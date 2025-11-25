@@ -27,7 +27,7 @@ public class SysUser implements Serializable {
      * 用户ID (主键)
      */
     @TableId(value = "id")
-    private Long id;
+    private String id;
 
     /**
      * 用户名（登录账号 / 学号）
