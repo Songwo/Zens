@@ -22,3 +22,30 @@ mybatis-plus:
     db-config:
       # 数据库配置
       id-type: auto
+
+logging:
+
+  # 1. 日志文件配置
+  # 定义日志文件的完整路径和名称。
+  # 文件将输出到项目根目录下的 /log/ 文件夹中。
+  file:
+    name: ./log/logfile.log
+  # 2. 日志级别和输出格式
+  # 设置日志输出格式
+  pattern:
+    # 控制台日志格式：时间 | 线程 | 级别 | Logger名称 | 消息
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{30} - %msg%n"
+    # 文件日志格式：与控制台保持一致
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{30} - %msg%n"
+
+  # 设置日志级别 (从低到高：TRACE, DEBUG, INFO, WARN, ERROR)
+  level:
+    # 根级别日志：对所有未单独配置的包生效
+    root: INFO
+
+    # 业务代码日志：将业务包设置为 DEBUG，以便看到 @Slf4j 打印的 DEBUG 级别信息
+    com.campus.trend.campus_pulse: DEBUG
+
+    # 第三方库日志：减少第三方库（如 Hibernate, Mybatis-Plus, Spring Security）的日志输出，避免刷屏
+    com.baomidou: WARN
+    org.springframework.security: WARN
