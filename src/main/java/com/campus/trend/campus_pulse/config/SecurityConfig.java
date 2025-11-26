@@ -51,7 +51,9 @@ public class SecurityConfig {
                 .authorizeHttpRequests(authorize -> authorize
                         // 允许匿名访问的接口（例如：注册、登录、公共内容、Swagger文档）
                         .requestMatchers("/sys-user/test",
-                                "/sys-user/user/**").permitAll()
+                                "/sys-user/user/**",
+                                "/sys-user/grade/**"
+                                ).permitAll()
 
                         // 其他所有请求都需要认证 (Authenticated)
                         .anyRequest().authenticated()

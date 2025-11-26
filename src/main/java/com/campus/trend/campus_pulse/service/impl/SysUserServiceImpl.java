@@ -10,15 +10,36 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 
-
 @Service
 public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> implements SysUserService {
 
+
+    /**
+     * Mybatis-Plus 的Lambda表达式详解
+     * 1.LambdaQueryWrapper Mybatis-plus内置的Lambda的查询
+     * 2.Wrappers.lambdaQuery() 等价于 new LambdaQueryWrapper()，Wrappers代表工厂
+     * 3.eq(1-字段名字，通常防止字段打错，2-参数)，指的是 Where 字段名 = ？ ,把第二个参数赋值给 ？
+     * 4.like，同上可以进行模糊查询
+     * 5.inSql,可以进行子查询
+     * 6.And/Or，可以嵌套条件进行查询
+     * 7.ge(),等价于 >=
+    */
 
     @Override
     public List<SysUser> searchByUsername(String username) {
         LambdaQueryWrapper<SysUser> wrapper = Wrappers.lambdaQuery();
         wrapper.eq(SysUser::getUsername, username);
+
+        return this.list(wrapper);
+    }
+
+    @Override
+    public List<SysUser> searchByGrade(int grade) {
+        LambdaQueryWrapper<SysUser> wrapper = Wrappers.lambdaQuery();
+        wrapper.ge(SysUser::getGrade, grade);
+//        wrapper.eq(ObjectUtils.isNotNull(grade),SysUser::getGrade, grade);
+//        wrapper.inSql(SysUser::getId,"select id from sys_user where grade >= 2024");
+
 
         return this.list(wrapper);
     }

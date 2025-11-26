@@ -25,4 +25,9 @@ public class SysUserController {
     public List<SysUser> getUser(@PathVariable String username){
         return userService.searchByUsername(username);
     }
+
+    @GetMapping("/grade/{grade}")
+    public List<SysUser> getUserByGrade(@PathVariable int grade){
+        return userService.searchByGrade(grade);
+    }
 }
