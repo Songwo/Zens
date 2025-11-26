@@ -1,13 +1,12 @@
 package com.campus.trend.campus_pulse.controller;
 
+import com.campus.trend.campus_pulse.common.Result;
+import com.campus.trend.campus_pulse.common.ResultCode;
 import com.campus.trend.campus_pulse.dto.LoginRequest;
-import com.campus.trend.campus_pulse.entity.SysUser;
 import com.campus.trend.campus_pulse.service.AuthService;
-import com.campus.trend.campus_pulse.service.SysUserService;
+import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
-import java.util.Map;
 
 @RestController
 @RequestMapping("/sys-user")
@@ -26,11 +25,12 @@ public class SysUserController {
 
 
     @PostMapping("/login")
-    public Map<String, Object> login(@RequestBody LoginRequest loginRequest){
-        String jwt = authService.login(loginRequest);
-        return Map.of(
-            "message","Success Login",
-            "data",jwt
-        );
+    public Result<?> login(@Valid @RequestBody LoginRequest loginRequest){
+        try {
+            String jwt = authService.login(loginRequest);
+            return Result.success(jwt);
+        }catch (Exception e){
+            return Result.error(ResultCode.LOGIN_ERROR,e.getMessage());
+        }
     }
 }

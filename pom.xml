@@ -90,14 +90,6 @@
             <artifactId>jakarta.validation-api</artifactId>
         </dependency>
 
-        <!-- 开发工具 -->
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-devtools</artifactId>
-            <scope>runtime</scope>
-            <optional>true</optional>
-        </dependency>
-
         <!-- 辅助工具：Lombok -->
         <dependency>
             <groupId>org.projectlombok</groupId>

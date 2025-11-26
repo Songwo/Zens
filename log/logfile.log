@@ -426,3 +426,241 @@ Consider defining a bean of type 'com.campus.trend.campus_pulse.service.AuthServ
 2025-11-26 14:35:18.937 [tomcat-shutdown] INFO  o.s.b.w.e.t.GracefulShutdown - Graceful shutdown complete
 2025-11-26 14:35:18.957 [SpringApplicationShutdownHook] INFO  c.z.hikari.HikariDataSource - HikariPool-1 - Shutdown initiated...
 2025-11-26 14:35:18.965 [SpringApplicationShutdownHook] INFO  c.z.hikari.HikariDataSource - HikariPool-1 - Shutdown completed.
+2025-11-26 14:40:32.604 [restartedMain] INFO  c.c.t.c.CampusPulseApplication - Starting CampusPulseApplication using Java 17.0.15 with PID 30616 (D:\2026毕业设计\DaiMa\campus-pulse(back)\campus-pulse\target\classes started by lenovo in D:\2026毕业设计\DaiMa\campus-pulse(back)\campus-pulse)
+2025-11-26 14:40:32.607 [restartedMain] DEBUG c.c.t.c.CampusPulseApplication - Running with Spring Boot v3.5.8, Spring v6.2.14
+2025-11-26 14:40:32.607 [restartedMain] INFO  c.c.t.c.CampusPulseApplication - No active profile set, falling back to 1 default profile: "default"
+2025-11-26 14:40:32.652 [restartedMain] INFO  o.s.b.d.e.DevToolsPropertyDefaultsPostProcessor - Devtools property defaults active! Set 'spring.devtools.add-properties' to 'false' to disable
+2025-11-26 14:40:32.652 [restartedMain] INFO  o.s.b.d.e.DevToolsPropertyDefaultsPostProcessor - For additional web related logging consider setting the 'logging.level.web' property to 'DEBUG'
+2025-11-26 14:40:33.211 [restartedMain] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Multiple Spring Data modules found, entering strict repository configuration mode
+2025-11-26 14:40:33.212 [restartedMain] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Bootstrapping Spring Data Redis repositories in DEFAULT mode.
+2025-11-26 14:40:33.238 [restartedMain] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Finished Spring Data repository scanning in 12 ms. Found 0 Redis repository interfaces.
+2025-11-26 14:40:33.723 [restartedMain] INFO  o.s.b.w.e.t.TomcatWebServer - Tomcat initialized with port 7800 (http)
+2025-11-26 14:40:33.732 [restartedMain] INFO  o.a.c.core.StandardService - Starting service [Tomcat]
+2025-11-26 14:40:33.733 [restartedMain] INFO  o.a.c.core.StandardEngine - Starting Servlet engine: [Apache Tomcat/10.1.49]
+2025-11-26 14:40:33.792 [restartedMain] INFO  o.a.c.c.C.[.[localhost].[/] - Initializing Spring embedded WebApplicationContext
+2025-11-26 14:40:33.792 [restartedMain] INFO  o.s.b.w.s.c.ServletWebServerApplicationContext - Root WebApplicationContext: initialization completed in 1140 ms
+2025-11-26 14:40:34.528 [restartedMain] INFO  o.s.v.b.OptionalValidatorFactoryBean - Failed to set up a Bean Validation provider: jakarta.validation.NoProviderFoundException: Unable to create a Configuration, because no Jakarta Bean Validation provider could be found. Add a provider like Hibernate Validator (RI) to your classpath.
+2025-11-26 14:40:34.873 [restartedMain] INFO  o.s.b.d.a.OptionalLiveReloadServer - LiveReload server is running on port 35729
+2025-11-26 14:40:34.904 [restartedMain] INFO  o.s.b.w.e.t.TomcatWebServer - Tomcat started on port 7800 (http) with context path '/'
+2025-11-26 14:40:34.913 [restartedMain] INFO  c.c.t.c.CampusPulseApplication - Started CampusPulseApplication in 2.764 seconds (process running for 3.455)
+2025-11-26 14:40:44.015 [http-nio-7800-exec-1] INFO  o.a.c.c.C.[.[localhost].[/] - Initializing Spring DispatcherServlet 'dispatcherServlet'
+2025-11-26 14:40:44.015 [http-nio-7800-exec-1] INFO  o.s.w.s.DispatcherServlet - Initializing Servlet 'dispatcherServlet'
+2025-11-26 14:40:44.016 [http-nio-7800-exec-1] INFO  o.s.w.s.DispatcherServlet - Completed initialization in 0 ms
+2025-11-26 14:40:44.441 [http-nio-7800-exec-1] INFO  c.z.hikari.HikariDataSource - HikariPool-1 - Starting...
+2025-11-26 14:40:44.908 [http-nio-7800-exec-1] INFO  c.z.hikari.pool.HikariPool - HikariPool-1 - Added connection com.mysql.cj.jdbc.ConnectionImpl@4c5cf8f2
+2025-11-26 14:40:44.911 [http-nio-7800-exec-1] INFO  c.z.hikari.HikariDataSource - HikariPool-1 - Start completed.
+2025-11-26 14:40:44.925 [http-nio-7800-exec-1] DEBUG c.c.t.c.m.S.selectList - ==>  Preparing: SELECT id,username,password,nickname,avatar,role,major,grade,interest_tags,create_time FROM sys_user WHERE (username = ?)
+2025-11-26 14:40:44.970 [http-nio-7800-exec-1] DEBUG c.c.t.c.m.S.selectList - ==> Parameters: student1(String)
+2025-11-26 14:40:45.022 [http-nio-7800-exec-1] DEBUG c.c.t.c.m.S.selectList - <==      Total: 1
+2025-11-26 14:40:45.029 [http-nio-7800-exec-1] INFO  c.c.t.c.s.SysUserDetailsServiceImpl - 用户student1信息加载成功！Role：User
+2025-11-26 14:41:02.620 [http-nio-7800-exec-10] DEBUG c.c.t.c.m.S.selectList - ==>  Preparing: SELECT id,username,password,nickname,avatar,role,major,grade,interest_tags,create_time FROM sys_user WHERE (username = ?)
+2025-11-26 14:41:02.622 [http-nio-7800-exec-10] DEBUG c.c.t.c.m.S.selectList - ==> Parameters: student(String)
+2025-11-26 14:41:02.626 [http-nio-7800-exec-10] DEBUG c.c.t.c.m.S.selectList - <==      Total: 0
+2025-11-26 14:41:02.627 [http-nio-7800-exec-10] INFO  c.c.t.c.s.SysUserDetailsServiceImpl - 登录失败：用户student不存在(未找到)
+2025-11-26 14:41:12.656 [http-nio-7800-exec-4] WARN  o.s.w.s.m.s.DefaultHandlerExceptionResolver - Resolved [org.springframework.http.converter.HttpMessageNotReadableException: Required request body is missing: public java.util.Map<java.lang.String, java.lang.Object> com.campus.trend.campus_pulse.controller.SysUserController.login(com.campus.trend.campus_pulse.dto.LoginRequest)]
+2025-11-26 14:44:36.301 [SpringApplicationShutdownHook] INFO  o.s.b.w.e.t.GracefulShutdown - Commencing graceful shutdown. Waiting for active requests to complete
+2025-11-26 14:44:36.701 [tomcat-shutdown] INFO  o.s.b.w.e.t.GracefulShutdown - Graceful shutdown complete
+2025-11-26 14:44:36.736 [SpringApplicationShutdownHook] INFO  c.z.hikari.HikariDataSource - HikariPool-1 - Shutdown initiated...
+2025-11-26 14:44:36.750 [SpringApplicationShutdownHook] INFO  c.z.hikari.HikariDataSource - HikariPool-1 - Shutdown completed.
+2025-11-26 14:44:41.506 [restartedMain] INFO  c.c.t.c.CampusPulseApplication - Starting CampusPulseApplication using Java 17.0.15 with PID 29664 (D:\2026毕业设计\DaiMa\campus-pulse(back)\campus-pulse\target\classes started by lenovo in D:\2026毕业设计\DaiMa\campus-pulse(back)\campus-pulse)
+2025-11-26 14:44:41.509 [restartedMain] DEBUG c.c.t.c.CampusPulseApplication - Running with Spring Boot v3.5.8, Spring v6.2.14
+2025-11-26 14:44:41.509 [restartedMain] INFO  c.c.t.c.CampusPulseApplication - No active profile set, falling back to 1 default profile: "default"
+2025-11-26 14:44:41.555 [restartedMain] INFO  o.s.b.d.e.DevToolsPropertyDefaultsPostProcessor - Devtools property defaults active! Set 'spring.devtools.add-properties' to 'false' to disable
+2025-11-26 14:44:41.556 [restartedMain] INFO  o.s.b.d.e.DevToolsPropertyDefaultsPostProcessor - For additional web related logging consider setting the 'logging.level.web' property to 'DEBUG'
+2025-11-26 14:44:42.161 [restartedMain] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Multiple Spring Data modules found, entering strict repository configuration mode
+2025-11-26 14:44:42.163 [restartedMain] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Bootstrapping Spring Data Redis repositories in DEFAULT mode.
+2025-11-26 14:44:42.188 [restartedMain] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Finished Spring Data repository scanning in 12 ms. Found 0 Redis repository interfaces.
+2025-11-26 14:44:42.646 [restartedMain] INFO  o.s.b.w.e.t.TomcatWebServer - Tomcat initialized with port 7800 (http)
+2025-11-26 14:44:42.656 [restartedMain] INFO  o.a.c.core.StandardService - Starting service [Tomcat]
+2025-11-26 14:44:42.656 [restartedMain] INFO  o.a.c.core.StandardEngine - Starting Servlet engine: [Apache Tomcat/10.1.49]
+2025-11-26 14:44:42.718 [restartedMain] INFO  o.a.c.c.C.[.[localhost].[/] - Initializing Spring embedded WebApplicationContext
+2025-11-26 14:44:42.718 [restartedMain] INFO  o.s.b.w.s.c.ServletWebServerApplicationContext - Root WebApplicationContext: initialization completed in 1162 ms
+2025-11-26 14:44:43.535 [restartedMain] INFO  o.s.v.b.OptionalValidatorFactoryBean - Failed to set up a Bean Validation provider: jakarta.validation.NoProviderFoundException: Unable to create a Configuration, because no Jakarta Bean Validation provider could be found. Add a provider like Hibernate Validator (RI) to your classpath.
+2025-11-26 14:44:43.905 [restartedMain] INFO  o.s.b.d.a.OptionalLiveReloadServer - LiveReload server is running on port 35729
+2025-11-26 14:44:43.938 [restartedMain] INFO  o.s.b.w.e.t.TomcatWebServer - Tomcat started on port 7800 (http) with context path '/'
+2025-11-26 14:44:43.947 [restartedMain] INFO  c.c.t.c.CampusPulseApplication - Started CampusPulseApplication in 2.894 seconds (process running for 3.604)
+2025-11-26 14:44:47.463 [http-nio-7800-exec-1] INFO  o.a.c.c.C.[.[localhost].[/] - Initializing Spring DispatcherServlet 'dispatcherServlet'
+2025-11-26 14:44:47.464 [http-nio-7800-exec-1] INFO  o.s.w.s.DispatcherServlet - Initializing Servlet 'dispatcherServlet'
+2025-11-26 14:44:47.465 [http-nio-7800-exec-1] INFO  o.s.w.s.DispatcherServlet - Completed initialization in 1 ms
+2025-11-26 14:44:47.551 [http-nio-7800-exec-1] WARN  o.s.w.s.m.s.DefaultHandlerExceptionResolver - Resolved [org.springframework.http.converter.HttpMessageNotReadableException: Required request body is missing: public java.util.Map<java.lang.String, java.lang.Object> com.campus.trend.campus_pulse.controller.SysUserController.login(com.campus.trend.campus_pulse.dto.LoginRequest)]
+2025-11-26 14:46:01.376 [SpringApplicationShutdownHook] INFO  o.s.b.w.e.t.GracefulShutdown - Commencing graceful shutdown. Waiting for active requests to complete
+2025-11-26 14:46:01.848 [tomcat-shutdown] INFO  o.s.b.w.e.t.GracefulShutdown - Graceful shutdown complete
+2025-11-26 14:46:07.086 [restartedMain] INFO  c.c.t.c.CampusPulseApplication - Starting CampusPulseApplication using Java 17.0.15 with PID 18080 (D:\2026毕业设计\DaiMa\campus-pulse(back)\campus-pulse\target\classes started by lenovo in D:\2026毕业设计\DaiMa\campus-pulse(back)\campus-pulse)
+2025-11-26 14:46:07.087 [restartedMain] DEBUG c.c.t.c.CampusPulseApplication - Running with Spring Boot v3.5.8, Spring v6.2.14
+2025-11-26 14:46:07.088 [restartedMain] INFO  c.c.t.c.CampusPulseApplication - No active profile set, falling back to 1 default profile: "default"
+2025-11-26 14:46:07.139 [restartedMain] INFO  o.s.b.d.e.DevToolsPropertyDefaultsPostProcessor - Devtools property defaults active! Set 'spring.devtools.add-properties' to 'false' to disable
+2025-11-26 14:46:07.139 [restartedMain] INFO  o.s.b.d.e.DevToolsPropertyDefaultsPostProcessor - For additional web related logging consider setting the 'logging.level.web' property to 'DEBUG'
+2025-11-26 14:46:07.739 [restartedMain] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Multiple Spring Data modules found, entering strict repository configuration mode
+2025-11-26 14:46:07.741 [restartedMain] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Bootstrapping Spring Data Redis repositories in DEFAULT mode.
+2025-11-26 14:46:07.766 [restartedMain] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Finished Spring Data repository scanning in 12 ms. Found 0 Redis repository interfaces.
+2025-11-26 14:46:08.225 [restartedMain] INFO  o.s.b.w.e.t.TomcatWebServer - Tomcat initialized with port 7800 (http)
+2025-11-26 14:46:08.235 [restartedMain] INFO  o.a.c.core.StandardService - Starting service [Tomcat]
+2025-11-26 14:46:08.236 [restartedMain] INFO  o.a.c.core.StandardEngine - Starting Servlet engine: [Apache Tomcat/10.1.49]
+2025-11-26 14:46:08.302 [restartedMain] INFO  o.a.c.c.C.[.[localhost].[/] - Initializing Spring embedded WebApplicationContext
+2025-11-26 14:46:08.302 [restartedMain] INFO  o.s.b.w.s.c.ServletWebServerApplicationContext - Root WebApplicationContext: initialization completed in 1162 ms
+2025-11-26 14:46:09.119 [restartedMain] INFO  o.s.v.b.OptionalValidatorFactoryBean - Failed to set up a Bean Validation provider: jakarta.validation.NoProviderFoundException: Unable to create a Configuration, because no Jakarta Bean Validation provider could be found. Add a provider like Hibernate Validator (RI) to your classpath.
+2025-11-26 14:46:09.507 [restartedMain] INFO  o.s.b.d.a.OptionalLiveReloadServer - LiveReload server is running on port 35729
+2025-11-26 14:46:09.541 [restartedMain] INFO  o.s.b.w.e.t.TomcatWebServer - Tomcat started on port 7800 (http) with context path '/'
+2025-11-26 14:46:09.548 [restartedMain] INFO  c.c.t.c.CampusPulseApplication - Started CampusPulseApplication in 2.935 seconds (process running for 3.704)
+2025-11-26 14:46:12.171 [http-nio-7800-exec-1] INFO  o.a.c.c.C.[.[localhost].[/] - Initializing Spring DispatcherServlet 'dispatcherServlet'
+2025-11-26 14:46:12.172 [http-nio-7800-exec-1] INFO  o.s.w.s.DispatcherServlet - Initializing Servlet 'dispatcherServlet'
+2025-11-26 14:46:12.173 [http-nio-7800-exec-1] INFO  o.s.w.s.DispatcherServlet - Completed initialization in 1 ms
+2025-11-26 14:46:12.253 [http-nio-7800-exec-1] WARN  o.s.w.s.m.s.DefaultHandlerExceptionResolver - Resolved [org.springframework.http.converter.HttpMessageNotReadableException: Required request body is missing: public java.util.Map<java.lang.String, java.lang.Object> com.campus.trend.campus_pulse.controller.SysUserController.login(com.campus.trend.campus_pulse.dto.LoginRequest)]
+2025-11-26 14:46:12.964 [File Watcher] INFO  o.s.b.d.a.LocalDevToolsAutoConfiguration$RestartingClassPathChangeChangedEventListener - Restarting due to 1 class path change (0 additions, 1 deletion, 0 modifications)
+2025-11-26 14:46:12.968 [Thread-5] INFO  o.s.b.w.e.t.GracefulShutdown - Commencing graceful shutdown. Waiting for active requests to complete
+2025-11-26 14:46:13.620 [tomcat-shutdown] INFO  o.s.b.w.e.t.GracefulShutdown - Graceful shutdown complete
+2025-11-26 14:46:13.699 [restartedMain] INFO  c.c.t.c.CampusPulseApplication - Starting CampusPulseApplication using Java 17.0.15 with PID 18080 (D:\2026毕业设计\DaiMa\campus-pulse(back)\campus-pulse\target\classes started by lenovo in D:\2026毕业设计\DaiMa\campus-pulse(back)\campus-pulse)
+2025-11-26 14:46:13.699 [restartedMain] DEBUG c.c.t.c.CampusPulseApplication - Running with Spring Boot v3.5.8, Spring v6.2.14
+2025-11-26 14:46:13.699 [restartedMain] INFO  c.c.t.c.CampusPulseApplication - No active profile set, falling back to 1 default profile: "default"
+2025-11-26 14:46:13.859 [restartedMain] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Multiple Spring Data modules found, entering strict repository configuration mode
+2025-11-26 14:46:13.859 [restartedMain] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Bootstrapping Spring Data Redis repositories in DEFAULT mode.
+2025-11-26 14:46:13.868 [restartedMain] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Finished Spring Data repository scanning in 8 ms. Found 0 Redis repository interfaces.
+2025-11-26 14:46:13.949 [restartedMain] INFO  o.s.b.w.e.t.TomcatWebServer - Tomcat initialized with port 7800 (http)
+2025-11-26 14:46:13.950 [restartedMain] INFO  o.a.c.core.StandardService - Starting service [Tomcat]
+2025-11-26 14:46:13.950 [restartedMain] INFO  o.a.c.core.StandardEngine - Starting Servlet engine: [Apache Tomcat/10.1.49]
+2025-11-26 14:46:13.995 [restartedMain] INFO  o.a.c.c.C.[.[localhost].[/] - Initializing Spring embedded WebApplicationContext
+2025-11-26 14:46:13.995 [restartedMain] INFO  o.s.b.w.s.c.ServletWebServerApplicationContext - Root WebApplicationContext: initialization completed in 294 ms
+2025-11-26 14:46:14.429 [restartedMain] INFO  o.s.v.b.OptionalValidatorFactoryBean - Failed to set up a Bean Validation provider: jakarta.validation.NoProviderFoundException: Unable to create a Configuration, because no Jakarta Bean Validation provider could be found. Add a provider like Hibernate Validator (RI) to your classpath.
+2025-11-26 14:46:14.474 [restartedMain] INFO  o.s.b.d.a.OptionalLiveReloadServer - LiveReload server is running on port 35729
+2025-11-26 14:46:14.488 [restartedMain] INFO  o.s.b.w.e.t.TomcatWebServer - Tomcat started on port 7800 (http) with context path '/'
+2025-11-26 14:46:14.492 [restartedMain] INFO  c.c.t.c.CampusPulseApplication - Started CampusPulseApplication in 0.819 seconds (process running for 8.648)
+2025-11-26 14:46:14.494 [restartedMain] INFO  o.s.b.d.a.ConditionEvaluationDeltaLoggingListener - Condition evaluation unchanged
+2025-11-26 14:46:15.927 [File Watcher] INFO  o.s.b.d.a.LocalDevToolsAutoConfiguration$RestartingClassPathChangeChangedEventListener - Restarting due to 1 class path change (1 addition, 0 deletions, 0 modifications)
+2025-11-26 14:46:15.929 [Thread-7] INFO  o.s.b.w.e.t.GracefulShutdown - Commencing graceful shutdown. Waiting for active requests to complete
+2025-11-26 14:46:16.324 [tomcat-shutdown] INFO  o.s.b.w.e.t.GracefulShutdown - Graceful shutdown complete
+2025-11-26 14:46:16.378 [restartedMain] INFO  c.c.t.c.CampusPulseApplication - Starting CampusPulseApplication using Java 17.0.15 with PID 18080 (D:\2026毕业设计\DaiMa\campus-pulse(back)\campus-pulse\target\classes started by lenovo in D:\2026毕业设计\DaiMa\campus-pulse(back)\campus-pulse)
+2025-11-26 14:46:16.378 [restartedMain] DEBUG c.c.t.c.CampusPulseApplication - Running with Spring Boot v3.5.8, Spring v6.2.14
+2025-11-26 14:46:16.378 [restartedMain] INFO  c.c.t.c.CampusPulseApplication - No active profile set, falling back to 1 default profile: "default"
+2025-11-26 14:46:16.546 [restartedMain] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Multiple Spring Data modules found, entering strict repository configuration mode
+2025-11-26 14:46:16.546 [restartedMain] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Bootstrapping Spring Data Redis repositories in DEFAULT mode.
+2025-11-26 14:46:16.556 [restartedMain] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Finished Spring Data repository scanning in 8 ms. Found 0 Redis repository interfaces.
+2025-11-26 14:46:16.634 [restartedMain] INFO  o.s.b.w.e.t.TomcatWebServer - Tomcat initialized with port 7800 (http)
+2025-11-26 14:46:16.634 [restartedMain] INFO  o.a.c.core.StandardService - Starting service [Tomcat]
+2025-11-26 14:46:16.635 [restartedMain] INFO  o.a.c.core.StandardEngine - Starting Servlet engine: [Apache Tomcat/10.1.49]
+2025-11-26 14:46:16.678 [restartedMain] INFO  o.a.c.c.C.[.[localhost].[/] - Initializing Spring embedded WebApplicationContext
+2025-11-26 14:46:16.678 [restartedMain] INFO  o.s.b.w.s.c.ServletWebServerApplicationContext - Root WebApplicationContext: initialization completed in 298 ms
+2025-11-26 14:46:17.038 [restartedMain] INFO  o.s.v.b.OptionalValidatorFactoryBean - Failed to set up a Bean Validation provider: jakarta.validation.NoProviderFoundException: Unable to create a Configuration, because no Jakarta Bean Validation provider could be found. Add a provider like Hibernate Validator (RI) to your classpath.
+2025-11-26 14:46:17.067 [restartedMain] INFO  o.s.b.d.a.OptionalLiveReloadServer - LiveReload server is running on port 35729
+2025-11-26 14:46:17.077 [restartedMain] INFO  o.s.b.w.e.t.TomcatWebServer - Tomcat started on port 7800 (http) with context path '/'
+2025-11-26 14:46:17.080 [restartedMain] INFO  c.c.t.c.CampusPulseApplication - Started CampusPulseApplication in 0.72 seconds (process running for 11.236)
+2025-11-26 14:46:17.081 [restartedMain] INFO  o.s.b.d.a.ConditionEvaluationDeltaLoggingListener - Condition evaluation unchanged
+2025-11-26 14:46:43.150 [SpringApplicationShutdownHook] INFO  o.s.b.w.e.t.GracefulShutdown - Commencing graceful shutdown. Waiting for active requests to complete
+2025-11-26 14:46:43.550 [tomcat-shutdown] INFO  o.s.b.w.e.t.GracefulShutdown - Graceful shutdown complete
+2025-11-26 14:46:51.710 [main] INFO  c.c.t.c.CampusPulseApplication - Starting CampusPulseApplication using Java 17.0.15 with PID 22356 (D:\2026毕业设计\DaiMa\campus-pulse(back)\campus-pulse\target\classes started by lenovo in D:\2026毕业设计\DaiMa\campus-pulse(back)\campus-pulse)
+2025-11-26 14:46:51.712 [main] DEBUG c.c.t.c.CampusPulseApplication - Running with Spring Boot v3.5.8, Spring v6.2.14
+2025-11-26 14:46:51.713 [main] INFO  c.c.t.c.CampusPulseApplication - No active profile set, falling back to 1 default profile: "default"
+2025-11-26 14:46:52.308 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Multiple Spring Data modules found, entering strict repository configuration mode
+2025-11-26 14:46:52.311 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Bootstrapping Spring Data Redis repositories in DEFAULT mode.
+2025-11-26 14:46:52.336 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Finished Spring Data repository scanning in 12 ms. Found 0 Redis repository interfaces.
+2025-11-26 14:46:52.772 [main] INFO  o.s.b.w.e.t.TomcatWebServer - Tomcat initialized with port 7800 (http)
+2025-11-26 14:46:52.784 [main] INFO  o.a.c.core.StandardService - Starting service [Tomcat]
+2025-11-26 14:46:52.784 [main] INFO  o.a.c.core.StandardEngine - Starting Servlet engine: [Apache Tomcat/10.1.49]
+2025-11-26 14:46:52.853 [main] INFO  o.a.c.c.C.[.[localhost].[/] - Initializing Spring embedded WebApplicationContext
+2025-11-26 14:46:52.853 [main] INFO  o.s.b.w.s.c.ServletWebServerApplicationContext - Root WebApplicationContext: initialization completed in 1091 ms
+2025-11-26 14:46:53.631 [main] INFO  o.s.v.b.OptionalValidatorFactoryBean - Failed to set up a Bean Validation provider: jakarta.validation.NoProviderFoundException: Unable to create a Configuration, because no Jakarta Bean Validation provider could be found. Add a provider like Hibernate Validator (RI) to your classpath.
+2025-11-26 14:46:54.007 [main] INFO  o.s.b.w.e.t.TomcatWebServer - Tomcat started on port 7800 (http) with context path '/'
+2025-11-26 14:46:54.015 [main] INFO  c.c.t.c.CampusPulseApplication - Started CampusPulseApplication in 2.812 seconds (process running for 3.438)
+2025-11-26 14:46:58.966 [http-nio-7800-exec-1] INFO  o.a.c.c.C.[.[localhost].[/] - Initializing Spring DispatcherServlet 'dispatcherServlet'
+2025-11-26 14:46:58.967 [http-nio-7800-exec-1] INFO  o.s.w.s.DispatcherServlet - Initializing Servlet 'dispatcherServlet'
+2025-11-26 14:46:58.969 [http-nio-7800-exec-1] INFO  o.s.w.s.DispatcherServlet - Completed initialization in 2 ms
+2025-11-26 14:46:59.044 [http-nio-7800-exec-1] WARN  o.s.w.s.m.s.DefaultHandlerExceptionResolver - Resolved [org.springframework.http.converter.HttpMessageNotReadableException: Required request body is missing: public java.util.Map<java.lang.String, java.lang.Object> com.campus.trend.campus_pulse.controller.SysUserController.login(com.campus.trend.campus_pulse.dto.LoginRequest)]
+2025-11-26 14:47:17.466 [http-nio-7800-exec-2] WARN  o.s.w.s.m.s.DefaultHandlerExceptionResolver - Resolved [org.springframework.http.converter.HttpMessageNotReadableException: Required request body is missing: public java.util.Map<java.lang.String, java.lang.Object> com.campus.trend.campus_pulse.controller.SysUserController.login(com.campus.trend.campus_pulse.dto.LoginRequest)]
+2025-11-26 14:47:20.853 [SpringApplicationShutdownHook] INFO  o.s.b.w.e.t.GracefulShutdown - Commencing graceful shutdown. Waiting for active requests to complete
+2025-11-26 14:47:21.263 [tomcat-shutdown] INFO  o.s.b.w.e.t.GracefulShutdown - Graceful shutdown complete
+2025-11-26 14:47:27.259 [main] INFO  c.c.t.c.CampusPulseApplication - Starting CampusPulseApplication using Java 17.0.15 with PID 30412 (D:\2026毕业设计\DaiMa\campus-pulse(back)\campus-pulse\target\classes started by lenovo in D:\2026毕业设计\DaiMa\campus-pulse(back)\campus-pulse)
+2025-11-26 14:47:27.262 [main] DEBUG c.c.t.c.CampusPulseApplication - Running with Spring Boot v3.5.8, Spring v6.2.14
+2025-11-26 14:47:27.263 [main] INFO  c.c.t.c.CampusPulseApplication - No active profile set, falling back to 1 default profile: "default"
+2025-11-26 14:47:27.979 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Multiple Spring Data modules found, entering strict repository configuration mode
+2025-11-26 14:47:27.982 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Bootstrapping Spring Data Redis repositories in DEFAULT mode.
+2025-11-26 14:47:28.017 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Finished Spring Data repository scanning in 19 ms. Found 0 Redis repository interfaces.
+2025-11-26 14:47:28.575 [main] INFO  o.s.b.w.e.t.TomcatWebServer - Tomcat initialized with port 7800 (http)
+2025-11-26 14:47:28.587 [main] INFO  o.a.c.core.StandardService - Starting service [Tomcat]
+2025-11-26 14:47:28.588 [main] INFO  o.a.c.core.StandardEngine - Starting Servlet engine: [Apache Tomcat/10.1.49]
+2025-11-26 14:47:28.657 [main] INFO  o.a.c.c.C.[.[localhost].[/] - Initializing Spring embedded WebApplicationContext
+2025-11-26 14:47:28.657 [main] INFO  o.s.b.w.s.c.ServletWebServerApplicationContext - Root WebApplicationContext: initialization completed in 1334 ms
+2025-11-26 14:47:30.560 [main] INFO  o.s.v.b.OptionalValidatorFactoryBean - Failed to set up a Bean Validation provider: jakarta.validation.NoProviderFoundException: Unable to create a Configuration, because no Jakarta Bean Validation provider could be found. Add a provider like Hibernate Validator (RI) to your classpath.
+2025-11-26 14:47:31.555 [main] INFO  o.s.b.w.e.t.TomcatWebServer - Tomcat started on port 7800 (http) with context path '/'
+2025-11-26 14:47:31.577 [main] INFO  c.c.t.c.CampusPulseApplication - Started CampusPulseApplication in 4.892 seconds (process running for 6.233)
+2025-11-26 14:47:37.296 [http-nio-7800-exec-3] INFO  o.a.c.c.C.[.[localhost].[/] - Initializing Spring DispatcherServlet 'dispatcherServlet'
+2025-11-26 14:47:37.296 [http-nio-7800-exec-3] INFO  o.s.w.s.DispatcherServlet - Initializing Servlet 'dispatcherServlet'
+2025-11-26 14:47:37.297 [http-nio-7800-exec-3] INFO  o.s.w.s.DispatcherServlet - Completed initialization in 1 ms
+2025-11-26 14:47:37.448 [http-nio-7800-exec-3] WARN  o.s.w.s.m.s.DefaultHandlerExceptionResolver - Resolved [org.springframework.http.converter.HttpMessageNotReadableException: Required request body is missing: public java.util.Map<java.lang.String, java.lang.Object> com.campus.trend.campus_pulse.controller.SysUserController.login(com.campus.trend.campus_pulse.dto.LoginRequest)]
+2025-11-26 14:47:46.393 [SpringApplicationShutdownHook] INFO  o.s.b.w.e.t.GracefulShutdown - Commencing graceful shutdown. Waiting for active requests to complete
+2025-11-26 14:47:46.809 [tomcat-shutdown] INFO  o.s.b.w.e.t.GracefulShutdown - Graceful shutdown complete
+2025-11-26 14:51:02.107 [main] INFO  c.c.t.c.CampusPulseApplication - Starting CampusPulseApplication using Java 17.0.15 with PID 24756 (D:\2026毕业设计\DaiMa\campus-pulse(back)\campus-pulse\target\classes started by lenovo in D:\2026毕业设计\DaiMa\campus-pulse(back)\campus-pulse)
+2025-11-26 14:51:02.111 [main] DEBUG c.c.t.c.CampusPulseApplication - Running with Spring Boot v3.5.8, Spring v6.2.14
+2025-11-26 14:51:02.111 [main] INFO  c.c.t.c.CampusPulseApplication - No active profile set, falling back to 1 default profile: "default"
+2025-11-26 14:51:02.685 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Multiple Spring Data modules found, entering strict repository configuration mode
+2025-11-26 14:51:02.687 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Bootstrapping Spring Data Redis repositories in DEFAULT mode.
+2025-11-26 14:51:02.712 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Finished Spring Data repository scanning in 13 ms. Found 0 Redis repository interfaces.
+2025-11-26 14:51:03.140 [main] INFO  o.s.b.w.e.t.TomcatWebServer - Tomcat initialized with port 7800 (http)
+2025-11-26 14:51:03.150 [main] INFO  o.a.c.core.StandardService - Starting service [Tomcat]
+2025-11-26 14:51:03.151 [main] INFO  o.a.c.core.StandardEngine - Starting Servlet engine: [Apache Tomcat/10.1.49]
+2025-11-26 14:51:03.209 [main] INFO  o.a.c.c.C.[.[localhost].[/] - Initializing Spring embedded WebApplicationContext
+2025-11-26 14:51:03.209 [main] INFO  o.s.b.w.s.c.ServletWebServerApplicationContext - Root WebApplicationContext: initialization completed in 1055 ms
+2025-11-26 14:51:03.956 [main] INFO  o.s.v.b.OptionalValidatorFactoryBean - Failed to set up a Bean Validation provider: jakarta.validation.NoProviderFoundException: Unable to create a Configuration, because no Jakarta Bean Validation provider could be found. Add a provider like Hibernate Validator (RI) to your classpath.
+2025-11-26 14:51:04.371 [main] INFO  o.s.b.w.e.t.TomcatWebServer - Tomcat started on port 7800 (http) with context path '/'
+2025-11-26 14:51:04.380 [main] INFO  c.c.t.c.CampusPulseApplication - Started CampusPulseApplication in 2.794 seconds (process running for 3.432)
+2025-11-26 14:51:10.289 [http-nio-7800-exec-2] INFO  o.a.c.c.C.[.[localhost].[/] - Initializing Spring DispatcherServlet 'dispatcherServlet'
+2025-11-26 14:51:10.290 [http-nio-7800-exec-2] INFO  o.s.w.s.DispatcherServlet - Initializing Servlet 'dispatcherServlet'
+2025-11-26 14:51:10.291 [http-nio-7800-exec-2] INFO  o.s.w.s.DispatcherServlet - Completed initialization in 1 ms
+2025-11-26 14:51:10.362 [http-nio-7800-exec-2] WARN  o.s.w.s.m.s.DefaultHandlerExceptionResolver - Resolved [org.springframework.http.converter.HttpMessageNotReadableException: Required request body is missing: public java.util.Map<java.lang.String, java.lang.Object> com.campus.trend.campus_pulse.controller.SysUserController.login(com.campus.trend.campus_pulse.dto.LoginRequest)]
+2025-11-26 14:53:38.672 [SpringApplicationShutdownHook] INFO  o.s.b.w.e.t.GracefulShutdown - Commencing graceful shutdown. Waiting for active requests to complete
+2025-11-26 14:53:39.099 [tomcat-shutdown] INFO  o.s.b.w.e.t.GracefulShutdown - Graceful shutdown complete
+2025-11-26 14:53:44.505 [main] INFO  c.c.t.c.CampusPulseApplication - Starting CampusPulseApplication using Java 17.0.15 with PID 30128 (D:\2026毕业设计\DaiMa\campus-pulse(back)\campus-pulse\target\classes started by lenovo in D:\2026毕业设计\DaiMa\campus-pulse(back)\campus-pulse)
+2025-11-26 14:53:44.507 [main] DEBUG c.c.t.c.CampusPulseApplication - Running with Spring Boot v3.5.8, Spring v6.2.14
+2025-11-26 14:53:44.508 [main] INFO  c.c.t.c.CampusPulseApplication - No active profile set, falling back to 1 default profile: "default"
+2025-11-26 14:53:45.128 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Multiple Spring Data modules found, entering strict repository configuration mode
+2025-11-26 14:53:45.130 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Bootstrapping Spring Data Redis repositories in DEFAULT mode.
+2025-11-26 14:53:45.157 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Finished Spring Data repository scanning in 14 ms. Found 0 Redis repository interfaces.
+2025-11-26 14:53:45.617 [main] INFO  o.s.b.w.e.t.TomcatWebServer - Tomcat initialized with port 7800 (http)
+2025-11-26 14:53:45.626 [main] INFO  o.a.c.core.StandardService - Starting service [Tomcat]
+2025-11-26 14:53:45.627 [main] INFO  o.a.c.core.StandardEngine - Starting Servlet engine: [Apache Tomcat/10.1.49]
+2025-11-26 14:53:45.691 [main] INFO  o.a.c.c.C.[.[localhost].[/] - Initializing Spring embedded WebApplicationContext
+2025-11-26 14:53:45.691 [main] INFO  o.s.b.w.s.c.ServletWebServerApplicationContext - Root WebApplicationContext: initialization completed in 1139 ms
+2025-11-26 14:53:46.429 [main] INFO  o.s.v.b.OptionalValidatorFactoryBean - Failed to set up a Bean Validation provider: jakarta.validation.NoProviderFoundException: Unable to create a Configuration, because no Jakarta Bean Validation provider could be found. Add a provider like Hibernate Validator (RI) to your classpath.
+2025-11-26 14:53:46.797 [main] INFO  o.s.b.w.e.t.TomcatWebServer - Tomcat started on port 7800 (http) with context path '/'
+2025-11-26 14:53:46.805 [main] INFO  c.c.t.c.CampusPulseApplication - Started CampusPulseApplication in 2.84 seconds (process running for 3.517)
+2025-11-26 14:53:49.110 [http-nio-7800-exec-1] INFO  o.a.c.c.C.[.[localhost].[/] - Initializing Spring DispatcherServlet 'dispatcherServlet'
+2025-11-26 14:53:49.110 [http-nio-7800-exec-1] INFO  o.s.w.s.DispatcherServlet - Initializing Servlet 'dispatcherServlet'
+2025-11-26 14:53:49.111 [http-nio-7800-exec-1] INFO  o.s.w.s.DispatcherServlet - Completed initialization in 1 ms
+2025-11-26 14:53:49.171 [http-nio-7800-exec-1] WARN  o.s.w.s.m.s.DefaultHandlerExceptionResolver - Resolved [org.springframework.http.converter.HttpMessageNotReadableException: Required request body is missing: public java.util.Map<java.lang.String, java.lang.Object> com.campus.trend.campus_pulse.controller.SysUserController.login(com.campus.trend.campus_pulse.dto.LoginRequest)]
+2025-11-26 14:54:06.657 [SpringApplicationShutdownHook] INFO  o.s.b.w.e.t.GracefulShutdown - Commencing graceful shutdown. Waiting for active requests to complete
+2025-11-26 14:54:07.111 [tomcat-shutdown] INFO  o.s.b.w.e.t.GracefulShutdown - Graceful shutdown complete
+2025-11-26 14:54:12.063 [main] INFO  c.c.t.c.CampusPulseApplication - Starting CampusPulseApplication using Java 17.0.15 with PID 30384 (D:\2026毕业设计\DaiMa\campus-pulse(back)\campus-pulse\target\classes started by lenovo in D:\2026毕业设计\DaiMa\campus-pulse(back)\campus-pulse)
+2025-11-26 14:54:12.067 [main] DEBUG c.c.t.c.CampusPulseApplication - Running with Spring Boot v3.5.8, Spring v6.2.14
+2025-11-26 14:54:12.068 [main] INFO  c.c.t.c.CampusPulseApplication - No active profile set, falling back to 1 default profile: "default"
+2025-11-26 14:54:12.645 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Multiple Spring Data modules found, entering strict repository configuration mode
+2025-11-26 14:54:12.646 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Bootstrapping Spring Data Redis repositories in DEFAULT mode.
+2025-11-26 14:54:12.672 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Finished Spring Data repository scanning in 13 ms. Found 0 Redis repository interfaces.
+2025-11-26 14:54:13.164 [main] INFO  o.s.b.w.e.t.TomcatWebServer - Tomcat initialized with port 7800 (http)
+2025-11-26 14:54:13.174 [main] INFO  o.a.c.core.StandardService - Starting service [Tomcat]
+2025-11-26 14:54:13.175 [main] INFO  o.a.c.core.StandardEngine - Starting Servlet engine: [Apache Tomcat/10.1.49]
+2025-11-26 14:54:13.240 [main] INFO  o.a.c.c.C.[.[localhost].[/] - Initializing Spring embedded WebApplicationContext
+2025-11-26 14:54:13.240 [main] INFO  o.s.b.w.s.c.ServletWebServerApplicationContext - Root WebApplicationContext: initialization completed in 1130 ms
+2025-11-26 14:54:14.011 [main] INFO  o.s.v.b.OptionalValidatorFactoryBean - Failed to set up a Bean Validation provider: jakarta.validation.NoProviderFoundException: Unable to create a Configuration, because no Jakarta Bean Validation provider could be found. Add a provider like Hibernate Validator (RI) to your classpath.
+2025-11-26 14:54:14.387 [main] INFO  o.s.b.w.e.t.TomcatWebServer - Tomcat started on port 7800 (http) with context path '/'
+2025-11-26 14:54:14.396 [main] INFO  c.c.t.c.CampusPulseApplication - Started CampusPulseApplication in 2.81 seconds (process running for 3.401)
+2025-11-26 14:54:19.235 [http-nio-7800-exec-1] INFO  o.a.c.c.C.[.[localhost].[/] - Initializing Spring DispatcherServlet 'dispatcherServlet'
+2025-11-26 14:54:19.236 [http-nio-7800-exec-1] INFO  o.s.w.s.DispatcherServlet - Initializing Servlet 'dispatcherServlet'
+2025-11-26 14:54:19.238 [http-nio-7800-exec-1] INFO  o.s.w.s.DispatcherServlet - Completed initialization in 1 ms
+2025-11-26 14:54:19.299 [http-nio-7800-exec-1] WARN  o.s.w.s.m.s.DefaultHandlerExceptionResolver - Resolved [org.springframework.http.converter.HttpMessageNotReadableException: Required request body is missing: public java.util.Map<java.lang.String, java.lang.Object> com.campus.trend.campus_pulse.controller.SysUserController.login(com.campus.trend.campus_pulse.dto.LoginRequest)]
+2025-11-26 14:55:57.716 [http-nio-7800-exec-4] INFO  c.z.hikari.HikariDataSource - HikariPool-1 - Starting...
+2025-11-26 14:55:58.178 [http-nio-7800-exec-4] INFO  c.z.hikari.pool.HikariPool - HikariPool-1 - Added connection com.mysql.cj.jdbc.ConnectionImpl@368e35c1
+2025-11-26 14:55:58.181 [http-nio-7800-exec-4] INFO  c.z.hikari.HikariDataSource - HikariPool-1 - Start completed.
+2025-11-26 14:55:58.191 [http-nio-7800-exec-4] DEBUG c.c.t.c.m.S.selectList - ==>  Preparing: SELECT id,username,password,nickname,avatar,role,major,grade,interest_tags,create_time FROM sys_user WHERE (username = ?)
+2025-11-26 14:55:58.230 [http-nio-7800-exec-4] DEBUG c.c.t.c.m.S.selectList - ==> Parameters: (String)
+2025-11-26 14:55:58.274 [http-nio-7800-exec-4] DEBUG c.c.t.c.m.S.selectList - <==      Total: 0
+2025-11-26 14:55:58.279 [http-nio-7800-exec-4] INFO  c.c.t.c.s.SysUserDetailsServiceImpl - 登录失败：用户不存在(未找到)
+2025-11-26 14:56:17.671 [http-nio-7800-exec-10] DEBUG c.c.t.c.m.S.selectList - ==>  Preparing: SELECT id,username,password,nickname,avatar,role,major,grade,interest_tags,create_time FROM sys_user WHERE (username = ?)
+2025-11-26 14:56:17.673 [http-nio-7800-exec-10] DEBUG c.c.t.c.m.S.selectList - ==> Parameters: NONE_PROVIDED(String)
+2025-11-26 14:56:17.675 [http-nio-7800-exec-10] DEBUG c.c.t.c.m.S.selectList - <==      Total: 0
+2025-11-26 14:56:17.676 [http-nio-7800-exec-10] INFO  c.c.t.c.s.SysUserDetailsServiceImpl - 登录失败：用户NONE_PROVIDED不存在(未找到)
+2025-11-26 14:56:33.366 [http-nio-7800-exec-6] DEBUG c.c.t.c.m.S.selectList - ==>  Preparing: SELECT id,username,password,nickname,avatar,role,major,grade,interest_tags,create_time FROM sys_user WHERE (username = ?)
+2025-11-26 14:56:33.368 [http-nio-7800-exec-6] DEBUG c.c.t.c.m.S.selectList - ==> Parameters: student(String)
+2025-11-26 14:56:33.372 [http-nio-7800-exec-6] DEBUG c.c.t.c.m.S.selectList - <==      Total: 0
+2025-11-26 14:56:33.373 [http-nio-7800-exec-6] INFO  c.c.t.c.s.SysUserDetailsServiceImpl - 登录失败：用户student不存在(未找到)
+2025-11-26 14:57:14.168 [SpringApplicationShutdownHook] INFO  o.s.b.w.e.t.GracefulShutdown - Commencing graceful shutdown. Waiting for active requests to complete
+2025-11-26 14:57:14.772 [tomcat-shutdown] INFO  o.s.b.w.e.t.GracefulShutdown - Graceful shutdown complete
+2025-11-26 14:57:14.821 [SpringApplicationShutdownHook] INFO  c.z.hikari.HikariDataSource - HikariPool-1 - Shutdown initiated...
+2025-11-26 14:57:14.837 [SpringApplicationShutdownHook] INFO  c.z.hikari.HikariDataSource - HikariPool-1 - Shutdown completed.
