@@ -25,11 +25,12 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
     */
 
     @Override
-    public List<SysUser> searchByUsername(String username) {
-        LambdaQueryWrapper<SysUser> wrapper = Wrappers.lambdaQuery();
-        wrapper.eq(SysUser::getUsername, username);
-
-        return this.list(wrapper);
+    public SysUser searchByUsername(String username) {
+        return this.getOne(
+                Wrappers.lambdaQuery(SysUser.class)
+                        .eq(SysUser::getUsername, username),
+                false // 不抛异常，返回 null
+        );
     }
 
     @Override

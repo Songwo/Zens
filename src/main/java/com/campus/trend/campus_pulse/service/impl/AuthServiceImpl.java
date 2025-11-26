@@ -3,12 +3,17 @@ package com.campus.trend.campus_pulse.service.impl;
 import com.campus.trend.campus_pulse.dto.LoginRequest;
 import com.campus.trend.campus_pulse.dto.RegisterRequest;
 import com.campus.trend.campus_pulse.entity.SysUser;
+import com.campus.trend.campus_pulse.exception.definexception.LoginException;
+import com.campus.trend.campus_pulse.exception.definexception.RegisterException;
+import com.campus.trend.campus_pulse.exception.definexception.UserNameAlreadyExisted;
 import com.campus.trend.campus_pulse.security.AuthSysUser;
 import com.campus.trend.campus_pulse.service.AuthService;
 import com.campus.trend.campus_pulse.service.SysUserService;
 import com.campus.trend.campus_pulse.utils.GenerateIDUtil;
 import com.campus.trend.campus_pulse.utils.JwtUtil;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -18,6 +23,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 @Service
+@Slf4j
 public class AuthServiceImpl implements AuthService {
 
     private final AuthenticationManager authorizationManager;
@@ -35,37 +41,63 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
-    public String login(LoginRequest loginRequest) {
-        UsernamePasswordAuthenticationToken token =
-                new UsernamePasswordAuthenticationToken(loginRequest.getUsername(), loginRequest.getPassword());
-        Authentication authentication = authorizationManager.authenticate(token);
+    public String login(LoginRequest req) {
 
-        AuthSysUser User = (AuthSysUser) authentication.getPrincipal();
+        // 1. 构造 Token（账户密码封装）
+        UsernamePasswordAuthenticationToken authToken =
+                new UsernamePasswordAuthenticationToken(req.getUsername(), req.getPassword());
 
-        SysUser sysUser = User.getSysUser();
+        // 2. SecurityManager 进行实际认证
+        Authentication authentication = authorizationManager.authenticate(authToken);
+
+        if (authentication == null || !authentication.isAuthenticated()) {
+            log.info("1111111111111111");
+            throw new LoginException("登录失败，账号或密码错误");
+        }
+
+        // 3. 获取登录用户信息
+        AuthSysUser authUser = (AuthSysUser) authentication.getPrincipal();
+        SysUser user = authUser.getSysUser();
+
+        // 4. JWT 内容,构造自定义 JWT
         Map<String, Object> claims = new HashMap<>();
-        claims.put("username", sysUser.getUsername());
-        claims.put("avatar", sysUser.getAvatar());
+        claims.put("username", user.getUsername());
+        claims.put("avatar", user.getAvatar());
+        claims.put("role", user.getRole());
 
-        return JwtUtil.GenerateToken(sysUser.getId(), claims);
+        // 5. 生成 Token
+        return JwtUtil.GenerateToken(user.getId(), claims);
     }
+
 
     @Override
-    public boolean register(RegisterRequest registerRequest) {
+    public void register(RegisterRequest req) {
 
-        SysUser sysUser = new SysUser();
-        String op = "USER";
-        sysUser.setId(GenerateIDUtil.genId(op));
-        sysUser.setUsername(registerRequest.getUsername());
+        // 1. 用户名（学号）是否已存在
+        SysUser exist = sysUserService.lambdaQuery()
+                .eq(SysUser::getUsername, req.getUsername())
+                .one();
 
-        sysUser.setPassword(passwordEncoder.encode(registerRequest.getPassword()));
+        if (exist != null) {
+            throw new UserNameAlreadyExisted("该学号已注册");
+        }
 
-        sysUser.setAvatar(registerRequest.getAvatar());
-        sysUser.setMajor(registerRequest.getMajor());
-        sysUser.setGrade(registerRequest.getGrade());
-        sysUser.setNickname(registerRequest.getNickname());
+        // 2. 创建用户实体
+        SysUser user = new SysUser();
+        user.setId(GenerateIDUtil.genId("USER"));
+        user.setUsername(req.getUsername());
+        user.setPassword(passwordEncoder.encode(req.getPassword()));
+        user.setNickname(req.getNickname());
+        user.setAvatar(req.getAvatar());
+        user.setMajor(req.getMajor());
+        user.setGrade(req.getGrade());
 
-        return sysUserService.save(sysUser);
+        // 3. 保存
+        boolean saved = sysUserService.save(user);
+        if (!saved) {
+            throw new RegisterException("注册失败，请稍后重试");
+        }
     }
+
 
 }

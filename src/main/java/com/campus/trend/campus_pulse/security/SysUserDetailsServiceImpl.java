@@ -1,6 +1,7 @@
 package com.campus.trend.campus_pulse.security;
 
 import com.campus.trend.campus_pulse.entity.SysUser;
+import com.campus.trend.campus_pulse.exception.definexception.LoginException;
 import com.campus.trend.campus_pulse.service.SysUserService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -24,16 +25,21 @@ public class SysUserDetailsServiceImpl implements UserDetailsService {
     }
 
     @Override
-    public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
-        List<SysUser> user = sysUserService.searchByUsername(username);
+    public UserDetails loadUserByUsername(String username) throws LoginException {
 
-        if (user.isEmpty()) {
-            log.info("登录失败：用户{}不存在(未找到)", username);
-            throw new UsernameNotFoundException("用户【"+username+"】不存在或密码错误");
+        SysUser user = sysUserService.lambdaQuery()
+                .eq(SysUser::getUsername, username)
+                .one();
+
+        if (user == null) {
+            log.warn("用户 [{}] 登录失败：账号不存在", username);
+            throw new LoginException("账号或密码错误");
         }
 
-        log.info("用户{}信息加载成功！Role：{}",user.get(0).getUsername(),user.get(0).getRole() == 0 ? "Admin":"User");
+        log.info("用户 [{}] 信息加载成功，角色：{}",
+                user.getUsername(),
+                user.getRole() == 0 ? "Admin" : "User");
 
-        return new AuthSysUser(user.get(0));
+        return new AuthSysUser(user);
     }
 }

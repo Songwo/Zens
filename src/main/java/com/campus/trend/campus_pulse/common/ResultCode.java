@@ -17,6 +17,7 @@ public enum ResultCode {
     TOKEN_INVALID(3005, "Token无效"),
     REGISTER_ERROR(3006,"用户注册失败"),
 
+
     // 4000开头：参数错误
     PARAM_ERROR(4001, "参数错误"),
     REQUEST_BODY_MISSING(4002, "请求体为空"),
@@ -25,6 +26,7 @@ public enum ResultCode {
     // 5000开头：资源问题
     USER_NOT_FOUND(5001, "用户不存在"),
     POST_NOT_FOUND(5002, "帖子不存在"),
+    USERNAME_ALREADY_EXISTED(5003,"用户已经存在"),
 
     // 9000开头：系统异常
     SYSTEM_ERROR(9000, "系统异常，请稍后再试");

@@ -7,7 +7,7 @@ import java.util.List;
 
 public interface SysUserService extends IService<SysUser> {
 
-    List<SysUser> searchByUsername(String username);
+    SysUser searchByUsername(String username);
 
     List<SysUser> searchByGrade(int grade);
 
