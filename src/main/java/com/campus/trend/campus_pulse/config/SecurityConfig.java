@@ -2,6 +2,8 @@ package com.campus.trend.campus_pulse.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -52,7 +54,8 @@ public class SecurityConfig {
                         // 允许匿名访问的接口（例如：注册、登录、公共内容、Swagger文档）
                         .requestMatchers("/sys-user/test",
                                 "/sys-user/user/**",
-                                "/sys-user/grade/**"
+                                "/sys-user/grade/**",
+                                "/sys-user/login"
                                 ).permitAll()
 
                         // 其他所有请求都需要认证 (Authenticated)
@@ -85,5 +88,10 @@ public class SecurityConfig {
         source.registerCorsConfiguration("/**", configuration);
 
         return source;
+    }
+
+    @Bean
+    public AuthenticationManager authenticationManager(AuthenticationConfiguration configuration) throws Exception {
+        return configuration.getAuthenticationManager();
     }
 }

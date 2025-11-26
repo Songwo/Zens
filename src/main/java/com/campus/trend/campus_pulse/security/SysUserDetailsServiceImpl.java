@@ -28,11 +28,11 @@ public class SysUserDetailsServiceImpl implements UserDetailsService {
         List<SysUser> user = sysUserService.searchByUsername(username);
 
         if (user.isEmpty()) {
-            log.info("登录失败：用户"+username+"不存在(未找到)");
+            log.info("登录失败：用户{}不存在(未找到)", username);
             throw new UsernameNotFoundException("用户【"+username+"】不存在或密码错误");
         }
 
-        log.info("用户{}信息加载成功！Role：{}",user.get(0).getRole() == 0 ? "Admin":"User",user.get(0).getRole());
+        log.info("用户{}信息加载成功！Role：{}",user.get(0).getUsername(),user.get(0).getRole() == 0 ? "Admin":"User");
 
         return new AuthSysUser(user.get(0));
     }

@@ -4,6 +4,9 @@ spring:
   # 设置自定义 Banner 文件位置
   banner:
     location: classpath:banner.txt
+  output:
+    ansi:
+      enabled: ALWAYS
 
   # 2. 数据库配置 (MySQL)
   datasource:
@@ -23,8 +26,8 @@ mybatis-plus:
       # 数据库配置
       id-type: auto
 
+# 4.Logging 配置
 logging:
-
   # 1. 日志文件配置
   # 定义日志文件的完整路径和名称。
   # 文件将输出到项目根目录下的 /log/ 文件夹中。
@@ -34,7 +37,7 @@ logging:
   # 设置日志输出格式
   pattern:
     # 控制台日志格式：时间 | 线程 | 级别 | Logger名称 | 消息
-    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{30} - %msg%n"
+    console: "%clr(%d{yyyy-MM-dd HH:mm:ss.SSS}){faint} %clr([%thread]){magenta} %clr(%-5level){green} %clr(%logger){cyan} %clr(-){faint} %msg%n"
     # 文件日志格式：与控制台保持一致
     file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{30} - %msg%n"
 
@@ -50,6 +53,7 @@ logging:
     com.baomidou: WARN
     org.springframework.security: WARN
 
+# 5.JWT 配置
 jwt:
   SECRET_KEY : "RwE7qC8ce3rE5eVTPVm1ZJNmD5JyAuDN1Xupe16p6gueoN9Ye5BYMReMm8ZMcv0u"
   ExpireTime : 3600000

@@ -15,3 +15,4 @@ ${AnsiColor.RED}        ██║     ╚██████╔╝╚████
 ${AnsiColor.BRIGHT_RED}        ╚═╝      ╚═════╝  ╚═════╝  ╚═╝  ╚═══╝╚═╝ ╚══╝╚═╝  ╚═╝
 
 ${AnsiColor.MAGENTA}                    >>>  Powered by SongOne <<<
+${AnsiColor.DEFAULT}
