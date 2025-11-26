@@ -55,7 +55,8 @@ public class SecurityConfig {
                         .requestMatchers("/sys-user/test",
                                 "/sys-user/user/**",
                                 "/sys-user/grade/**",
-                                "/sys-user/login"
+                                "/sys-user/login",
+                                "/sys-user/register"
                                 ).permitAll()
 
                         // 其他所有请求都需要认证 (Authenticated)

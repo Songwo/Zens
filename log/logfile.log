@@ -692,3 +692,158 @@ Consider defining a bean of type 'com.campus.trend.campus_pulse.service.AuthServ
 2025-11-26 15:11:05.859 [tomcat-shutdown] INFO  o.s.b.w.e.t.GracefulShutdown - Graceful shutdown complete
 2025-11-26 15:11:05.879 [SpringApplicationShutdownHook] INFO  c.z.hikari.HikariDataSource - HikariPool-1 - Shutdown initiated...
 2025-11-26 15:11:05.885 [SpringApplicationShutdownHook] INFO  c.z.hikari.HikariDataSource - HikariPool-1 - Shutdown completed.
+2025-11-26 15:21:48.886 [main] INFO  c.c.t.c.CampusPulseApplication - Starting CampusPulseApplication using Java 17.0.15 with PID 28324 (D:\2026毕业设计\DaiMa\campus-pulse(back)\campus-pulse\target\classes started by lenovo in D:\2026毕业设计\DaiMa\campus-pulse(back)\campus-pulse)
+2025-11-26 15:21:48.888 [main] DEBUG c.c.t.c.CampusPulseApplication - Running with Spring Boot v3.5.8, Spring v6.2.14
+2025-11-26 15:21:48.888 [main] INFO  c.c.t.c.CampusPulseApplication - No active profile set, falling back to 1 default profile: "default"
+2025-11-26 15:21:49.626 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Multiple Spring Data modules found, entering strict repository configuration mode
+2025-11-26 15:21:49.629 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Bootstrapping Spring Data Redis repositories in DEFAULT mode.
+2025-11-26 15:21:49.663 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Finished Spring Data repository scanning in 17 ms. Found 0 Redis repository interfaces.
+2025-11-26 15:21:50.207 [main] INFO  o.s.b.w.e.t.TomcatWebServer - Tomcat initialized with port 7800 (http)
+2025-11-26 15:21:50.219 [main] INFO  o.a.c.core.StandardService - Starting service [Tomcat]
+2025-11-26 15:21:50.219 [main] INFO  o.a.c.core.StandardEngine - Starting Servlet engine: [Apache Tomcat/10.1.49]
+2025-11-26 15:21:50.291 [main] INFO  o.a.c.c.C.[.[localhost].[/] - Initializing Spring embedded WebApplicationContext
+2025-11-26 15:21:50.292 [main] INFO  o.s.b.w.s.c.ServletWebServerApplicationContext - Root WebApplicationContext: initialization completed in 1347 ms
+2025-11-26 15:21:51.111 [main] INFO  o.s.v.b.OptionalValidatorFactoryBean - Failed to set up a Bean Validation provider: jakarta.validation.NoProviderFoundException: Unable to create a Configuration, because no Jakarta Bean Validation provider could be found. Add a provider like Hibernate Validator (RI) to your classpath.
+2025-11-26 15:21:51.573 [main] INFO  o.s.b.w.e.t.TomcatWebServer - Tomcat started on port 7800 (http) with context path '/'
+2025-11-26 15:21:51.581 [main] INFO  c.c.t.c.CampusPulseApplication - Started CampusPulseApplication in 3.238 seconds (process running for 3.985)
+2025-11-26 15:21:55.075 [http-nio-7800-exec-1] INFO  o.a.c.c.C.[.[localhost].[/] - Initializing Spring DispatcherServlet 'dispatcherServlet'
+2025-11-26 15:21:55.075 [http-nio-7800-exec-1] INFO  o.s.w.s.DispatcherServlet - Initializing Servlet 'dispatcherServlet'
+2025-11-26 15:21:55.076 [http-nio-7800-exec-1] INFO  o.s.w.s.DispatcherServlet - Completed initialization in 1 ms
+2025-11-26 15:21:55.373 [http-nio-7800-exec-1] INFO  c.z.hikari.HikariDataSource - HikariPool-1 - Starting...
+2025-11-26 15:21:55.795 [http-nio-7800-exec-1] INFO  c.z.hikari.pool.HikariPool - HikariPool-1 - Added connection com.mysql.cj.jdbc.ConnectionImpl@16d50b7e
+2025-11-26 15:21:55.797 [http-nio-7800-exec-1] INFO  c.z.hikari.HikariDataSource - HikariPool-1 - Start completed.
+2025-11-26 15:21:55.806 [http-nio-7800-exec-1] DEBUG c.c.t.c.m.S.selectList - ==>  Preparing: SELECT id,username,password,nickname,avatar,role,major,grade,interest_tags,create_time FROM sys_user WHERE (username = ?)
+2025-11-26 15:21:55.836 [http-nio-7800-exec-1] DEBUG c.c.t.c.m.S.selectList - ==> Parameters: student(String)
+2025-11-26 15:21:55.863 [http-nio-7800-exec-1] DEBUG c.c.t.c.m.S.selectList - <==      Total: 0
+2025-11-26 15:21:55.870 [http-nio-7800-exec-1] INFO  c.c.t.c.s.SysUserDetailsServiceImpl - 登录失败：用户student不存在(未找到)
+2025-11-26 15:22:03.408 [http-nio-7800-exec-3] DEBUG c.c.t.c.m.S.selectList - ==>  Preparing: SELECT id,username,password,nickname,avatar,role,major,grade,interest_tags,create_time FROM sys_user WHERE (username = ?)
+2025-11-26 15:22:03.409 [http-nio-7800-exec-3] DEBUG c.c.t.c.m.S.selectList - ==> Parameters: NONE_PROVIDED(String)
+2025-11-26 15:22:03.412 [http-nio-7800-exec-3] DEBUG c.c.t.c.m.S.selectList - <==      Total: 0
+2025-11-26 15:22:03.412 [http-nio-7800-exec-3] INFO  c.c.t.c.s.SysUserDetailsServiceImpl - 登录失败：用户NONE_PROVIDED不存在(未找到)
+2025-11-26 15:22:07.235 [http-nio-7800-exec-4] DEBUG c.c.t.c.m.S.selectList - ==>  Preparing: SELECT id,username,password,nickname,avatar,role,major,grade,interest_tags,create_time FROM sys_user WHERE (username = ?)
+2025-11-26 15:22:07.236 [http-nio-7800-exec-4] DEBUG c.c.t.c.m.S.selectList - ==> Parameters: NONE_PROVIDED(String)
+2025-11-26 15:22:07.237 [http-nio-7800-exec-4] DEBUG c.c.t.c.m.S.selectList - <==      Total: 0
+2025-11-26 15:22:07.237 [http-nio-7800-exec-4] INFO  c.c.t.c.s.SysUserDetailsServiceImpl - 登录失败：用户NONE_PROVIDED不存在(未找到)
+2025-11-26 15:22:25.607 [http-nio-7800-exec-5] DEBUG c.c.t.c.m.S.selectList - ==>  Preparing: SELECT id,username,password,nickname,avatar,role,major,grade,interest_tags,create_time FROM sys_user WHERE (username = ?)
+2025-11-26 15:22:25.610 [http-nio-7800-exec-5] DEBUG c.c.t.c.m.S.selectList - ==> Parameters: (String)
+2025-11-26 15:22:25.614 [http-nio-7800-exec-5] DEBUG c.c.t.c.m.S.selectList - <==      Total: 0
+2025-11-26 15:22:25.616 [http-nio-7800-exec-5] INFO  c.c.t.c.s.SysUserDetailsServiceImpl - 登录失败：用户不存在(未找到)
+2025-11-26 15:22:53.585 [SpringApplicationShutdownHook] INFO  o.s.b.w.e.t.GracefulShutdown - Commencing graceful shutdown. Waiting for active requests to complete
+2025-11-26 15:22:54.094 [tomcat-shutdown] INFO  o.s.b.w.e.t.GracefulShutdown - Graceful shutdown complete
+2025-11-26 15:22:54.146 [SpringApplicationShutdownHook] INFO  c.z.hikari.HikariDataSource - HikariPool-1 - Shutdown initiated...
+2025-11-26 15:22:54.166 [SpringApplicationShutdownHook] INFO  c.z.hikari.HikariDataSource - HikariPool-1 - Shutdown completed.
+2025-11-26 15:49:12.443 [main] INFO  c.c.t.c.CampusPulseApplication - Starting CampusPulseApplication using Java 17.0.15 with PID 16076 (D:\2026毕业设计\DaiMa\campus-pulse(back)\campus-pulse\target\classes started by lenovo in D:\2026毕业设计\DaiMa\campus-pulse(back)\campus-pulse)
+2025-11-26 15:49:12.445 [main] DEBUG c.c.t.c.CampusPulseApplication - Running with Spring Boot v3.5.8, Spring v6.2.14
+2025-11-26 15:49:12.446 [main] INFO  c.c.t.c.CampusPulseApplication - No active profile set, falling back to 1 default profile: "default"
+2025-11-26 15:49:13.100 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Multiple Spring Data modules found, entering strict repository configuration mode
+2025-11-26 15:49:13.101 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Bootstrapping Spring Data Redis repositories in DEFAULT mode.
+2025-11-26 15:49:13.133 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Finished Spring Data repository scanning in 18 ms. Found 0 Redis repository interfaces.
+2025-11-26 15:49:13.578 [main] INFO  o.s.b.w.e.t.TomcatWebServer - Tomcat initialized with port 7800 (http)
+2025-11-26 15:49:13.588 [main] INFO  o.a.c.core.StandardService - Starting service [Tomcat]
+2025-11-26 15:49:13.589 [main] INFO  o.a.c.core.StandardEngine - Starting Servlet engine: [Apache Tomcat/10.1.49]
+2025-11-26 15:49:13.664 [main] INFO  o.a.c.c.C.[.[localhost].[/] - Initializing Spring embedded WebApplicationContext
+2025-11-26 15:49:13.664 [main] INFO  o.s.b.w.s.c.ServletWebServerApplicationContext - Root WebApplicationContext: initialization completed in 1160 ms
+2025-11-26 15:49:14.553 [main] INFO  o.s.v.b.OptionalValidatorFactoryBean - Failed to set up a Bean Validation provider: jakarta.validation.NoProviderFoundException: Unable to create a Configuration, because no Jakarta Bean Validation provider could be found. Add a provider like Hibernate Validator (RI) to your classpath.
+2025-11-26 15:49:14.942 [main] INFO  o.s.b.w.e.t.TomcatWebServer - Tomcat started on port 7800 (http) with context path '/'
+2025-11-26 15:49:14.950 [main] INFO  c.c.t.c.CampusPulseApplication - Started CampusPulseApplication in 2.988 seconds (process running for 3.594)
+2025-11-26 15:50:47.522 [http-nio-7800-exec-1] INFO  o.a.c.c.C.[.[localhost].[/] - Initializing Spring DispatcherServlet 'dispatcherServlet'
+2025-11-26 15:50:47.523 [http-nio-7800-exec-1] INFO  o.s.w.s.DispatcherServlet - Initializing Servlet 'dispatcherServlet'
+2025-11-26 15:50:47.525 [http-nio-7800-exec-1] INFO  o.s.w.s.DispatcherServlet - Completed initialization in 2 ms
+2025-11-26 15:50:47.837 [http-nio-7800-exec-1] INFO  c.z.hikari.HikariDataSource - HikariPool-1 - Starting...
+2025-11-26 15:50:48.222 [http-nio-7800-exec-1] INFO  c.z.hikari.pool.HikariPool - HikariPool-1 - Added connection com.mysql.cj.jdbc.ConnectionImpl@799f0ce4
+2025-11-26 15:50:48.225 [http-nio-7800-exec-1] INFO  c.z.hikari.HikariDataSource - HikariPool-1 - Start completed.
+2025-11-26 15:50:48.232 [http-nio-7800-exec-1] DEBUG c.c.t.c.m.SysUserMapper.insert - ==>  Preparing: INSERT INTO sys_user ( id, username, password, nickname, avatar, major, grade ) VALUES ( ?, ?, ?, ?, ?, ?, ? )
+2025-11-26 15:50:48.265 [http-nio-7800-exec-1] DEBUG c.c.t.c.m.SysUserMapper.insert - ==> Parameters: USER_1764143447662578412(String), song(String), $2a$10$58/IBJ5GGodK68fEg3MS/usJkel9fRtjhItPKpEe.FB6QUPovNf3i(String), ssss(String), ssssswww(String), sadowd(String), 2021(Integer)
+2025-11-26 15:50:48.278 [http-nio-7800-exec-1] DEBUG c.c.t.c.m.SysUserMapper.insert - <==    Updates: 1
+2025-11-26 15:51:37.621 [http-nio-7800-exec-2] DEBUG c.c.t.c.m.S.selectList - ==>  Preparing: SELECT id,username,password,nickname,avatar,role,major,grade,interest_tags,create_time FROM sys_user WHERE (username = ?)
+2025-11-26 15:51:37.626 [http-nio-7800-exec-2] DEBUG c.c.t.c.m.S.selectList - ==> Parameters: song(String)
+2025-11-26 15:51:37.650 [http-nio-7800-exec-2] DEBUG c.c.t.c.m.S.selectList - <==      Total: 1
+2025-11-26 15:51:37.655 [http-nio-7800-exec-2] INFO  c.c.t.c.s.SysUserDetailsServiceImpl - 用户song信息加载成功！Role：User
+2025-11-26 15:52:04.412 [http-nio-7800-exec-10] DEBUG c.c.t.c.m.SysUserMapper.insert - ==>  Preparing: INSERT INTO sys_user ( id, username, password, nickname, avatar, major, grade ) VALUES ( ?, ?, ?, ?, ?, ?, ? )
+2025-11-26 15:52:04.415 [http-nio-7800-exec-10] DEBUG c.c.t.c.m.SysUserMapper.insert - ==> Parameters: USER_1764143524312394294(String), (String), $2a$10$V2pUBqBRhHtVLjVjZHorU.cCtwISM3pk.bJoMWzU26e.uCV9jRfgC(String), ssss(String), ssssswww(String), sadowd(String), 2021(Integer)
+2025-11-26 15:52:04.432 [http-nio-7800-exec-10] DEBUG c.c.t.c.m.SysUserMapper.insert - <==    Updates: 1
+2025-11-26 16:51:10.566 [SpringApplicationShutdownHook] INFO  o.s.b.w.e.t.GracefulShutdown - Commencing graceful shutdown. Waiting for active requests to complete
+2025-11-26 16:51:10.990 [tomcat-shutdown] INFO  o.s.b.w.e.t.GracefulShutdown - Graceful shutdown complete
+2025-11-26 16:51:11.027 [SpringApplicationShutdownHook] INFO  c.z.hikari.HikariDataSource - HikariPool-1 - Shutdown initiated...
+2025-11-26 16:51:11.034 [SpringApplicationShutdownHook] INFO  c.z.hikari.HikariDataSource - HikariPool-1 - Shutdown completed.
+2025-11-26 16:51:16.585 [main] INFO  c.c.t.c.CampusPulseApplication - Starting CampusPulseApplication using Java 17.0.15 with PID 23244 (D:\2026毕业设计\DaiMa\campus-pulse(back)\campus-pulse\target\classes started by lenovo in D:\2026毕业设计\DaiMa\campus-pulse(back)\campus-pulse)
+2025-11-26 16:51:16.588 [main] DEBUG c.c.t.c.CampusPulseApplication - Running with Spring Boot v3.5.8, Spring v6.2.14
+2025-11-26 16:51:16.589 [main] INFO  c.c.t.c.CampusPulseApplication - No active profile set, falling back to 1 default profile: "default"
+2025-11-26 16:51:17.324 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Multiple Spring Data modules found, entering strict repository configuration mode
+2025-11-26 16:51:17.329 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Bootstrapping Spring Data Redis repositories in DEFAULT mode.
+2025-11-26 16:51:17.398 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Finished Spring Data repository scanning in 36 ms. Found 0 Redis repository interfaces.
+2025-11-26 16:51:18.071 [main] INFO  o.s.b.w.e.t.TomcatWebServer - Tomcat initialized with port 7800 (http)
+2025-11-26 16:51:18.088 [main] INFO  o.a.c.core.StandardService - Starting service [Tomcat]
+2025-11-26 16:51:18.089 [main] INFO  o.a.c.core.StandardEngine - Starting Servlet engine: [Apache Tomcat/10.1.49]
+2025-11-26 16:51:18.209 [main] INFO  o.a.c.c.C.[.[localhost].[/] - Initializing Spring embedded WebApplicationContext
+2025-11-26 16:51:18.209 [main] INFO  o.s.b.w.s.c.ServletWebServerApplicationContext - Root WebApplicationContext: initialization completed in 1562 ms
+2025-11-26 16:51:19.230 [main] INFO  o.s.v.b.OptionalValidatorFactoryBean - Failed to set up a Bean Validation provider: jakarta.validation.NoProviderFoundException: Unable to create a Configuration, because no Jakarta Bean Validation provider could be found. Add a provider like Hibernate Validator (RI) to your classpath.
+2025-11-26 16:51:19.679 [main] INFO  o.s.b.w.e.t.TomcatWebServer - Tomcat started on port 7800 (http) with context path '/'
+2025-11-26 16:51:19.691 [main] INFO  c.c.t.c.CampusPulseApplication - Started CampusPulseApplication in 3.687 seconds (process running for 4.453)
+2025-11-26 16:51:46.007 [http-nio-7800-exec-1] INFO  o.a.c.c.C.[.[localhost].[/] - Initializing Spring DispatcherServlet 'dispatcherServlet'
+2025-11-26 16:51:46.007 [http-nio-7800-exec-1] INFO  o.s.w.s.DispatcherServlet - Initializing Servlet 'dispatcherServlet'
+2025-11-26 16:51:46.008 [http-nio-7800-exec-1] INFO  o.s.w.s.DispatcherServlet - Completed initialization in 0 ms
+2025-11-26 16:51:46.288 [http-nio-7800-exec-1] INFO  c.z.hikari.HikariDataSource - HikariPool-1 - Starting...
+2025-11-26 16:51:46.681 [http-nio-7800-exec-1] INFO  c.z.hikari.pool.HikariPool - HikariPool-1 - Added connection com.mysql.cj.jdbc.ConnectionImpl@696c768f
+2025-11-26 16:51:46.682 [http-nio-7800-exec-1] INFO  c.z.hikari.HikariDataSource - HikariPool-1 - Start completed.
+2025-11-26 16:51:46.691 [http-nio-7800-exec-1] DEBUG c.c.t.c.m.SysUserMapper.insert - ==>  Preparing: INSERT INTO sys_user ( id, username, password, nickname, avatar, major, grade ) VALUES ( ?, ?, ?, ?, ?, ?, ? )
+2025-11-26 16:51:46.721 [http-nio-7800-exec-1] DEBUG c.c.t.c.m.SysUserMapper.insert - ==> Parameters: USER_1764147106122699786(String), (String), $2a$10$W2Dv7HLwMxMjxn57cEmELenjW3xVS5r6uKhlUt2gsthzJma7egiWu(String), (String), ssssswww(String), (String), 2021(Integer)
+2025-11-26 16:53:51.872 [SpringApplicationShutdownHook] INFO  o.s.b.w.e.t.GracefulShutdown - Commencing graceful shutdown. Waiting for active requests to complete
+2025-11-26 16:53:52.360 [tomcat-shutdown] INFO  o.s.b.w.e.t.GracefulShutdown - Graceful shutdown complete
+2025-11-26 16:53:52.390 [SpringApplicationShutdownHook] INFO  c.z.hikari.HikariDataSource - HikariPool-1 - Shutdown initiated...
+2025-11-26 16:53:52.408 [SpringApplicationShutdownHook] INFO  c.z.hikari.HikariDataSource - HikariPool-1 - Shutdown completed.
+2025-11-26 16:56:36.848 [main] INFO  c.c.t.c.CampusPulseApplication - Starting CampusPulseApplication using Java 17.0.15 with PID 5944 (D:\2026毕业设计\DaiMa\campus-pulse(back)\campus-pulse\target\classes started by lenovo in D:\2026毕业设计\DaiMa\campus-pulse(back)\campus-pulse)
+2025-11-26 16:56:36.851 [main] DEBUG c.c.t.c.CampusPulseApplication - Running with Spring Boot v3.5.8, Spring v6.2.14
+2025-11-26 16:56:36.852 [main] INFO  c.c.t.c.CampusPulseApplication - No active profile set, falling back to 1 default profile: "default"
+2025-11-26 16:56:37.499 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Multiple Spring Data modules found, entering strict repository configuration mode
+2025-11-26 16:56:37.502 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Bootstrapping Spring Data Redis repositories in DEFAULT mode.
+2025-11-26 16:56:37.528 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Finished Spring Data repository scanning in 14 ms. Found 0 Redis repository interfaces.
+2025-11-26 16:56:37.997 [main] INFO  o.s.b.w.e.t.TomcatWebServer - Tomcat initialized with port 7800 (http)
+2025-11-26 16:56:38.008 [main] INFO  o.a.c.core.StandardService - Starting service [Tomcat]
+2025-11-26 16:56:38.008 [main] INFO  o.a.c.core.StandardEngine - Starting Servlet engine: [Apache Tomcat/10.1.49]
+2025-11-26 16:56:38.072 [main] INFO  o.a.c.c.C.[.[localhost].[/] - Initializing Spring embedded WebApplicationContext
+2025-11-26 16:56:38.073 [main] INFO  o.s.b.w.s.c.ServletWebServerApplicationContext - Root WebApplicationContext: initialization completed in 1173 ms
+2025-11-26 16:56:38.914 [main] INFO  o.s.v.b.OptionalValidatorFactoryBean - Failed to set up a Bean Validation provider: jakarta.validation.NoProviderFoundException: Unable to create a Configuration, because no Jakarta Bean Validation provider could be found. Add a provider like Hibernate Validator (RI) to your classpath.
+2025-11-26 16:56:39.327 [main] INFO  o.s.b.w.e.t.TomcatWebServer - Tomcat started on port 7800 (http) with context path '/'
+2025-11-26 16:56:39.335 [main] INFO  c.c.t.c.CampusPulseApplication - Started CampusPulseApplication in 3.014 seconds (process running for 3.672)
+2025-11-26 16:56:43.522 [http-nio-7800-exec-7] INFO  o.a.c.c.C.[.[localhost].[/] - Initializing Spring DispatcherServlet 'dispatcherServlet'
+2025-11-26 16:56:43.522 [http-nio-7800-exec-7] INFO  o.s.w.s.DispatcherServlet - Initializing Servlet 'dispatcherServlet'
+2025-11-26 16:56:43.524 [http-nio-7800-exec-7] INFO  o.s.w.s.DispatcherServlet - Completed initialization in 1 ms
+2025-11-26 16:56:43.876 [http-nio-7800-exec-7] INFO  c.z.hikari.HikariDataSource - HikariPool-1 - Starting...
+2025-11-26 16:56:44.190 [http-nio-7800-exec-7] INFO  c.z.hikari.pool.HikariPool - HikariPool-1 - Added connection com.mysql.cj.jdbc.ConnectionImpl@398b74a
+2025-11-26 16:56:44.193 [http-nio-7800-exec-7] INFO  c.z.hikari.HikariDataSource - HikariPool-1 - Start completed.
+2025-11-26 16:56:44.200 [http-nio-7800-exec-7] DEBUG c.c.t.c.m.SysUserMapper.insert - ==>  Preparing: INSERT INTO sys_user ( id, username, password, nickname, avatar, major, grade ) VALUES ( ?, ?, ?, ?, ?, ?, ? )
+2025-11-26 16:56:44.227 [http-nio-7800-exec-7] DEBUG c.c.t.c.m.SysUserMapper.insert - ==> Parameters: USER_1764147403684467475(String), (String), $2a$10$99wxhRCSk.mrunViuJpLkeEavGYivUbqe7YSh8sj0tGr1utWSl.hm(String), (String), ssssswww(String), (String), 2021(Integer)
+2025-11-26 16:56:56.608 [http-nio-7800-exec-2] DEBUG c.c.t.c.m.SysUserMapper.insert - ==>  Preparing: INSERT INTO sys_user ( id, username, password, nickname, avatar, major, grade ) VALUES ( ?, ?, ?, ?, ?, ?, ? )
+2025-11-26 16:56:56.617 [http-nio-7800-exec-2] DEBUG c.c.t.c.m.SysUserMapper.insert - ==> Parameters: USER_1764147416469924692(String), sdwddaa(String), $2a$10$73gEmds/20lPxmIEZ64w5.L92XyQpirJN8GyFM2Lrr2FgVuMj.pyS(String), ssss(String), ssssswww(String), sadowd(String), 2021(Integer)
+2025-11-26 16:56:56.629 [http-nio-7800-exec-2] DEBUG c.c.t.c.m.SysUserMapper.insert - <==    Updates: 1
+2025-11-26 16:57:57.663 [SpringApplicationShutdownHook] INFO  o.s.b.w.e.t.GracefulShutdown - Commencing graceful shutdown. Waiting for active requests to complete
+2025-11-26 16:57:58.242 [tomcat-shutdown] INFO  o.s.b.w.e.t.GracefulShutdown - Graceful shutdown complete
+2025-11-26 16:57:58.276 [SpringApplicationShutdownHook] INFO  c.z.hikari.HikariDataSource - HikariPool-1 - Shutdown initiated...
+2025-11-26 16:57:58.290 [SpringApplicationShutdownHook] INFO  c.z.hikari.HikariDataSource - HikariPool-1 - Shutdown completed.
+2025-11-26 16:59:54.689 [main] INFO  c.c.t.c.CampusPulseApplication - Starting CampusPulseApplication using Java 17.0.15 with PID 30764 (D:\2026毕业设计\DaiMa\campus-pulse(back)\campus-pulse\target\classes started by lenovo in D:\2026毕业设计\DaiMa\campus-pulse(back)\campus-pulse)
+2025-11-26 16:59:54.692 [main] DEBUG c.c.t.c.CampusPulseApplication - Running with Spring Boot v3.5.8, Spring v6.2.14
+2025-11-26 16:59:54.692 [main] INFO  c.c.t.c.CampusPulseApplication - No active profile set, falling back to 1 default profile: "default"
+2025-11-26 16:59:55.395 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Multiple Spring Data modules found, entering strict repository configuration mode
+2025-11-26 16:59:55.397 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Bootstrapping Spring Data Redis repositories in DEFAULT mode.
+2025-11-26 16:59:55.430 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Finished Spring Data repository scanning in 19 ms. Found 0 Redis repository interfaces.
+2025-11-26 16:59:55.901 [main] INFO  o.s.b.w.e.t.TomcatWebServer - Tomcat initialized with port 7800 (http)
+2025-11-26 16:59:55.910 [main] INFO  o.a.c.core.StandardService - Starting service [Tomcat]
+2025-11-26 16:59:55.910 [main] INFO  o.a.c.core.StandardEngine - Starting Servlet engine: [Apache Tomcat/10.1.49]
+2025-11-26 16:59:55.978 [main] INFO  o.a.c.c.C.[.[localhost].[/] - Initializing Spring embedded WebApplicationContext
+2025-11-26 16:59:55.978 [main] INFO  o.s.b.w.s.c.ServletWebServerApplicationContext - Root WebApplicationContext: initialization completed in 1237 ms
+2025-11-26 16:59:57.125 [main] INFO  o.s.b.w.e.t.TomcatWebServer - Tomcat started on port 7800 (http) with context path '/'
+2025-11-26 16:59:57.137 [main] INFO  c.c.t.c.CampusPulseApplication - Started CampusPulseApplication in 2.977 seconds (process running for 3.618)
+2025-11-26 17:00:00.847 [http-nio-7800-exec-5] INFO  o.a.c.c.C.[.[localhost].[/] - Initializing Spring DispatcherServlet 'dispatcherServlet'
+2025-11-26 17:00:00.848 [http-nio-7800-exec-5] INFO  o.s.w.s.DispatcherServlet - Initializing Servlet 'dispatcherServlet'
+2025-11-26 17:00:00.851 [http-nio-7800-exec-5] INFO  o.s.w.s.DispatcherServlet - Completed initialization in 3 ms
+2025-11-26 17:00:20.157 [http-nio-7800-exec-4] INFO  c.z.hikari.HikariDataSource - HikariPool-1 - Starting...
+2025-11-26 17:00:20.517 [http-nio-7800-exec-4] INFO  c.z.hikari.pool.HikariPool - HikariPool-1 - Added connection com.mysql.cj.jdbc.ConnectionImpl@6b70d44d
+2025-11-26 17:00:20.519 [http-nio-7800-exec-4] INFO  c.z.hikari.HikariDataSource - HikariPool-1 - Start completed.
+2025-11-26 17:00:20.539 [http-nio-7800-exec-4] DEBUG c.c.t.c.m.SysUserMapper.insert - ==>  Preparing: INSERT INTO sys_user ( id, username, password, nickname, avatar, major, grade ) VALUES ( ?, ?, ?, ?, ?, ?, ? )
+2025-11-26 17:00:20.585 [http-nio-7800-exec-4] DEBUG c.c.t.c.m.SysUserMapper.insert - ==> Parameters: USER_1764147619986636797(String), 202233(String), $2a$10$itl2X9nBCGoKzBadtL5LweQDFaEXwr..cMY.ktO1ilaLKXHPTsoW2(String), ssss(String), ssssswww(String), sadowd(String), 2021(Integer)
+2025-11-26 17:00:20.599 [http-nio-7800-exec-4] DEBUG c.c.t.c.m.SysUserMapper.insert - <==    Updates: 1
+2025-11-26 17:01:23.119 [SpringApplicationShutdownHook] INFO  o.s.b.w.e.t.GracefulShutdown - Commencing graceful shutdown. Waiting for active requests to complete
+2025-11-26 17:01:23.613 [tomcat-shutdown] INFO  o.s.b.w.e.t.GracefulShutdown - Graceful shutdown complete
+2025-11-26 17:01:23.636 [SpringApplicationShutdownHook] INFO  c.z.hikari.HikariDataSource - HikariPool-1 - Shutdown initiated...
+2025-11-26 17:01:23.648 [SpringApplicationShutdownHook] INFO  c.z.hikari.HikariDataSource - HikariPool-1 - Shutdown completed.

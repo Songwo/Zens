@@ -15,6 +15,7 @@ public enum ResultCode {
     NO_PERMISSION(3003, "无访问权限"),
     TOKEN_MISSING(3004, "未提供Token"),
     TOKEN_INVALID(3005, "Token无效"),
+    REGISTER_ERROR(3006,"用户注册失败"),
 
     // 4000开头：参数错误
     PARAM_ERROR(4001, "参数错误"),
