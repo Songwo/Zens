@@ -664,3 +664,31 @@ Consider defining a bean of type 'com.campus.trend.campus_pulse.service.AuthServ
 2025-11-26 14:57:14.772 [tomcat-shutdown] INFO  o.s.b.w.e.t.GracefulShutdown - Graceful shutdown complete
 2025-11-26 14:57:14.821 [SpringApplicationShutdownHook] INFO  c.z.hikari.HikariDataSource - HikariPool-1 - Shutdown initiated...
 2025-11-26 14:57:14.837 [SpringApplicationShutdownHook] INFO  c.z.hikari.HikariDataSource - HikariPool-1 - Shutdown completed.
+2025-11-26 15:08:53.271 [main] INFO  c.c.t.c.CampusPulseApplication - Starting CampusPulseApplication using Java 17.0.15 with PID 26612 (D:\2026毕业设计\DaiMa\campus-pulse(back)\campus-pulse\target\classes started by lenovo in D:\2026毕业设计\DaiMa\campus-pulse(back)\campus-pulse)
+2025-11-26 15:08:53.273 [main] DEBUG c.c.t.c.CampusPulseApplication - Running with Spring Boot v3.5.8, Spring v6.2.14
+2025-11-26 15:08:53.274 [main] INFO  c.c.t.c.CampusPulseApplication - No active profile set, falling back to 1 default profile: "default"
+2025-11-26 15:08:54.175 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Multiple Spring Data modules found, entering strict repository configuration mode
+2025-11-26 15:08:54.177 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Bootstrapping Spring Data Redis repositories in DEFAULT mode.
+2025-11-26 15:08:54.210 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Finished Spring Data repository scanning in 17 ms. Found 0 Redis repository interfaces.
+2025-11-26 15:08:54.828 [main] INFO  o.s.b.w.e.t.TomcatWebServer - Tomcat initialized with port 7800 (http)
+2025-11-26 15:08:54.842 [main] INFO  o.a.c.core.StandardService - Starting service [Tomcat]
+2025-11-26 15:08:54.843 [main] INFO  o.a.c.core.StandardEngine - Starting Servlet engine: [Apache Tomcat/10.1.49]
+2025-11-26 15:08:54.927 [main] INFO  o.a.c.c.C.[.[localhost].[/] - Initializing Spring embedded WebApplicationContext
+2025-11-26 15:08:54.927 [main] INFO  o.s.b.w.s.c.ServletWebServerApplicationContext - Root WebApplicationContext: initialization completed in 1589 ms
+2025-11-26 15:08:56.285 [main] INFO  o.s.v.b.OptionalValidatorFactoryBean - Failed to set up a Bean Validation provider: jakarta.validation.NoProviderFoundException: Unable to create a Configuration, because no Jakarta Bean Validation provider could be found. Add a provider like Hibernate Validator (RI) to your classpath.
+2025-11-26 15:08:56.816 [main] INFO  o.s.b.w.e.t.TomcatWebServer - Tomcat started on port 7800 (http) with context path '/'
+2025-11-26 15:08:56.831 [main] INFO  c.c.t.c.CampusPulseApplication - Started CampusPulseApplication in 4.239 seconds (process running for 5.053)
+2025-11-26 15:09:14.513 [http-nio-7800-exec-6] INFO  o.a.c.c.C.[.[localhost].[/] - Initializing Spring DispatcherServlet 'dispatcherServlet'
+2025-11-26 15:09:14.513 [http-nio-7800-exec-6] INFO  o.s.w.s.DispatcherServlet - Initializing Servlet 'dispatcherServlet'
+2025-11-26 15:09:14.514 [http-nio-7800-exec-6] INFO  o.s.w.s.DispatcherServlet - Completed initialization in 1 ms
+2025-11-26 15:09:14.842 [http-nio-7800-exec-6] INFO  c.z.hikari.HikariDataSource - HikariPool-1 - Starting...
+2025-11-26 15:09:15.108 [http-nio-7800-exec-6] INFO  c.z.hikari.pool.HikariPool - HikariPool-1 - Added connection com.mysql.cj.jdbc.ConnectionImpl@25f5ec47
+2025-11-26 15:09:15.109 [http-nio-7800-exec-6] INFO  c.z.hikari.HikariDataSource - HikariPool-1 - Start completed.
+2025-11-26 15:09:15.114 [http-nio-7800-exec-6] DEBUG c.c.t.c.m.S.selectList - ==>  Preparing: SELECT id,username,password,nickname,avatar,role,major,grade,interest_tags,create_time FROM sys_user WHERE (username = ?)
+2025-11-26 15:09:15.138 [http-nio-7800-exec-6] DEBUG c.c.t.c.m.S.selectList - ==> Parameters: student(String)
+2025-11-26 15:09:15.168 [http-nio-7800-exec-6] DEBUG c.c.t.c.m.S.selectList - <==      Total: 0
+2025-11-26 15:09:15.173 [http-nio-7800-exec-6] INFO  c.c.t.c.s.SysUserDetailsServiceImpl - 登录失败：用户student不存在(未找到)
+2025-11-26 15:11:05.376 [SpringApplicationShutdownHook] INFO  o.s.b.w.e.t.GracefulShutdown - Commencing graceful shutdown. Waiting for active requests to complete
+2025-11-26 15:11:05.859 [tomcat-shutdown] INFO  o.s.b.w.e.t.GracefulShutdown - Graceful shutdown complete
+2025-11-26 15:11:05.879 [SpringApplicationShutdownHook] INFO  c.z.hikari.HikariDataSource - HikariPool-1 - Shutdown initiated...
+2025-11-26 15:11:05.885 [SpringApplicationShutdownHook] INFO  c.z.hikari.HikariDataSource - HikariPool-1 - Shutdown completed.
