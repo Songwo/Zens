@@ -49,3 +49,7 @@ logging:
     # 第三方库日志：减少第三方库（如 Hibernate, Mybatis-Plus, Spring Security）的日志输出，避免刷屏
     com.baomidou: WARN
     org.springframework.security: WARN
+
+jwt:
+  SECRET_KEY : "RwE7qC8ce3rE5eVTPVm1ZJNmD5JyAuDN1Xupe16p6gueoN9Ye5BYMReMm8ZMcv0u"
+  ExpireTime : 3600000
