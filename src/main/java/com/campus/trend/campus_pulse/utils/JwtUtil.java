@@ -8,6 +8,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.stereotype.Component;
 
 import java.nio.charset.StandardCharsets;
 import java.security.Key;
@@ -20,6 +21,7 @@ import java.util.Objects;
  * 日期：2025/11/26
  */
 @Slf4j
+@Component
 public class JwtUtil {
 
     //Jwt密钥
