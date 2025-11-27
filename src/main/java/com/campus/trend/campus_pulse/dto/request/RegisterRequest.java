@@ -1,4 +1,4 @@
-package com.campus.trend.campus_pulse.dto;
+package com.campus.trend.campus_pulse.dto.request;
 
 import jakarta.validation.constraints.*;
 import lombok.Data;

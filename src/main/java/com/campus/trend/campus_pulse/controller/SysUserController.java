@@ -1,8 +1,8 @@
 package com.campus.trend.campus_pulse.controller;
 
 import com.campus.trend.campus_pulse.common.Result;
-import com.campus.trend.campus_pulse.dto.LoginRequest;
-import com.campus.trend.campus_pulse.dto.RegisterRequest;
+import com.campus.trend.campus_pulse.dto.request.LoginRequest;
+import com.campus.trend.campus_pulse.dto.request.RegisterRequest;
 import com.campus.trend.campus_pulse.service.AuthService;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
@@ -25,6 +25,16 @@ public class SysUserController {
     @GetMapping("/all")
     public Result<?> getAll() {
         return Result.success(authService.getUsers());
+    }
+
+    @GetMapping("/profile")
+    public Result<?> getProfile() {
+        return Result.success(authService.getProFile());
+    }
+
+    @GetMapping("/simple-profile")
+    public Result<?> getSimpleProfile() {
+        return Result.success(authService.getSimpleProfile());
     }
 
     @PostMapping("/login")

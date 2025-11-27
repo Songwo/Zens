@@ -27,7 +27,6 @@ public class AuthSysUser implements UserDetails, Serializable {
         this.sysUser = sysUser;
         String roleName = sysUser.getRole() == 0 ? "ROLE_ADMIN" : "ROLE_STUDENT";
         this.authorities = Collections.singletonList(new SimpleGrantedAuthority(roleName));
-
     }
 
     private final Collection<? extends GrantedAuthority> authorities;
