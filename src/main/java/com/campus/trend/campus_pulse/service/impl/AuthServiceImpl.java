@@ -12,6 +12,7 @@ import com.campus.trend.campus_pulse.service.SysUserService;
 import com.campus.trend.campus_pulse.utils.GenerateIDUtil;
 import com.campus.trend.campus_pulse.utils.JwtUtil;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -31,12 +32,15 @@ public class AuthServiceImpl implements AuthService {
 
     private final PasswordEncoder passwordEncoder;
 
+    private final StringRedisTemplate stringRedisTemplate;
+
     public AuthServiceImpl(AuthenticationManager authorizationManager,
                            SysUserService sysUserService,
-                           PasswordEncoder passwordEncoder) {
+                           PasswordEncoder passwordEncoder, StringRedisTemplate stringRedisTemplate) {
         this.authorizationManager = authorizationManager;
         this.sysUserService = sysUserService;
         this.passwordEncoder = passwordEncoder;
+        this.stringRedisTemplate = stringRedisTemplate;
     }
 
     @Override
@@ -63,8 +67,13 @@ public class AuthServiceImpl implements AuthService {
         claims.put("avatar", user.getAvatar());
         claims.put("role", user.getRole());
 
-        // 5. 生成 Token
-        return JwtUtil.GenerateToken(user.getId(), claims);
+        // 5. 生成 Token ,并存入 Redis
+        String token = JwtUtil.GenerateToken(user.getId(), claims);
+
+        // 5.1 构建 Redis ，通过Key-用户ID，Value-token
+        stringRedisTemplate.opsForValue().set(user.getId(),token);
+
+        return token;
     }
 
     @Override

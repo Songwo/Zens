@@ -75,12 +75,12 @@ public class JwtUtil {
     }
 
     //获取用户ID
-    public static String getUserID(String token) {
+    public  String getUserID(String token) {
         return Objects.requireNonNull(parseToken(token)).getSubject();
     }
 
     //获取用户名
-    public static String getUsername(String token) {
+    public  String getUsername(String token) {
         return getClaimByToken(token,"username", String.class);
     }
 
