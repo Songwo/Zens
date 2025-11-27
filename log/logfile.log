@@ -294,3 +294,140 @@ java.lang.NullPointerException: null
 2025-11-27 14:24:42.797 [tomcat-shutdown] INFO  o.s.b.w.e.t.GracefulShutdown - Graceful shutdown complete
 2025-11-27 14:24:42.928 [SpringApplicationShutdownHook] INFO  c.z.hikari.HikariDataSource - HikariPool-1 - Shutdown initiated...
 2025-11-27 14:24:42.934 [SpringApplicationShutdownHook] INFO  c.z.hikari.HikariDataSource - HikariPool-1 - Shutdown completed.
+2025-11-27 14:42:06.986 [main] INFO  c.c.t.c.CampusPulseApplication - Starting CampusPulseApplication using Java 17.0.15 with PID 15244 (D:\2026毕业设计\DaiMa\campus-pulse(back)\campus-pulse\target\classes started by lenovo in D:\2026毕业设计\DaiMa\campus-pulse(back)\campus-pulse)
+2025-11-27 14:42:06.989 [main] DEBUG c.c.t.c.CampusPulseApplication - Running with Spring Boot v3.5.8, Spring v6.2.14
+2025-11-27 14:42:06.989 [main] INFO  c.c.t.c.CampusPulseApplication - No active profile set, falling back to 1 default profile: "default"
+2025-11-27 14:42:07.646 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Multiple Spring Data modules found, entering strict repository configuration mode
+2025-11-27 14:42:07.648 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Bootstrapping Spring Data Redis repositories in DEFAULT mode.
+2025-11-27 14:42:07.688 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Finished Spring Data repository scanning in 26 ms. Found 0 Redis repository interfaces.
+2025-11-27 14:42:08.135 [main] INFO  o.s.b.w.e.t.TomcatWebServer - Tomcat initialized with port 7800 (http)
+2025-11-27 14:42:08.144 [main] INFO  o.a.c.core.StandardService - Starting service [Tomcat]
+2025-11-27 14:42:08.145 [main] INFO  o.a.c.core.StandardEngine - Starting Servlet engine: [Apache Tomcat/10.1.49]
+2025-11-27 14:42:08.203 [main] INFO  o.a.c.c.C.[.[localhost].[/] - Initializing Spring embedded WebApplicationContext
+2025-11-27 14:42:08.203 [main] INFO  o.s.b.w.s.c.ServletWebServerApplicationContext - Root WebApplicationContext: initialization completed in 1164 ms
+2025-11-27 14:42:08.843 [main] DEBUG c.c.t.c.f.JwtAuthenticationFilter - Filter 'jwtAuthenticationFilter' configured for use
+2025-11-27 14:42:09.295 [main] INFO  o.s.b.w.e.t.TomcatWebServer - Tomcat started on port 7800 (http) with context path '/'
+2025-11-27 14:42:09.302 [main] INFO  c.c.t.c.CampusPulseApplication - Started CampusPulseApplication in 2.85 seconds (process running for 3.492)
+2025-11-27 14:42:16.713 [http-nio-7800-exec-1] INFO  o.a.c.c.C.[.[localhost].[/] - Initializing Spring DispatcherServlet 'dispatcherServlet'
+2025-11-27 14:42:16.713 [http-nio-7800-exec-1] INFO  o.s.w.s.DispatcherServlet - Initializing Servlet 'dispatcherServlet'
+2025-11-27 14:42:16.715 [http-nio-7800-exec-1] INFO  o.s.w.s.DispatcherServlet - Completed initialization in 2 ms
+2025-11-27 14:42:33.462 [SpringApplicationShutdownHook] INFO  o.s.b.w.e.t.GracefulShutdown - Commencing graceful shutdown. Waiting for active requests to complete
+2025-11-27 14:42:33.853 [tomcat-shutdown] INFO  o.s.b.w.e.t.GracefulShutdown - Graceful shutdown complete
+2025-11-27 14:52:46.353 [main] INFO  c.c.t.c.CampusPulseApplication - Starting CampusPulseApplication using Java 17.0.15 with PID 35184 (D:\2026毕业设计\DaiMa\campus-pulse(back)\campus-pulse\target\classes started by lenovo in D:\2026毕业设计\DaiMa\campus-pulse(back)\campus-pulse)
+2025-11-27 14:52:46.356 [main] DEBUG c.c.t.c.CampusPulseApplication - Running with Spring Boot v3.5.8, Spring v6.2.14
+2025-11-27 14:52:46.356 [main] INFO  c.c.t.c.CampusPulseApplication - No active profile set, falling back to 1 default profile: "default"
+2025-11-27 14:52:46.554 [main] WARN  o.s.b.w.s.c.AnnotationConfigServletWebServerApplicationContext - Exception encountered during context initialization - cancelling refresh attempt: org.springframework.beans.factory.BeanDefinitionStoreException: Failed to parse configuration class [com.campus.trend.campus_pulse.CampusPulseApplication]
+2025-11-27 14:52:46.708 [main] ERROR o.s.boot.SpringApplication - Application run failed
+org.springframework.beans.factory.BeanDefinitionStoreException: Failed to parse configuration class [com.campus.trend.campus_pulse.CampusPulseApplication]
+	at org.springframework.context.annotation.ConfigurationClassParser.parse(ConfigurationClassParser.java:194)
+	at org.springframework.context.annotation.ConfigurationClassPostProcessor.processConfigBeanDefinitions(ConfigurationClassPostProcessor.java:418)
+	at org.springframework.context.annotation.ConfigurationClassPostProcessor.postProcessBeanDefinitionRegistry(ConfigurationClassPostProcessor.java:290)
+	at org.springframework.context.support.PostProcessorRegistrationDelegate.invokeBeanDefinitionRegistryPostProcessors(PostProcessorRegistrationDelegate.java:349)
+	at org.springframework.context.support.PostProcessorRegistrationDelegate.invokeBeanFactoryPostProcessors(PostProcessorRegistrationDelegate.java:118)
+	at org.springframework.context.support.AbstractApplicationContext.invokeBeanFactoryPostProcessors(AbstractApplicationContext.java:791)
+	at org.springframework.context.support.AbstractApplicationContext.refresh(AbstractApplicationContext.java:609)
+	at org.springframework.boot.web.servlet.context.ServletWebServerApplicationContext.refresh(ServletWebServerApplicationContext.java:146)
+	at org.springframework.boot.SpringApplication.refresh(SpringApplication.java:752)
+	at org.springframework.boot.SpringApplication.refreshContext(SpringApplication.java:439)
+	at org.springframework.boot.SpringApplication.run(SpringApplication.java:318)
+	at org.springframework.boot.SpringApplication.run(SpringApplication.java:1361)
+	at org.springframework.boot.SpringApplication.run(SpringApplication.java:1350)
+	at com.campus.trend.campus_pulse.CampusPulseApplication.main(CampusPulseApplication.java:14)
+Caused by: org.springframework.context.annotation.ConflictingBeanDefinitionException: Annotation-specified bean name 'sysUserServiceImpl' for bean class [com.campus.trend.campus_pulse.service.mapperservice.impl.SysUserServiceImpl] conflicts with existing, non-compatible bean definition of same name and class [com.campus.trend.campus_pulse.service.impl.SysUserServiceImpl]
+	at org.springframework.context.annotation.ClassPathBeanDefinitionScanner.checkCandidate(ClassPathBeanDefinitionScanner.java:361)
+	at org.springframework.context.annotation.ClassPathBeanDefinitionScanner.doScan(ClassPathBeanDefinitionScanner.java:288)
+	at org.springframework.context.annotation.ComponentScanAnnotationParser.parse(ComponentScanAnnotationParser.java:128)
+	at org.springframework.context.annotation.ConfigurationClassParser.doProcessConfigurationClass(ConfigurationClassParser.java:346)
+	at org.springframework.context.annotation.ConfigurationClassParser.processConfigurationClass(ConfigurationClassParser.java:281)
+	at org.springframework.context.annotation.ConfigurationClassParser.parse(ConfigurationClassParser.java:204)
+	at org.springframework.context.annotation.ConfigurationClassParser.parse(ConfigurationClassParser.java:172)
+	... 13 common frames omitted
+2025-11-27 14:55:25.111 [main] INFO  c.c.t.c.CampusPulseApplication - Starting CampusPulseApplication using Java 17.0.15 with PID 22160 (D:\2026毕业设计\DaiMa\campus-pulse(back)\campus-pulse\target\classes started by lenovo in D:\2026毕业设计\DaiMa\campus-pulse(back)\campus-pulse)
+2025-11-27 14:55:25.113 [main] DEBUG c.c.t.c.CampusPulseApplication - Running with Spring Boot v3.5.8, Spring v6.2.14
+2025-11-27 14:55:25.114 [main] INFO  c.c.t.c.CampusPulseApplication - No active profile set, falling back to 1 default profile: "default"
+2025-11-27 14:55:25.876 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Multiple Spring Data modules found, entering strict repository configuration mode
+2025-11-27 14:55:25.878 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Bootstrapping Spring Data Redis repositories in DEFAULT mode.
+2025-11-27 14:55:25.914 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Finished Spring Data repository scanning in 19 ms. Found 0 Redis repository interfaces.
+2025-11-27 14:55:26.463 [main] INFO  o.s.b.w.e.t.TomcatWebServer - Tomcat initialized with port 7800 (http)
+2025-11-27 14:55:26.474 [main] INFO  o.a.c.core.StandardService - Starting service [Tomcat]
+2025-11-27 14:55:26.474 [main] INFO  o.a.c.core.StandardEngine - Starting Servlet engine: [Apache Tomcat/10.1.49]
+2025-11-27 14:55:26.553 [main] INFO  o.a.c.c.C.[.[localhost].[/] - Initializing Spring embedded WebApplicationContext
+2025-11-27 14:55:26.553 [main] INFO  o.s.b.w.s.c.ServletWebServerApplicationContext - Root WebApplicationContext: initialization completed in 1395 ms
+2025-11-27 14:55:27.242 [main] DEBUG c.c.t.c.f.JwtAuthenticationFilter - Filter 'jwtAuthenticationFilter' configured for use
+2025-11-27 14:55:27.290 [main] WARN  o.s.b.w.s.c.AnnotationConfigServletWebServerApplicationContext - Exception encountered during context initialization - cancelling refresh attempt: org.springframework.beans.factory.UnsatisfiedDependencyException: Error creating bean with name 'adminController' defined in file [D:\2026毕业设计\DaiMa\campus-pulse(back)\campus-pulse\target\classes\com\campus\trend\campus_pulse\controller\AdminController.class]: Unsatisfied dependency expressed through constructor parameter 0: Error creating bean with name 'authServiceImpl' defined in file [D:\2026毕业设计\DaiMa\campus-pulse(back)\campus-pulse\target\classes\com\campus\trend\campus_pulse\service\impl\AuthServiceImpl.class]: Unsatisfied dependency expressed through constructor parameter 3: No qualifying bean of type 'org.springframework.data.redis.core.RedisTemplate<java.lang.String, java.lang.Object>' available: expected at least 1 bean which qualifies as autowire candidate. Dependency annotations: {}
+2025-11-27 14:55:27.421 [main] INFO  o.a.c.core.StandardService - Stopping service [Tomcat]
+2025-11-27 14:55:27.430 [main] INFO  o.s.b.a.l.ConditionEvaluationReportLogger - 
+
+Error starting ApplicationContext. To display the condition evaluation report re-run your application with 'debug' enabled.
+2025-11-27 14:55:27.442 [main] ERROR o.s.b.d.LoggingFailureAnalysisReporter - 
+
+***************************
+APPLICATION FAILED TO START
+***************************
+
+Description:
+
+Parameter 3 of constructor in com.campus.trend.campus_pulse.service.impl.AuthServiceImpl required a bean of type 'org.springframework.data.redis.core.RedisTemplate' that could not be found.
+
+
+Action:
+
+Consider defining a bean of type 'org.springframework.data.redis.core.RedisTemplate' in your configuration.
+
+2025-11-27 14:58:50.866 [main] INFO  c.c.t.c.CampusPulseApplication - Starting CampusPulseApplication using Java 17.0.15 with PID 3396 (D:\2026毕业设计\DaiMa\campus-pulse(back)\campus-pulse\target\classes started by lenovo in D:\2026毕业设计\DaiMa\campus-pulse(back)\campus-pulse)
+2025-11-27 14:58:50.867 [main] DEBUG c.c.t.c.CampusPulseApplication - Running with Spring Boot v3.5.8, Spring v6.2.14
+2025-11-27 14:58:50.868 [main] INFO  c.c.t.c.CampusPulseApplication - No active profile set, falling back to 1 default profile: "default"
+2025-11-27 14:58:51.532 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Multiple Spring Data modules found, entering strict repository configuration mode
+2025-11-27 14:58:51.534 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Bootstrapping Spring Data Redis repositories in DEFAULT mode.
+2025-11-27 14:58:51.569 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Finished Spring Data repository scanning in 19 ms. Found 0 Redis repository interfaces.
+2025-11-27 14:58:52.035 [main] INFO  o.s.b.w.e.t.TomcatWebServer - Tomcat initialized with port 7800 (http)
+2025-11-27 14:58:52.045 [main] INFO  o.a.c.core.StandardService - Starting service [Tomcat]
+2025-11-27 14:58:52.046 [main] INFO  o.a.c.core.StandardEngine - Starting Servlet engine: [Apache Tomcat/10.1.49]
+2025-11-27 14:58:52.108 [main] INFO  o.a.c.c.C.[.[localhost].[/] - Initializing Spring embedded WebApplicationContext
+2025-11-27 14:58:52.108 [main] INFO  o.s.b.w.s.c.ServletWebServerApplicationContext - Root WebApplicationContext: initialization completed in 1189 ms
+2025-11-27 14:58:52.789 [main] DEBUG c.c.t.c.f.JwtAuthenticationFilter - Filter 'jwtAuthenticationFilter' configured for use
+2025-11-27 14:58:53.251 [main] INFO  o.s.b.w.e.t.TomcatWebServer - Tomcat started on port 7800 (http) with context path '/'
+2025-11-27 14:58:53.259 [main] INFO  c.c.t.c.CampusPulseApplication - Started CampusPulseApplication in 2.929 seconds (process running for 3.609)
+2025-11-27 14:59:05.046 [http-nio-7800-exec-1] INFO  o.a.c.c.C.[.[localhost].[/] - Initializing Spring DispatcherServlet 'dispatcherServlet'
+2025-11-27 14:59:05.047 [http-nio-7800-exec-1] INFO  o.s.w.s.DispatcherServlet - Initializing Servlet 'dispatcherServlet'
+2025-11-27 14:59:05.050 [http-nio-7800-exec-1] INFO  o.s.w.s.DispatcherServlet - Completed initialization in 3 ms
+2025-11-27 14:59:05.583 [http-nio-7800-exec-1] INFO  c.z.hikari.HikariDataSource - HikariPool-1 - Starting...
+2025-11-27 14:59:05.955 [http-nio-7800-exec-1] INFO  c.z.hikari.pool.HikariPool - HikariPool-1 - Added connection com.mysql.cj.jdbc.ConnectionImpl@58d8b300
+2025-11-27 14:59:05.956 [http-nio-7800-exec-1] INFO  c.z.hikari.HikariDataSource - HikariPool-1 - Start completed.
+2025-11-27 14:59:05.963 [http-nio-7800-exec-1] DEBUG c.c.t.c.m.S.selectList - ==>  Preparing: SELECT id,username,password,nickname,avatar,role,major,grade,interest_tags,create_time FROM sys_user WHERE (username = ?)
+2025-11-27 14:59:05.989 [http-nio-7800-exec-1] DEBUG c.c.t.c.m.S.selectList - ==> Parameters: song(String)
+2025-11-27 14:59:06.026 [http-nio-7800-exec-1] DEBUG c.c.t.c.m.S.selectList - <==      Total: 1
+2025-11-27 14:59:06.033 [http-nio-7800-exec-1] INFO  c.c.t.c.s.SysUserDetailsServiceImpl - 用户 [song] 信息加载成功，角色：User
+2025-11-27 15:04:24.471 [SpringApplicationShutdownHook] INFO  o.s.b.w.e.t.GracefulShutdown - Commencing graceful shutdown. Waiting for active requests to complete
+2025-11-27 15:04:25.180 [tomcat-shutdown] INFO  o.s.b.w.e.t.GracefulShutdown - Graceful shutdown complete
+2025-11-27 15:04:25.349 [SpringApplicationShutdownHook] INFO  c.z.hikari.HikariDataSource - HikariPool-1 - Shutdown initiated...
+2025-11-27 15:04:25.362 [SpringApplicationShutdownHook] INFO  c.z.hikari.HikariDataSource - HikariPool-1 - Shutdown completed.
+2025-11-27 15:04:32.603 [main] INFO  c.c.t.c.CampusPulseApplication - Starting CampusPulseApplication using Java 17.0.15 with PID 16304 (D:\2026毕业设计\DaiMa\campus-pulse(back)\campus-pulse\target\classes started by lenovo in D:\2026毕业设计\DaiMa\campus-pulse(back)\campus-pulse)
+2025-11-27 15:04:32.606 [main] DEBUG c.c.t.c.CampusPulseApplication - Running with Spring Boot v3.5.8, Spring v6.2.14
+2025-11-27 15:04:32.607 [main] INFO  c.c.t.c.CampusPulseApplication - No active profile set, falling back to 1 default profile: "default"
+2025-11-27 15:04:33.685 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Multiple Spring Data modules found, entering strict repository configuration mode
+2025-11-27 15:04:33.690 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Bootstrapping Spring Data Redis repositories in DEFAULT mode.
+2025-11-27 15:04:33.743 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Finished Spring Data repository scanning in 33 ms. Found 0 Redis repository interfaces.
+2025-11-27 15:04:34.328 [main] INFO  o.s.b.w.e.t.TomcatWebServer - Tomcat initialized with port 7800 (http)
+2025-11-27 15:04:34.339 [main] INFO  o.a.c.core.StandardService - Starting service [Tomcat]
+2025-11-27 15:04:34.339 [main] INFO  o.a.c.core.StandardEngine - Starting Servlet engine: [Apache Tomcat/10.1.49]
+2025-11-27 15:04:34.409 [main] INFO  o.a.c.c.C.[.[localhost].[/] - Initializing Spring embedded WebApplicationContext
+2025-11-27 15:04:34.409 [main] INFO  o.s.b.w.s.c.ServletWebServerApplicationContext - Root WebApplicationContext: initialization completed in 1740 ms
+2025-11-27 15:04:35.262 [main] DEBUG c.c.t.c.f.JwtAuthenticationFilter - Filter 'jwtAuthenticationFilter' configured for use
+2025-11-27 15:04:35.821 [main] INFO  o.s.b.w.e.t.TomcatWebServer - Tomcat started on port 7800 (http) with context path '/'
+2025-11-27 15:04:35.828 [main] INFO  c.c.t.c.CampusPulseApplication - Started CampusPulseApplication in 3.878 seconds (process running for 4.843)
+2025-11-27 15:04:39.977 [http-nio-7800-exec-2] INFO  o.a.c.c.C.[.[localhost].[/] - Initializing Spring DispatcherServlet 'dispatcherServlet'
+2025-11-27 15:04:39.978 [http-nio-7800-exec-2] INFO  o.s.w.s.DispatcherServlet - Initializing Servlet 'dispatcherServlet'
+2025-11-27 15:04:39.979 [http-nio-7800-exec-2] INFO  o.s.w.s.DispatcherServlet - Completed initialization in 1 ms
+2025-11-27 15:04:40.396 [http-nio-7800-exec-2] INFO  c.z.hikari.HikariDataSource - HikariPool-1 - Starting...
+2025-11-27 15:04:40.780 [http-nio-7800-exec-2] INFO  c.z.hikari.pool.HikariPool - HikariPool-1 - Added connection com.mysql.cj.jdbc.ConnectionImpl@4af60785
+2025-11-27 15:04:40.782 [http-nio-7800-exec-2] INFO  c.z.hikari.HikariDataSource - HikariPool-1 - Start completed.
+2025-11-27 15:04:40.790 [http-nio-7800-exec-2] DEBUG c.c.t.c.m.S.selectList - ==>  Preparing: SELECT id,username,password,nickname,avatar,role,major,grade,interest_tags,create_time FROM sys_user WHERE (username = ?)
+2025-11-27 15:04:40.823 [http-nio-7800-exec-2] DEBUG c.c.t.c.m.S.selectList - ==> Parameters: song(String)
+2025-11-27 15:04:40.866 [http-nio-7800-exec-2] DEBUG c.c.t.c.m.S.selectList - <==      Total: 1
+2025-11-27 15:04:40.879 [http-nio-7800-exec-2] INFO  c.c.t.c.s.SysUserDetailsServiceImpl - 用户 [song] 信息加载成功，角色：User
+2025-11-27 15:04:41.704 [http-nio-7800-exec-2] INFO  c.c.t.c.s.impl.AuthServiceImpl - accessToken:eyJhbGciOiJIUzUxMiJ9.eyJyb2xlIjoxLCJhdmF0YXIiOiJzc3Nzc3d3dyIsInVzZXJuYW1lIjoic29uZyIsInN1YiI6IlVTRVJfMTc2NDE0MzQ0NzY2MjU3ODQxMiIsImlhdCI6MTc2NDIyNzA4MSwiZXhwIjoxNzY0MjMwNjgxfQ.pWsfabgaBqD8497tKNdvto4bn3LR1Xxv0fWL_v-B5PdYh0ou2XlCIX_TMvBe3KgmnXeaYCxKhZgQ1QxSAbn1sA,refreshToken:eyJhbGciOiJIUzUxMiJ9.eyJyb2xlIjoxLCJhdmF0YXIiOiJzc3Nzc3d3dyIsInVzZXJuYW1lIjoic29uZyIsInN1YiI6IlVTRVJfMTc2NDE0MzQ0NzY2MjU3ODQxMiIsImlhdCI6MTc2NDIyNzA4MSwiZXhwIjoxNzY0ODMxODgxfQ.AQsxQt-mUCcKLoLHvi89xuNimreYy02FNug2xZzLZbzWj_KQo1iyteE5SxD-xSXDvHv8vJIwjcwEmJ8tJDKknA
+2025-11-27 15:05:24.824 [SpringApplicationShutdownHook] INFO  o.s.b.w.e.t.GracefulShutdown - Commencing graceful shutdown. Waiting for active requests to complete
+2025-11-27 15:05:25.320 [tomcat-shutdown] INFO  o.s.b.w.e.t.GracefulShutdown - Graceful shutdown complete
+2025-11-27 15:05:25.461 [SpringApplicationShutdownHook] INFO  c.z.hikari.HikariDataSource - HikariPool-1 - Shutdown initiated...
+2025-11-27 15:05:25.472 [SpringApplicationShutdownHook] INFO  c.z.hikari.HikariDataSource - HikariPool-1 - Shutdown completed.

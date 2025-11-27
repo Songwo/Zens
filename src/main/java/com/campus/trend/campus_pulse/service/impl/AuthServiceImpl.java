@@ -2,8 +2,7 @@ package com.campus.trend.campus_pulse.service.impl;
 
 import com.campus.trend.campus_pulse.dto.request.LoginRequest;
 import com.campus.trend.campus_pulse.dto.request.RegisterRequest;
-import com.campus.trend.campus_pulse.dto.response.ProFileResponse;
-import com.campus.trend.campus_pulse.dto.response.SimpleProfileResponse;
+import com.campus.trend.campus_pulse.dto.response.LoginResponse;
 import com.campus.trend.campus_pulse.entity.SysUser;
 import com.campus.trend.campus_pulse.exception.definexception.LoginException;
 import com.campus.trend.campus_pulse.exception.definexception.RegisterException;
@@ -14,16 +13,14 @@ import com.campus.trend.campus_pulse.service.mapperservice.SysUserService;
 import com.campus.trend.campus_pulse.utils.GenerateIDUtil;
 import com.campus.trend.campus_pulse.utils.JwtUtil;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 @Service
@@ -36,22 +33,24 @@ public class AuthServiceImpl implements AuthService {
 
     private final PasswordEncoder passwordEncoder;
 
-    private final StringRedisTemplate stringRedisTemplate;
+    private final RedisTemplate<Object,Object> redisTemplate;
 
     private final JwtUtil jwtUtil;
 
     public AuthServiceImpl(AuthenticationManager authorizationManager,
                            SysUserService sysUserService,
-                           PasswordEncoder passwordEncoder, StringRedisTemplate stringRedisTemplate, JwtUtil jwtUtil) {
+                           PasswordEncoder passwordEncoder,
+                           RedisTemplate<Object,Object> redisTemplate,
+                           JwtUtil jwtUtil) {
         this.authorizationManager = authorizationManager;
         this.sysUserService = sysUserService;
         this.passwordEncoder = passwordEncoder;
-        this.stringRedisTemplate = stringRedisTemplate;
+        this.redisTemplate = redisTemplate;
         this.jwtUtil = jwtUtil;
     }
 
     @Override
-    public String login(LoginRequest req) {
+    public LoginResponse login(LoginRequest req) {
 
         // 1. 构造 Token（账户密码封装）
         UsernamePasswordAuthenticationToken authToken =
@@ -75,12 +74,17 @@ public class AuthServiceImpl implements AuthService {
         claims.put("role", user.getRole());
 
         // 5. 生成 Token ,并存入 Redis
-        String token = jwtUtil.GenerateToken(user.getId(), claims);
+        String AccessToken = jwtUtil.GenerateAccessToken(user.getId(), claims);
+        String RefreshToken = jwtUtil.GenerateRefreshToken(user.getId(), claims);
 
         // 5.1 构建 Redis ，通过Key-用户ID，Value-token
-        stringRedisTemplate.opsForValue().set(user.getId(),token);
+        LoginResponse response = new LoginResponse();
+        response.setAccessToken(AccessToken);
+        response.setRefreshToken(RefreshToken);
 
-        return token;
+        redisTemplate.opsForValue().set(user.getId(),response);
+
+        return response;
     }
 
     @Override
@@ -111,53 +115,5 @@ public class AuthServiceImpl implements AuthService {
             throw new RegisterException("注册失败，请稍后重试");
         }
     }
-
-    @Override
-    public ProFileResponse getProFile() {
-        // 1.从Security上下文中获取用户信息
-        AuthSysUser auUser =  (AuthSysUser) SecurityContextHolder.
-                getContext().
-                getAuthentication().
-                getPrincipal();
-
-        // 2.获取用户详细信息
-        SysUser sysUser = sysUserService.searchByUsername(auUser.getUsername());
-        // 3.构造用户信息响应
-        ProFileResponse proFileResponse = new ProFileResponse();
-        proFileResponse.setUsername(sysUser.getUsername());
-        proFileResponse.setAvatar(sysUser.getAvatar());
-        proFileResponse.setNickname(sysUser.getNickname());
-        proFileResponse.setMajor(sysUser.getMajor());
-        proFileResponse.setGrade(sysUser.getGrade());
-        proFileResponse.setInterest_tags(sysUser.getInterestTags());
-        proFileResponse.setCreatTime(sysUser.getCreateTime());
-
-        return proFileResponse;
-    }
-
-    @Override
-    public SimpleProfileResponse getSimpleProfile() {
-        // 1.从Security上下文中获取用户信息
-        AuthSysUser auUser =  (AuthSysUser) SecurityContextHolder.
-                getContext().
-                getAuthentication().
-                getPrincipal();
-
-        // 2.获取用户详细信息
-        SysUser sysUser = sysUserService.searchByUsername(auUser.getUsername());
-        // 3.构造用户信息响应
-        SimpleProfileResponse simpleProfileResponse = new SimpleProfileResponse();
-        simpleProfileResponse.setAvatar(sysUser.getAvatar());
-        simpleProfileResponse.setNickname(sysUser.getNickname());
-        simpleProfileResponse.setInterest_tags(sysUser.getInterestTags());
-
-        return simpleProfileResponse;
-    }
-
-    @Override
-    public List<SysUser> getUsers() {
-        return sysUserService.searchAll();
-    }
-
 
 }

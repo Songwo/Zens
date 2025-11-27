@@ -39,12 +39,22 @@ public class JwtUtil {
     /**
      * 根据用户自定义Claims生成Token
     */
-    public  String GenerateToken(String userID,Map<String, Object> claims) {
+    public  String GenerateAccessToken(String userID,Map<String, Object> claims) {
         return Jwts.builder()
                 .setClaims(claims)
                 .setSubject(userID)
                 .setIssuedAt(new Date())
                 .setExpiration(new Date(System.currentTimeMillis() + ExpireTime))
+                .signWith(getJwtKey())
+                .compact();
+    }
+
+    public  String GenerateRefreshToken(String userID,Map<String, Object> claims) {
+        return Jwts.builder()
+                .setClaims(claims)
+                .setSubject(userID)
+                .setIssuedAt(new Date())
+                .setExpiration(new Date(System.currentTimeMillis() + 7 * 24 * 60 * 60 * 1000))// 7 天
                 .signWith(getJwtKey())
                 .compact();
     }
