@@ -67,7 +67,6 @@ public class AuthServiceImpl implements AuthService {
         return JwtUtil.GenerateToken(user.getId(), claims);
     }
 
-
     @Override
     public void register(RegisterRequest req) {
 

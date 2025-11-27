@@ -4,8 +4,10 @@ import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.core.userdetails.UserDetails;
 
 import java.nio.charset.StandardCharsets;
 import java.security.Key;
@@ -45,6 +47,7 @@ public class JwtUtil {
                 .compact();
 
     }
+
     /**
      * 解析Token
     */
@@ -68,22 +71,27 @@ public class JwtUtil {
             return null;
         return claims.get(name, clazz);
     }
+
     //获取用户ID
     public static String getUserID(String token) {
         return Objects.requireNonNull(parseToken(token)).getSubject();
     }
+
     //获取用户名
     public static String getUsername(String token) {
         return getClaimByToken(token,"username", String.class);
     }
+
     //获取用户角色
     public static String getRole(String token) {
         return getClaimByToken(token,"role", String.class);
     }
+
     //获取用户头像
     public static String getAvatar(String token) {
         return getClaimByToken(token,"avatar", String.class);
     }
+
     //检查Token是否过期
     public static boolean isExpired(String token) {
         Claims claims = parseToken(token);
@@ -91,9 +99,20 @@ public class JwtUtil {
             return false;
         return claims.getExpiration().before(new Date());
     }
+
     //检查Token是否有效
-    public static boolean validateToken(String token) {
-        return !isExpired(token) && parseToken(token) != null;
+    public boolean validateToken(String token, UserDetails userDetails) {
+        String username = getUsername(token);
+        return username.equals(userDetails.getUsername()) && !isExpired(token);
+    }
+
+    //获取请求头中的Token
+    public String getToken(HttpServletRequest request) {
+        String auth = request.getHeader("Authorization");
+        if (auth != null && auth.startsWith("Bearer ")) {
+            return auth.substring(7);
+        }
+        return null;
     }
 
 }
