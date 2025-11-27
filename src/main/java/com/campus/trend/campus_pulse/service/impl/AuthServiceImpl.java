@@ -13,7 +13,6 @@ import com.campus.trend.campus_pulse.utils.GenerateIDUtil;
 import com.campus.trend.campus_pulse.utils.JwtUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -51,7 +50,6 @@ public class AuthServiceImpl implements AuthService {
         Authentication authentication = authorizationManager.authenticate(authToken);
 
         if (authentication == null || !authentication.isAuthenticated()) {
-            log.info("1111111111111111");
             throw new LoginException("登录失败，账号或密码错误");
         }
 
