@@ -22,6 +22,10 @@ public class SysUserController {
         return "test";
     }
 
+    @GetMapping("/all")
+    public Result<?> getAll() {
+        return Result.success(authService.getUsers());
+    }
 
     @PostMapping("/login")
     public Result<?> login(@Valid @RequestBody LoginRequest loginRequest) {

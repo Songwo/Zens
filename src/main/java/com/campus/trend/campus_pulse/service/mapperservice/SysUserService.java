@@ -1,4 +1,4 @@
-package com.campus.trend.campus_pulse.service;
+package com.campus.trend.campus_pulse.service.mapperservice;
 
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.campus.trend.campus_pulse.entity.SysUser;
@@ -10,5 +10,7 @@ public interface SysUserService extends IService<SysUser> {
     SysUser searchByUsername(String username);
 
     List<SysUser> searchByGrade(int grade);
+
+    List<SysUser> searchAll();
 
 }

@@ -26,34 +26,33 @@ public class JwtUtil {
 
     //Jwt密钥
     @Value("${jwt.SECRET_KEY}")
-    private static final String secretKey = "RwE7qC8ce3rE5eVTPVm1ZJNmD5JyAuDN1Xupe16p6gueoN9Ye5BYMReMm8ZMcv0u";
+    private  final String secretKey = "RwE7qC8ce3rE5eVTPVm1ZJNmD5JyAuDN1Xupe16p6gueoN9Ye5BYMReMm8ZMcv0u";
     //Jwt过期时间
     @Value("${jwt.ExpireTime}")
-    private static final int ExpireTime = 3600000;
+    private  final int ExpireTime = 3600000;
 
     //获取签名
-    public static Key getJwtKey() {
+    public  Key getJwtKey() {
         return Keys.hmacShaKeyFor(secretKey.getBytes(StandardCharsets.UTF_8));
     }
 
     /**
      * 根据用户自定义Claims生成Token
     */
-    public static String GenerateToken(String userID,Map<String, Object> claims) {
+    public  String GenerateToken(String userID,Map<String, Object> claims) {
         return Jwts.builder()
-                .setSubject(userID)
                 .setClaims(claims)
+                .setSubject(userID)
                 .setIssuedAt(new Date())
                 .setExpiration(new Date(System.currentTimeMillis() + ExpireTime))
                 .signWith(getJwtKey())
                 .compact();
-
     }
 
     /**
      * 解析Token
     */
-    public static Claims parseToken(String token) {
+    public  Claims parseToken(String token) {
         try {
             return Jwts.parserBuilder()
                     .setSigningKey(getJwtKey())
@@ -67,7 +66,7 @@ public class JwtUtil {
     }
 
     //获取Claim对象，根据不同名字获取值，通用内置方法
-    public static <T> T getClaimByToken(String token,String name, Class<T> clazz) {
+    public  <T> T getClaimByToken(String token,String name, Class<T> clazz) {
         Claims claims = parseToken(token);
         if (Objects.isNull(claims))
             return null;
@@ -80,22 +79,22 @@ public class JwtUtil {
     }
 
     //获取用户名
-    public  String getUsername(String token) {
+    public String getUsername(String token) {
         return getClaimByToken(token,"username", String.class);
     }
 
     //获取用户角色
-    public static String getRole(String token) {
+    public  String getRole(String token) {
         return getClaimByToken(token,"role", String.class);
     }
 
     //获取用户头像
-    public static String getAvatar(String token) {
+    public  String getAvatar(String token) {
         return getClaimByToken(token,"avatar", String.class);
     }
 
     //检查Token是否过期
-    public static boolean isExpired(String token) {
+    public  boolean isExpired(String token) {
         Claims claims = parseToken(token);
         if (Objects.isNull(claims))
             return false;

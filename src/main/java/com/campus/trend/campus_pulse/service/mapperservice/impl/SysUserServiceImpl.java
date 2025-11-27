@@ -1,11 +1,11 @@
-package com.campus.trend.campus_pulse.service.impl;
+package com.campus.trend.campus_pulse.service.mapperservice.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.campus.trend.campus_pulse.entity.SysUser;
 import com.campus.trend.campus_pulse.mapper.SysUserMapper;
-import com.campus.trend.campus_pulse.service.SysUserService;
+import com.campus.trend.campus_pulse.service.mapperservice.SysUserService;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -37,12 +37,15 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
     public List<SysUser> searchByGrade(int grade) {
         LambdaQueryWrapper<SysUser> wrapper = Wrappers.lambdaQuery();
         wrapper.ge(SysUser::getGrade, grade);
-//        wrapper.eq(ObjectUtils.isNotNull(grade),SysUser::getGrade, grade);
-//        wrapper.inSql(SysUser::getId,"select id from sys_user where grade >= 2024");
-
-
         return this.list(wrapper);
     }
+
+    @Override
+    public List<SysUser> searchAll() {
+        LambdaQueryWrapper<SysUser> wrapper = Wrappers.lambdaQuery();
+        return this.list(wrapper);
+    }
+
 
 }
 

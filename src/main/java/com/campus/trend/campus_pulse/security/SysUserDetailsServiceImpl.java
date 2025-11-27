@@ -2,7 +2,7 @@ package com.campus.trend.campus_pulse.security;
 
 import com.campus.trend.campus_pulse.entity.SysUser;
 import com.campus.trend.campus_pulse.exception.definexception.LoginException;
-import com.campus.trend.campus_pulse.service.SysUserService;
+import com.campus.trend.campus_pulse.service.mapperservice.SysUserService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;

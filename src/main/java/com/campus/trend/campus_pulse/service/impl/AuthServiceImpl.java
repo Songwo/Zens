@@ -8,7 +8,7 @@ import com.campus.trend.campus_pulse.exception.definexception.RegisterException;
 import com.campus.trend.campus_pulse.exception.definexception.UserNameAlreadyExisted;
 import com.campus.trend.campus_pulse.security.AuthSysUser;
 import com.campus.trend.campus_pulse.service.AuthService;
-import com.campus.trend.campus_pulse.service.SysUserService;
+import com.campus.trend.campus_pulse.service.mapperservice.SysUserService;
 import com.campus.trend.campus_pulse.utils.GenerateIDUtil;
 import com.campus.trend.campus_pulse.utils.JwtUtil;
 import lombok.extern.slf4j.Slf4j;
@@ -20,6 +20,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @Service
@@ -34,13 +35,16 @@ public class AuthServiceImpl implements AuthService {
 
     private final StringRedisTemplate stringRedisTemplate;
 
+    private final JwtUtil jwtUtil;
+
     public AuthServiceImpl(AuthenticationManager authorizationManager,
                            SysUserService sysUserService,
-                           PasswordEncoder passwordEncoder, StringRedisTemplate stringRedisTemplate) {
+                           PasswordEncoder passwordEncoder, StringRedisTemplate stringRedisTemplate, JwtUtil jwtUtil) {
         this.authorizationManager = authorizationManager;
         this.sysUserService = sysUserService;
         this.passwordEncoder = passwordEncoder;
         this.stringRedisTemplate = stringRedisTemplate;
+        this.jwtUtil = jwtUtil;
     }
 
     @Override
@@ -68,7 +72,7 @@ public class AuthServiceImpl implements AuthService {
         claims.put("role", user.getRole());
 
         // 5. 生成 Token ,并存入 Redis
-        String token = JwtUtil.GenerateToken(user.getId(), claims);
+        String token = jwtUtil.GenerateToken(user.getId(), claims);
 
         // 5.1 构建 Redis ，通过Key-用户ID，Value-token
         stringRedisTemplate.opsForValue().set(user.getId(),token);
@@ -103,6 +107,11 @@ public class AuthServiceImpl implements AuthService {
         if (!saved) {
             throw new RegisterException("注册失败，请稍后重试");
         }
+    }
+
+    @Override
+    public List<SysUser> getUsers() {
+        return sysUserService.searchAll();
     }
 
 
