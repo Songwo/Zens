@@ -13,117 +13,108 @@ import org.springframework.stereotype.Component;
 import java.nio.charset.StandardCharsets;
 import java.security.Key;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
+
 /**
  * 功能：Jwt工具包，包含生成和解析以及解析的附加方法
  * 作者：Song
  * 日期：2025/11/26
  */
-@Slf4j
 @Component
+@Slf4j
 public class JwtUtil {
 
-    //Jwt密钥
-    @Value("${jwt.SECRET_KEY}")
-    private  final String secretKey = "RwE7qC8ce3rE5eVTPVm1ZJNmD5JyAuDN1Xupe16p6gueoN9Ye5BYMReMm8ZMcv0u";
-    //Jwt过期时间
-    @Value("${jwt.ExpireTime}")
-    private  final int ExpireTime = 3600000;
+    @Value("${jwt.secret}")
+    private String secretKey;   // 注入成功
 
-    //获取签名
-    public  Key getJwtKey() {
+    @Value("${jwt.access-expire}")
+    private long accessExpire;  // 毫秒
+
+    @Value("${jwt.refresh-expire}")
+    private long refreshExpire; // 毫秒
+
+    private Key getKey() {
         return Keys.hmacShaKeyFor(secretKey.getBytes(StandardCharsets.UTF_8));
     }
 
-    /**
-     * 根据用户自定义Claims生成Token
-    */
-    public  String GenerateAccessToken(String userID,Map<String, Object> claims) {
+    /** 生成通用 Claims */
+    public Map<String, Object> buildClaims(String username, int role, String avatar) {
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("username", username);
+        claims.put("role", role);
+        claims.put("avatar", avatar);
+        return claims;
+    }
+
+    /** 生成 AccessToken */
+    public String generateAccessToken(String userId, Map<String, Object> claims) {
         return Jwts.builder()
                 .setClaims(claims)
-                .setSubject(userID)
+                .setSubject(userId)
                 .setIssuedAt(new Date())
-                .setExpiration(new Date(System.currentTimeMillis() + ExpireTime))
-                .signWith(getJwtKey())
+                .setExpiration(new Date(System.currentTimeMillis() + accessExpire))
+                .signWith(getKey())
                 .compact();
     }
 
-    public  String GenerateRefreshToken(String userID,Map<String, Object> claims) {
+    /** 生成 RefreshToken */
+    public String generateRefreshToken(String userId, Map<String, Object> claims) {
         return Jwts.builder()
                 .setClaims(claims)
-                .setSubject(userID)
+                .setSubject(userId)
                 .setIssuedAt(new Date())
-                .setExpiration(new Date(System.currentTimeMillis() + 7 * 24 * 60 * 60 * 1000))// 7 天
-                .signWith(getJwtKey())
+                .setExpiration(new Date(System.currentTimeMillis() + refreshExpire))
+                .signWith(getKey())
                 .compact();
     }
 
-    /**
-     * 解析Token
-    */
-    public  Claims parseToken(String token) {
+    /** 解析 Token */
+    public Claims parse(String token) {
         try {
             return Jwts.parserBuilder()
-                    .setSigningKey(getJwtKey())
+                    .setSigningKey(getKey())
                     .build()
                     .parseClaimsJws(token)
                     .getBody();
-        }catch (JwtException e){
-            log.error("JWT解析失败：{}",e.getMessage());
+        } catch (Exception e) {
+            log.info("JWT 解析失败: {}", e.getMessage());
             return null;
         }
     }
 
-    //获取Claim对象，根据不同名字获取值，通用内置方法
-    public  <T> T getClaimByToken(String token,String name, Class<T> clazz) {
-        Claims claims = parseToken(token);
-        if (Objects.isNull(claims))
-            return null;
-        return claims.get(name, clazz);
+    public String getUserId(String token) {
+        Claims c = parse(token);
+        return c.getSubject();
     }
 
-    //获取用户ID
-    public  String getUserID(String token) {
-        return Objects.requireNonNull(parseToken(token)).getSubject();
-    }
-
-    //获取用户名
     public String getUsername(String token) {
-        return getClaimByToken(token,"username", String.class);
+        Claims c = parse(token);
+        return c == null ? null : c.get("username", String.class);
     }
 
-    //获取用户角色
-    public  String getRole(String token) {
-        return getClaimByToken(token,"role", String.class);
+    public boolean isExpired(String token) {
+        Claims c = parse(token);
+        return c == null || c.getExpiration().before(new Date());
     }
 
-    //获取用户头像
-    public  String getAvatar(String token) {
-        return getClaimByToken(token,"avatar", String.class);
+    public boolean validate(String token) {
+        return !isExpired(token);
     }
 
-    //检查Token是否过期
-    public  boolean isExpired(String token) {
-        Claims claims = parseToken(token);
-        if (Objects.isNull(claims))
-            return false;
-        return claims.getExpiration().before(new Date());
-    }
-
-    //检查Token是否有效
-    public boolean validateToken(String token, UserDetails userDetails) {
+    public boolean validate(String token, UserDetails userDetails) {
         String username = getUsername(token);
         return username.equals(userDetails.getUsername()) && !isExpired(token);
     }
 
-    //获取请求头中的Token
+    /** 获取请求头中的 Token */
     public String getToken(HttpServletRequest request) {
-        String auth = request.getHeader("Authorization");
-        if (auth != null && auth.startsWith("Bearer ")) {
-            return auth.substring(7);
+        String a = request.getHeader("Authorization");
+        if (a != null && a.startsWith("Bearer ")) {
+            return a.substring(7);
         }
         return null;
     }
-
 }
+

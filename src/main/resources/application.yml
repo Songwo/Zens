@@ -69,5 +69,6 @@ logging:
 
 # 5.JWT 配置
 jwt:
-  SECRET_KEY : "RwE7qC8ce3rE5eVTPVm1ZJNmD5JyAuDN1Xupe16p6gueoN9Ye5BYMReMm8ZMcv0u"
-  ExpireTime : 3600000
+  secret: "RwE7qC8ce3rE5eVTPVm1ZJNmD5JyAuDN1Xupe16p6gueoN9Ye5BYMReMm8ZMcv0u"
+  access-expire: 3600000        # 1 小时
+  refresh-expire: 604800000     # 7 天

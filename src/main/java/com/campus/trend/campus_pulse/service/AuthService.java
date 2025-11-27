@@ -3,11 +3,6 @@ package com.campus.trend.campus_pulse.service;
 import com.campus.trend.campus_pulse.dto.request.LoginRequest;
 import com.campus.trend.campus_pulse.dto.request.RegisterRequest;
 import com.campus.trend.campus_pulse.dto.response.LoginResponse;
-import com.campus.trend.campus_pulse.dto.response.ProFileResponse;
-import com.campus.trend.campus_pulse.dto.response.SimpleProfileResponse;
-import com.campus.trend.campus_pulse.entity.SysUser;
-
-import java.util.List;
 
 
 public interface AuthService {

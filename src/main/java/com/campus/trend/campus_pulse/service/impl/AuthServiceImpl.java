@@ -14,6 +14,7 @@ import com.campus.trend.campus_pulse.utils.GenerateIDUtil;
 import com.campus.trend.campus_pulse.utils.JwtUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -33,19 +34,19 @@ public class AuthServiceImpl implements AuthService {
 
     private final PasswordEncoder passwordEncoder;
 
-    private final RedisTemplate<Object,Object> redisTemplate;
+    private final StringRedisTemplate stringRedisTemplate;
 
     private final JwtUtil jwtUtil;
 
     public AuthServiceImpl(AuthenticationManager authorizationManager,
                            SysUserService sysUserService,
                            PasswordEncoder passwordEncoder,
-                           RedisTemplate<Object,Object> redisTemplate,
+                           StringRedisTemplate stringRedisTemplate,
                            JwtUtil jwtUtil) {
         this.authorizationManager = authorizationManager;
         this.sysUserService = sysUserService;
         this.passwordEncoder = passwordEncoder;
-        this.redisTemplate = redisTemplate;
+        this.stringRedisTemplate = stringRedisTemplate;
         this.jwtUtil = jwtUtil;
     }
 
@@ -68,21 +69,20 @@ public class AuthServiceImpl implements AuthService {
         SysUser user = authUser.getSysUser();
 
         // 4. JWT 内容,构造自定义 JWT
-        Map<String, Object> claims = new HashMap<>();
-        claims.put("username", user.getUsername());
-        claims.put("avatar", user.getAvatar());
-        claims.put("role", user.getRole());
+        Map<String, Object> claims =jwtUtil.buildClaims(user.getUsername(),user.getRole(),user.getAvatar());
 
         // 5. 生成 Token ,并存入 Redis
-        String AccessToken = jwtUtil.GenerateAccessToken(user.getId(), claims);
-        String RefreshToken = jwtUtil.GenerateRefreshToken(user.getId(), claims);
+        String AccessToken = jwtUtil.generateAccessToken(user.getId(), claims);
+        String RefreshToken = jwtUtil.generateRefreshToken(user.getId(), claims);
 
-        // 5.1 构建 Redis ，通过Key-用户ID，Value-token
+
         LoginResponse response = new LoginResponse();
         response.setAccessToken(AccessToken);
         response.setRefreshToken(RefreshToken);
 
-        redisTemplate.opsForValue().set(user.getId(),response);
+        // 5.1 构建 Redis ，通过Key-用户ID，Value-token
+        stringRedisTemplate.opsForValue().set("access_token"+user.getId(),AccessToken);
+        stringRedisTemplate.opsForValue().set("refresh_token"+user.getId(),RefreshToken);
 
         return response;
     }

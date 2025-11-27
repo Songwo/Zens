@@ -6,6 +6,7 @@ import com.campus.trend.campus_pulse.entity.SysUser;
 import com.campus.trend.campus_pulse.security.AuthSysUser;
 import com.campus.trend.campus_pulse.service.UserService;
 import com.campus.trend.campus_pulse.service.mapperservice.SysUserService;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
@@ -23,13 +24,28 @@ public class UserServiceImpl implements UserService {
 
     }
 
+    private AuthSysUser getAuthenticatedUser() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+
+        // 检查是否已认证
+        if (authentication == null || !authentication.isAuthenticated() || authentication.getPrincipal().equals("anonymousUser")) {
+            throw new IllegalStateException("用户未认证或已过期，无法访问用户信息。");
+        }
+
+        Object principal = authentication.getPrincipal();
+
+        // 检查 Principal 是否是 AuthSysUser 类型
+        if (principal instanceof AuthSysUser) {
+            return (AuthSysUser) principal;
+        }
+
+        throw new IllegalStateException("认证主体类型错误: " + principal.getClass().getName());
+    }
+
     @Override
     public ProFileResponse getProFile() {
         // 1.从Security上下文中获取用户信息
-        AuthSysUser auUser =  (AuthSysUser) SecurityContextHolder.
-                getContext().
-                getAuthentication().
-                getPrincipal();
+        AuthSysUser auUser = getAuthenticatedUser();
 
         // 2.获取用户详细信息
         SysUser sysUser = sysUserService.searchByUsername(auUser.getUsername());
@@ -49,10 +65,7 @@ public class UserServiceImpl implements UserService {
     @Override
     public SimpleProfileResponse getSimpleProfile() {
         // 1.从Security上下文中获取用户信息
-        AuthSysUser auUser =  (AuthSysUser) SecurityContextHolder.
-                getContext().
-                getAuthentication().
-                getPrincipal();
+        AuthSysUser auUser = getAuthenticatedUser();
 
         // 2.获取用户详细信息
         SysUser sysUser = sysUserService.searchByUsername(auUser.getUsername());
