@@ -9,6 +9,7 @@ public class SecurityWhitelist {
             //用户认证相关接口
             "/auth/login",
             "/auth/register",
+            "/static/**",
 
             //用户业务相关接口
             "/sys-user/test",

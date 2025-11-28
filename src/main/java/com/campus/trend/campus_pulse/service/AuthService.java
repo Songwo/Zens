@@ -14,8 +14,6 @@ public interface AuthService {
 
     void logout();
 
-    String UploadAvatar(MultipartFile file);
-
     //TODO 待实现列表
     // 1.用户获取详细个人信息 ✔
     // 2.获取简单个人信息 ✔

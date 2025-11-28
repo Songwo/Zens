@@ -12,6 +12,7 @@ import com.campus.trend.campus_pulse.security.AuthSysUser;
 import com.campus.trend.campus_pulse.service.AuthService;
 import com.campus.trend.campus_pulse.service.mapperservice.SysUserService;
 import com.campus.trend.campus_pulse.utils.GenerateIDUtil;
+import com.campus.trend.campus_pulse.utils.GetStringFile;
 import com.campus.trend.campus_pulse.utils.GetUserDetail;
 import com.campus.trend.campus_pulse.utils.JwtUtil;
 import lombok.extern.slf4j.Slf4j;
@@ -25,8 +26,11 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.File;
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 
 @Service
 @Slf4j
@@ -133,17 +137,6 @@ public class AuthServiceImpl implements AuthService {
 
         // 3. 清除 SecurityContext
         SecurityContextHolder.clearContext();
-    }
-
-    @Override
-    public String UploadAvatar(MultipartFile file) {
-
-        // 1.检查文件夹是否存在
-
-
-
-
-        return "";
     }
 
 }

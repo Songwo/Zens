@@ -28,6 +28,9 @@ public enum ResultCode {
     USER_NOT_FOUND(5001, "用户不存在"),
     POST_NOT_FOUND(5002, "帖子不存在"),
     USERNAME_ALREADY_EXISTED(5003,"用户已经存在"),
+    FILE_IS_NULL(5004,"文件为空"),
+    FILE_NAME_FAIL(5005,"文件名不合法"),
+    FILE_GESHI(5006,"文件格式不属于jpg、png、jpeg"),
 
     // 9000开头：系统异常
     SYSTEM_ERROR(9000, "系统异常，请稍后再试");

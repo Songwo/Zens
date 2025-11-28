@@ -3,12 +3,13 @@ package com.campus.trend.campus_pulse.controller;
 import com.campus.trend.campus_pulse.common.Result;
 import com.campus.trend.campus_pulse.service.UserService;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping("/sys-user")
-public class SysUserController {
+public class UserController {
 
-    public SysUserController(UserService userService) {
+    public UserController(UserService userService) {
         this.userService = userService;
     }
 
@@ -33,4 +34,11 @@ public class SysUserController {
     public Result<?> getAll() {
         return Result.success(userService.getUsers());
     }
+
+    @PutMapping("/avatar")
+    public Result<?> updateAvatar(@RequestPart("avatar") MultipartFile file) {
+        String url = userService.UploadAvatar(file);
+        return Result.success(url);
+    }
+
 }

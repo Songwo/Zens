@@ -2,10 +2,7 @@ package com.campus.trend.campus_pulse.exception;
 
 import com.campus.trend.campus_pulse.common.Result;
 import com.campus.trend.campus_pulse.common.ResultCode;
-import com.campus.trend.campus_pulse.exception.definexception.LoginException;
-import com.campus.trend.campus_pulse.exception.definexception.RedisDeleteException;
-import com.campus.trend.campus_pulse.exception.definexception.RegisterException;
-import com.campus.trend.campus_pulse.exception.definexception.UserNameAlreadyExisted;
+import com.campus.trend.campus_pulse.exception.definexception.*;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -53,6 +50,27 @@ public class GlobalExceptionHandler {
     public Result<String> handleRedisDeleteException(RedisDeleteException e){
         String message = e.getMessage();
         return Result.error(ResultCode.REDIS_DELETE_ERROR,message);
+    }
+
+    //文件为空
+    @ExceptionHandler(FileIsNullException.class)
+    public Result<String> handleFileIsNull(FileIsNullException e){
+        String message = e.getMessage();
+        return Result.error(ResultCode.FILE_IS_NULL,message);
+    }
+
+    //文件名字不合法异常
+    @ExceptionHandler(FileNameFailException.class)
+    public Result<String> handleFileNameFail(FileNameFailException e){
+        String message = e.getMessage();
+        return Result.error(ResultCode.FILE_NAME_FAIL,message);
+    }
+
+    //文件格式不正确异常
+    @ExceptionHandler(FileGeShiException.class)
+    public Result<String> handleFileGeShi(FileGeShiException e){
+        String message = e.getMessage();
+        return Result.error(ResultCode.FILE_GESHI,message);
     }
 
     //系统异常
