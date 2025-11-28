@@ -72,3 +72,7 @@ jwt:
   secret: "RwE7qC8ce3rE5eVTPVm1ZJNmD5JyAuDN1Xupe16p6gueoN9Ye5BYMReMm8ZMcv0u"
   access-expire: 3600000        # 1 小时
   refresh-expire: 604800000     # 7 天
+
+# 6.Web Url 配置
+Web:
+  AvatarUrl: "http://localhost:7800/static/avatar/"

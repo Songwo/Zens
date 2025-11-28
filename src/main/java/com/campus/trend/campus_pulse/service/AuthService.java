@@ -3,8 +3,6 @@ package com.campus.trend.campus_pulse.service;
 import com.campus.trend.campus_pulse.dto.request.LoginRequest;
 import com.campus.trend.campus_pulse.dto.request.RegisterRequest;
 import com.campus.trend.campus_pulse.dto.response.LoginResponse;
-import org.springframework.web.multipart.MultipartFile;
-
 
 public interface AuthService {
 
@@ -17,7 +15,7 @@ public interface AuthService {
     //TODO 待实现列表
     // 1.用户获取详细个人信息 ✔
     // 2.获取简单个人信息 ✔
-    // 3.用户头像上传
+    // 3.用户头像上传 ✔
     // 4.根据用户ID改用户密码
     // 5.根据用户名修改用户信息
     // 6.年级设置一年自动更新

@@ -1,14 +1,19 @@
 package com.campus.trend.campus_pulse.service.impl;
 
+import com.campus.trend.campus_pulse.dto.request.UpdatePasswordRequest;
 import com.campus.trend.campus_pulse.dto.response.ProFileResponse;
 import com.campus.trend.campus_pulse.dto.response.SimpleProfileResponse;
 import com.campus.trend.campus_pulse.entity.SysUser;
 import com.campus.trend.campus_pulse.security.AuthSysUser;
+import com.campus.trend.campus_pulse.service.AuthService;
 import com.campus.trend.campus_pulse.service.UserService;
 import com.campus.trend.campus_pulse.service.mapperservice.SysUserService;
+import com.campus.trend.campus_pulse.utils.GetRootPath;
 import com.campus.trend.campus_pulse.utils.GetStringFile;
 import com.campus.trend.campus_pulse.utils.GetUserDetail;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -24,10 +29,18 @@ public class UserServiceImpl implements UserService {
 
     private final SysUserService sysUserService;
 
+    private final PasswordEncoder passwordEncoder;
 
-    public UserServiceImpl(SysUserService sysUserService) {
+    private final AuthService  authService;
+
+    @Value("${Web.AvatarUrl}")
+    private String url;
+
+    public UserServiceImpl(SysUserService sysUserService,
+                           PasswordEncoder passwordEncoder, AuthService authService) {
         this.sysUserService = sysUserService;
-
+        this.passwordEncoder = passwordEncoder;
+        this.authService = authService;
     }
 
     @Override
@@ -71,9 +84,7 @@ public class UserServiceImpl implements UserService {
 
         String suffix = GetStringFile.getString(file);
 
-        // 获取项目根目录
-        String rootPath = System.getProperty("user.dir");
-        String uploadDir = rootPath + "/data/avatar/";
+        String uploadDir = GetRootPath.getRootPath() + "/data/avatar/";
 
         File folder = new File(uploadDir);
         if (!folder.exists()) {
@@ -89,8 +100,34 @@ public class UserServiceImpl implements UserService {
             throw new RuntimeException("头像上传失败", e);
         }
 
-        return "http://localhost:7800/static/avatar/" + fileName;
+        return url + fileName;
     }
+
+    @Override
+    public void UpdateUserPassword(UpdatePasswordRequest req) {
+
+        // 1.获取当前用户
+        AuthSysUser auUser = GetUserDetail.getAuthenticatedUser();
+        SysUser sysUser = sysUserService.searchByUsername(auUser.getUsername());
+
+        // 2.校验旧密码
+        if (!passwordEncoder.matches(req.getOldPassword(), sysUser.getPassword())) {
+            throw new RuntimeException("旧密码错误");
+        }
+
+        // 3.新旧密码不能一样
+        if (passwordEncoder.matches(req.getNewPassword(), sysUser.getPassword())) {
+            throw new RuntimeException("新密码不能与旧密码相同");
+        }
+
+        // 4.设置新密码（加密）
+        sysUser.setPassword(passwordEncoder.encode(req.getNewPassword()));
+        sysUserService.updateById(sysUser);
+
+        // 5.修改密码后注销登录
+        authService.logout();
+    }
+
 
     @Override
     public List<SysUser> getUsers() {
