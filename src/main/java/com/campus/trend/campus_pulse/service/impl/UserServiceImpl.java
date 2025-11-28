@@ -1,6 +1,7 @@
 package com.campus.trend.campus_pulse.service.impl;
 
 import com.campus.trend.campus_pulse.dto.request.UpdatePasswordRequest;
+import com.campus.trend.campus_pulse.dto.request.UpdateUserDetailRequest;
 import com.campus.trend.campus_pulse.dto.response.ProFileResponse;
 import com.campus.trend.campus_pulse.dto.response.SimpleProfileResponse;
 import com.campus.trend.campus_pulse.entity.SysUser;
@@ -126,6 +127,23 @@ public class UserServiceImpl implements UserService {
 
         // 5.修改密码后注销登录
         authService.logout();
+    }
+
+    @Override
+    public void UpdateUserDetails(UpdateUserDetailRequest updateUserDetailRequest) {
+        // 1.获取当前用户
+        AuthSysUser auUser = GetUserDetail.getAuthenticatedUser();
+        SysUser sysUser = sysUserService.searchByUsername(auUser.getUsername());
+
+        // 2.修改信息
+        sysUser.setNickname(updateUserDetailRequest.getNickname());
+        sysUser.setMajor(updateUserDetailRequest.getMajor());
+        sysUser.setGrade(updateUserDetailRequest.getGrade());
+        sysUser.setAvatar(updateUserDetailRequest.getAvatar());
+        sysUser.setInterestTags(updateUserDetailRequest.getInterestTags());
+
+        // 3.执行修改
+        sysUserService.updateById(sysUser);
     }
 
 
