@@ -16,6 +16,7 @@ public enum ResultCode {
     TOKEN_MISSING(3004, "未提供Token"),
     TOKEN_INVALID(3005, "Token无效"),
     REGISTER_ERROR(3006,"用户注册失败"),
+    REDIS_DELETE_ERROR(3007,"Redis 登录信息删除失败"),
 
 
     // 4000开头：参数错误

@@ -5,12 +5,14 @@ import com.campus.trend.campus_pulse.dto.request.RegisterRequest;
 import com.campus.trend.campus_pulse.dto.response.LoginResponse;
 import com.campus.trend.campus_pulse.entity.SysUser;
 import com.campus.trend.campus_pulse.exception.definexception.LoginException;
+import com.campus.trend.campus_pulse.exception.definexception.RedisDeleteException;
 import com.campus.trend.campus_pulse.exception.definexception.RegisterException;
 import com.campus.trend.campus_pulse.exception.definexception.UserNameAlreadyExisted;
 import com.campus.trend.campus_pulse.security.AuthSysUser;
 import com.campus.trend.campus_pulse.service.AuthService;
 import com.campus.trend.campus_pulse.service.mapperservice.SysUserService;
 import com.campus.trend.campus_pulse.utils.GenerateIDUtil;
+import com.campus.trend.campus_pulse.utils.GetUserDetail;
 import com.campus.trend.campus_pulse.utils.JwtUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -18,8 +20,10 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -69,7 +73,7 @@ public class AuthServiceImpl implements AuthService {
         SysUser user = authUser.getSysUser();
 
         // 4. JWT 内容,构造自定义 JWT
-        Map<String, Object> claims =jwtUtil.buildClaims(user.getUsername(),user.getRole(),user.getAvatar());
+        Map<String, Object> claims = jwtUtil.buildClaims(user.getUsername(), user.getRole(), user.getAvatar());
 
         // 5. 生成 Token ,并存入 Redis
         String AccessToken = jwtUtil.generateAccessToken(user.getId(), claims);
@@ -81,8 +85,8 @@ public class AuthServiceImpl implements AuthService {
         response.setRefreshToken(RefreshToken);
 
         // 5.1 构建 Redis ，通过Key-用户ID，Value-token
-        stringRedisTemplate.opsForValue().set("access_token"+user.getId(),AccessToken);
-        stringRedisTemplate.opsForValue().set("refresh_token"+user.getId(),RefreshToken);
+        stringRedisTemplate.opsForValue().set("access_token" + user.getId(), AccessToken);
+        stringRedisTemplate.opsForValue().set("refresh_token" + user.getId(), RefreshToken);
 
         return response;
     }
@@ -114,6 +118,32 @@ public class AuthServiceImpl implements AuthService {
         if (!saved) {
             throw new RegisterException("注册失败，请稍后重试");
         }
+    }
+
+    @Override
+    public void logout() {
+        // 1. 获取当前登录用户
+        AuthSysUser authSysUser = GetUserDetail.getAuthenticatedUser();
+        String userId = authSysUser.getSysUser().getId();
+
+        // 2. 删除 Redis Token
+        if (!stringRedisTemplate.delete("access_token" + userId) || !stringRedisTemplate.delete("refresh_token" + userId)) {
+            throw new RedisDeleteException("Redis 登录信息删除失败");
+        }
+
+        // 3. 清除 SecurityContext
+        SecurityContextHolder.clearContext();
+    }
+
+    @Override
+    public String UploadAvatar(MultipartFile file) {
+
+        // 1.检查文件夹是否存在
+
+
+
+
+        return "";
     }
 
 }

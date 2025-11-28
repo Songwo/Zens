@@ -31,6 +31,12 @@ public class AuthController {
         return Result.success();
     }
 
+    @PostMapping("/logout")
+    public Result<?> logout() {
+        authService.logout();
+        return Result.success();
+    }
+
 
 
 }
