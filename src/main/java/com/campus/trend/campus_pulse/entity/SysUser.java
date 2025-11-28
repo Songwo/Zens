@@ -74,4 +74,14 @@ public class SysUser implements Serializable {
      */
     private LocalDateTime createTime;
 
+    /**
+     * 更新时间
+    */
+    private LocalDateTime updateTime;
+
+    /**
+     * 自动更新年级时间
+     */
+    private LocalDateTime lastGradeUpgrade;
+
 }

@@ -6,11 +6,11 @@ import com.campus.trend.campus_pulse.dto.response.LoginResponse;
 
 public interface AuthService {
 
-    LoginResponse login(LoginRequest loginRequest);
+    LoginResponse Login(LoginRequest loginRequest);
 
-    void register(RegisterRequest registerRequest);
+    void Register(RegisterRequest registerRequest);
 
-    void logout();
+    void Logout();
 
     //TODO 待实现列表
     // 1.用户获取详细个人信息 ✔

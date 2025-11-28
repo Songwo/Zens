@@ -20,12 +20,12 @@ public class UserController {
 
     @GetMapping("/profile")
     public Result<?> getProfile() {
-        return Result.success(userService.getProFile());
+        return Result.success(userService.GetProFile());
     }
 
     @GetMapping("/simple-profile")
     public Result<?> getSimpleProfile() {
-        return Result.success(userService.getSimpleProfile());
+        return Result.success(userService.GetSimpleProfile());
     }
 
     @GetMapping("/test")
@@ -35,7 +35,7 @@ public class UserController {
 
     @GetMapping("/all")
     public Result<?> getAll() {
-        return Result.success(userService.getUsers());
+        return Result.success(userService.GetUsers());
     }
 
     @PutMapping("/avatar")

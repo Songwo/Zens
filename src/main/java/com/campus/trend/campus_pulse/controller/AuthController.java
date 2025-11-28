@@ -22,18 +22,18 @@ public class AuthController {
 
     @PostMapping("/login")
     public Result<?> login(@Valid @RequestBody LoginRequest loginRequest) {
-        return Result.success(authService.login(loginRequest));
+        return Result.success(authService.Login(loginRequest));
     }
 
     @PostMapping("/register")
     public Result<?> register(@Valid @RequestBody RegisterRequest registerRequest) {
-        authService.register(registerRequest);
+        authService.Register(registerRequest);
         return Result.success();
     }
 
     @PostMapping("/logout")
     public Result<?> logout() {
-        authService.logout();
+        authService.Logout();
         return Result.success();
     }
 

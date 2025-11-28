@@ -10,13 +10,12 @@ import com.campus.trend.campus_pulse.exception.definexception.RegisterException;
 import com.campus.trend.campus_pulse.exception.definexception.UserNameAlreadyExisted;
 import com.campus.trend.campus_pulse.security.AuthSysUser;
 import com.campus.trend.campus_pulse.service.AuthService;
+import com.campus.trend.campus_pulse.service.UserService;
 import com.campus.trend.campus_pulse.service.mapperservice.SysUserService;
 import com.campus.trend.campus_pulse.utils.GenerateIDUtil;
-import com.campus.trend.campus_pulse.utils.GetStringFile;
 import com.campus.trend.campus_pulse.utils.GetUserDetail;
 import com.campus.trend.campus_pulse.utils.JwtUtil;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -24,13 +23,8 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
-import org.springframework.web.multipart.MultipartFile;
 
-import java.io.File;
-import java.io.IOException;
-import java.util.HashMap;
 import java.util.Map;
-import java.util.UUID;
 
 @Service
 @Slf4j
@@ -45,21 +39,23 @@ public class AuthServiceImpl implements AuthService {
     private final StringRedisTemplate stringRedisTemplate;
 
     private final JwtUtil jwtUtil;
+    private final UserService userService;
 
     public AuthServiceImpl(AuthenticationManager authorizationManager,
                            SysUserService sysUserService,
                            PasswordEncoder passwordEncoder,
                            StringRedisTemplate stringRedisTemplate,
-                           JwtUtil jwtUtil) {
+                           JwtUtil jwtUtil, UserService userService) {
         this.authorizationManager = authorizationManager;
         this.sysUserService = sysUserService;
         this.passwordEncoder = passwordEncoder;
         this.stringRedisTemplate = stringRedisTemplate;
         this.jwtUtil = jwtUtil;
+        this.userService = userService;
     }
 
     @Override
-    public LoginResponse login(LoginRequest req) {
+    public LoginResponse Login(LoginRequest req) {
 
         // 1. 构造 Token（账户密码封装）
         UsernamePasswordAuthenticationToken authToken =
@@ -92,11 +88,13 @@ public class AuthServiceImpl implements AuthService {
         stringRedisTemplate.opsForValue().set("access_token" + user.getId(), AccessToken);
         stringRedisTemplate.opsForValue().set("refresh_token" + user.getId(), RefreshToken);
 
+        userService.autoUpgradeGrade(user);
+
         return response;
     }
 
     @Override
-    public void register(RegisterRequest req) {
+    public void Register(RegisterRequest req) {
 
         // 1. 用户名（学号）是否已存在
         SysUser exist = sysUserService.lambdaQuery()
@@ -125,7 +123,7 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
-    public void logout() {
+    public void Logout() {
         // 1. 获取当前登录用户
         AuthSysUser authSysUser = GetUserDetail.getAuthenticatedUser();
         String userId = authSysUser.getSysUser().getId();

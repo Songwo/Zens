@@ -20,6 +20,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.File;
 import java.io.IOException;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -27,25 +28,27 @@ import java.util.UUID;
 @Slf4j
 public class UserServiceImpl implements UserService {
 
-
     private final SysUserService sysUserService;
 
     private final PasswordEncoder passwordEncoder;
 
     private final AuthService  authService;
 
+    private final UserService userService;
+
     @Value("${Web.AvatarUrl}")
     private String url;
 
     public UserServiceImpl(SysUserService sysUserService,
-                           PasswordEncoder passwordEncoder, AuthService authService) {
+                           PasswordEncoder passwordEncoder, AuthService authService, UserService userService) {
         this.sysUserService = sysUserService;
         this.passwordEncoder = passwordEncoder;
         this.authService = authService;
+        this.userService = userService;
     }
 
     @Override
-    public ProFileResponse getProFile() {
+    public ProFileResponse GetProFile() {
         // 1.从Security上下文中获取用户信息
         AuthSysUser auUser = GetUserDetail.getAuthenticatedUser();
 
@@ -60,12 +63,15 @@ public class UserServiceImpl implements UserService {
         proFileResponse.setGrade(sysUser.getGrade());
         proFileResponse.setInterest_tags(sysUser.getInterestTags());
         proFileResponse.setCreatTime(sysUser.getCreateTime());
+        proFileResponse.setUpdateTime(sysUser.getUpdateTime());
+
+        userService.autoUpgradeGrade(sysUser);
 
         return proFileResponse;
     }
 
     @Override
-    public SimpleProfileResponse getSimpleProfile() {
+    public SimpleProfileResponse GetSimpleProfile() {
         // 1.从Security上下文中获取用户信息
         AuthSysUser auUser = GetUserDetail.getAuthenticatedUser();
 
@@ -76,6 +82,8 @@ public class UserServiceImpl implements UserService {
         simpleProfileResponse.setAvatar(sysUser.getAvatar());
         simpleProfileResponse.setNickname(sysUser.getNickname());
         simpleProfileResponse.setInterest_tags(sysUser.getInterestTags());
+
+        userService.autoUpgradeGrade(sysUser);
 
         return simpleProfileResponse;
     }
@@ -123,10 +131,11 @@ public class UserServiceImpl implements UserService {
 
         // 4.设置新密码（加密）
         sysUser.setPassword(passwordEncoder.encode(req.getNewPassword()));
+        sysUser.setUpdateTime(LocalDateTime.now());
         sysUserService.updateById(sysUser);
 
         // 5.修改密码后注销登录
-        authService.logout();
+        authService.Logout();
     }
 
     @Override
@@ -142,14 +151,34 @@ public class UserServiceImpl implements UserService {
         sysUser.setAvatar(updateUserDetailRequest.getAvatar());
         sysUser.setInterestTags(updateUserDetailRequest.getInterestTags());
 
+        sysUser.setUpdateTime(LocalDateTime.now());
+
         // 3.执行修改
         sysUserService.updateById(sysUser);
     }
 
 
+
     @Override
-    public List<SysUser> getUsers() {
+    public List<SysUser> GetUsers() {
         return sysUserService.searchAll();
+    }
+
+    /**-----------------------内置方法-------------------------*/
+    public void autoUpgradeGrade(SysUser user) {
+
+        LocalDateTime last = user.getLastGradeUpgrade();
+        if (last == null) {
+            last = user.getCreateTime(); // 没有升级记录则从注册时间算
+        }
+
+        // 判断是否满一年
+        if (last.plusYears(1).isBefore(LocalDateTime.now())) {
+            user.setGrade(user.getGrade() + 1);
+            user.setLastGradeUpgrade(LocalDateTime.now());
+
+            sysUserService.updateById(user);
+        }
     }
 
 }

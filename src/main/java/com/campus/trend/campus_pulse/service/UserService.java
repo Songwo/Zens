@@ -11,15 +11,18 @@ import java.util.List;
 
 public interface UserService {
 
-    ProFileResponse getProFile();
+    ProFileResponse GetProFile();
 
-    SimpleProfileResponse getSimpleProfile();
+    SimpleProfileResponse GetSimpleProfile();
 
-    List<SysUser> getUsers();
+    List<SysUser> GetUsers();
 
     String UploadAvatar(MultipartFile file);
 
     void UpdateUserPassword(UpdatePasswordRequest updatePasswordRequest);
 
     void UpdateUserDetails(UpdateUserDetailRequest updateUserDetailRequest);
+
+    void autoUpgradeGrade(SysUser user);
+
 }

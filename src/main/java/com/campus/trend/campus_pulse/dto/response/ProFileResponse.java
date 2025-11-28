@@ -14,5 +14,6 @@ public class ProFileResponse {
     private int grade;
     private String interest_tags;
     private LocalDateTime CreatTime;
+    private LocalDateTime UpdateTime;
 
 }
