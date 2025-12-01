@@ -1,14 +1,18 @@
 package com.campus.trend.campus_pulse.config;
 
 import com.campus.trend.campus_pulse.filter.JwtAuthenticationFilter;
+import com.campus.trend.campus_pulse.utils.JwtUtil;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
@@ -27,11 +31,11 @@ import java.util.List;
 @EnableWebSecurity
 public class SecurityConfig {
 
-
-    private final JwtAuthenticationFilter  jwtAuthenticationFilter;
-
-    public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter) {
-        this.jwtAuthenticationFilter = jwtAuthenticationFilter;
+    @Bean
+    public JwtAuthenticationFilter jwtAuthenticationFilter(UserDetailsService uds,
+                                                           JwtUtil jwtUtil,
+                                                           StringRedisTemplate redisTemplate) {
+        return new JwtAuthenticationFilter(uds, jwtUtil, redisTemplate);
     }
 
     /**
@@ -47,7 +51,8 @@ public class SecurityConfig {
      * 配置安全过滤链：定义认证、授权、CORS
      */
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain securityFilterChain(HttpSecurity http,
+                                                   JwtAuthenticationFilter jwtAuthenticationFilter) throws Exception {
         http
                 // 1. 配置 CORS 策略
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))

@@ -11,7 +11,6 @@ import com.campus.trend.campus_pulse.exception.definexception.UserNameAlreadyExi
 import com.campus.trend.campus_pulse.security.AuthSysUser;
 import com.campus.trend.campus_pulse.service.AuthService;
 import com.campus.trend.campus_pulse.service.UserService;
-import com.campus.trend.campus_pulse.service.mapperservice.SysUserService;
 import com.campus.trend.campus_pulse.utils.GenerateIDUtil;
 import com.campus.trend.campus_pulse.utils.GetUserDetail;
 import com.campus.trend.campus_pulse.utils.JwtUtil;
@@ -32,8 +31,6 @@ public class AuthServiceImpl implements AuthService {
 
     private final AuthenticationManager authorizationManager;
 
-    private final SysUserService sysUserService;
-
     private final PasswordEncoder passwordEncoder;
 
     private final StringRedisTemplate stringRedisTemplate;
@@ -43,12 +40,10 @@ public class AuthServiceImpl implements AuthService {
     private final UserService userService;
 
     public AuthServiceImpl(AuthenticationManager authorizationManager,
-                           SysUserService sysUserService,
                            PasswordEncoder passwordEncoder,
                            StringRedisTemplate stringRedisTemplate,
                            JwtUtil jwtUtil, UserService userService) {
         this.authorizationManager = authorizationManager;
-        this.sysUserService = sysUserService;
         this.passwordEncoder = passwordEncoder;
         this.stringRedisTemplate = stringRedisTemplate;
         this.jwtUtil = jwtUtil;
@@ -98,7 +93,7 @@ public class AuthServiceImpl implements AuthService {
     public void Register(RegisterRequest req) {
 
         // 1. 用户名（学号）是否已存在
-        SysUser exist = sysUserService.lambdaQuery()
+        SysUser exist = userService.lambdaQuery()
                 .eq(SysUser::getUsername, req.getUsername())
                 .one();
 
@@ -117,7 +112,7 @@ public class AuthServiceImpl implements AuthService {
         user.setGrade(req.getGrade());
 
         // 3. 保存
-        boolean saved = sysUserService.save(user);
+        boolean saved = userService.save(user);
         if (!saved) {
             throw new RegisterException("注册失败，请稍后重试");
         }

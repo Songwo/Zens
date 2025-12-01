@@ -2,7 +2,7 @@ package com.campus.trend.campus_pulse.security;
 
 import com.campus.trend.campus_pulse.entity.SysUser;
 import com.campus.trend.campus_pulse.exception.definexception.LoginException;
-import com.campus.trend.campus_pulse.service.mapperservice.SysUserService;
+import com.campus.trend.campus_pulse.service.UserService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
@@ -16,16 +16,16 @@ public class SysUserDetailsServiceImpl implements UserDetailsService {
     /**
      * 构造方法注入用户方法
     */
-    private final SysUserService sysUserService;
+    private final UserService userService;
 
-    public SysUserDetailsServiceImpl(SysUserService sysUserService) {
-        this.sysUserService = sysUserService;
+    public SysUserDetailsServiceImpl(UserService userService) {
+        this.userService = userService;
     }
 
     @Override
     public UserDetails loadUserByUsername(String username) throws LoginException {
 
-        SysUser user = sysUserService.lambdaQuery()
+        SysUser user = userService.lambdaQuery()
                 .eq(SysUser::getUsername, username)
                 .one();
 

@@ -1,14 +1,16 @@
 package com.campus.trend.campus_pulse.service.impl;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.toolkit.Wrappers;
+import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.campus.trend.campus_pulse.dto.request.UpdatePasswordRequest;
 import com.campus.trend.campus_pulse.dto.request.UpdateUserDetailRequest;
 import com.campus.trend.campus_pulse.dto.response.ProFileResponse;
 import com.campus.trend.campus_pulse.dto.response.SimpleProfileResponse;
 import com.campus.trend.campus_pulse.entity.SysUser;
+import com.campus.trend.campus_pulse.mapper.SysUserMapper;
 import com.campus.trend.campus_pulse.security.AuthSysUser;
-import com.campus.trend.campus_pulse.service.AuthService;
 import com.campus.trend.campus_pulse.service.UserService;
-import com.campus.trend.campus_pulse.service.mapperservice.SysUserService;
 import com.campus.trend.campus_pulse.utils.GetRootPath;
 import com.campus.trend.campus_pulse.utils.GetStringFile;
 import com.campus.trend.campus_pulse.utils.GetUserDetail;
@@ -26,19 +28,14 @@ import java.util.UUID;
 
 @Service
 @Slf4j
-public class UserServiceImpl implements UserService {
-
-    private final SysUserService sysUserService;
+public class UserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> implements UserService {
 
     private final PasswordEncoder passwordEncoder;
-
 
     @Value("${Web.AvatarUrl}")
     private String url;
 
-    public UserServiceImpl(SysUserService sysUserService,
-                           PasswordEncoder passwordEncoder) {
-        this.sysUserService = sysUserService;
+    public UserServiceImpl(PasswordEncoder passwordEncoder) {
         this.passwordEncoder = passwordEncoder;
     }
 
@@ -48,7 +45,7 @@ public class UserServiceImpl implements UserService {
         AuthSysUser auUser = GetUserDetail.getAuthenticatedUser();
 
         // 2.获取用户详细信息
-        SysUser sysUser = sysUserService.searchByUsername(auUser.getUsername());
+        SysUser sysUser = searchByUsername(auUser.getUsername());
         // 3.构造用户信息响应
         ProFileResponse proFileResponse = new ProFileResponse();
         proFileResponse.setUsername(sysUser.getUsername());
@@ -71,7 +68,7 @@ public class UserServiceImpl implements UserService {
         AuthSysUser auUser = GetUserDetail.getAuthenticatedUser();
 
         // 2.获取用户详细信息
-        SysUser sysUser = sysUserService.searchByUsername(auUser.getUsername());
+        SysUser sysUser = searchByUsername(auUser.getUsername());
         // 3.构造用户信息响应
         SimpleProfileResponse simpleProfileResponse = new SimpleProfileResponse();
         simpleProfileResponse.setAvatar(sysUser.getAvatar());
@@ -112,7 +109,7 @@ public class UserServiceImpl implements UserService {
 
         // 1.获取当前用户
         AuthSysUser auUser = GetUserDetail.getAuthenticatedUser();
-        SysUser sysUser = sysUserService.searchByUsername(auUser.getUsername());
+        SysUser sysUser = searchByUsername(auUser.getUsername());
 
         // 2.校验旧密码
         if (!passwordEncoder.matches(req.getOldPassword(), sysUser.getPassword())) {
@@ -127,14 +124,14 @@ public class UserServiceImpl implements UserService {
         // 4.设置新密码（加密）
         sysUser.setPassword(passwordEncoder.encode(req.getNewPassword()));
         sysUser.setUpdateTime(LocalDateTime.now());
-        sysUserService.updateById(sysUser);
+        updateById(sysUser);
     }
 
     @Override
     public void UpdateUserDetails(UpdateUserDetailRequest updateUserDetailRequest) {
         // 1.获取当前用户
         AuthSysUser auUser = GetUserDetail.getAuthenticatedUser();
-        SysUser sysUser = sysUserService.searchByUsername(auUser.getUsername());
+        SysUser sysUser = searchByUsername(auUser.getUsername());
 
         // 2.修改信息
         sysUser.setNickname(updateUserDetailRequest.getNickname());
@@ -146,14 +143,34 @@ public class UserServiceImpl implements UserService {
         sysUser.setUpdateTime(LocalDateTime.now());
 
         // 3.执行修改
-        sysUserService.updateById(sysUser);
+        updateById(sysUser);
     }
 
+    @Override
+    public SysUser searchByUsername(String username) {
+        return this.getOne(
+                Wrappers.lambdaQuery(SysUser.class)
+                        .eq(SysUser::getUsername, username),
+                false // 不抛异常，返回 null
+        );
+    }
 
+    @Override
+    public List<SysUser> searchByGrade(int grade) {
+        LambdaQueryWrapper<SysUser> wrapper = Wrappers.lambdaQuery();
+        wrapper.ge(SysUser::getGrade, grade);
+        return this.list(wrapper);
+    }
+
+    @Override
+    public List<SysUser> searchAll() {
+        LambdaQueryWrapper<SysUser> wrapper = Wrappers.lambdaQuery();
+        return this.list(wrapper);
+    }
 
     @Override
     public List<SysUser> GetUsers() {
-        return sysUserService.searchAll();
+        return searchAll();
     }
 
     /**-----------------------内置方法-------------------------*/
@@ -169,7 +186,7 @@ public class UserServiceImpl implements UserService {
             user.setGrade(user.getGrade() + 1);
             user.setLastGradeUpgrade(LocalDateTime.now());
 
-            sysUserService.updateById(user);
+            updateById(user);
         }
     }
 
