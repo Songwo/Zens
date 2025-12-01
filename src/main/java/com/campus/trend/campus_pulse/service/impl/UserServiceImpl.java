@@ -32,19 +32,14 @@ public class UserServiceImpl implements UserService {
 
     private final PasswordEncoder passwordEncoder;
 
-    private final AuthService  authService;
-
-    private final UserService userService;
 
     @Value("${Web.AvatarUrl}")
     private String url;
 
     public UserServiceImpl(SysUserService sysUserService,
-                           PasswordEncoder passwordEncoder, AuthService authService, UserService userService) {
+                           PasswordEncoder passwordEncoder) {
         this.sysUserService = sysUserService;
         this.passwordEncoder = passwordEncoder;
-        this.authService = authService;
-        this.userService = userService;
     }
 
     @Override
@@ -65,7 +60,7 @@ public class UserServiceImpl implements UserService {
         proFileResponse.setCreatTime(sysUser.getCreateTime());
         proFileResponse.setUpdateTime(sysUser.getUpdateTime());
 
-        userService.autoUpgradeGrade(sysUser);
+        autoUpgradeGrade(sysUser);
 
         return proFileResponse;
     }
@@ -83,7 +78,7 @@ public class UserServiceImpl implements UserService {
         simpleProfileResponse.setNickname(sysUser.getNickname());
         simpleProfileResponse.setInterest_tags(sysUser.getInterestTags());
 
-        userService.autoUpgradeGrade(sysUser);
+        autoUpgradeGrade(sysUser);
 
         return simpleProfileResponse;
     }
@@ -133,9 +128,6 @@ public class UserServiceImpl implements UserService {
         sysUser.setPassword(passwordEncoder.encode(req.getNewPassword()));
         sysUser.setUpdateTime(LocalDateTime.now());
         sysUserService.updateById(sysUser);
-
-        // 5.修改密码后注销登录
-        authService.Logout();
     }
 
     @Override

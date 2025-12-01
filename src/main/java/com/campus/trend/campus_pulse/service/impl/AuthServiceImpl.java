@@ -39,6 +39,7 @@ public class AuthServiceImpl implements AuthService {
     private final StringRedisTemplate stringRedisTemplate;
 
     private final JwtUtil jwtUtil;
+
     private final UserService userService;
 
     public AuthServiceImpl(AuthenticationManager authorizationManager,

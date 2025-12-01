@@ -23,6 +23,7 @@ public interface UserService {
 
     void UpdateUserDetails(UpdateUserDetailRequest updateUserDetailRequest);
 
+    // Warning ：内置方法禁止本服务引入自己的方法 ！！！
     void autoUpgradeGrade(SysUser user);
 
 }

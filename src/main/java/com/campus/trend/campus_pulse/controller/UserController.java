@@ -3,6 +3,7 @@ package com.campus.trend.campus_pulse.controller;
 import com.campus.trend.campus_pulse.common.Result;
 import com.campus.trend.campus_pulse.dto.request.UpdatePasswordRequest;
 import com.campus.trend.campus_pulse.dto.request.UpdateUserDetailRequest;
+import com.campus.trend.campus_pulse.service.AuthService;
 import com.campus.trend.campus_pulse.service.UserService;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
@@ -12,11 +13,14 @@ import org.springframework.web.multipart.MultipartFile;
 @RequestMapping("/sys-user")
 public class UserController {
 
-    public UserController(UserService userService) {
+    public UserController(UserService userService, AuthService authService) {
         this.userService = userService;
+        this.authService = authService;
     }
 
     private final UserService userService;
+
+    private final AuthService authService;
 
     @GetMapping("/profile")
     public Result<?> getProfile() {
@@ -47,6 +51,7 @@ public class UserController {
     @PostMapping("/update-pwd")
     public Result<?> updatePwd(@Valid @RequestBody UpdatePasswordRequest updatePasswordRequest) {
         userService.UpdateUserPassword(updatePasswordRequest);
+        authService.Logout();
         return Result.success();
     }
 
