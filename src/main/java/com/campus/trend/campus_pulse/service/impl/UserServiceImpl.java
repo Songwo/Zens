@@ -1,7 +1,6 @@
 package com.campus.trend.campus_pulse.service.impl;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.baomidou.mybatisplus.core.toolkit.Wrappers;
+
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.campus.trend.campus_pulse.dto.request.UpdatePasswordRequest;
 import com.campus.trend.campus_pulse.dto.request.UpdateUserDetailRequest;
@@ -148,29 +147,21 @@ public class UserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impleme
 
     @Override
     public SysUser searchByUsername(String username) {
-        return this.getOne(
-                Wrappers.lambdaQuery(SysUser.class)
-                        .eq(SysUser::getUsername, username),
-                false // 不抛异常，返回 null
-        );
+        return lambdaQuery().
+                eq(SysUser::getUsername, username).
+                one();
     }
 
     @Override
     public List<SysUser> searchByGrade(int grade) {
-        LambdaQueryWrapper<SysUser> wrapper = Wrappers.lambdaQuery();
-        wrapper.ge(SysUser::getGrade, grade);
-        return this.list(wrapper);
-    }
-
-    @Override
-    public List<SysUser> searchAll() {
-        LambdaQueryWrapper<SysUser> wrapper = Wrappers.lambdaQuery();
-        return this.list(wrapper);
+        return lambdaQuery().
+                ge(SysUser::getGrade,grade).
+                list();
     }
 
     @Override
     public List<SysUser> GetUsers() {
-        return searchAll();
+        return this.list();
     }
 
     /**-----------------------内置方法-------------------------*/

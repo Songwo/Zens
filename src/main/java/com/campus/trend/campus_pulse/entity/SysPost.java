@@ -7,6 +7,8 @@ import lombok.EqualsAndHashCode;
 import lombok.experimental.Accessors;
 
 import java.io.Serializable;
+import java.sql.Timestamp;
+import java.time.LocalDateTime;
 
 @Data
 @EqualsAndHashCode(callSuper = false)
@@ -51,13 +53,13 @@ public class SysPost implements Serializable {
     /**
      * 讨厌分数，趋势分析
     */
-    private boolean heatScore;
+    private Double heatScore;
     /**
      * 文章状态
     */
     private String status;
 
-    private String createTime;
-    private String updateTime;
+    private LocalDateTime createTime;
+    private LocalDateTime updateTime;
 
 }

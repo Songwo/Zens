@@ -28,8 +28,6 @@ public interface UserService extends IService<SysUser> {
 
     List<SysUser> searchByGrade(int grade);
 
-    List<SysUser> searchAll();
-
     // Warning ：内置方法禁止本服务引入自己的方法 ！！！
     void autoUpgradeGrade(SysUser user);
 

@@ -1,12 +1,14 @@
 package com.campus.trend.campus_pulse.controller;
 
 import com.campus.trend.campus_pulse.common.Result;
+import com.campus.trend.campus_pulse.dto.request.CreatePostRequest;
+import com.campus.trend.campus_pulse.dto.request.ExtractTagsRequest;
+import com.campus.trend.campus_pulse.security.AuthSysUser;
 import com.campus.trend.campus_pulse.service.PostService;
+import com.campus.trend.campus_pulse.utils.GetUserDetail;
+import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/sys-post")
@@ -22,6 +24,19 @@ public class PostController {
     @GetMapping("/{id}")
     public Result<?> searchByPostId(@PathVariable String id) {
         return Result.success(postService.searchByPostId(id));
+    }
+
+    @PostMapping("/create-post")
+    public Result<?> createPost(@Valid @RequestBody CreatePostRequest createPostRequest) {
+        AuthSysUser authSysUser = GetUserDetail.getAuthenticatedUser();
+        postService.createPost(createPostRequest,authSysUser.getSysUser().getId());
+        return Result.success();
+    }
+
+    @GetMapping("/extract-tags")
+    public Result<?> extractTags(@Valid @RequestBody ExtractTagsRequest extractTagsRequest){
+        return Result.success(postService.extractTags(extractTagsRequest));
+
     }
 
 
