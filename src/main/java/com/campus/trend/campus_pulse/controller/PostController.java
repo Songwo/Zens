@@ -3,6 +3,7 @@ package com.campus.trend.campus_pulse.controller;
 import com.campus.trend.campus_pulse.common.Result;
 import com.campus.trend.campus_pulse.dto.request.CreatePostRequest;
 import com.campus.trend.campus_pulse.dto.request.ExtractTagsRequest;
+import com.campus.trend.campus_pulse.dto.request.PostSearchRequest;
 import com.campus.trend.campus_pulse.security.AuthSysUser;
 import com.campus.trend.campus_pulse.service.PostService;
 import com.campus.trend.campus_pulse.utils.GetUserDetail;
@@ -36,7 +37,11 @@ public class PostController {
     @GetMapping("/extract-tags")
     public Result<?> extractTags(@Valid @RequestBody ExtractTagsRequest extractTagsRequest){
         return Result.success(postService.extractTags(extractTagsRequest));
+    }
 
+    @PostMapping("/search-lists")
+    public Result<?> searchList(@RequestBody PostSearchRequest postSearchRequest){
+        return Result.success(postService.searchAllList(postSearchRequest));
     }
 
 

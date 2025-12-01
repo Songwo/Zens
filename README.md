@@ -136,7 +136,7 @@ http://localhost:7800/sys-user/test
 ```
 src/main/java/com/campus/trend/campus_pulse/
 ├── common/           # 通用类（统一返回结果、状态码等）
-├── config/           # 配置类（安全、Redis、Web等）
+├── config/           # 配置类（安全、Redis、Web、静态资源配置）
 ├── controller/       # 控制器层
 ├── dto/              # 数据传输对象
 │   ├── request/      # 请求DTO
@@ -148,8 +148,7 @@ src/main/java/com/campus/trend/campus_pulse/
 ├── mapper/           # MyBatis Mapper接口
 ├── security/         # 安全相关
 ├── service/          # 服务层
-│   ├── impl/         # 服务实现
-│   └── mapperservice/ # Mapper服务封装
+│    └── impl/         # 服务实现
 ├── utils/            # 工具类
 └── CampusPulseApplication.java  # 启动类
 ```
@@ -175,6 +174,49 @@ src/main/java/com/campus/trend/campus_pulse/
 | `/sys-user/update-pwd` | POST | 更新用户密码 |
 | `/sys-user/update-udetail` | POST | 更新用户详细信息 |
 | `/sys-user/avatar` | PUT | 上传用户头像 |
+
+### 帖子相关
+
+| Endpoint                 | Method | Description |
+|--------------------------|--------|-------------|
+| `/sys-post/{id}}`        | GET    | 获取帖子详细信息    |
+| `/sys-post/create-post`  | POST   | 创建帖子        |
+| `/sys-post/extract-tags` | GET    | 根据文章内容加载标签  |
+| `/sys-post/search-lists` | POST   | 获取文章集合      |
+📝 /sys-post/search-lists — 文章列表查询接口说明
+📌 接口描述
+
+该接口用于 分页查询帖子列表，支持多条件组合查询，包括：
+
+分类 ID
+
+用户 ID
+
+发布状态
+
+标题/内容关键字模糊搜索
+
+分页功能
+
+搜索结果按 创建时间倒序 排序返回。
+
+📍 请求方式
+POST /sys-post/search-lists
+
+🧩 请求参数（JSON）
+字段名	类型	是否必填	说明
+
+categoryID	String	否	分类 ID，用于筛选指定分类下的文章
+
+userID	String	否	用户 ID，用于筛选该用户发布的帖子
+
+keyword	String	否	搜索关键词，可在标题和内容中模糊匹配
+
+status	Integer	否	帖子状态，例如：0=草稿 1=发布 2=隐藏
+
+page	Integer	是	第几页，从 1 开始
+
+pageSize	Integer	是	每页条数
 
 ---
 
