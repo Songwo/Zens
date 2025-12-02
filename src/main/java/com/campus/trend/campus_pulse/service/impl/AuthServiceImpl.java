@@ -40,9 +40,9 @@ public class AuthServiceImpl implements AuthService {
     private final UserService userService;
 
     public AuthServiceImpl(AuthenticationManager authorizationManager,
-                           PasswordEncoder passwordEncoder,
-                           StringRedisTemplate stringRedisTemplate,
-                           JwtUtil jwtUtil, UserService userService) {
+            PasswordEncoder passwordEncoder,
+            StringRedisTemplate stringRedisTemplate,
+            JwtUtil jwtUtil, UserService userService) {
         this.authorizationManager = authorizationManager;
         this.passwordEncoder = passwordEncoder;
         this.stringRedisTemplate = stringRedisTemplate;
@@ -54,8 +54,8 @@ public class AuthServiceImpl implements AuthService {
     public LoginResponse Login(LoginRequest req) {
 
         // 1. 构造 Token（账户密码封装）
-        UsernamePasswordAuthenticationToken authToken =
-                new UsernamePasswordAuthenticationToken(req.getUsername(), req.getPassword());
+        UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(req.getUsername(),
+                req.getPassword());
 
         // 2. SecurityManager 进行实际认证
         Authentication authentication = authorizationManager.authenticate(authToken);
@@ -74,7 +74,6 @@ public class AuthServiceImpl implements AuthService {
         // 5. 生成 Token ,并存入 Redis
         String AccessToken = jwtUtil.generateAccessToken(user.getId(), claims);
         String RefreshToken = jwtUtil.generateRefreshToken(user.getId(), claims);
-
 
         LoginResponse response = new LoginResponse();
         response.setAccessToken(AccessToken);
@@ -103,13 +102,17 @@ public class AuthServiceImpl implements AuthService {
 
         // 2. 创建用户实体
         SysUser user = new SysUser();
-        user.setId(GenerateIDUtil.genId("USER"));
+
         user.setUsername(req.getUsername());
         user.setPassword(passwordEncoder.encode(req.getPassword()));
         user.setNickname(req.getNickname());
         user.setAvatar(req.getAvatar());
         user.setMajor(req.getMajor());
         user.setGrade(req.getGrade());
+        user.setGender(req.getGender());
+        user.setSchool(req.getSchool());
+        user.setRole(req.getRole());
+        user.setStatus(1); // 默认正常
 
         // 3. 保存
         boolean saved = userService.save(user);
@@ -125,7 +128,8 @@ public class AuthServiceImpl implements AuthService {
         String userId = authSysUser.getSysUser().getId();
 
         // 2. 删除 Redis Token
-        if (!stringRedisTemplate.delete("access_token" + userId) || !stringRedisTemplate.delete("refresh_token" + userId)) {
+        if (!stringRedisTemplate.delete("access_token" + userId)
+                || !stringRedisTemplate.delete("refresh_token" + userId)) {
             throw new RedisDeleteException("Redis 登录信息删除失败");
         }
 

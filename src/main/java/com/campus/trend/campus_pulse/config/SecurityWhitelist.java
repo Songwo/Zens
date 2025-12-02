@@ -12,9 +12,9 @@ public class SecurityWhitelist {
             "/static/**",
 
             //用户业务相关接口
-            "/sys-user/test",
-            "/sys-user/all",
-            "/sys-user/profile",
-            "/sys-user/simple-profile",
+//            "/sys-user/test",
+//            "/sys-user/all",
+//            "/sys-user/profile",
+//            "/sys-user/simple-profile",
     };
 }

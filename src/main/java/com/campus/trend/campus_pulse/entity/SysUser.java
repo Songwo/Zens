@@ -1,87 +1,58 @@
 package com.campus.trend.campus_pulse.entity;
 
+import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
-import lombok.EqualsAndHashCode;
 import lombok.experimental.Accessors;
 
-import java.io.Serial;
 import java.io.Serializable;
 import java.time.LocalDateTime;
 
 /**
- * 系统用户实体类
- * 对应数据库表：sys_user
+ * 用户基础信息表
  */
 @Data
-@EqualsAndHashCode(callSuper = false)
-@Accessors(chain = true) // 开启链式操作
-@TableName("sys_user") // 映射数据库表名
+@Accessors(chain = true)
+@TableName("sys_user")
 public class SysUser implements Serializable {
 
-    @Serial
-    private static final long serialVersionUID = 1L;
-
-    /**
-     * 用户ID (主键)
-     */
-    @TableId(value = "id")
+    @TableId(value = "id", type = IdType.ASSIGN_ID) // 假设使用雪花算法生成ID
     private String id;
 
-    /**
-     * 用户名（登录账号 / 学号）
-     */
     private String username;
 
-    /**
-     * 密码（存储加密后的哈希值）
-     */
     private String password;
 
-    /**
-     * 昵称
-     */
     private String nickname;
 
-    /**
-     * 头像URL
-     */
     private String avatar;
 
     /**
-     * 角色类型：0-管理员, 1-学生
+     * 性别 0:未知 1:男 2:女
+     */
+    private Integer gender;
+
+    /**
+     * 角色 0:管理员 1:学生 2:老师
      */
     private Integer role;
 
-    /**
-     * 专业
-     */
+    private String school;
+
     private String major;
 
-    /**
-     * 年级
-     */
     private Integer grade;
 
     /**
-     * 兴趣标签JSON
+     * 状态 1:正常 0:封禁
      */
-    private String interestTags;
+    private Integer status;
 
-    /**
-     * 创建时间
-     */
     private LocalDateTime createTime;
 
-    /**
-     * 更新时间
-    */
     private LocalDateTime updateTime;
 
-    /**
-     * 自动更新年级时间
-     */
     private LocalDateTime lastGradeUpgrade;
 
 }

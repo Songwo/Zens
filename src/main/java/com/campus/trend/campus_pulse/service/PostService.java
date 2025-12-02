@@ -14,16 +14,18 @@ public interface PostService extends IService<SysPost> {
 
     SysPost searchByPostId(String postId);
 
-    void createPost(CreatePostRequest createPostRequest,String userID);
+    void createPost(CreatePostRequest createPostRequest, String userID);
 
-    Map<String,Object> extractTagsAndSummary(ExtractTagsRequest extractTagsRequest);
+    Map<String, Object> extractTagsAndSummary(ExtractTagsRequest extractTagsRequest);
 
-    void likePost(String postId);
+    void likePost(String postId, String userId);
+
+    void collectPost(String postId, String userId);
 
     IPage<SysPost> searchAllList(PostSearchRequest postSearchRequest);
 
     // TODO 待实现列表
-    //  1.帖子观看量 2.查询当前用户处于审核中的帖子 ✔
-    //  3.查询全部帖子状态（简单） 4.模糊查询帖子内容或者题目 ✔
+    // 1.帖子观看量 2.查询当前用户处于审核中的帖子 ✔
+    // 3.查询全部帖子状态（简单） 4.模糊查询帖子内容或者题目 ✔
 
 }

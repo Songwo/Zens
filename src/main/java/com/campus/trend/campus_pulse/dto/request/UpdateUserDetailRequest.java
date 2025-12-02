@@ -11,8 +11,7 @@ public class UpdateUserDetailRequest {
     private String nickname;
 
     @NotBlank
-    @Pattern(regexp = "^(http|https)://.*$", message = "头像必须是合法的 URL",
-            groups = RegisterRequest.UrlCheck.class)
+    @Pattern(regexp = "^(http|https)://.*$", message = "头像必须是合法的 URL", groups = RegisterRequest.UrlCheck.class)
     private String avatar;
 
     @NotBlank
@@ -23,8 +22,15 @@ public class UpdateUserDetailRequest {
     @Max(value = 2030, message = "年级不能大于 2030")
     private int grade;
 
-    @NotBlank
-    private  String interestTags;
+    /**
+     * 性别 0:未知 1:男 2:女
+     */
+    private Integer gender;
 
+    @Size(max = 50, message = "学校名称长度不能超过 50 个字符")
+    private String school;
+
+    @NotBlank
+    private String interestTags;
 
 }

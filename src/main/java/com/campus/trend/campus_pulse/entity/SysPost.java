@@ -1,65 +1,77 @@
 package com.campus.trend.campus_pulse.entity;
 
+import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.baomidou.mybatisplus.extension.handlers.JacksonTypeHandler;
 import lombok.Data;
-import lombok.EqualsAndHashCode;
 import lombok.experimental.Accessors;
 
 import java.io.Serializable;
-import java.sql.Timestamp;
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Data
-@EqualsAndHashCode(callSuper = false)
-@Accessors(chain = true) // 开启链式操作
-@TableName("sys_post") // 映射数据库表名
+@Accessors(chain = true)
+@TableName(value = "sys_post", autoResultMap = true)
 public class SysPost implements Serializable {
 
-    @TableId(value = "id")
+    @TableId(value = "id", type = IdType.ASSIGN_ID)
     private String id;
-    /**
-     * 关联的用户 ID
-    */
+
     private String userId;
-    /**
-     * 分类的 ID
-    */
+
     private String categoryId;
-    /**
-     * 文章的题目
-    */
+
     private String title;
-    /**
-     * 文章的内容
-    */
+
     private String content;
+
     /**
-     * 文章的图片
-    */
-    private String images;
+     * 图片列表
+     * 数据库存 ["url1", "url2"]
+     * Java 直接映射为 List<String>
+     */
+    @TableField(typeHandler = JacksonTypeHandler.class)
+    private List<String> images;
+
     /**
-     * 文章的标签
-    */
+     * 冗余存储的标签字符串，用于简单展示 (如 "#考研 #Java")
+     * 复杂的标签分析走 sys_tag 关联逻辑
+     */
     private String tags;
+
     /**
-     * 文章浏览量
-    */
+     * 是否匿名 1:是 0:否
+     */
+    private Integer isAnonymous;
+
+    private String locationName;
+
+    /**
+     * 情感分数
+     */
+    private BigDecimal sentimentScore;
+
+    /**
+     * 状态 1:正常 0:删除
+     */
+    private Integer status;
+
+    /**
+     * 审核状态: PENDING/APPROVED/REJECTED
+     */
+    private String auditStatus;
+
+    // 统计数据
     private Integer viewCount;
-    /**
-     * 文章喜欢量
-    */
     private Integer likeCount;
-    /**
-     * 讨厌分数，趋势分析
-    */
+    private Integer collectCount;
+    private Integer commentCount;
     private Double heatScore;
-    /**
-     * 文章状态
-    */
-    private String status;
 
     private LocalDateTime createTime;
     private LocalDateTime updateTime;
-
 }

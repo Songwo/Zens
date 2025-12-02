@@ -30,19 +30,32 @@ public class PostController {
     @PostMapping("/create-post")
     public Result<?> createPost(@Valid @RequestBody CreatePostRequest createPostRequest) {
         AuthSysUser authSysUser = GetUserDetail.getAuthenticatedUser();
-        postService.createPost(createPostRequest,authSysUser.getSysUser().getId());
+        postService.createPost(createPostRequest, authSysUser.getSysUser().getId());
         return Result.success();
     }
 
-    @GetMapping("/extract-tags")
-    public Result<?> extractTags(@Valid @RequestBody ExtractTagsRequest extractTagsRequest){
+    @PostMapping("/extract-tags")
+    public Result<?> extractTags(@Valid @RequestBody ExtractTagsRequest extractTagsRequest) {
         return Result.success(postService.extractTagsAndSummary(extractTagsRequest));
     }
 
     @PostMapping("/search-lists")
-    public Result<?> searchList(@RequestBody PostSearchRequest postSearchRequest){
+    public Result<?> searchList(@RequestBody PostSearchRequest postSearchRequest) {
         return Result.success(postService.searchAllList(postSearchRequest));
     }
 
+    @PostMapping("/{id}/like")
+    public Result<?> likePost(@PathVariable String id) {
+        AuthSysUser authSysUser = GetUserDetail.getAuthenticatedUser();
+        postService.likePost(id, authSysUser.getSysUser().getId());
+        return Result.success();
+    }
+
+    @PostMapping("/{id}/collect")
+    public Result<?> collectPost(@PathVariable String id) {
+        AuthSysUser authSysUser = GetUserDetail.getAuthenticatedUser();
+        postService.collectPost(id, authSysUser.getSysUser().getId());
+        return Result.success();
+    }
 
 }

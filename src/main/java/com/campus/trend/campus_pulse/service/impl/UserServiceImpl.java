@@ -1,6 +1,5 @@
 package com.campus.trend.campus_pulse.service.impl;
 
-
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.campus.trend.campus_pulse.dto.request.UpdatePasswordRequest;
 import com.campus.trend.campus_pulse.dto.request.UpdateUserDetailRequest;
@@ -52,7 +51,10 @@ public class UserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impleme
         proFileResponse.setNickname(sysUser.getNickname());
         proFileResponse.setMajor(sysUser.getMajor());
         proFileResponse.setGrade(sysUser.getGrade());
-        proFileResponse.setInterest_tags(sysUser.getInterestTags());
+        proFileResponse.setGender(sysUser.getGender());
+        proFileResponse.setSchool(sysUser.getSchool());
+        proFileResponse.setRole(sysUser.getRole());
+        proFileResponse.setStatus(sysUser.getStatus());
         proFileResponse.setCreatTime(sysUser.getCreateTime());
         proFileResponse.setUpdateTime(sysUser.getUpdateTime());
 
@@ -72,7 +74,6 @@ public class UserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impleme
         SimpleProfileResponse simpleProfileResponse = new SimpleProfileResponse();
         simpleProfileResponse.setAvatar(sysUser.getAvatar());
         simpleProfileResponse.setNickname(sysUser.getNickname());
-        simpleProfileResponse.setInterest_tags(sysUser.getInterestTags());
 
         autoUpgradeGrade(sysUser);
 
@@ -137,7 +138,8 @@ public class UserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impleme
         sysUser.setMajor(updateUserDetailRequest.getMajor());
         sysUser.setGrade(updateUserDetailRequest.getGrade());
         sysUser.setAvatar(updateUserDetailRequest.getAvatar());
-        sysUser.setInterestTags(updateUserDetailRequest.getInterestTags());
+        sysUser.setGender(updateUserDetailRequest.getGender());
+        sysUser.setSchool(updateUserDetailRequest.getSchool());
 
         sysUser.setUpdateTime(LocalDateTime.now());
 
@@ -147,16 +149,12 @@ public class UserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impleme
 
     @Override
     public SysUser searchByUsername(String username) {
-        return lambdaQuery().
-                eq(SysUser::getUsername, username).
-                one();
+        return lambdaQuery().eq(SysUser::getUsername, username).one();
     }
 
     @Override
     public List<SysUser> searchByGrade(int grade) {
-        return lambdaQuery().
-                ge(SysUser::getGrade,grade).
-                list();
+        return lambdaQuery().ge(SysUser::getGrade, grade).list();
     }
 
     @Override
@@ -164,7 +162,7 @@ public class UserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impleme
         return this.list();
     }
 
-    /**-----------------------内置方法-------------------------*/
+    /** -----------------------内置方法------------------------- */
     public void autoUpgradeGrade(SysUser user) {
 
         LocalDateTime last = user.getLastGradeUpgrade();

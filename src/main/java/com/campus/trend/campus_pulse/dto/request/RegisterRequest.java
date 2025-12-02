@@ -17,8 +17,7 @@ public class RegisterRequest {
     @Size(min = 6, max = 20, message = "密码长度必须在 6-20 个字符之间")
     private String password;
 
-    @Pattern(regexp = "^(http|https)://.*$", message = "头像必须是合法的 URL",
-            groups = UrlCheck.class)
+    @Pattern(regexp = "^(http|https)://.*$", message = "头像必须是合法的 URL", groups = UrlCheck.class)
     private String avatar;
 
     @Size(max = 30, message = "专业名称长度不能超过 30 个字符")
@@ -28,6 +27,17 @@ public class RegisterRequest {
     @Max(value = 2030, message = "年级不能大于 2030")
     private Integer grade;
 
+    private Integer role;
+
+    /**
+     * 性别 0:未知 1:男 2:女
+     */
+    private Integer gender;
+
+    @Size(max = 50, message = "学校名称长度不能超过 50 个字符")
+    private String school;
+
     // 用于可选的 URL 验证分组
-    public interface UrlCheck {}
+    public interface UrlCheck {
+    }
 }
