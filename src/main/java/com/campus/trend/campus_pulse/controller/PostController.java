@@ -36,7 +36,7 @@ public class PostController {
 
     @GetMapping("/extract-tags")
     public Result<?> extractTags(@Valid @RequestBody ExtractTagsRequest extractTagsRequest){
-        return Result.success(postService.extractTags(extractTagsRequest));
+        return Result.success(postService.extractTagsAndSummary(extractTagsRequest));
     }
 
     @PostMapping("/search-lists")

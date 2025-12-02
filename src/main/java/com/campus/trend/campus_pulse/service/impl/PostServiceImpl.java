@@ -17,7 +17,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Service
 public class PostServiceImpl extends ServiceImpl<SysPostMapper, SysPost> implements PostService {
@@ -48,9 +50,32 @@ public class PostServiceImpl extends ServiceImpl<SysPostMapper, SysPost> impleme
     }
 
     @Override
-    public List<String> extractTags(ExtractTagsRequest extractTagsRequest) {
-        String pureText = extractTagsRequest.getContent().replaceAll("<[^>]*>", "");
-        return HanLP.extractKeyword(pureText, extractTagsRequest.getSize());
+    public Map<String, Object> extractTagsAndSummary(ExtractTagsRequest extractTagsRequest) {
+
+        // 1. 清洗 HTML，提取纯文本
+        String pureText = extractTagsRequest.getContent()
+                .replaceAll("<[^>]*>", "")
+                .replaceAll("&nbsp;", " ")
+                .replaceAll("\\s+", " ")
+                .trim();
+
+        // 2. 提取关键词
+        List<String> tags = HanLP.extractKeyword(
+                pureText,
+                extractTagsRequest.getTagSize()
+        );
+
+        // 3. 提取摘要
+        List<String> summary = HanLP.extractSummary(
+                pureText,
+                extractTagsRequest.getSummarySize()
+        );
+
+        // 4. 封装返回
+        Map<String, Object> map = new HashMap<>();
+        map.put("tags", tags);
+        map.put("summary", summary);
+        return map;
     }
 
     @Override

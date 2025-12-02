@@ -8,6 +8,7 @@ import com.campus.trend.campus_pulse.dto.request.PostSearchRequest;
 import com.campus.trend.campus_pulse.entity.SysPost;
 
 import java.util.List;
+import java.util.Map;
 
 public interface PostService extends IService<SysPost> {
 
@@ -15,7 +16,7 @@ public interface PostService extends IService<SysPost> {
 
     void createPost(CreatePostRequest createPostRequest,String userID);
 
-    List<String> extractTags(ExtractTagsRequest extractTagsRequest);
+    Map<String,Object> extractTagsAndSummary(ExtractTagsRequest extractTagsRequest);
 
     void likePost(String postId);
 

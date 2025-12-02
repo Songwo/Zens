@@ -9,6 +9,8 @@ public class ExtractTagsRequest {
     @NotBlank(message = "文章内容不允许为空")
     private String content;
 
-    private int size;
+    private int tagSize;
+
+    private int summarySize;
 
 }
