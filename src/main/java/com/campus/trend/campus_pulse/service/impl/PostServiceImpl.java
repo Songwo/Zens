@@ -9,10 +9,12 @@ import com.campus.trend.campus_pulse.dto.request.CreatePostRequest;
 import com.campus.trend.campus_pulse.dto.request.ExtractTagsRequest;
 import com.campus.trend.campus_pulse.dto.request.PostSearchRequest;
 import com.campus.trend.campus_pulse.entity.SysPost;
+import com.campus.trend.campus_pulse.entity.SysTag;
 import com.campus.trend.campus_pulse.mapper.SysPostMapper;
 import com.campus.trend.campus_pulse.service.PostCollectService;
 import com.campus.trend.campus_pulse.service.PostLikeService;
 import com.campus.trend.campus_pulse.service.PostService;
+import com.campus.trend.campus_pulse.service.TagService;
 import com.campus.trend.campus_pulse.utils.GenerateIDUtil;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -34,6 +36,7 @@ public class PostServiceImpl extends ServiceImpl<SysPostMapper, SysPost> impleme
 
     private final PostLikeService postLikeService;
     private final PostCollectService postCollectService;
+    private final TagService tagService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Override
@@ -84,8 +87,39 @@ public class PostServiceImpl extends ServiceImpl<SysPostMapper, SysPost> impleme
         sysPost.setAuditStatus("PENDING"); // 待审核
         sysPost.setHeatScore(0.0); // 初始热度
 
-        // 3.保存
+        // 3.保存帖子
         this.save(sysPost);
+
+        // 4.处理标签（自动创建标签并增加热度）
+        processPostTags(createPostRequest.getTags());
+    }
+
+    /**
+     * 处理帖子标签：自动创建标签并增加热度
+     *
+     * @param tagsString 标签字符串（如"#考研 #Java"）
+     */
+    private void processPostTags(String tagsString) {
+        if (!StringUtils.hasText(tagsString)) {
+            return;
+        }
+
+        // 解析标签字符串（支持空格或#分隔）
+        String[] tagNames = tagsString.split("[\\s#]+");
+
+        for (String tagName : tagNames) {
+            String trimmedTag = tagName.trim();
+            if (StringUtils.hasText(trimmedTag) && !trimmedTag.isEmpty()) {
+                try {
+                    // 获取或创建标签
+                    SysTag tag = tagService.getOrCreateTag(trimmedTag);
+                    // 增加标签热度
+                    tagService.increaseHeat(tag.getId());
+                } catch (Exception e) {
+                    log.error("处理标签 " + trimmedTag + " 失败", e);
+                }
+            }
+        }
     }
 
     @Override
