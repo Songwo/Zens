@@ -10,10 +10,9 @@ import com.campus.trend.campus_pulse.dto.request.ExtractTagsRequest;
 import com.campus.trend.campus_pulse.dto.request.PostSearchRequest;
 import com.campus.trend.campus_pulse.entity.SysPost;
 import com.campus.trend.campus_pulse.entity.SysPostCollect;
-import com.campus.trend.campus_pulse.entity.SysPostLike;
 import com.campus.trend.campus_pulse.mapper.SysPostCollectMapper;
-import com.campus.trend.campus_pulse.mapper.SysPostLikeMapper;
 import com.campus.trend.campus_pulse.mapper.SysPostMapper;
+import com.campus.trend.campus_pulse.service.PostLikeService;
 import com.campus.trend.campus_pulse.service.PostService;
 import com.campus.trend.campus_pulse.utils.GenerateIDUtil;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -34,7 +33,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class PostServiceImpl extends ServiceImpl<SysPostMapper, SysPost> implements PostService {
 
-    private final SysPostLikeMapper sysPostLikeMapper;
+    private final PostLikeService postLikeService;
     private final SysPostCollectMapper sysPostCollectMapper;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -118,32 +117,10 @@ public class PostServiceImpl extends ServiceImpl<SysPostMapper, SysPost> impleme
     }
 
     @Override
-    @Transactional(rollbackFor = Exception.class)
     public void likePost(String postId, String userId) {
-        // 1. 查询是否已经点赞
-        SysPostLike exist = sysPostLikeMapper.selectOne(Wrappers.<SysPostLike>lambdaQuery()
-                .eq(SysPostLike::getPostId, postId)
-                .eq(SysPostLike::getUserId, userId));
-
-        SysPost post = getById(postId);
-        if (post == null) {
-            throw new RuntimeException("帖子不存在");
-        }
-
-        if (exist != null) {
-            // 取消点赞
-            sysPostLikeMapper.deleteById(exist.getId());
-            post.setLikeCount(Math.max(0, post.getLikeCount() - 1));
-        } else {
-            // 点赞
-            SysPostLike like = new SysPostLike();
-            like.setPostId(postId);
-            like.setUserId(userId);
-            like.setCreateTime(LocalDateTime.now());
-            sysPostLikeMapper.insert(like);
-            post.setLikeCount(post.getLikeCount() + 1);
-        }
-        updateById(post);
+        // 委托给 PostLikeService 处理点赞/取消点赞逻辑
+        // 该方法会自动处理点赞状态切换并更新点赞数
+        postLikeService.toggleLike(postId, userId);
     }
 
     @Override

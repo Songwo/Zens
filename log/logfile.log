@@ -1,101 +1,22 @@
-2025-12-02 15:21:34.453 [main] INFO  c.c.t.c.CampusPulseApplication - Starting CampusPulseApplication using Java 17.0.15 with PID 22480 (D:\2026毕业设计\DaiMa\campus-pulse(back)\campus-pulse\target\classes started by lenovo in D:\2026毕业设计\DaiMa\campus-pulse(back)\campus-pulse)
-2025-12-02 15:21:34.459 [main] DEBUG c.c.t.c.CampusPulseApplication - Running with Spring Boot v3.5.8, Spring v6.2.14
-2025-12-02 15:21:34.462 [main] INFO  c.c.t.c.CampusPulseApplication - No active profile set, falling back to 1 default profile: "default"
-2025-12-02 15:21:35.198 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Multiple Spring Data modules found, entering strict repository configuration mode
-2025-12-02 15:21:35.201 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Bootstrapping Spring Data Redis repositories in DEFAULT mode.
-2025-12-02 15:21:35.237 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Finished Spring Data repository scanning in 19 ms. Found 0 Redis repository interfaces.
-2025-12-02 15:21:35.764 [main] INFO  o.s.b.w.e.t.TomcatWebServer - Tomcat initialized with port 7800 (http)
-2025-12-02 15:21:35.776 [main] INFO  o.a.c.core.StandardService - Starting service [Tomcat]
-2025-12-02 15:21:35.776 [main] INFO  o.a.c.core.StandardEngine - Starting Servlet engine: [Apache Tomcat/10.1.49]
-2025-12-02 15:21:35.846 [main] INFO  o.a.c.c.C.[.[localhost].[/] - Initializing Spring embedded WebApplicationContext
-2025-12-02 15:21:35.846 [main] INFO  o.s.b.w.s.c.ServletWebServerApplicationContext - Root WebApplicationContext: initialization completed in 1314 ms
-2025-12-02 15:21:36.739 [main] DEBUG c.c.t.c.f.JwtAuthenticationFilter - Filter 'jwtAuthenticationFilter' configured for use
-2025-12-02 15:21:37.356 [main] INFO  o.s.b.w.e.t.TomcatWebServer - Tomcat started on port 7800 (http) with context path '/'
-2025-12-02 15:21:37.364 [main] INFO  c.c.t.c.CampusPulseApplication - Started CampusPulseApplication in 3.452 seconds (process running for 4.232)
-2025-12-02 15:22:13.458 [http-nio-7800-exec-1] INFO  o.a.c.c.C.[.[localhost].[/] - Initializing Spring DispatcherServlet 'dispatcherServlet'
-2025-12-02 15:22:13.461 [http-nio-7800-exec-1] INFO  o.s.w.s.DispatcherServlet - Initializing Servlet 'dispatcherServlet'
-2025-12-02 15:22:13.482 [http-nio-7800-exec-1] INFO  o.s.w.s.DispatcherServlet - Completed initialization in 19 ms
-2025-12-02 15:23:28.377 [SpringApplicationShutdownHook] INFO  o.s.b.w.e.t.GracefulShutdown - Commencing graceful shutdown. Waiting for active requests to complete
-2025-12-02 15:23:28.625 [tomcat-shutdown] INFO  o.s.b.w.e.t.GracefulShutdown - Graceful shutdown complete
-2025-12-02 15:23:34.548 [main] INFO  c.c.t.c.CampusPulseApplication - Starting CampusPulseApplication using Java 17.0.15 with PID 21156 (D:\2026毕业设计\DaiMa\campus-pulse(back)\campus-pulse\target\classes started by lenovo in D:\2026毕业设计\DaiMa\campus-pulse(back)\campus-pulse)
-2025-12-02 15:23:34.550 [main] DEBUG c.c.t.c.CampusPulseApplication - Running with Spring Boot v3.5.8, Spring v6.2.14
-2025-12-02 15:23:34.550 [main] INFO  c.c.t.c.CampusPulseApplication - No active profile set, falling back to 1 default profile: "default"
-2025-12-02 15:23:35.241 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Multiple Spring Data modules found, entering strict repository configuration mode
-2025-12-02 15:23:35.244 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Bootstrapping Spring Data Redis repositories in DEFAULT mode.
-2025-12-02 15:23:35.282 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Finished Spring Data repository scanning in 22 ms. Found 0 Redis repository interfaces.
-2025-12-02 15:23:35.731 [main] INFO  o.s.b.w.e.t.TomcatWebServer - Tomcat initialized with port 7800 (http)
-2025-12-02 15:23:35.740 [main] INFO  o.a.c.core.StandardService - Starting service [Tomcat]
-2025-12-02 15:23:35.741 [main] INFO  o.a.c.core.StandardEngine - Starting Servlet engine: [Apache Tomcat/10.1.49]
-2025-12-02 15:23:35.803 [main] INFO  o.a.c.c.C.[.[localhost].[/] - Initializing Spring embedded WebApplicationContext
-2025-12-02 15:23:35.803 [main] INFO  o.s.b.w.s.c.ServletWebServerApplicationContext - Root WebApplicationContext: initialization completed in 1209 ms
-2025-12-02 15:23:36.603 [main] DEBUG c.c.t.c.f.JwtAuthenticationFilter - Filter 'jwtAuthenticationFilter' configured for use
-2025-12-02 15:23:37.264 [main] INFO  o.s.b.w.e.t.TomcatWebServer - Tomcat started on port 7800 (http) with context path '/'
-2025-12-02 15:23:37.273 [main] INFO  c.c.t.c.CampusPulseApplication - Started CampusPulseApplication in 3.239 seconds (process running for 3.948)
-2025-12-02 15:23:40.393 [http-nio-7800-exec-5] INFO  o.a.c.c.C.[.[localhost].[/] - Initializing Spring DispatcherServlet 'dispatcherServlet'
-2025-12-02 15:23:40.395 [http-nio-7800-exec-5] INFO  o.s.w.s.DispatcherServlet - Initializing Servlet 'dispatcherServlet'
-2025-12-02 15:23:40.396 [http-nio-7800-exec-5] INFO  o.s.w.s.DispatcherServlet - Completed initialization in 1 ms
-2025-12-02 15:23:40.742 [http-nio-7800-exec-5] INFO  c.z.hikari.HikariDataSource - HikariPool-1 - Starting...
-2025-12-02 15:23:41.381 [http-nio-7800-exec-5] INFO  c.z.hikari.pool.HikariPool - HikariPool-1 - Added connection com.mysql.cj.jdbc.ConnectionImpl@46108f79
-2025-12-02 15:23:41.384 [http-nio-7800-exec-5] INFO  c.z.hikari.HikariDataSource - HikariPool-1 - Start completed.
-2025-12-02 15:23:41.397 [http-nio-7800-exec-5] DEBUG c.c.t.c.m.S.selectList - ==>  Preparing: SELECT id,username,password,nickname,avatar,gender,role,school,major,grade,status,create_time,update_time,last_grade_upgrade FROM sys_user WHERE (username = ?)
-2025-12-02 15:23:41.430 [http-nio-7800-exec-5] DEBUG c.c.t.c.m.S.selectList - ==> Parameters: 2022335(String)
-2025-12-02 15:23:41.493 [http-nio-7800-exec-5] DEBUG c.c.t.c.m.S.selectList - <==      Total: 0
-2025-12-02 15:23:41.616 [http-nio-7800-exec-5] DEBUG c.c.t.c.m.SysUserMapper.insert - ==>  Preparing: INSERT INTO sys_user ( id, username, password, nickname, avatar, role, major, grade, status ) VALUES ( ?, ?, ?, ?, ?, ?, ?, ?, ? )
-2025-12-02 15:23:41.617 [http-nio-7800-exec-5] DEBUG c.c.t.c.m.SysUserMapper.insert - ==> Parameters: 1995755736615567362(String), 2022335(String), $2a$10$mTYd4tIV/u.gQp3Il.jGhurwsa4FUn2coIvdcUYKVejLj0xrmPR1i(String), ssss(String), ssssswww(String), 1(Integer), sadowd(String), 2021(Integer), 1(Integer)
-2025-12-02 15:23:41.637 [http-nio-7800-exec-5] DEBUG c.c.t.c.m.SysUserMapper.insert - <==    Updates: 1
-2025-12-02 15:23:48.356 [http-nio-7800-exec-3] DEBUG c.c.t.c.m.S.selectList - ==>  Preparing: SELECT id,username,password,nickname,avatar,gender,role,school,major,grade,status,create_time,update_time,last_grade_upgrade FROM sys_user WHERE (username = ?)
-2025-12-02 15:23:48.357 [http-nio-7800-exec-3] DEBUG c.c.t.c.m.S.selectList - ==> Parameters: 2022335(String)
-2025-12-02 15:23:48.373 [http-nio-7800-exec-3] DEBUG c.c.t.c.m.S.selectList - <==      Total: 1
-2025-12-02 15:24:02.775 [http-nio-7800-exec-6] DEBUG c.c.t.c.m.S.selectList - ==>  Preparing: SELECT id,username,password,nickname,avatar,gender,role,school,major,grade,status,create_time,update_time,last_grade_upgrade FROM sys_user WHERE (username = ?)
-2025-12-02 15:24:02.775 [http-nio-7800-exec-6] DEBUG c.c.t.c.m.S.selectList - ==> Parameters: 202250735(String)
-2025-12-02 15:24:02.777 [http-nio-7800-exec-6] DEBUG c.c.t.c.m.S.selectList - <==      Total: 0
-2025-12-02 15:24:02.778 [http-nio-7800-exec-6] WARN  c.c.t.c.s.SysUserDetailsServiceImpl - 用户 [202250735] 登录失败：账号不存在
-2025-12-02 15:24:16.399 [http-nio-7800-exec-2] DEBUG c.c.t.c.m.S.selectList - ==>  Preparing: SELECT id,username,password,nickname,avatar,gender,role,school,major,grade,status,create_time,update_time,last_grade_upgrade FROM sys_user WHERE (username = ?)
-2025-12-02 15:24:16.400 [http-nio-7800-exec-2] DEBUG c.c.t.c.m.S.selectList - ==> Parameters: 2022335(String)
-2025-12-02 15:24:16.403 [http-nio-7800-exec-2] DEBUG c.c.t.c.m.S.selectList - <==      Total: 1
-2025-12-02 15:24:16.403 [http-nio-7800-exec-2] INFO  c.c.t.c.s.SysUserDetailsServiceImpl - 用户 [2022335] 信息加载成功，角色：User
-2025-12-02 15:24:39.470 [http-nio-7800-exec-4] DEBUG c.c.t.c.m.S.selectList - ==>  Preparing: SELECT id,username,password,nickname,avatar,gender,role,school,major,grade,status,create_time,update_time,last_grade_upgrade FROM sys_user WHERE (username = ?)
-2025-12-02 15:24:39.471 [http-nio-7800-exec-4] DEBUG c.c.t.c.m.S.selectList - ==> Parameters: 2022335(String)
-2025-12-02 15:24:39.474 [http-nio-7800-exec-4] DEBUG c.c.t.c.m.S.selectList - <==      Total: 1
-2025-12-02 15:24:39.474 [http-nio-7800-exec-4] INFO  c.c.t.c.s.SysUserDetailsServiceImpl - 用户 [2022335] 信息加载成功，角色：User
-2025-12-02 15:24:39.477 [http-nio-7800-exec-4] INFO  c.c.t.c.f.JwtAuthenticationFilter - 认证通过
-2025-12-02 15:24:39.482 [http-nio-7800-exec-4] DEBUG c.c.t.c.m.S.selectList - ==>  Preparing: SELECT id,username,password,nickname,avatar,gender,role,school,major,grade,status,create_time,update_time,last_grade_upgrade FROM sys_user
-2025-12-02 15:24:39.482 [http-nio-7800-exec-4] DEBUG c.c.t.c.m.S.selectList - ==> Parameters: 
-2025-12-02 15:24:39.484 [http-nio-7800-exec-4] DEBUG c.c.t.c.m.S.selectList - <==      Total: 1
-2025-12-02 15:25:09.914 [http-nio-7800-exec-7] DEBUG c.c.t.c.m.S.selectList - ==>  Preparing: SELECT id,username,password,nickname,avatar,gender,role,school,major,grade,status,create_time,update_time,last_grade_upgrade FROM sys_user WHERE (username = ?)
-2025-12-02 15:25:09.915 [http-nio-7800-exec-7] DEBUG c.c.t.c.m.S.selectList - ==> Parameters: 2022335(String)
-2025-12-02 15:25:09.916 [http-nio-7800-exec-7] DEBUG c.c.t.c.m.S.selectList - <==      Total: 1
-2025-12-02 15:25:09.917 [http-nio-7800-exec-7] INFO  c.c.t.c.s.SysUserDetailsServiceImpl - 用户 [2022335] 信息加载成功，角色：User
-2025-12-02 15:25:09.919 [http-nio-7800-exec-7] INFO  c.c.t.c.f.JwtAuthenticationFilter - 认证通过
-2025-12-02 15:25:09.921 [http-nio-7800-exec-7] DEBUG c.c.t.c.m.S.selectList - ==>  Preparing: SELECT id,username,password,nickname,avatar,gender,role,school,major,grade,status,create_time,update_time,last_grade_upgrade FROM sys_user WHERE (username = ?)
-2025-12-02 15:25:09.921 [http-nio-7800-exec-7] DEBUG c.c.t.c.m.S.selectList - ==> Parameters: 2022335(String)
-2025-12-02 15:25:09.923 [http-nio-7800-exec-7] DEBUG c.c.t.c.m.S.selectList - <==      Total: 1
-2025-12-02 15:25:24.487 [http-nio-7800-exec-9] DEBUG c.c.t.c.m.S.selectList - ==>  Preparing: SELECT id,username,password,nickname,avatar,gender,role,school,major,grade,status,create_time,update_time,last_grade_upgrade FROM sys_user WHERE (username = ?)
-2025-12-02 15:25:24.487 [http-nio-7800-exec-9] DEBUG c.c.t.c.m.S.selectList - ==> Parameters: 2022335(String)
-2025-12-02 15:25:24.488 [http-nio-7800-exec-9] DEBUG c.c.t.c.m.S.selectList - <==      Total: 1
-2025-12-02 15:25:24.489 [http-nio-7800-exec-9] INFO  c.c.t.c.s.SysUserDetailsServiceImpl - 用户 [2022335] 信息加载成功，角色：User
-2025-12-02 15:25:24.491 [http-nio-7800-exec-9] INFO  c.c.t.c.f.JwtAuthenticationFilter - 认证通过
-2025-12-02 15:25:24.493 [http-nio-7800-exec-9] DEBUG c.c.t.c.m.S.selectList - ==>  Preparing: SELECT id,username,password,nickname,avatar,gender,role,school,major,grade,status,create_time,update_time,last_grade_upgrade FROM sys_user WHERE (username = ?)
-2025-12-02 15:25:24.493 [http-nio-7800-exec-9] DEBUG c.c.t.c.m.S.selectList - ==> Parameters: 2022335(String)
-2025-12-02 15:25:24.495 [http-nio-7800-exec-9] DEBUG c.c.t.c.m.S.selectList - <==      Total: 1
-2025-12-02 15:25:43.790 [http-nio-7800-exec-8] DEBUG c.c.t.c.m.S.selectList - ==>  Preparing: SELECT id,username,password,nickname,avatar,gender,role,school,major,grade,status,create_time,update_time,last_grade_upgrade FROM sys_user WHERE (username = ?)
-2025-12-02 15:25:43.791 [http-nio-7800-exec-8] DEBUG c.c.t.c.m.S.selectList - ==> Parameters: 2022335(String)
-2025-12-02 15:25:43.792 [http-nio-7800-exec-8] DEBUG c.c.t.c.m.S.selectList - <==      Total: 1
-2025-12-02 15:25:43.793 [http-nio-7800-exec-8] INFO  c.c.t.c.s.SysUserDetailsServiceImpl - 用户 [2022335] 信息加载成功，角色：User
-2025-12-02 15:25:43.797 [http-nio-7800-exec-8] INFO  c.c.t.c.f.JwtAuthenticationFilter - 认证通过
-2025-12-02 15:26:02.753 [http-nio-7800-exec-5] DEBUG c.c.t.c.m.S.selectList - ==>  Preparing: SELECT id,username,password,nickname,avatar,gender,role,school,major,grade,status,create_time,update_time,last_grade_upgrade FROM sys_user WHERE (username = ?)
-2025-12-02 15:26:02.754 [http-nio-7800-exec-5] DEBUG c.c.t.c.m.S.selectList - ==> Parameters: 2022335(String)
-2025-12-02 15:26:02.757 [http-nio-7800-exec-5] DEBUG c.c.t.c.m.S.selectList - <==      Total: 1
-2025-12-02 15:26:02.757 [http-nio-7800-exec-5] INFO  c.c.t.c.s.SysUserDetailsServiceImpl - 用户 [2022335] 信息加载成功，角色：User
-2025-12-02 15:26:02.761 [http-nio-7800-exec-5] INFO  c.c.t.c.f.JwtAuthenticationFilter - 认证通过
-2025-12-02 15:26:02.771 [http-nio-7800-exec-5] DEBUG c.c.t.c.m.S.selectList - ==>  Preparing: SELECT id,username,password,nickname,avatar,gender,role,school,major,grade,status,create_time,update_time,last_grade_upgrade FROM sys_user WHERE (username = ?)
-2025-12-02 15:26:02.771 [http-nio-7800-exec-5] DEBUG c.c.t.c.m.S.selectList - ==> Parameters: 2022335(String)
-2025-12-02 15:26:02.774 [http-nio-7800-exec-5] DEBUG c.c.t.c.m.S.selectList - <==      Total: 1
-2025-12-02 15:26:03.129 [http-nio-7800-exec-5] DEBUG c.c.t.c.m.S.updateById - ==>  Preparing: UPDATE sys_user SET username=?, password=?, nickname=?, avatar=?, gender=?, role=?, school=?, major=?, grade=?, status=?, create_time=?, update_time=? WHERE id=?
-2025-12-02 15:26:03.129 [http-nio-7800-exec-5] DEBUG c.c.t.c.m.S.updateById - ==> Parameters: 2022335(String), $2a$10$gvH/EDO.2oZuMGTyE7Jh7.sEqhtMdrBLTdOonWe/bCHinRvAFUunK(String), ssss(String), ssssswww(String), 0(Integer), 1(Integer), 本校(String), sadowd(String), 2021(Integer), 1(Integer), 2025-12-02T15:23:41(LocalDateTime), 2025-12-02T15:26:03.127273900(LocalDateTime), 1995755736615567362(String)
-2025-12-02 15:26:03.146 [http-nio-7800-exec-5] DEBUG c.c.t.c.m.S.updateById - <==    Updates: 1
-2025-12-02 15:28:02.530 [http-nio-7800-exec-9] INFO  c.c.t.c.utils.JwtUtil - JWT 解析失败: JWT expired at 2025-12-01T03:22:39Z. Current time: 2025-12-02T07:28:02Z, a difference of 101123529 milliseconds.  Allowed clock skew: 0 milliseconds.
-2025-12-02 15:28:02.532 [http-nio-7800-exec-9] ERROR o.a.c.c.C.[.[.[.[dispatcherServlet] - Servlet.service() for servlet [dispatcherServlet] in context with path [] threw exception
+2025-12-09 09:49:27.262 [main] INFO  c.c.t.c.CampusPulseApplication - Starting CampusPulseApplication using Java 17.0.15 with PID 912 (D:\2026毕业设计\DaiMa\campus-pulse(back)\campus-pulse\target\classes started by lenovo in D:\2026毕业设计\DaiMa\campus-pulse(back)\campus-pulse)
+2025-12-09 09:49:27.269 [main] DEBUG c.c.t.c.CampusPulseApplication - Running with Spring Boot v3.5.8, Spring v6.2.14
+2025-12-09 09:49:27.271 [main] INFO  c.c.t.c.CampusPulseApplication - No active profile set, falling back to 1 default profile: "default"
+2025-12-09 09:49:28.180 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Multiple Spring Data modules found, entering strict repository configuration mode
+2025-12-09 09:49:28.182 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Bootstrapping Spring Data Redis repositories in DEFAULT mode.
+2025-12-09 09:49:28.232 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Finished Spring Data repository scanning in 29 ms. Found 0 Redis repository interfaces.
+2025-12-09 09:49:28.867 [main] INFO  o.s.b.w.e.t.TomcatWebServer - Tomcat initialized with port 7800 (http)
+2025-12-09 09:49:28.881 [main] INFO  o.a.c.core.StandardService - Starting service [Tomcat]
+2025-12-09 09:49:28.881 [main] INFO  o.a.c.core.StandardEngine - Starting Servlet engine: [Apache Tomcat/10.1.49]
+2025-12-09 09:49:28.963 [main] INFO  o.a.c.c.C.[.[localhost].[/] - Initializing Spring embedded WebApplicationContext
+2025-12-09 09:49:28.965 [main] INFO  o.s.b.w.s.c.ServletWebServerApplicationContext - Root WebApplicationContext: initialization completed in 1632 ms
+2025-12-09 09:49:29.849 [main] DEBUG c.c.t.c.f.JwtAuthenticationFilter - Filter 'jwtAuthenticationFilter' configured for use
+2025-12-09 09:49:30.614 [main] INFO  o.s.b.w.e.t.TomcatWebServer - Tomcat started on port 7800 (http) with context path '/'
+2025-12-09 09:49:30.623 [main] INFO  c.c.t.c.CampusPulseApplication - Started CampusPulseApplication in 3.992 seconds (process running for 5.095)
+2025-12-09 09:51:17.980 [http-nio-7800-exec-3] INFO  o.a.c.c.C.[.[localhost].[/] - Initializing Spring DispatcherServlet 'dispatcherServlet'
+2025-12-09 09:51:17.986 [http-nio-7800-exec-3] INFO  o.s.w.s.DispatcherServlet - Initializing Servlet 'dispatcherServlet'
+2025-12-09 09:51:18.008 [http-nio-7800-exec-3] INFO  o.s.w.s.DispatcherServlet - Completed initialization in 22 ms
+2025-12-09 09:51:18.199 [http-nio-7800-exec-3] INFO  c.c.t.c.utils.JwtUtil - JWT 解析失败: JWT expired at 2025-12-02T09:31:54Z. Current time: 2025-12-09T01:51:18Z, a difference of 577164195 milliseconds.  Allowed clock skew: 0 milliseconds.
+2025-12-09 09:51:18.204 [http-nio-7800-exec-3] ERROR o.a.c.c.C.[.[.[.[dispatcherServlet] - Servlet.service() for servlet [dispatcherServlet] in context with path [] threw exception
 java.lang.NullPointerException: Cannot invoke "io.jsonwebtoken.Claims.getSubject()" because "c" is null
 	at com.campus.trend.campus_pulse.utils.JwtUtil.getUserId(JwtUtil.java:89)
 	at com.campus.trend.campus_pulse.filter.JwtAuthenticationFilter.doFilterInternal(JwtAuthenticationFilter.java:46)
@@ -164,119 +85,23 @@ java.lang.NullPointerException: Cannot invoke "io.jsonwebtoken.Claims.getSubject
 	at org.apache.tomcat.util.threads.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:491)
 	at org.apache.tomcat.util.threads.TaskThread$WrappingRunnable.run(TaskThread.java:63)
 	at java.base/java.lang.Thread.run(Thread.java:840)
-2025-12-02 15:28:35.011 [http-nio-7800-exec-1] DEBUG c.c.t.c.m.S.selectList - ==>  Preparing: SELECT id,username,password,nickname,avatar,gender,role,school,major,grade,status,create_time,update_time,last_grade_upgrade FROM sys_user WHERE (username = ?)
-2025-12-02 15:28:35.011 [http-nio-7800-exec-1] DEBUG c.c.t.c.m.S.selectList - ==> Parameters: 2022335(String)
-2025-12-02 15:28:35.012 [http-nio-7800-exec-1] DEBUG c.c.t.c.m.S.selectList - <==      Total: 1
-2025-12-02 15:28:35.013 [http-nio-7800-exec-1] INFO  c.c.t.c.s.SysUserDetailsServiceImpl - 用户 [2022335] 信息加载成功，角色：User
-2025-12-02 15:28:43.453 [http-nio-7800-exec-5] DEBUG c.c.t.c.m.S.selectList - ==>  Preparing: SELECT id,username,password,nickname,avatar,gender,role,school,major,grade,status,create_time,update_time,last_grade_upgrade FROM sys_user WHERE (username = ?)
-2025-12-02 15:28:43.454 [http-nio-7800-exec-5] DEBUG c.c.t.c.m.S.selectList - ==> Parameters: 2022335(String)
-2025-12-02 15:28:43.455 [http-nio-7800-exec-5] DEBUG c.c.t.c.m.S.selectList - <==      Total: 1
-2025-12-02 15:28:43.456 [http-nio-7800-exec-5] INFO  c.c.t.c.s.SysUserDetailsServiceImpl - 用户 [2022335] 信息加载成功，角色：User
-2025-12-02 15:28:55.787 [http-nio-7800-exec-3] DEBUG c.c.t.c.m.S.selectList - ==>  Preparing: SELECT id,username,password,nickname,avatar,gender,role,school,major,grade,status,create_time,update_time,last_grade_upgrade FROM sys_user WHERE (username = ?)
-2025-12-02 15:28:55.788 [http-nio-7800-exec-3] DEBUG c.c.t.c.m.S.selectList - ==> Parameters: 2022335(String)
-2025-12-02 15:28:55.790 [http-nio-7800-exec-3] DEBUG c.c.t.c.m.S.selectList - <==      Total: 1
-2025-12-02 15:28:55.791 [http-nio-7800-exec-3] INFO  c.c.t.c.s.SysUserDetailsServiceImpl - 用户 [2022335] 信息加载成功，角色：User
-2025-12-02 15:28:55.795 [http-nio-7800-exec-3] INFO  c.c.t.c.f.JwtAuthenticationFilter - 认证通过
-2025-12-02 15:28:55.806 [http-nio-7800-exec-3] DEBUG c.c.t.c.m.S.selectList - ==>  Preparing: SELECT id,username,password,nickname,avatar,gender,role,school,major,grade,status,create_time,update_time,last_grade_upgrade FROM sys_user WHERE (username = ?)
-2025-12-02 15:28:55.806 [http-nio-7800-exec-3] DEBUG c.c.t.c.m.S.selectList - ==> Parameters: 2022335(String)
-2025-12-02 15:28:55.808 [http-nio-7800-exec-3] DEBUG c.c.t.c.m.S.selectList - <==      Total: 1
-2025-12-02 15:28:55.809 [http-nio-7800-exec-3] DEBUG c.c.t.c.m.S.updateById - ==>  Preparing: UPDATE sys_user SET username=?, password=?, nickname=?, avatar=?, role=?, major=?, grade=?, status=?, create_time=?, update_time=? WHERE id=?
-2025-12-02 15:28:55.810 [http-nio-7800-exec-3] DEBUG c.c.t.c.m.S.updateById - ==> Parameters: 2022335(String), $2a$10$gvH/EDO.2oZuMGTyE7Jh7.sEqhtMdrBLTdOonWe/bCHinRvAFUunK(String), Uix-Song(String), 1234567(String), 1(Integer), sdwgrtrr(String), 2022(Integer), 1(Integer), 2025-12-02T15:23:41(LocalDateTime), 2025-12-02T15:28:55.809928500(LocalDateTime), 1995755736615567362(String)
-2025-12-02 15:28:55.820 [http-nio-7800-exec-3] DEBUG c.c.t.c.m.S.updateById - <==    Updates: 1
-2025-12-02 15:30:45.835 [SpringApplicationShutdownHook] INFO  o.s.b.w.e.t.GracefulShutdown - Commencing graceful shutdown. Waiting for active requests to complete
-2025-12-02 15:30:46.053 [tomcat-shutdown] INFO  o.s.b.w.e.t.GracefulShutdown - Graceful shutdown complete
-2025-12-02 15:30:46.176 [SpringApplicationShutdownHook] INFO  c.z.hikari.HikariDataSource - HikariPool-1 - Shutdown initiated...
-2025-12-02 15:30:46.183 [SpringApplicationShutdownHook] INFO  c.z.hikari.HikariDataSource - HikariPool-1 - Shutdown completed.
-2025-12-02 15:30:50.875 [main] INFO  c.c.t.c.CampusPulseApplication - Starting CampusPulseApplication using Java 17.0.15 with PID 29264 (D:\2026毕业设计\DaiMa\campus-pulse(back)\campus-pulse\target\classes started by lenovo in D:\2026毕业设计\DaiMa\campus-pulse(back)\campus-pulse)
-2025-12-02 15:30:50.878 [main] DEBUG c.c.t.c.CampusPulseApplication - Running with Spring Boot v3.5.8, Spring v6.2.14
-2025-12-02 15:30:50.880 [main] INFO  c.c.t.c.CampusPulseApplication - No active profile set, falling back to 1 default profile: "default"
-2025-12-02 15:30:51.530 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Multiple Spring Data modules found, entering strict repository configuration mode
-2025-12-02 15:30:51.532 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Bootstrapping Spring Data Redis repositories in DEFAULT mode.
-2025-12-02 15:30:51.562 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Finished Spring Data repository scanning in 19 ms. Found 0 Redis repository interfaces.
-2025-12-02 15:30:51.985 [main] INFO  o.s.b.w.e.t.TomcatWebServer - Tomcat initialized with port 7800 (http)
-2025-12-02 15:30:51.995 [main] INFO  o.a.c.core.StandardService - Starting service [Tomcat]
-2025-12-02 15:30:51.995 [main] INFO  o.a.c.core.StandardEngine - Starting Servlet engine: [Apache Tomcat/10.1.49]
-2025-12-02 15:30:52.056 [main] INFO  o.a.c.c.C.[.[localhost].[/] - Initializing Spring embedded WebApplicationContext
-2025-12-02 15:30:52.056 [main] INFO  o.s.b.w.s.c.ServletWebServerApplicationContext - Root WebApplicationContext: initialization completed in 1122 ms
-2025-12-02 15:30:52.796 [main] DEBUG c.c.t.c.f.JwtAuthenticationFilter - Filter 'jwtAuthenticationFilter' configured for use
-2025-12-02 15:30:53.344 [main] INFO  o.s.b.w.e.t.TomcatWebServer - Tomcat started on port 7800 (http) with context path '/'
-2025-12-02 15:30:53.354 [main] INFO  c.c.t.c.CampusPulseApplication - Started CampusPulseApplication in 2.953 seconds (process running for 3.562)
-2025-12-02 15:31:07.572 [http-nio-7800-exec-2] INFO  o.a.c.c.C.[.[localhost].[/] - Initializing Spring DispatcherServlet 'dispatcherServlet'
-2025-12-02 15:31:07.573 [http-nio-7800-exec-2] INFO  o.s.w.s.DispatcherServlet - Initializing Servlet 'dispatcherServlet'
-2025-12-02 15:31:07.576 [http-nio-7800-exec-2] INFO  o.s.w.s.DispatcherServlet - Completed initialization in 3 ms
-2025-12-02 15:31:25.093 [http-nio-7800-exec-3] INFO  c.z.hikari.HikariDataSource - HikariPool-1 - Starting...
-2025-12-02 15:31:25.428 [http-nio-7800-exec-3] INFO  c.z.hikari.pool.HikariPool - HikariPool-1 - Added connection com.mysql.cj.jdbc.ConnectionImpl@775171ad
-2025-12-02 15:31:25.429 [http-nio-7800-exec-3] INFO  c.z.hikari.HikariDataSource - HikariPool-1 - Start completed.
-2025-12-02 15:31:25.436 [http-nio-7800-exec-3] DEBUG c.c.t.c.m.S.selectList - ==>  Preparing: SELECT id,username,password,nickname,avatar,gender,role,school,major,grade,status,create_time,update_time,last_grade_upgrade FROM sys_user WHERE (username = ?)
-2025-12-02 15:31:25.462 [http-nio-7800-exec-3] DEBUG c.c.t.c.m.S.selectList - ==> Parameters: 2022335(String)
-2025-12-02 15:31:25.489 [http-nio-7800-exec-3] DEBUG c.c.t.c.m.S.selectList - <==      Total: 1
-2025-12-02 15:31:25.495 [http-nio-7800-exec-3] INFO  c.c.t.c.s.SysUserDetailsServiceImpl - 用户 [2022335] 信息加载成功，角色：User
-2025-12-02 15:31:25.502 [http-nio-7800-exec-3] INFO  c.c.t.c.f.JwtAuthenticationFilter - 认证通过
-2025-12-02 15:31:25.519 [http-nio-7800-exec-3] DEBUG c.c.t.c.m.S.selectList - ==>  Preparing: SELECT id,username,password,nickname,avatar,gender,role,school,major,grade,status,create_time,update_time,last_grade_upgrade FROM sys_user WHERE (username = ?)
-2025-12-02 15:31:25.520 [http-nio-7800-exec-3] DEBUG c.c.t.c.m.S.selectList - ==> Parameters: 2022335(String)
-2025-12-02 15:31:25.521 [http-nio-7800-exec-3] DEBUG c.c.t.c.m.S.selectList - <==      Total: 1
-2025-12-02 15:31:32.331 [http-nio-7800-exec-5] DEBUG c.c.t.c.m.S.selectList - ==>  Preparing: SELECT id,username,password,nickname,avatar,gender,role,school,major,grade,status,create_time,update_time,last_grade_upgrade FROM sys_user WHERE (username = ?)
-2025-12-02 15:31:32.331 [http-nio-7800-exec-5] DEBUG c.c.t.c.m.S.selectList - ==> Parameters: 2022335(String)
-2025-12-02 15:31:32.333 [http-nio-7800-exec-5] DEBUG c.c.t.c.m.S.selectList - <==      Total: 1
-2025-12-02 15:31:32.333 [http-nio-7800-exec-5] INFO  c.c.t.c.s.SysUserDetailsServiceImpl - 用户 [2022335] 信息加载成功，角色：User
-2025-12-02 15:31:32.336 [http-nio-7800-exec-5] INFO  c.c.t.c.f.JwtAuthenticationFilter - 认证通过
-2025-12-02 15:31:32.337 [http-nio-7800-exec-5] DEBUG c.c.t.c.m.S.selectList - ==>  Preparing: SELECT id,username,password,nickname,avatar,gender,role,school,major,grade,status,create_time,update_time,last_grade_upgrade FROM sys_user WHERE (username = ?)
-2025-12-02 15:31:32.337 [http-nio-7800-exec-5] DEBUG c.c.t.c.m.S.selectList - ==> Parameters: 2022335(String)
-2025-12-02 15:31:32.339 [http-nio-7800-exec-5] DEBUG c.c.t.c.m.S.selectList - <==      Total: 1
-2025-12-02 15:31:49.105 [SpringApplicationShutdownHook] INFO  o.s.b.w.e.t.GracefulShutdown - Commencing graceful shutdown. Waiting for active requests to complete
-2025-12-02 15:31:49.311 [tomcat-shutdown] INFO  o.s.b.w.e.t.GracefulShutdown - Graceful shutdown complete
-2025-12-02 15:31:49.450 [SpringApplicationShutdownHook] INFO  c.z.hikari.HikariDataSource - HikariPool-1 - Shutdown initiated...
-2025-12-02 15:31:49.459 [SpringApplicationShutdownHook] INFO  c.z.hikari.HikariDataSource - HikariPool-1 - Shutdown completed.
-2025-12-02 15:37:49.433 [main] INFO  c.c.t.c.CampusPulseApplication - Starting CampusPulseApplication using Java 17.0.15 with PID 28524 (D:\2026毕业设计\DaiMa\campus-pulse(back)\campus-pulse\target\classes started by lenovo in D:\2026毕业设计\DaiMa\campus-pulse(back)\campus-pulse)
-2025-12-02 15:37:49.435 [main] DEBUG c.c.t.c.CampusPulseApplication - Running with Spring Boot v3.5.8, Spring v6.2.14
-2025-12-02 15:37:49.436 [main] INFO  c.c.t.c.CampusPulseApplication - No active profile set, falling back to 1 default profile: "default"
-2025-12-02 15:37:50.134 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Multiple Spring Data modules found, entering strict repository configuration mode
-2025-12-02 15:37:50.136 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Bootstrapping Spring Data Redis repositories in DEFAULT mode.
-2025-12-02 15:37:50.175 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Finished Spring Data repository scanning in 26 ms. Found 0 Redis repository interfaces.
-2025-12-02 15:37:50.603 [main] INFO  o.s.b.w.e.t.TomcatWebServer - Tomcat initialized with port 7800 (http)
-2025-12-02 15:37:50.612 [main] INFO  o.a.c.core.StandardService - Starting service [Tomcat]
-2025-12-02 15:37:50.613 [main] INFO  o.a.c.core.StandardEngine - Starting Servlet engine: [Apache Tomcat/10.1.49]
-2025-12-02 15:37:50.671 [main] INFO  o.a.c.c.C.[.[localhost].[/] - Initializing Spring embedded WebApplicationContext
-2025-12-02 15:37:50.671 [main] INFO  o.s.b.w.s.c.ServletWebServerApplicationContext - Root WebApplicationContext: initialization completed in 1170 ms
-2025-12-02 15:37:51.524 [main] DEBUG c.c.t.c.f.JwtAuthenticationFilter - Filter 'jwtAuthenticationFilter' configured for use
-2025-12-02 15:37:52.097 [main] INFO  o.s.b.w.e.t.TomcatWebServer - Tomcat started on port 7800 (http) with context path '/'
-2025-12-02 15:37:52.105 [main] INFO  c.c.t.c.CampusPulseApplication - Started CampusPulseApplication in 3.138 seconds (process running for 3.767)
-2025-12-02 15:38:02.877 [http-nio-7800-exec-1] INFO  o.a.c.c.C.[.[localhost].[/] - Initializing Spring DispatcherServlet 'dispatcherServlet'
-2025-12-02 15:38:02.879 [http-nio-7800-exec-1] INFO  o.s.w.s.DispatcherServlet - Initializing Servlet 'dispatcherServlet'
-2025-12-02 15:38:02.884 [http-nio-7800-exec-1] INFO  o.s.w.s.DispatcherServlet - Completed initialization in 5 ms
-2025-12-02 15:38:03.907 [http-nio-7800-exec-1] INFO  c.z.hikari.HikariDataSource - HikariPool-1 - Starting...
-2025-12-02 15:38:04.252 [http-nio-7800-exec-1] INFO  c.z.hikari.pool.HikariPool - HikariPool-1 - Added connection com.mysql.cj.jdbc.ConnectionImpl@5e06a16f
-2025-12-02 15:38:04.254 [http-nio-7800-exec-1] INFO  c.z.hikari.HikariDataSource - HikariPool-1 - Start completed.
-2025-12-02 15:38:04.264 [http-nio-7800-exec-1] DEBUG c.c.t.c.m.S.selectList - ==>  Preparing: SELECT id,username,password,nickname,avatar,gender,role,school,major,grade,status,create_time,update_time,last_grade_upgrade FROM sys_user WHERE (username = ?)
-2025-12-02 15:38:04.286 [http-nio-7800-exec-1] DEBUG c.c.t.c.m.S.selectList - ==> Parameters: 2022335(String)
-2025-12-02 15:38:04.313 [http-nio-7800-exec-1] DEBUG c.c.t.c.m.S.selectList - <==      Total: 1
-2025-12-02 15:38:04.319 [http-nio-7800-exec-1] INFO  c.c.t.c.s.SysUserDetailsServiceImpl - 用户 [2022335] 信息加载成功，角色：User
-2025-12-02 15:38:04.326 [http-nio-7800-exec-1] INFO  c.c.t.c.f.JwtAuthenticationFilter - 认证通过
-2025-12-02 15:38:04.356 [http-nio-7800-exec-1] DEBUG c.c.t.c.m.S.selectList - ==>  Preparing: SELECT id,user_id,category_id,title,content,images,tags,is_anonymous,location_name,sentiment_score,status,audit_status,view_count,like_count,collect_count,comment_count,heat_score,create_time,update_time FROM sys_post WHERE (id = ?)
-2025-12-02 15:38:04.357 [http-nio-7800-exec-1] DEBUG c.c.t.c.m.S.selectList - ==> Parameters: 1(String)
-2025-12-02 15:38:04.359 [http-nio-7800-exec-1] DEBUG c.c.t.c.m.S.selectList - <==      Total: 0
-2025-12-02 15:38:04.360 [http-nio-7800-exec-1] DEBUG c.c.t.c.m.S.selectById - ==>  Preparing: SELECT id,user_id,category_id,title,content,images,tags,is_anonymous,location_name,sentiment_score,status,audit_status,view_count,like_count,collect_count,comment_count,heat_score,create_time,update_time FROM sys_post WHERE id=?
-2025-12-02 15:38:04.360 [http-nio-7800-exec-1] DEBUG c.c.t.c.m.S.selectById - ==> Parameters: 1(String)
-2025-12-02 15:38:04.361 [http-nio-7800-exec-1] DEBUG c.c.t.c.m.S.selectById - <==      Total: 0
-2025-12-02 15:39:04.185 [http-nio-7800-exec-2] DEBUG c.c.t.c.m.S.selectList - ==>  Preparing: SELECT id,username,password,nickname,avatar,gender,role,school,major,grade,status,create_time,update_time,last_grade_upgrade FROM sys_user WHERE (username = ?)
-2025-12-02 15:39:04.186 [http-nio-7800-exec-2] DEBUG c.c.t.c.m.S.selectList - ==> Parameters: 2022335(String)
-2025-12-02 15:39:04.189 [http-nio-7800-exec-2] DEBUG c.c.t.c.m.S.selectList - <==      Total: 1
-2025-12-02 15:39:04.190 [http-nio-7800-exec-2] INFO  c.c.t.c.s.SysUserDetailsServiceImpl - 用户 [2022335] 信息加载成功，角色：User
-2025-12-02 15:39:04.194 [http-nio-7800-exec-2] INFO  c.c.t.c.f.JwtAuthenticationFilter - 认证通过
-2025-12-02 15:39:04.197 [http-nio-7800-exec-2] DEBUG c.c.t.c.m.S.selectList - ==>  Preparing: SELECT id,user_id,category_id,title,content,images,tags,is_anonymous,location_name,sentiment_score,status,audit_status,view_count,like_count,collect_count,comment_count,heat_score,create_time,update_time FROM sys_post WHERE (id = ?)
-2025-12-02 15:39:04.197 [http-nio-7800-exec-2] DEBUG c.c.t.c.m.S.selectList - ==> Parameters: 101(String)
-2025-12-02 15:39:04.208 [http-nio-7800-exec-2] DEBUG c.c.t.c.m.S.selectList - <==      Total: 1
-2025-12-02 15:39:04.209 [http-nio-7800-exec-2] DEBUG c.c.t.c.m.S.selectById - ==>  Preparing: SELECT id,user_id,category_id,title,content,images,tags,is_anonymous,location_name,sentiment_score,status,audit_status,view_count,like_count,collect_count,comment_count,heat_score,create_time,update_time FROM sys_post WHERE id=?
-2025-12-02 15:39:04.210 [http-nio-7800-exec-2] DEBUG c.c.t.c.m.S.selectById - ==> Parameters: 101(String)
-2025-12-02 15:39:04.213 [http-nio-7800-exec-2] DEBUG c.c.t.c.m.S.selectById - <==      Total: 1
-2025-12-02 15:39:04.220 [http-nio-7800-exec-2] DEBUG c.c.t.c.m.S.updateById - ==>  Preparing: UPDATE sys_post SET user_id=?, category_id=?, title=?, content=?, images=?, tags=?, is_anonymous=?, location_name=?, sentiment_score=?, status=?, audit_status=?, view_count=?, like_count=?, collect_count=?, comment_count=?, heat_score=?, create_time=?, update_time=? WHERE id=?
-2025-12-02 15:39:04.234 [http-nio-7800-exec-2] DEBUG c.c.t.c.m.S.updateById - ==> Parameters: 1(String), 1(String), 今天食堂的饭真好吃(String), 红烧肉不错，推荐大家去尝尝！(String), ["https://example.com/food.jpg"](String), #食堂 #美食(String), 0(Integer), 第一食堂(String), 0.80(BigDecimal), 1(Integer), APPROVED(String), 101(Integer), 10(Integer), 5(Integer), 2(Integer), 80.5(Double), 2025-12-02T15:35:30(LocalDateTime), 2025-12-02T15:35:30(LocalDateTime), 101(String)
-2025-12-02 15:39:04.307 [http-nio-7800-exec-2] DEBUG c.c.t.c.m.S.updateById - <==    Updates: 1
-2025-12-02 15:39:04.307 [http-nio-7800-exec-2] DEBUG c.c.t.c.m.S.selectById - ==>  Preparing: SELECT id,user_id,category_id,title,content,images,tags,is_anonymous,location_name,sentiment_score,status,audit_status,view_count,like_count,collect_count,comment_count,heat_score,create_time,update_time FROM sys_post WHERE id=?
-2025-12-02 15:39:04.308 [http-nio-7800-exec-2] DEBUG c.c.t.c.m.S.selectById - ==> Parameters: 101(String)
-2025-12-02 15:39:04.310 [http-nio-7800-exec-2] DEBUG c.c.t.c.m.S.selectById - <==      Total: 1
-2025-12-02 15:43:42.729 [http-nio-7800-exec-8] INFO  c.c.t.c.utils.JwtUtil - JWT 解析失败: JWT expired at 2025-12-01T08:03:49Z. Current time: 2025-12-02T07:43:42Z, a difference of 85193723 milliseconds.  Allowed clock skew: 0 milliseconds.
-2025-12-02 15:43:42.733 [http-nio-7800-exec-8] ERROR o.a.c.c.C.[.[.[.[dispatcherServlet] - Servlet.service() for servlet [dispatcherServlet] in context with path [] threw exception
+2025-12-09 09:51:26.992 [http-nio-7800-exec-4] INFO  c.z.hikari.HikariDataSource - HikariPool-1 - Starting...
+2025-12-09 09:51:27.625 [http-nio-7800-exec-4] INFO  c.z.hikari.pool.HikariPool - HikariPool-1 - Added connection com.mysql.cj.jdbc.ConnectionImpl@718cd4d0
+2025-12-09 09:51:27.627 [http-nio-7800-exec-4] INFO  c.z.hikari.HikariDataSource - HikariPool-1 - Start completed.
+2025-12-09 09:51:27.637 [http-nio-7800-exec-4] DEBUG c.c.t.c.m.S.selectList - ==>  Preparing: SELECT id,username,password,nickname,avatar,gender,role,school,major,grade,status,create_time,update_time,last_grade_upgrade FROM sys_user WHERE (username = ?)
+2025-12-09 09:51:27.669 [http-nio-7800-exec-4] DEBUG c.c.t.c.m.S.selectList - ==> Parameters: 2022335(String)
+2025-12-09 09:51:27.717 [http-nio-7800-exec-4] DEBUG c.c.t.c.m.S.selectList - <==      Total: 1
+2025-12-09 09:51:27.724 [http-nio-7800-exec-4] INFO  c.c.t.c.s.SysUserDetailsServiceImpl - 用户 [2022335] 信息加载成功，角色：User
+2025-12-09 09:51:42.022 [http-nio-7800-exec-5] DEBUG c.c.t.c.m.S.selectList - ==>  Preparing: SELECT id,username,password,nickname,avatar,gender,role,school,major,grade,status,create_time,update_time,last_grade_upgrade FROM sys_user WHERE (username = ?)
+2025-12-09 09:51:42.023 [http-nio-7800-exec-5] DEBUG c.c.t.c.m.S.selectList - ==> Parameters: 2022335(String)
+2025-12-09 09:51:42.025 [http-nio-7800-exec-5] DEBUG c.c.t.c.m.S.selectList - <==      Total: 1
+2025-12-09 09:51:42.025 [http-nio-7800-exec-5] INFO  c.c.t.c.s.SysUserDetailsServiceImpl - 用户 [2022335] 信息加载成功，角色：User
+2025-12-09 09:51:42.031 [http-nio-7800-exec-5] INFO  c.c.t.c.f.JwtAuthenticationFilter - 认证通过
+2025-12-09 09:51:42.049 [http-nio-7800-exec-5] DEBUG c.c.t.c.m.S.selectList - ==>  Preparing: SELECT id,post_id,user_id,content,parent_id,reply_user_id,is_anonymous,like_count,create_time FROM sys_comment WHERE (post_id = ?) ORDER BY create_time ASC
+2025-12-09 09:51:42.050 [http-nio-7800-exec-5] DEBUG c.c.t.c.m.S.selectList - ==> Parameters: 101(String)
+2025-12-09 09:51:42.057 [http-nio-7800-exec-5] DEBUG c.c.t.c.m.S.selectList - <==      Total: 3
+2025-12-09 09:52:46.725 [http-nio-7800-exec-8] INFO  c.c.t.c.utils.JwtUtil - JWT 解析失败: JWT expired at 2025-12-02T09:31:54Z. Current time: 2025-12-09T01:52:46Z, a difference of 577252725 milliseconds.  Allowed clock skew: 0 milliseconds.
+2025-12-09 09:52:46.726 [http-nio-7800-exec-8] ERROR o.a.c.c.C.[.[.[.[dispatcherServlet] - Servlet.service() for servlet [dispatcherServlet] in context with path [] threw exception
 java.lang.NullPointerException: Cannot invoke "io.jsonwebtoken.Claims.getSubject()" because "c" is null
 	at com.campus.trend.campus_pulse.utils.JwtUtil.getUserId(JwtUtil.java:89)
 	at com.campus.trend.campus_pulse.filter.JwtAuthenticationFilter.doFilterInternal(JwtAuthenticationFilter.java:46)
@@ -345,113 +170,103 @@ java.lang.NullPointerException: Cannot invoke "io.jsonwebtoken.Claims.getSubject
 	at org.apache.tomcat.util.threads.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:491)
 	at org.apache.tomcat.util.threads.TaskThread$WrappingRunnable.run(TaskThread.java:63)
 	at java.base/java.lang.Thread.run(Thread.java:840)
-2025-12-02 15:43:50.342 [http-nio-7800-exec-9] DEBUG c.c.t.c.m.S.selectList - ==>  Preparing: SELECT id,username,password,nickname,avatar,gender,role,school,major,grade,status,create_time,update_time,last_grade_upgrade FROM sys_user WHERE (username = ?)
-2025-12-02 15:43:50.343 [http-nio-7800-exec-9] DEBUG c.c.t.c.m.S.selectList - ==> Parameters: 2022335(String)
-2025-12-02 15:43:50.345 [http-nio-7800-exec-9] DEBUG c.c.t.c.m.S.selectList - <==      Total: 1
-2025-12-02 15:43:50.346 [http-nio-7800-exec-9] INFO  c.c.t.c.s.SysUserDetailsServiceImpl - 用户 [2022335] 信息加载成功，角色：User
-2025-12-02 15:43:50.352 [http-nio-7800-exec-9] INFO  c.c.t.c.f.JwtAuthenticationFilter - 认证通过
-2025-12-02 15:43:50.420 [http-nio-7800-exec-9] DEBUG c.c.t.c.m.S.selectList - ==>  Preparing: SELECT id,user_id,category_id,title,content,images,tags,is_anonymous,location_name,sentiment_score,status,audit_status,view_count,like_count,collect_count,comment_count,heat_score,create_time,update_time FROM sys_post WHERE (category_id = ? AND status = ?) ORDER BY create_time DESC
-2025-12-02 15:43:50.420 [http-nio-7800-exec-9] DEBUG c.c.t.c.m.S.selectList - ==> Parameters: 1(String), 1(Integer)
-2025-12-02 15:43:50.425 [http-nio-7800-exec-9] DEBUG c.c.t.c.m.S.selectList - <==      Total: 1
-2025-12-02 15:46:22.924 [http-nio-7800-exec-1] DEBUG c.c.t.c.m.S.selectList - ==>  Preparing: SELECT id,username,password,nickname,avatar,gender,role,school,major,grade,status,create_time,update_time,last_grade_upgrade FROM sys_user WHERE (username = ?)
-2025-12-02 15:46:22.924 [http-nio-7800-exec-1] DEBUG c.c.t.c.m.S.selectList - ==> Parameters: 2022335(String)
-2025-12-02 15:46:22.926 [http-nio-7800-exec-1] DEBUG c.c.t.c.m.S.selectList - <==      Total: 1
-2025-12-02 15:46:22.926 [http-nio-7800-exec-1] INFO  c.c.t.c.s.SysUserDetailsServiceImpl - 用户 [2022335] 信息加载成功，角色：User
-2025-12-02 15:46:22.930 [http-nio-7800-exec-1] INFO  c.c.t.c.f.JwtAuthenticationFilter - 认证通过
-2025-12-02 15:46:22.933 [http-nio-7800-exec-1] DEBUG c.c.t.c.m.S.selectList - ==>  Preparing: SELECT id,user_id,category_id,title,content,images,tags,is_anonymous,location_name,sentiment_score,status,audit_status,view_count,like_count,collect_count,comment_count,heat_score,create_time,update_time FROM sys_post WHERE (id = ?)
-2025-12-02 15:46:22.933 [http-nio-7800-exec-1] DEBUG c.c.t.c.m.S.selectList - ==> Parameters: extract-tags(String)
-2025-12-02 15:46:22.934 [http-nio-7800-exec-1] DEBUG c.c.t.c.m.S.selectList - <==      Total: 0
-2025-12-02 15:46:22.935 [http-nio-7800-exec-1] DEBUG c.c.t.c.m.S.selectById - ==>  Preparing: SELECT id,user_id,category_id,title,content,images,tags,is_anonymous,location_name,sentiment_score,status,audit_status,view_count,like_count,collect_count,comment_count,heat_score,create_time,update_time FROM sys_post WHERE id=?
-2025-12-02 15:46:22.935 [http-nio-7800-exec-1] DEBUG c.c.t.c.m.S.selectById - ==> Parameters: extract-tags(String)
-2025-12-02 15:46:22.936 [http-nio-7800-exec-1] DEBUG c.c.t.c.m.S.selectById - <==      Total: 0
-2025-12-02 15:46:48.916 [http-nio-7800-exec-4] DEBUG c.c.t.c.m.S.selectList - ==>  Preparing: SELECT id,username,password,nickname,avatar,gender,role,school,major,grade,status,create_time,update_time,last_grade_upgrade FROM sys_user WHERE (username = ?)
-2025-12-02 15:46:48.926 [http-nio-7800-exec-4] DEBUG c.c.t.c.m.S.selectList - ==> Parameters: 2022335(String)
-2025-12-02 15:46:48.928 [http-nio-7800-exec-4] DEBUG c.c.t.c.m.S.selectList - <==      Total: 1
-2025-12-02 15:46:48.928 [http-nio-7800-exec-4] INFO  c.c.t.c.s.SysUserDetailsServiceImpl - 用户 [2022335] 信息加载成功，角色：User
-2025-12-02 15:46:48.933 [http-nio-7800-exec-4] INFO  c.c.t.c.f.JwtAuthenticationFilter - 认证通过
-2025-12-02 15:47:23.578 [http-nio-7800-exec-2] DEBUG c.c.t.c.m.S.selectList - ==>  Preparing: SELECT id,username,password,nickname,avatar,gender,role,school,major,grade,status,create_time,update_time,last_grade_upgrade FROM sys_user WHERE (username = ?)
-2025-12-02 15:47:23.579 [http-nio-7800-exec-2] DEBUG c.c.t.c.m.S.selectList - ==> Parameters: 2022335(String)
-2025-12-02 15:47:23.581 [http-nio-7800-exec-2] DEBUG c.c.t.c.m.S.selectList - <==      Total: 1
-2025-12-02 15:47:23.581 [http-nio-7800-exec-2] INFO  c.c.t.c.s.SysUserDetailsServiceImpl - 用户 [2022335] 信息加载成功，角色：User
-2025-12-02 15:47:23.585 [http-nio-7800-exec-2] INFO  c.c.t.c.f.JwtAuthenticationFilter - 认证通过
-2025-12-02 15:51:41.457 [http-nio-7800-exec-7] DEBUG c.c.t.c.m.S.selectList - ==>  Preparing: SELECT id,username,password,nickname,avatar,gender,role,school,major,grade,status,create_time,update_time,last_grade_upgrade FROM sys_user WHERE (username = ?)
-2025-12-02 15:51:41.462 [http-nio-7800-exec-7] DEBUG c.c.t.c.m.S.selectList - ==> Parameters: 2022335(String)
-2025-12-02 15:51:41.467 [http-nio-7800-exec-7] DEBUG c.c.t.c.m.S.selectList - <==      Total: 1
-2025-12-02 15:51:41.468 [http-nio-7800-exec-7] INFO  c.c.t.c.s.SysUserDetailsServiceImpl - 用户 [2022335] 信息加载成功，角色：User
-2025-12-02 15:51:41.471 [http-nio-7800-exec-7] INFO  c.c.t.c.f.JwtAuthenticationFilter - 认证通过
-2025-12-02 15:51:41.524 [http-nio-7800-exec-7] DEBUG c.c.t.c.m.S.selectList - ==>  Preparing: SELECT id,post_id,user_id,create_time FROM sys_post_like WHERE (post_id = ? AND user_id = ?)
-2025-12-02 15:51:41.524 [http-nio-7800-exec-7] DEBUG c.c.t.c.m.S.selectList - ==> Parameters: 101(String), 1995755736615567362(String)
-2025-12-02 15:51:41.527 [http-nio-7800-exec-7] DEBUG c.c.t.c.m.S.selectList - <==      Total: 0
-2025-12-02 15:51:41.528 [http-nio-7800-exec-7] DEBUG c.c.t.c.m.S.selectById - ==>  Preparing: SELECT id,user_id,category_id,title,content,images,tags,is_anonymous,location_name,sentiment_score,status,audit_status,view_count,like_count,collect_count,comment_count,heat_score,create_time,update_time FROM sys_post WHERE id=?
-2025-12-02 15:51:41.529 [http-nio-7800-exec-7] DEBUG c.c.t.c.m.S.selectById - ==> Parameters: 101(String)
-2025-12-02 15:51:41.532 [http-nio-7800-exec-7] DEBUG c.c.t.c.m.S.selectById - <==      Total: 1
-2025-12-02 15:51:41.539 [http-nio-7800-exec-7] DEBUG c.c.t.c.m.S.insert - ==>  Preparing: INSERT INTO sys_post_like ( id, post_id, user_id, create_time ) VALUES ( ?, ?, ?, ? )
-2025-12-02 15:51:41.540 [http-nio-7800-exec-7] DEBUG c.c.t.c.m.S.insert - ==> Parameters: 1995762782714929153(String), 101(String), 1995755736615567362(String), 2025-12-02T15:51:41.532089900(LocalDateTime)
-2025-12-02 15:51:41.543 [http-nio-7800-exec-7] DEBUG c.c.t.c.m.S.insert - <==    Updates: 1
-2025-12-02 15:51:41.544 [http-nio-7800-exec-7] DEBUG c.c.t.c.m.S.updateById - ==>  Preparing: UPDATE sys_post SET user_id=?, category_id=?, title=?, content=?, images=?, tags=?, is_anonymous=?, location_name=?, sentiment_score=?, status=?, audit_status=?, view_count=?, like_count=?, collect_count=?, comment_count=?, heat_score=?, create_time=?, update_time=? WHERE id=?
-2025-12-02 15:51:41.545 [http-nio-7800-exec-7] DEBUG c.c.t.c.m.S.updateById - ==> Parameters: 1(String), 1(String), 今天食堂的饭真好吃(String), 红烧肉不错，推荐大家去尝尝！(String), ["https://example.com/food.jpg"](String), #食堂 #美食(String), 0(Integer), 第一食堂(String), 0.80(BigDecimal), 1(Integer), APPROVED(String), 101(Integer), 11(Integer), 5(Integer), 2(Integer), 80.5(Double), 2025-12-02T15:35:30(LocalDateTime), 2025-12-02T15:35:30(LocalDateTime), 101(String)
-2025-12-02 15:51:41.548 [http-nio-7800-exec-7] DEBUG c.c.t.c.m.S.updateById - <==    Updates: 1
-2025-12-02 15:51:46.762 [http-nio-7800-exec-8] DEBUG c.c.t.c.m.S.selectList - ==>  Preparing: SELECT id,username,password,nickname,avatar,gender,role,school,major,grade,status,create_time,update_time,last_grade_upgrade FROM sys_user WHERE (username = ?)
-2025-12-02 15:51:46.762 [http-nio-7800-exec-8] DEBUG c.c.t.c.m.S.selectList - ==> Parameters: 2022335(String)
-2025-12-02 15:51:46.763 [http-nio-7800-exec-8] DEBUG c.c.t.c.m.S.selectList - <==      Total: 1
-2025-12-02 15:51:46.763 [http-nio-7800-exec-8] INFO  c.c.t.c.s.SysUserDetailsServiceImpl - 用户 [2022335] 信息加载成功，角色：User
-2025-12-02 15:51:46.767 [http-nio-7800-exec-8] INFO  c.c.t.c.f.JwtAuthenticationFilter - 认证通过
-2025-12-02 15:51:46.770 [http-nio-7800-exec-8] DEBUG c.c.t.c.m.S.selectList - ==>  Preparing: SELECT id,user_id,category_id,title,content,images,tags,is_anonymous,location_name,sentiment_score,status,audit_status,view_count,like_count,collect_count,comment_count,heat_score,create_time,update_time FROM sys_post WHERE (id = ?)
-2025-12-02 15:51:46.770 [http-nio-7800-exec-8] DEBUG c.c.t.c.m.S.selectList - ==> Parameters: 101(String)
-2025-12-02 15:51:46.772 [http-nio-7800-exec-8] DEBUG c.c.t.c.m.S.selectList - <==      Total: 1
-2025-12-02 15:51:46.773 [http-nio-7800-exec-8] DEBUG c.c.t.c.m.S.selectById - ==>  Preparing: SELECT id,user_id,category_id,title,content,images,tags,is_anonymous,location_name,sentiment_score,status,audit_status,view_count,like_count,collect_count,comment_count,heat_score,create_time,update_time FROM sys_post WHERE id=?
-2025-12-02 15:51:46.773 [http-nio-7800-exec-8] DEBUG c.c.t.c.m.S.selectById - ==> Parameters: 101(String)
-2025-12-02 15:51:46.774 [http-nio-7800-exec-8] DEBUG c.c.t.c.m.S.selectById - <==      Total: 1
-2025-12-02 15:51:46.775 [http-nio-7800-exec-8] DEBUG c.c.t.c.m.S.updateById - ==>  Preparing: UPDATE sys_post SET user_id=?, category_id=?, title=?, content=?, images=?, tags=?, is_anonymous=?, location_name=?, sentiment_score=?, status=?, audit_status=?, view_count=?, like_count=?, collect_count=?, comment_count=?, heat_score=?, create_time=?, update_time=? WHERE id=?
-2025-12-02 15:51:46.776 [http-nio-7800-exec-8] DEBUG c.c.t.c.m.S.updateById - ==> Parameters: 1(String), 1(String), 今天食堂的饭真好吃(String), 红烧肉不错，推荐大家去尝尝！(String), ["https://example.com/food.jpg"](String), #食堂 #美食(String), 0(Integer), 第一食堂(String), 0.80(BigDecimal), 1(Integer), APPROVED(String), 102(Integer), 11(Integer), 5(Integer), 2(Integer), 80.5(Double), 2025-12-02T15:35:30(LocalDateTime), 2025-12-02T15:35:30(LocalDateTime), 101(String)
-2025-12-02 15:51:46.785 [http-nio-7800-exec-8] DEBUG c.c.t.c.m.S.updateById - <==    Updates: 1
-2025-12-02 15:51:46.786 [http-nio-7800-exec-8] DEBUG c.c.t.c.m.S.selectById - ==>  Preparing: SELECT id,user_id,category_id,title,content,images,tags,is_anonymous,location_name,sentiment_score,status,audit_status,view_count,like_count,collect_count,comment_count,heat_score,create_time,update_time FROM sys_post WHERE id=?
-2025-12-02 15:51:46.786 [http-nio-7800-exec-8] DEBUG c.c.t.c.m.S.selectById - ==> Parameters: 101(String)
-2025-12-02 15:51:46.788 [http-nio-7800-exec-8] DEBUG c.c.t.c.m.S.selectById - <==      Total: 1
-2025-12-02 15:52:17.894 [http-nio-7800-exec-9] DEBUG c.c.t.c.m.S.selectList - ==>  Preparing: SELECT id,username,password,nickname,avatar,gender,role,school,major,grade,status,create_time,update_time,last_grade_upgrade FROM sys_user WHERE (username = ?)
-2025-12-02 15:52:17.894 [http-nio-7800-exec-9] DEBUG c.c.t.c.m.S.selectList - ==> Parameters: 2022335(String)
-2025-12-02 15:52:17.897 [http-nio-7800-exec-9] DEBUG c.c.t.c.m.S.selectList - <==      Total: 1
-2025-12-02 15:52:17.897 [http-nio-7800-exec-9] INFO  c.c.t.c.s.SysUserDetailsServiceImpl - 用户 [2022335] 信息加载成功，角色：User
-2025-12-02 15:52:17.900 [http-nio-7800-exec-9] INFO  c.c.t.c.f.JwtAuthenticationFilter - 认证通过
-2025-12-02 15:52:17.904 [http-nio-7800-exec-9] DEBUG c.c.t.c.m.S.selectList - ==>  Preparing: SELECT id,post_id,user_id,create_time FROM sys_post_collect WHERE (post_id = ? AND user_id = ?)
-2025-12-02 15:52:17.904 [http-nio-7800-exec-9] DEBUG c.c.t.c.m.S.selectList - ==> Parameters: 101(String), 1995755736615567362(String)
-2025-12-02 15:52:17.906 [http-nio-7800-exec-9] DEBUG c.c.t.c.m.S.selectList - <==      Total: 0
-2025-12-02 15:52:17.906 [http-nio-7800-exec-9] DEBUG c.c.t.c.m.S.selectById - ==>  Preparing: SELECT id,user_id,category_id,title,content,images,tags,is_anonymous,location_name,sentiment_score,status,audit_status,view_count,like_count,collect_count,comment_count,heat_score,create_time,update_time FROM sys_post WHERE id=?
-2025-12-02 15:52:17.906 [http-nio-7800-exec-9] DEBUG c.c.t.c.m.S.selectById - ==> Parameters: 101(String)
-2025-12-02 15:52:17.907 [http-nio-7800-exec-9] DEBUG c.c.t.c.m.S.selectById - <==      Total: 1
-2025-12-02 15:52:17.908 [http-nio-7800-exec-9] DEBUG c.c.t.c.m.S.insert - ==>  Preparing: INSERT INTO sys_post_collect ( id, post_id, user_id, create_time ) VALUES ( ?, ?, ?, ? )
-2025-12-02 15:52:17.908 [http-nio-7800-exec-9] DEBUG c.c.t.c.m.S.insert - ==> Parameters: 1995762935207239682(String), 101(String), 1995755736615567362(String), 2025-12-02T15:52:17.908155200(LocalDateTime)
-2025-12-02 15:52:17.910 [http-nio-7800-exec-9] DEBUG c.c.t.c.m.S.insert - <==    Updates: 1
-2025-12-02 15:52:17.911 [http-nio-7800-exec-9] DEBUG c.c.t.c.m.S.updateById - ==>  Preparing: UPDATE sys_post SET user_id=?, category_id=?, title=?, content=?, images=?, tags=?, is_anonymous=?, location_name=?, sentiment_score=?, status=?, audit_status=?, view_count=?, like_count=?, collect_count=?, comment_count=?, heat_score=?, create_time=?, update_time=? WHERE id=?
-2025-12-02 15:52:17.912 [http-nio-7800-exec-9] DEBUG c.c.t.c.m.S.updateById - ==> Parameters: 1(String), 1(String), 今天食堂的饭真好吃(String), 红烧肉不错，推荐大家去尝尝！(String), ["https://example.com/food.jpg"](String), #食堂 #美食(String), 0(Integer), 第一食堂(String), 0.80(BigDecimal), 1(Integer), APPROVED(String), 102(Integer), 11(Integer), 6(Integer), 2(Integer), 80.5(Double), 2025-12-02T15:35:30(LocalDateTime), 2025-12-02T15:35:30(LocalDateTime), 101(String)
-2025-12-02 15:52:17.915 [http-nio-7800-exec-9] DEBUG c.c.t.c.m.S.updateById - <==    Updates: 1
-2025-12-02 15:52:23.834 [http-nio-7800-exec-10] DEBUG c.c.t.c.m.S.selectList - ==>  Preparing: SELECT id,username,password,nickname,avatar,gender,role,school,major,grade,status,create_time,update_time,last_grade_upgrade FROM sys_user WHERE (username = ?)
-2025-12-02 15:52:23.834 [http-nio-7800-exec-10] DEBUG c.c.t.c.m.S.selectList - ==> Parameters: 2022335(String)
-2025-12-02 15:52:23.836 [http-nio-7800-exec-10] DEBUG c.c.t.c.m.S.selectList - <==      Total: 1
-2025-12-02 15:52:23.836 [http-nio-7800-exec-10] INFO  c.c.t.c.s.SysUserDetailsServiceImpl - 用户 [2022335] 信息加载成功，角色：User
-2025-12-02 15:52:23.842 [http-nio-7800-exec-10] INFO  c.c.t.c.f.JwtAuthenticationFilter - 认证通过
-2025-12-02 15:52:23.843 [http-nio-7800-exec-10] DEBUG c.c.t.c.m.S.selectList - ==>  Preparing: SELECT id,user_id,category_id,title,content,images,tags,is_anonymous,location_name,sentiment_score,status,audit_status,view_count,like_count,collect_count,comment_count,heat_score,create_time,update_time FROM sys_post WHERE (id = ?)
-2025-12-02 15:52:23.844 [http-nio-7800-exec-10] DEBUG c.c.t.c.m.S.selectList - ==> Parameters: 101(String)
-2025-12-02 15:52:23.846 [http-nio-7800-exec-10] DEBUG c.c.t.c.m.S.selectList - <==      Total: 1
-2025-12-02 15:52:23.847 [http-nio-7800-exec-10] DEBUG c.c.t.c.m.S.selectById - ==>  Preparing: SELECT id,user_id,category_id,title,content,images,tags,is_anonymous,location_name,sentiment_score,status,audit_status,view_count,like_count,collect_count,comment_count,heat_score,create_time,update_time FROM sys_post WHERE id=?
-2025-12-02 15:52:23.847 [http-nio-7800-exec-10] DEBUG c.c.t.c.m.S.selectById - ==> Parameters: 101(String)
-2025-12-02 15:52:23.849 [http-nio-7800-exec-10] DEBUG c.c.t.c.m.S.selectById - <==      Total: 1
-2025-12-02 15:52:23.850 [http-nio-7800-exec-10] DEBUG c.c.t.c.m.S.updateById - ==>  Preparing: UPDATE sys_post SET user_id=?, category_id=?, title=?, content=?, images=?, tags=?, is_anonymous=?, location_name=?, sentiment_score=?, status=?, audit_status=?, view_count=?, like_count=?, collect_count=?, comment_count=?, heat_score=?, create_time=?, update_time=? WHERE id=?
-2025-12-02 15:52:23.850 [http-nio-7800-exec-10] DEBUG c.c.t.c.m.S.updateById - ==> Parameters: 1(String), 1(String), 今天食堂的饭真好吃(String), 红烧肉不错，推荐大家去尝尝！(String), ["https://example.com/food.jpg"](String), #食堂 #美食(String), 0(Integer), 第一食堂(String), 0.80(BigDecimal), 1(Integer), APPROVED(String), 103(Integer), 11(Integer), 6(Integer), 2(Integer), 80.5(Double), 2025-12-02T15:35:30(LocalDateTime), 2025-12-02T15:35:30(LocalDateTime), 101(String)
-2025-12-02 15:52:23.859 [http-nio-7800-exec-10] DEBUG c.c.t.c.m.S.updateById - <==    Updates: 1
-2025-12-02 15:52:23.860 [http-nio-7800-exec-10] DEBUG c.c.t.c.m.S.selectById - ==>  Preparing: SELECT id,user_id,category_id,title,content,images,tags,is_anonymous,location_name,sentiment_score,status,audit_status,view_count,like_count,collect_count,comment_count,heat_score,create_time,update_time FROM sys_post WHERE id=?
-2025-12-02 15:52:23.860 [http-nio-7800-exec-10] DEBUG c.c.t.c.m.S.selectById - ==> Parameters: 101(String)
-2025-12-02 15:52:23.863 [http-nio-7800-exec-10] DEBUG c.c.t.c.m.S.selectById - <==      Total: 1
-2025-12-02 16:04:14.790 [http-nio-7800-exec-1] DEBUG c.c.t.c.m.S.selectList - ==>  Preparing: SELECT id,username,password,nickname,avatar,gender,role,school,major,grade,status,create_time,update_time,last_grade_upgrade FROM sys_user WHERE (username = ?)
-2025-12-02 16:04:14.795 [http-nio-7800-exec-1] DEBUG c.c.t.c.m.S.selectList - ==> Parameters: 2022335(String)
-2025-12-02 16:04:14.799 [http-nio-7800-exec-1] DEBUG c.c.t.c.m.S.selectList - <==      Total: 1
-2025-12-02 16:04:14.800 [http-nio-7800-exec-1] INFO  c.c.t.c.s.SysUserDetailsServiceImpl - 用户 [2022335] 信息加载成功，角色：User
-2025-12-02 16:04:14.805 [http-nio-7800-exec-1] INFO  c.c.t.c.f.JwtAuthenticationFilter - 认证通过
-2025-12-02 16:04:14.820 [http-nio-7800-exec-1] DEBUG c.c.t.c.m.S.selectList - ==>  Preparing: SELECT id,post_id,user_id,content,parent_id,reply_user_id,is_anonymous,like_count,create_time FROM sys_comment WHERE (post_id = ?) ORDER BY create_time ASC
-2025-12-02 16:04:14.820 [http-nio-7800-exec-1] DEBUG c.c.t.c.m.S.selectList - ==> Parameters: 101(String)
-2025-12-02 16:04:14.822 [http-nio-7800-exec-1] DEBUG c.c.t.c.m.S.selectList - <==      Total: 2
-2025-12-02 16:31:47.833 [http-nio-7800-exec-7] INFO  c.c.t.c.utils.JwtUtil - JWT 解析失败: JWT expired at 2025-12-02T08:28:43Z. Current time: 2025-12-02T08:31:47Z, a difference of 184828 milliseconds.  Allowed clock skew: 0 milliseconds.
-2025-12-02 16:31:47.837 [http-nio-7800-exec-7] ERROR o.a.c.c.C.[.[.[.[dispatcherServlet] - Servlet.service() for servlet [dispatcherServlet] in context with path [] threw exception
+2025-12-09 09:52:53.636 [http-nio-7800-exec-9] DEBUG c.c.t.c.m.S.selectList - ==>  Preparing: SELECT id,username,password,nickname,avatar,gender,role,school,major,grade,status,create_time,update_time,last_grade_upgrade FROM sys_user WHERE (username = ?)
+2025-12-09 09:52:53.637 [http-nio-7800-exec-9] DEBUG c.c.t.c.m.S.selectList - ==> Parameters: 2022335(String)
+2025-12-09 09:52:53.639 [http-nio-7800-exec-9] DEBUG c.c.t.c.m.S.selectList - <==      Total: 1
+2025-12-09 09:52:53.640 [http-nio-7800-exec-9] INFO  c.c.t.c.s.SysUserDetailsServiceImpl - 用户 [2022335] 信息加载成功，角色：User
+2025-12-09 09:52:53.647 [http-nio-7800-exec-9] INFO  c.c.t.c.f.JwtAuthenticationFilter - 认证通过
+2025-12-09 09:52:53.688 [http-nio-7800-exec-9] DEBUG c.c.t.c.m.S.insert - ==>  Preparing: INSERT INTO sys_comment ( id, post_id, user_id, content, parent_id, reply_user_id, is_anonymous, like_count, create_time ) VALUES ( ?, ?, ?, ?, ?, ?, ?, ?, ? )
+2025-12-09 09:52:53.690 [http-nio-7800-exec-9] DEBUG c.c.t.c.m.S.insert - ==> Parameters: 1998209203432366081(String), 101(String), 1995755736615567362(String), 我也觉得挺好吃的(String), 0(String), (String), 0(Integer), 0(Integer), 2025-12-09T09:52:53.679528600(LocalDateTime)
+2025-12-09 09:52:53.707 [http-nio-7800-exec-9] DEBUG c.c.t.c.m.S.insert - <==    Updates: 1
+2025-12-09 09:52:53.708 [http-nio-7800-exec-9] DEBUG c.c.t.c.m.S.selectById - ==>  Preparing: SELECT id,user_id,category_id,title,content,images,tags,is_anonymous,location_name,sentiment_score,status,audit_status,view_count,like_count,collect_count,comment_count,heat_score,create_time,update_time FROM sys_post WHERE id=?
+2025-12-09 09:52:53.709 [http-nio-7800-exec-9] DEBUG c.c.t.c.m.S.selectById - ==> Parameters: 101(String)
+2025-12-09 09:52:53.722 [http-nio-7800-exec-9] DEBUG c.c.t.c.m.S.selectById - <==      Total: 1
+2025-12-09 09:52:53.728 [http-nio-7800-exec-9] DEBUG c.c.t.c.m.S.updateById - ==>  Preparing: UPDATE sys_post SET user_id=?, category_id=?, title=?, content=?, images=?, tags=?, is_anonymous=?, location_name=?, sentiment_score=?, status=?, audit_status=?, view_count=?, like_count=?, collect_count=?, comment_count=?, heat_score=?, create_time=?, update_time=? WHERE id=?
+2025-12-09 09:52:53.732 [http-nio-7800-exec-9] DEBUG c.c.t.c.m.S.updateById - ==> Parameters: 1(String), 1(String), 今天食堂的饭真好吃(String), 红烧肉不错，推荐大家去尝尝！(String), ["https://example.com/food.jpg"](String), #食堂 #美食(String), 0(Integer), 第一食堂(String), 0.80(BigDecimal), 1(Integer), APPROVED(String), 103(Integer), 11(Integer), 6(Integer), 4(Integer), 80.5(Double), 2025-12-02T15:35:30(LocalDateTime), 2025-12-02T15:35:30(LocalDateTime), 101(String)
+2025-12-09 09:52:53.737 [http-nio-7800-exec-9] DEBUG c.c.t.c.m.S.updateById - <==    Updates: 1
+2025-12-09 09:52:58.018 [http-nio-7800-exec-10] DEBUG c.c.t.c.m.S.selectList - ==>  Preparing: SELECT id,username,password,nickname,avatar,gender,role,school,major,grade,status,create_time,update_time,last_grade_upgrade FROM sys_user WHERE (username = ?)
+2025-12-09 09:52:58.019 [http-nio-7800-exec-10] DEBUG c.c.t.c.m.S.selectList - ==> Parameters: 2022335(String)
+2025-12-09 09:52:58.022 [http-nio-7800-exec-10] DEBUG c.c.t.c.m.S.selectList - <==      Total: 1
+2025-12-09 09:52:58.023 [http-nio-7800-exec-10] INFO  c.c.t.c.s.SysUserDetailsServiceImpl - 用户 [2022335] 信息加载成功，角色：User
+2025-12-09 09:52:58.030 [http-nio-7800-exec-10] INFO  c.c.t.c.f.JwtAuthenticationFilter - 认证通过
+2025-12-09 09:52:58.032 [http-nio-7800-exec-10] DEBUG c.c.t.c.m.S.selectList - ==>  Preparing: SELECT id,post_id,user_id,content,parent_id,reply_user_id,is_anonymous,like_count,create_time FROM sys_comment WHERE (post_id = ?) ORDER BY create_time ASC
+2025-12-09 09:52:58.033 [http-nio-7800-exec-10] DEBUG c.c.t.c.m.S.selectList - ==> Parameters: 101(String)
+2025-12-09 09:52:58.037 [http-nio-7800-exec-10] DEBUG c.c.t.c.m.S.selectList - <==      Total: 4
+2025-12-09 09:55:11.280 [SpringApplicationShutdownHook] INFO  o.s.b.w.e.t.GracefulShutdown - Commencing graceful shutdown. Waiting for active requests to complete
+2025-12-09 09:55:11.882 [tomcat-shutdown] INFO  o.s.b.w.e.t.GracefulShutdown - Graceful shutdown complete
+2025-12-09 09:55:12.045 [SpringApplicationShutdownHook] INFO  c.z.hikari.HikariDataSource - HikariPool-1 - Shutdown initiated...
+2025-12-09 09:55:12.069 [SpringApplicationShutdownHook] INFO  c.z.hikari.HikariDataSource - HikariPool-1 - Shutdown completed.
+2025-12-09 10:04:43.479 [main] INFO  c.c.t.c.CampusPulseApplication - Starting CampusPulseApplication using Java 17.0.15 with PID 4920 (D:\2026毕业设计\DaiMa\campus-pulse(back)\campus-pulse\target\classes started by lenovo in D:\2026毕业设计\DaiMa\campus-pulse(back)\campus-pulse)
+2025-12-09 10:04:43.483 [main] DEBUG c.c.t.c.CampusPulseApplication - Running with Spring Boot v3.5.8, Spring v6.2.14
+2025-12-09 10:04:43.484 [main] INFO  c.c.t.c.CampusPulseApplication - No active profile set, falling back to 1 default profile: "default"
+2025-12-09 10:04:44.351 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Multiple Spring Data modules found, entering strict repository configuration mode
+2025-12-09 10:04:44.354 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Bootstrapping Spring Data Redis repositories in DEFAULT mode.
+2025-12-09 10:04:44.410 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Finished Spring Data repository scanning in 34 ms. Found 0 Redis repository interfaces.
+2025-12-09 10:04:45.105 [main] INFO  o.s.b.w.e.t.TomcatWebServer - Tomcat initialized with port 7800 (http)
+2025-12-09 10:04:45.122 [main] INFO  o.a.c.core.StandardService - Starting service [Tomcat]
+2025-12-09 10:04:45.123 [main] INFO  o.a.c.core.StandardEngine - Starting Servlet engine: [Apache Tomcat/10.1.49]
+2025-12-09 10:04:45.211 [main] INFO  o.a.c.c.C.[.[localhost].[/] - Initializing Spring embedded WebApplicationContext
+2025-12-09 10:04:45.212 [main] INFO  o.s.b.w.s.c.ServletWebServerApplicationContext - Root WebApplicationContext: initialization completed in 1661 ms
+2025-12-09 10:04:46.102 [main] DEBUG c.c.t.c.f.JwtAuthenticationFilter - Filter 'jwtAuthenticationFilter' configured for use
+2025-12-09 10:04:46.912 [main] INFO  o.s.b.w.e.t.TomcatWebServer - Tomcat started on port 7800 (http) with context path '/'
+2025-12-09 10:04:46.922 [main] INFO  c.c.t.c.CampusPulseApplication - Started CampusPulseApplication in 4.164 seconds (process running for 5.097)
+2025-12-09 10:04:52.101 [http-nio-7800-exec-2] INFO  o.a.c.c.C.[.[localhost].[/] - Initializing Spring DispatcherServlet 'dispatcherServlet'
+2025-12-09 10:04:52.101 [http-nio-7800-exec-2] INFO  o.s.w.s.DispatcherServlet - Initializing Servlet 'dispatcherServlet'
+2025-12-09 10:04:52.102 [http-nio-7800-exec-2] INFO  o.s.w.s.DispatcherServlet - Completed initialization in 1 ms
+2025-12-09 10:04:53.204 [http-nio-7800-exec-2] INFO  c.z.hikari.HikariDataSource - HikariPool-1 - Starting...
+2025-12-09 10:04:53.643 [http-nio-7800-exec-2] INFO  c.z.hikari.pool.HikariPool - HikariPool-1 - Added connection com.mysql.cj.jdbc.ConnectionImpl@3e23dcd0
+2025-12-09 10:04:53.644 [http-nio-7800-exec-2] INFO  c.z.hikari.HikariDataSource - HikariPool-1 - Start completed.
+2025-12-09 10:04:53.653 [http-nio-7800-exec-2] DEBUG c.c.t.c.m.S.selectList - ==>  Preparing: SELECT id,username,password,nickname,avatar,gender,role,school,major,grade,status,create_time,update_time,last_grade_upgrade FROM sys_user WHERE (username = ?)
+2025-12-09 10:04:53.689 [http-nio-7800-exec-2] DEBUG c.c.t.c.m.S.selectList - ==> Parameters: 2022335(String)
+2025-12-09 10:04:53.724 [http-nio-7800-exec-2] DEBUG c.c.t.c.m.S.selectList - <==      Total: 1
+2025-12-09 10:04:53.728 [http-nio-7800-exec-2] INFO  c.c.t.c.s.SysUserDetailsServiceImpl - 用户 [2022335] 信息加载成功，角色：User
+2025-12-09 10:04:53.736 [http-nio-7800-exec-2] INFO  c.c.t.c.f.JwtAuthenticationFilter - 认证通过
+2025-12-09 10:04:53.780 [http-nio-7800-exec-2] DEBUG c.c.t.c.m.S.selectList - ==>  Preparing: SELECT id,post_id,user_id,content,parent_id,reply_user_id,is_anonymous,like_count,create_time FROM sys_comment WHERE (post_id = ?) ORDER BY create_time ASC
+2025-12-09 10:04:53.781 [http-nio-7800-exec-2] DEBUG c.c.t.c.m.S.selectList - ==> Parameters: 101(String)
+2025-12-09 10:04:53.786 [http-nio-7800-exec-2] DEBUG c.c.t.c.m.S.selectList - <==      Total: 4
+2025-12-09 10:06:47.711 [http-nio-7800-exec-5] DEBUG c.c.t.c.m.S.selectList - ==>  Preparing: SELECT id,username,password,nickname,avatar,gender,role,school,major,grade,status,create_time,update_time,last_grade_upgrade FROM sys_user WHERE (username = ?)
+2025-12-09 10:06:47.721 [http-nio-7800-exec-5] DEBUG c.c.t.c.m.S.selectList - ==> Parameters: 2022335(String)
+2025-12-09 10:06:47.734 [http-nio-7800-exec-5] DEBUG c.c.t.c.m.S.selectList - <==      Total: 1
+2025-12-09 10:06:47.735 [http-nio-7800-exec-5] INFO  c.c.t.c.s.SysUserDetailsServiceImpl - 用户 [2022335] 信息加载成功，角色：User
+2025-12-09 10:06:47.743 [http-nio-7800-exec-5] INFO  c.c.t.c.f.JwtAuthenticationFilter - 认证通过
+2025-12-09 10:06:48.055 [http-nio-7800-exec-5] DEBUG c.c.t.c.m.S.insert - ==>  Preparing: INSERT INTO sys_comment ( id, post_id, user_id, content, parent_id, reply_user_id, is_anonymous, like_count, create_time ) VALUES ( ?, ?, ?, ?, ?, ?, ?, ?, ? )
+2025-12-09 10:06:48.059 [http-nio-7800-exec-5] DEBUG c.c.t.c.m.S.insert - ==> Parameters: 1998212703012859905(String), 202(String), 1995755736615567362(String), 你说的很对呀(String), 0(String), (String), 0(Integer), 0(Integer), 2025-12-09T10:06:48.042256700(LocalDateTime)
+2025-12-09 10:06:48.070 [http-nio-7800-exec-5] DEBUG c.c.t.c.m.S.insert - <==    Updates: 1
+2025-12-09 10:06:48.072 [http-nio-7800-exec-5] DEBUG c.c.t.c.m.S.selectById - ==>  Preparing: SELECT id,user_id,category_id,title,content,images,tags,is_anonymous,location_name,sentiment_score,status,audit_status,view_count,like_count,collect_count,comment_count,heat_score,create_time,update_time FROM sys_post WHERE id=?
+2025-12-09 10:06:48.073 [http-nio-7800-exec-5] DEBUG c.c.t.c.m.S.selectById - ==> Parameters: 202(String)
+2025-12-09 10:06:48.076 [http-nio-7800-exec-5] DEBUG c.c.t.c.m.S.selectById - <==      Total: 0
+2025-12-09 10:06:51.516 [http-nio-7800-exec-6] DEBUG c.c.t.c.m.S.selectList - ==>  Preparing: SELECT id,username,password,nickname,avatar,gender,role,school,major,grade,status,create_time,update_time,last_grade_upgrade FROM sys_user WHERE (username = ?)
+2025-12-09 10:06:51.517 [http-nio-7800-exec-6] DEBUG c.c.t.c.m.S.selectList - ==> Parameters: 2022335(String)
+2025-12-09 10:06:51.520 [http-nio-7800-exec-6] DEBUG c.c.t.c.m.S.selectList - <==      Total: 1
+2025-12-09 10:06:51.520 [http-nio-7800-exec-6] INFO  c.c.t.c.s.SysUserDetailsServiceImpl - 用户 [2022335] 信息加载成功，角色：User
+2025-12-09 10:06:51.529 [http-nio-7800-exec-6] INFO  c.c.t.c.f.JwtAuthenticationFilter - 认证通过
+2025-12-09 10:06:51.534 [http-nio-7800-exec-6] DEBUG c.c.t.c.m.S.selectList - ==>  Preparing: SELECT id,post_id,user_id,content,parent_id,reply_user_id,is_anonymous,like_count,create_time FROM sys_comment WHERE (post_id = ?) ORDER BY create_time ASC
+2025-12-09 10:06:51.534 [http-nio-7800-exec-6] DEBUG c.c.t.c.m.S.selectList - ==> Parameters: 101(String)
+2025-12-09 10:06:51.539 [http-nio-7800-exec-6] DEBUG c.c.t.c.m.S.selectList - <==      Total: 4
+2025-12-09 10:08:07.666 [http-nio-7800-exec-9] DEBUG c.c.t.c.m.S.selectList - ==>  Preparing: SELECT id,username,password,nickname,avatar,gender,role,school,major,grade,status,create_time,update_time,last_grade_upgrade FROM sys_user WHERE (username = ?)
+2025-12-09 10:08:07.673 [http-nio-7800-exec-9] DEBUG c.c.t.c.m.S.selectList - ==> Parameters: 2022335(String)
+2025-12-09 10:08:07.683 [http-nio-7800-exec-9] DEBUG c.c.t.c.m.S.selectList - <==      Total: 1
+2025-12-09 10:08:07.684 [http-nio-7800-exec-9] INFO  c.c.t.c.s.SysUserDetailsServiceImpl - 用户 [2022335] 信息加载成功，角色：User
+2025-12-09 10:08:07.693 [http-nio-7800-exec-9] INFO  c.c.t.c.f.JwtAuthenticationFilter - 认证通过
+2025-12-09 10:08:07.716 [http-nio-7800-exec-9] DEBUG c.c.t.c.m.S.insert - ==>  Preparing: INSERT INTO sys_comment ( id, post_id, user_id, content, parent_id, reply_user_id, is_anonymous, like_count, create_time ) VALUES ( ?, ?, ?, ?, ?, ?, ?, ?, ? )
+2025-12-09 10:08:07.719 [http-nio-7800-exec-9] DEBUG c.c.t.c.m.S.insert - ==> Parameters: 1998213037126922241(String), 101(String), 1995755736615567362(String), 你说的很对呀(String), 202(String), (String), 0(Integer), 0(Integer), 2025-12-09T10:08:07.714420(LocalDateTime)
+2025-12-09 10:08:07.722 [http-nio-7800-exec-9] DEBUG c.c.t.c.m.S.insert - <==    Updates: 1
+2025-12-09 10:08:07.722 [http-nio-7800-exec-9] DEBUG c.c.t.c.m.S.selectById - ==>  Preparing: SELECT id,user_id,category_id,title,content,images,tags,is_anonymous,location_name,sentiment_score,status,audit_status,view_count,like_count,collect_count,comment_count,heat_score,create_time,update_time FROM sys_post WHERE id=?
+2025-12-09 10:08:07.724 [http-nio-7800-exec-9] DEBUG c.c.t.c.m.S.selectById - ==> Parameters: 101(String)
+2025-12-09 10:08:07.748 [http-nio-7800-exec-9] DEBUG c.c.t.c.m.S.selectById - <==      Total: 1
+2025-12-09 10:08:07.763 [http-nio-7800-exec-9] DEBUG c.c.t.c.m.S.updateById - ==>  Preparing: UPDATE sys_post SET user_id=?, category_id=?, title=?, content=?, images=?, tags=?, is_anonymous=?, location_name=?, sentiment_score=?, status=?, audit_status=?, view_count=?, like_count=?, collect_count=?, comment_count=?, heat_score=?, create_time=?, update_time=? WHERE id=?
+2025-12-09 10:08:07.770 [http-nio-7800-exec-9] DEBUG c.c.t.c.m.S.updateById - ==> Parameters: 1(String), 1(String), 今天食堂的饭真好吃(String), 红烧肉不错，推荐大家去尝尝！(String), ["https://example.com/food.jpg"](String), #食堂 #美食(String), 0(Integer), 第一食堂(String), 0.80(BigDecimal), 1(Integer), APPROVED(String), 103(Integer), 11(Integer), 6(Integer), 5(Integer), 80.5(Double), 2025-12-02T15:35:30(LocalDateTime), 2025-12-02T15:35:30(LocalDateTime), 101(String)
+2025-12-09 10:08:07.774 [http-nio-7800-exec-9] DEBUG c.c.t.c.m.S.updateById - <==    Updates: 1
+2025-12-09 10:08:10.583 [http-nio-7800-exec-10] DEBUG c.c.t.c.m.S.selectList - ==>  Preparing: SELECT id,username,password,nickname,avatar,gender,role,school,major,grade,status,create_time,update_time,last_grade_upgrade FROM sys_user WHERE (username = ?)
+2025-12-09 10:08:10.584 [http-nio-7800-exec-10] DEBUG c.c.t.c.m.S.selectList - ==> Parameters: 2022335(String)
+2025-12-09 10:08:10.587 [http-nio-7800-exec-10] DEBUG c.c.t.c.m.S.selectList - <==      Total: 1
+2025-12-09 10:08:10.587 [http-nio-7800-exec-10] INFO  c.c.t.c.s.SysUserDetailsServiceImpl - 用户 [2022335] 信息加载成功，角色：User
+2025-12-09 10:08:10.595 [http-nio-7800-exec-10] INFO  c.c.t.c.f.JwtAuthenticationFilter - 认证通过
+2025-12-09 10:08:10.599 [http-nio-7800-exec-10] DEBUG c.c.t.c.m.S.selectList - ==>  Preparing: SELECT id,post_id,user_id,content,parent_id,reply_user_id,is_anonymous,like_count,create_time FROM sys_comment WHERE (post_id = ?) ORDER BY create_time ASC
+2025-12-09 10:08:10.600 [http-nio-7800-exec-10] DEBUG c.c.t.c.m.S.selectList - ==> Parameters: 101(String)
+2025-12-09 10:08:10.604 [http-nio-7800-exec-10] DEBUG c.c.t.c.m.S.selectList - <==      Total: 5
+2025-12-09 10:08:51.237 [http-nio-7800-exec-1] INFO  c.c.t.c.utils.JwtUtil - JWT 解析失败: JWT expired at 2025-12-02T08:28:43Z. Current time: 2025-12-09T02:08:51Z, a difference of 582008233 milliseconds.  Allowed clock skew: 0 milliseconds.
+2025-12-09 10:08:51.239 [http-nio-7800-exec-1] ERROR o.a.c.c.C.[.[.[.[dispatcherServlet] - Servlet.service() for servlet [dispatcherServlet] in context with path [] threw exception
 java.lang.NullPointerException: Cannot invoke "io.jsonwebtoken.Claims.getSubject()" because "c" is null
 	at com.campus.trend.campus_pulse.utils.JwtUtil.getUserId(JwtUtil.java:89)
 	at com.campus.trend.campus_pulse.filter.JwtAuthenticationFilter.doFilterInternal(JwtAuthenticationFilter.java:46)
@@ -520,26 +335,8 @@ java.lang.NullPointerException: Cannot invoke "io.jsonwebtoken.Claims.getSubject
 	at org.apache.tomcat.util.threads.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:491)
 	at org.apache.tomcat.util.threads.TaskThread$WrappingRunnable.run(TaskThread.java:63)
 	at java.base/java.lang.Thread.run(Thread.java:840)
-2025-12-02 16:31:54.012 [http-nio-7800-exec-8] DEBUG c.c.t.c.m.S.selectList - ==>  Preparing: SELECT id,username,password,nickname,avatar,gender,role,school,major,grade,status,create_time,update_time,last_grade_upgrade FROM sys_user WHERE (username = ?)
-2025-12-02 16:31:54.014 [http-nio-7800-exec-8] DEBUG c.c.t.c.m.S.selectList - ==> Parameters: 2022335(String)
-2025-12-02 16:31:54.020 [http-nio-7800-exec-8] DEBUG c.c.t.c.m.S.selectList - <==      Total: 1
-2025-12-02 16:31:54.021 [http-nio-7800-exec-8] INFO  c.c.t.c.s.SysUserDetailsServiceImpl - 用户 [2022335] 信息加载成功，角色：User
-2025-12-02 16:32:06.854 [http-nio-7800-exec-9] DEBUG c.c.t.c.m.S.selectList - ==>  Preparing: SELECT id,username,password,nickname,avatar,gender,role,school,major,grade,status,create_time,update_time,last_grade_upgrade FROM sys_user WHERE (username = ?)
-2025-12-02 16:32:06.855 [http-nio-7800-exec-9] DEBUG c.c.t.c.m.S.selectList - ==> Parameters: 2022335(String)
-2025-12-02 16:32:06.857 [http-nio-7800-exec-9] DEBUG c.c.t.c.m.S.selectList - <==      Total: 1
-2025-12-02 16:32:06.857 [http-nio-7800-exec-9] INFO  c.c.t.c.s.SysUserDetailsServiceImpl - 用户 [2022335] 信息加载成功，角色：User
-2025-12-02 16:32:06.862 [http-nio-7800-exec-9] INFO  c.c.t.c.f.JwtAuthenticationFilter - 认证通过
-2025-12-02 16:32:06.874 [http-nio-7800-exec-9] DEBUG c.c.t.c.m.S.insert - ==>  Preparing: INSERT INTO sys_comment ( id, post_id, user_id, content, parent_id, reply_user_id, is_anonymous, like_count, create_time ) VALUES ( ?, ?, ?, ?, ?, ?, ?, ?, ? )
-2025-12-02 16:32:06.875 [http-nio-7800-exec-9] DEBUG c.c.t.c.m.S.insert - ==> Parameters: 1995772955273666562(String), 101(String), 1995755736615567362(String), 我也觉得挺好吃的(String), 0(String), (String), 0(Integer), 0(Integer), 2025-12-02T16:32:06.870699100(LocalDateTime)
-2025-12-02 16:32:06.880 [http-nio-7800-exec-9] DEBUG c.c.t.c.m.S.insert - <==    Updates: 1
-2025-12-02 16:32:06.880 [http-nio-7800-exec-9] DEBUG c.c.t.c.m.S.selectById - ==>  Preparing: SELECT id,user_id,category_id,title,content,images,tags,is_anonymous,location_name,sentiment_score,status,audit_status,view_count,like_count,collect_count,comment_count,heat_score,create_time,update_time FROM sys_post WHERE id=?
-2025-12-02 16:32:06.881 [http-nio-7800-exec-9] DEBUG c.c.t.c.m.S.selectById - ==> Parameters: 101(String)
-2025-12-02 16:32:06.885 [http-nio-7800-exec-9] DEBUG c.c.t.c.m.S.selectById - <==      Total: 1
-2025-12-02 16:32:06.887 [http-nio-7800-exec-9] DEBUG c.c.t.c.m.S.updateById - ==>  Preparing: UPDATE sys_post SET user_id=?, category_id=?, title=?, content=?, images=?, tags=?, is_anonymous=?, location_name=?, sentiment_score=?, status=?, audit_status=?, view_count=?, like_count=?, collect_count=?, comment_count=?, heat_score=?, create_time=?, update_time=? WHERE id=?
-2025-12-02 16:32:06.897 [http-nio-7800-exec-9] DEBUG c.c.t.c.m.S.updateById - ==> Parameters: 1(String), 1(String), 今天食堂的饭真好吃(String), 红烧肉不错，推荐大家去尝尝！(String), ["https://example.com/food.jpg"](String), #食堂 #美食(String), 0(Integer), 第一食堂(String), 0.80(BigDecimal), 1(Integer), APPROVED(String), 103(Integer), 11(Integer), 6(Integer), 3(Integer), 80.5(Double), 2025-12-02T15:35:30(LocalDateTime), 2025-12-02T15:35:30(LocalDateTime), 101(String)
-2025-12-02 16:32:06.900 [http-nio-7800-exec-9] DEBUG c.c.t.c.m.S.updateById - <==    Updates: 1
-2025-12-02 16:32:14.049 [http-nio-7800-exec-10] INFO  c.c.t.c.utils.JwtUtil - JWT 解析失败: JWT expired at 2025-12-02T08:28:43Z. Current time: 2025-12-02T08:32:14Z, a difference of 211048 milliseconds.  Allowed clock skew: 0 milliseconds.
-2025-12-02 16:32:14.050 [http-nio-7800-exec-10] ERROR o.a.c.c.C.[.[.[.[dispatcherServlet] - Servlet.service() for servlet [dispatcherServlet] in context with path [] threw exception
+2025-12-09 10:12:02.565 [http-nio-7800-exec-3] INFO  c.c.t.c.utils.JwtUtil - JWT 解析失败: JWT expired at 2025-12-02T08:28:43Z. Current time: 2025-12-09T02:12:02Z, a difference of 582199559 milliseconds.  Allowed clock skew: 0 milliseconds.
+2025-12-09 10:12:02.577 [http-nio-7800-exec-3] ERROR o.a.c.c.C.[.[.[.[dispatcherServlet] - Servlet.service() for servlet [dispatcherServlet] in context with path [] threw exception
 java.lang.NullPointerException: Cannot invoke "io.jsonwebtoken.Claims.getSubject()" because "c" is null
 	at com.campus.trend.campus_pulse.utils.JwtUtil.getUserId(JwtUtil.java:89)
 	at com.campus.trend.campus_pulse.filter.JwtAuthenticationFilter.doFilterInternal(JwtAuthenticationFilter.java:46)
@@ -608,15 +405,67 @@ java.lang.NullPointerException: Cannot invoke "io.jsonwebtoken.Claims.getSubject
 	at org.apache.tomcat.util.threads.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:491)
 	at org.apache.tomcat.util.threads.TaskThread$WrappingRunnable.run(TaskThread.java:63)
 	at java.base/java.lang.Thread.run(Thread.java:840)
-2025-12-02 16:32:19.020 [http-nio-7800-exec-3] DEBUG c.c.t.c.m.S.selectList - ==>  Preparing: SELECT id,username,password,nickname,avatar,gender,role,school,major,grade,status,create_time,update_time,last_grade_upgrade FROM sys_user WHERE (username = ?)
-2025-12-02 16:32:19.020 [http-nio-7800-exec-3] DEBUG c.c.t.c.m.S.selectList - ==> Parameters: 2022335(String)
-2025-12-02 16:32:19.022 [http-nio-7800-exec-3] DEBUG c.c.t.c.m.S.selectList - <==      Total: 1
-2025-12-02 16:32:19.022 [http-nio-7800-exec-3] INFO  c.c.t.c.s.SysUserDetailsServiceImpl - 用户 [2022335] 信息加载成功，角色：User
-2025-12-02 16:32:19.027 [http-nio-7800-exec-3] INFO  c.c.t.c.f.JwtAuthenticationFilter - 认证通过
-2025-12-02 16:32:19.030 [http-nio-7800-exec-3] DEBUG c.c.t.c.m.S.selectList - ==>  Preparing: SELECT id,post_id,user_id,content,parent_id,reply_user_id,is_anonymous,like_count,create_time FROM sys_comment WHERE (post_id = ?) ORDER BY create_time ASC
-2025-12-02 16:32:19.030 [http-nio-7800-exec-3] DEBUG c.c.t.c.m.S.selectList - ==> Parameters: 101(String)
-2025-12-02 16:32:19.033 [http-nio-7800-exec-3] DEBUG c.c.t.c.m.S.selectList - <==      Total: 3
-2025-12-02 16:33:22.582 [SpringApplicationShutdownHook] INFO  o.s.b.w.e.t.GracefulShutdown - Commencing graceful shutdown. Waiting for active requests to complete
-2025-12-02 16:33:22.873 [tomcat-shutdown] INFO  o.s.b.w.e.t.GracefulShutdown - Graceful shutdown complete
-2025-12-02 16:33:23.030 [SpringApplicationShutdownHook] INFO  c.z.hikari.HikariDataSource - HikariPool-1 - Shutdown initiated...
-2025-12-02 16:33:23.036 [SpringApplicationShutdownHook] INFO  c.z.hikari.HikariDataSource - HikariPool-1 - Shutdown completed.
+2025-12-09 10:12:08.061 [http-nio-7800-exec-5] DEBUG c.c.t.c.m.S.selectList - ==>  Preparing: SELECT id,username,password,nickname,avatar,gender,role,school,major,grade,status,create_time,update_time,last_grade_upgrade FROM sys_user WHERE (username = ?)
+2025-12-09 10:12:08.065 [http-nio-7800-exec-5] DEBUG c.c.t.c.m.S.selectList - ==> Parameters: 2022335(String)
+2025-12-09 10:12:08.072 [http-nio-7800-exec-5] DEBUG c.c.t.c.m.S.selectList - <==      Total: 1
+2025-12-09 10:12:08.073 [http-nio-7800-exec-5] INFO  c.c.t.c.s.SysUserDetailsServiceImpl - 用户 [2022335] 信息加载成功，角色：User
+2025-12-09 10:12:22.439 [http-nio-7800-exec-6] DEBUG c.c.t.c.m.S.selectList - ==>  Preparing: SELECT id,username,password,nickname,avatar,gender,role,school,major,grade,status,create_time,update_time,last_grade_upgrade FROM sys_user WHERE (username = ?)
+2025-12-09 10:12:22.439 [http-nio-7800-exec-6] DEBUG c.c.t.c.m.S.selectList - ==> Parameters: 2022335(String)
+2025-12-09 10:12:22.442 [http-nio-7800-exec-6] DEBUG c.c.t.c.m.S.selectList - <==      Total: 1
+2025-12-09 10:12:22.443 [http-nio-7800-exec-6] INFO  c.c.t.c.s.SysUserDetailsServiceImpl - 用户 [2022335] 信息加载成功，角色：User
+2025-12-09 10:12:22.450 [http-nio-7800-exec-6] INFO  c.c.t.c.f.JwtAuthenticationFilter - 认证通过
+2025-12-09 10:12:22.461 [http-nio-7800-exec-6] DEBUG c.c.t.c.m.S.selectCount - ==>  Preparing: SELECT COUNT( * ) AS total FROM sys_post_like WHERE (post_id = ? AND user_id = ?)
+2025-12-09 10:12:22.463 [http-nio-7800-exec-6] DEBUG c.c.t.c.m.S.selectCount - ==> Parameters: 101(String), 1995755736615567362(String)
+2025-12-09 10:12:22.481 [http-nio-7800-exec-6] DEBUG c.c.t.c.m.S.selectCount - <==      Total: 1
+2025-12-09 10:12:22.491 [http-nio-7800-exec-6] DEBUG c.c.t.c.m.S.delete - ==>  Preparing: DELETE FROM sys_post_like WHERE (post_id = ? AND user_id = ?)
+2025-12-09 10:12:22.494 [http-nio-7800-exec-6] DEBUG c.c.t.c.m.S.delete - ==> Parameters: 101(String), 1995755736615567362(String)
+2025-12-09 10:12:22.498 [http-nio-7800-exec-6] DEBUG c.c.t.c.m.S.delete - <==    Updates: 1
+2025-12-09 10:12:22.498 [http-nio-7800-exec-6] DEBUG c.c.t.c.m.S.selectById - ==>  Preparing: SELECT id,user_id,category_id,title,content,images,tags,is_anonymous,location_name,sentiment_score,status,audit_status,view_count,like_count,collect_count,comment_count,heat_score,create_time,update_time FROM sys_post WHERE id=?
+2025-12-09 10:12:22.498 [http-nio-7800-exec-6] DEBUG c.c.t.c.m.S.selectById - ==> Parameters: 101(String)
+2025-12-09 10:12:22.503 [http-nio-7800-exec-6] DEBUG c.c.t.c.m.S.selectById - <==      Total: 1
+2025-12-09 10:12:22.509 [http-nio-7800-exec-6] DEBUG c.c.t.c.m.S.updateById - ==>  Preparing: UPDATE sys_post SET user_id=?, category_id=?, title=?, content=?, images=?, tags=?, is_anonymous=?, location_name=?, sentiment_score=?, status=?, audit_status=?, view_count=?, like_count=?, collect_count=?, comment_count=?, heat_score=?, create_time=?, update_time=? WHERE id=?
+2025-12-09 10:12:22.511 [http-nio-7800-exec-6] DEBUG c.c.t.c.m.S.updateById - ==> Parameters: 1(String), 1(String), 今天食堂的饭真好吃(String), 红烧肉不错，推荐大家去尝尝！(String), ["https://example.com/food.jpg"](String), #食堂 #美食(String), 0(Integer), 第一食堂(String), 0.80(BigDecimal), 1(Integer), APPROVED(String), 103(Integer), 10(Integer), 6(Integer), 5(Integer), 80.5(Double), 2025-12-02T15:35:30(LocalDateTime), 2025-12-02T15:35:30(LocalDateTime), 101(String)
+2025-12-09 10:12:22.515 [http-nio-7800-exec-6] DEBUG c.c.t.c.m.S.updateById - <==    Updates: 1
+2025-12-09 10:12:22.515 [http-nio-7800-exec-6] INFO  c.c.t.c.s.i.PostLikeServiceImpl - 用户 [1995755736615567362] 取消点赞帖子 [101] 成功，当前点赞数: 10
+2025-12-09 10:12:46.022 [http-nio-7800-exec-7] DEBUG c.c.t.c.m.S.selectList - ==>  Preparing: SELECT id,username,password,nickname,avatar,gender,role,school,major,grade,status,create_time,update_time,last_grade_upgrade FROM sys_user WHERE (username = ?)
+2025-12-09 10:12:46.025 [http-nio-7800-exec-7] DEBUG c.c.t.c.m.S.selectList - ==> Parameters: 2022335(String)
+2025-12-09 10:12:46.031 [http-nio-7800-exec-7] DEBUG c.c.t.c.m.S.selectList - <==      Total: 1
+2025-12-09 10:12:46.032 [http-nio-7800-exec-7] INFO  c.c.t.c.s.SysUserDetailsServiceImpl - 用户 [2022335] 信息加载成功，角色：User
+2025-12-09 10:12:46.042 [http-nio-7800-exec-7] INFO  c.c.t.c.f.JwtAuthenticationFilter - 认证通过
+2025-12-09 10:12:46.050 [http-nio-7800-exec-7] DEBUG c.c.t.c.m.S.selectCount - ==>  Preparing: SELECT COUNT( * ) AS total FROM sys_post_like WHERE (post_id = ? AND user_id = ?)
+2025-12-09 10:12:46.051 [http-nio-7800-exec-7] DEBUG c.c.t.c.m.S.selectCount - ==> Parameters: 101(String), 1995755736615567362(String)
+2025-12-09 10:12:46.059 [http-nio-7800-exec-7] DEBUG c.c.t.c.m.S.selectCount - <==      Total: 1
+2025-12-09 10:12:46.069 [http-nio-7800-exec-7] DEBUG c.c.t.c.m.S.insert - ==>  Preparing: INSERT INTO sys_post_like ( id, post_id, user_id, create_time ) VALUES ( ?, ?, ?, ? )
+2025-12-09 10:12:46.070 [http-nio-7800-exec-7] DEBUG c.c.t.c.m.S.insert - ==> Parameters: 1998214204603052033(String), 101(String), 1995755736615567362(String), 2025-12-09T10:12:46.066643800(LocalDateTime)
+2025-12-09 10:12:46.074 [http-nio-7800-exec-7] DEBUG c.c.t.c.m.S.insert - <==    Updates: 1
+2025-12-09 10:12:46.075 [http-nio-7800-exec-7] DEBUG c.c.t.c.m.S.selectById - ==>  Preparing: SELECT id,user_id,category_id,title,content,images,tags,is_anonymous,location_name,sentiment_score,status,audit_status,view_count,like_count,collect_count,comment_count,heat_score,create_time,update_time FROM sys_post WHERE id=?
+2025-12-09 10:12:46.075 [http-nio-7800-exec-7] DEBUG c.c.t.c.m.S.selectById - ==> Parameters: 101(String)
+2025-12-09 10:12:46.079 [http-nio-7800-exec-7] DEBUG c.c.t.c.m.S.selectById - <==      Total: 1
+2025-12-09 10:12:46.083 [http-nio-7800-exec-7] DEBUG c.c.t.c.m.S.updateById - ==>  Preparing: UPDATE sys_post SET user_id=?, category_id=?, title=?, content=?, images=?, tags=?, is_anonymous=?, location_name=?, sentiment_score=?, status=?, audit_status=?, view_count=?, like_count=?, collect_count=?, comment_count=?, heat_score=?, create_time=?, update_time=? WHERE id=?
+2025-12-09 10:12:46.086 [http-nio-7800-exec-7] DEBUG c.c.t.c.m.S.updateById - ==> Parameters: 1(String), 1(String), 今天食堂的饭真好吃(String), 红烧肉不错，推荐大家去尝尝！(String), ["https://example.com/food.jpg"](String), #食堂 #美食(String), 0(Integer), 第一食堂(String), 0.80(BigDecimal), 1(Integer), APPROVED(String), 103(Integer), 11(Integer), 6(Integer), 5(Integer), 80.5(Double), 2025-12-02T15:35:30(LocalDateTime), 2025-12-02T15:35:30(LocalDateTime), 101(String)
+2025-12-09 10:12:46.088 [http-nio-7800-exec-7] DEBUG c.c.t.c.m.S.updateById - <==    Updates: 1
+2025-12-09 10:12:46.089 [http-nio-7800-exec-7] INFO  c.c.t.c.s.i.PostLikeServiceImpl - 用户 [1995755736615567362] 点赞帖子 [101] 成功，当前点赞数: 11
+2025-12-09 10:14:26.952 [http-nio-7800-exec-1] DEBUG c.c.t.c.m.S.selectList - ==>  Preparing: SELECT id,username,password,nickname,avatar,gender,role,school,major,grade,status,create_time,update_time,last_grade_upgrade FROM sys_user WHERE (username = ?)
+2025-12-09 10:14:26.958 [http-nio-7800-exec-1] DEBUG c.c.t.c.m.S.selectList - ==> Parameters: 2022335(String)
+2025-12-09 10:14:26.965 [http-nio-7800-exec-1] DEBUG c.c.t.c.m.S.selectList - <==      Total: 1
+2025-12-09 10:14:26.967 [http-nio-7800-exec-1] INFO  c.c.t.c.s.SysUserDetailsServiceImpl - 用户 [2022335] 信息加载成功，角色：User
+2025-12-09 10:14:26.975 [http-nio-7800-exec-1] INFO  c.c.t.c.f.JwtAuthenticationFilter - 认证通过
+2025-12-09 10:14:26.985 [http-nio-7800-exec-1] DEBUG c.c.t.c.m.S.selectCount - ==>  Preparing: SELECT COUNT( * ) AS total FROM sys_post_like WHERE (post_id = ? AND user_id = ?)
+2025-12-09 10:14:26.986 [http-nio-7800-exec-1] DEBUG c.c.t.c.m.S.selectCount - ==> Parameters: 101(String), 1995755736615567362(String)
+2025-12-09 10:14:26.988 [http-nio-7800-exec-1] DEBUG c.c.t.c.m.S.selectCount - <==      Total: 1
+2025-12-09 10:15:59.559 [http-nio-7800-exec-5] DEBUG c.c.t.c.m.S.selectList - ==>  Preparing: SELECT id,username,password,nickname,avatar,gender,role,school,major,grade,status,create_time,update_time,last_grade_upgrade FROM sys_user WHERE (username = ?)
+2025-12-09 10:15:59.567 [http-nio-7800-exec-5] DEBUG c.c.t.c.m.S.selectList - ==> Parameters: 2022335(String)
+2025-12-09 10:15:59.577 [http-nio-7800-exec-5] DEBUG c.c.t.c.m.S.selectList - <==      Total: 1
+2025-12-09 10:15:59.579 [http-nio-7800-exec-5] INFO  c.c.t.c.s.SysUserDetailsServiceImpl - 用户 [2022335] 信息加载成功，角色：User
+2025-12-09 10:15:59.585 [http-nio-7800-exec-5] INFO  c.c.t.c.f.JwtAuthenticationFilter - 认证通过
+2025-12-09 10:15:59.640 [http-nio-7800-exec-5] DEBUG c.c.t.c.m.S.selectList - ==>  Preparing: SELECT id,post_id,user_id,create_time FROM sys_post_like WHERE (user_id = ?) ORDER BY create_time DESC
+2025-12-09 10:15:59.640 [http-nio-7800-exec-5] DEBUG c.c.t.c.m.S.selectList - ==> Parameters: 1995755736615567362(String)
+2025-12-09 10:15:59.643 [http-nio-7800-exec-5] DEBUG c.c.t.c.m.S.selectList - <==      Total: 1
+2025-12-09 10:15:59.651 [http-nio-7800-exec-5] DEBUG c.c.t.c.m.S.selectBatchIds - ==>  Preparing: SELECT id,user_id,category_id,title,content,images,tags,is_anonymous,location_name,sentiment_score,status,audit_status,view_count,like_count,collect_count,comment_count,heat_score,create_time,update_time FROM sys_post WHERE id IN ( ? )
+2025-12-09 10:15:59.652 [http-nio-7800-exec-5] DEBUG c.c.t.c.m.S.selectBatchIds - ==> Parameters: 101(String)
+2025-12-09 10:15:59.657 [http-nio-7800-exec-5] DEBUG c.c.t.c.m.S.selectBatchIds - <==      Total: 1
+2025-12-09 10:15:59.659 [http-nio-7800-exec-5] INFO  c.c.t.c.s.i.PostLikeServiceImpl - 用户 [1995755736615567362] 第 1 页，每页 20 条，共 0 条点赞记录，返回 1 条有效帖子
+2025-12-09 10:18:30.718 [SpringApplicationShutdownHook] INFO  o.s.b.w.e.t.GracefulShutdown - Commencing graceful shutdown. Waiting for active requests to complete
+2025-12-09 10:18:31.523 [tomcat-shutdown] INFO  o.s.b.w.e.t.GracefulShutdown - Graceful shutdown complete
+2025-12-09 10:18:31.706 [SpringApplicationShutdownHook] INFO  c.z.hikari.HikariDataSource - HikariPool-1 - Shutdown initiated...
+2025-12-09 10:18:31.728 [SpringApplicationShutdownHook] INFO  c.z.hikari.HikariDataSource - HikariPool-1 - Shutdown completed.

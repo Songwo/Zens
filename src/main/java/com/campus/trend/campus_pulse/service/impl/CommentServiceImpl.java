@@ -14,6 +14,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Objects;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -68,8 +70,28 @@ public class CommentServiceImpl extends ServiceImpl<SysCommentMapper, SysComment
 
     @Override
     public List<SysComment> getCommentsByPostId(String postId) {
-        return this.list(Wrappers.<SysComment>lambdaQuery()
+        List<SysComment> sysCommentList = this.list(Wrappers.<SysComment>lambdaQuery()
                 .eq(SysComment::getPostId, postId)
                 .orderByAsc(SysComment::getCreateTime));
+
+        // 过滤出父ID为 "0" 的根节点，开始递归构建
+        return sysCommentList.stream()
+                .filter(comment -> "0".equals(comment.getParentId()))
+                .peek(comment -> comment.setChildren(getChildrens(comment, sysCommentList)))
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * 递归查找子节点
+     */
+    private List<SysComment> getChildrens(SysComment root, List<SysComment> all) {
+        return all.stream()
+                // 筛选出所有 parentId 等于当前 root id 的数据
+                .filter(comment -> Objects.equals(comment.getParentId(), root.getId()))
+                .peek(comment -> {
+                    // 递归：继续去找当前子节点的子节点
+                    comment.setChildren(getChildrens(comment, all));
+                })
+                .collect(Collectors.toList());
     }
 }
