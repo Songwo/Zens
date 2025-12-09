@@ -1,0 +1,21 @@
+package com.campus.trend.campus_pulse.service;
+
+/**
+ * Redis缓存管理服务
+ * 提供缓存清理等管理功能
+ */
+public interface CacheManagementService {
+
+    /**
+     * 清除所有标签相关缓存
+     */
+    void clearAllTagCache();
+
+    /**
+     * 清除指定前缀的缓存
+     * 
+     * @param keyPattern 缓存键模式（如 "tag:*"）
+     * @return 清除的数量
+     */
+    long clearCacheByPattern(String keyPattern);
+}
