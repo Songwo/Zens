@@ -9,9 +9,8 @@ import com.campus.trend.campus_pulse.dto.request.CreatePostRequest;
 import com.campus.trend.campus_pulse.dto.request.ExtractTagsRequest;
 import com.campus.trend.campus_pulse.dto.request.PostSearchRequest;
 import com.campus.trend.campus_pulse.entity.SysPost;
-import com.campus.trend.campus_pulse.entity.SysPostCollect;
-import com.campus.trend.campus_pulse.mapper.SysPostCollectMapper;
 import com.campus.trend.campus_pulse.mapper.SysPostMapper;
+import com.campus.trend.campus_pulse.service.PostCollectService;
 import com.campus.trend.campus_pulse.service.PostLikeService;
 import com.campus.trend.campus_pulse.service.PostService;
 import com.campus.trend.campus_pulse.utils.GenerateIDUtil;
@@ -34,7 +33,7 @@ import java.util.Map;
 public class PostServiceImpl extends ServiceImpl<SysPostMapper, SysPost> implements PostService {
 
     private final PostLikeService postLikeService;
-    private final SysPostCollectMapper sysPostCollectMapper;
+    private final PostCollectService postCollectService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Override
@@ -124,32 +123,10 @@ public class PostServiceImpl extends ServiceImpl<SysPostMapper, SysPost> impleme
     }
 
     @Override
-    @Transactional(rollbackFor = Exception.class)
     public void collectPost(String postId, String userId) {
-        // 1. 查询是否已经收藏
-        SysPostCollect exist = sysPostCollectMapper.selectOne(Wrappers.<SysPostCollect>lambdaQuery()
-                .eq(SysPostCollect::getPostId, postId)
-                .eq(SysPostCollect::getUserId, userId));
-
-        SysPost post = getById(postId);
-        if (post == null) {
-            throw new RuntimeException("帖子不存在");
-        }
-
-        if (exist != null) {
-            // 取消收藏
-            sysPostCollectMapper.deleteById(exist.getId());
-            post.setCollectCount(Math.max(0, post.getCollectCount() - 1));
-        } else {
-            // 收藏
-            SysPostCollect collect = new SysPostCollect();
-            collect.setPostId(postId);
-            collect.setUserId(userId);
-            collect.setCreateTime(LocalDateTime.now());
-            sysPostCollectMapper.insert(collect);
-            post.setCollectCount(post.getCollectCount() + 1);
-        }
-        updateById(post);
+        // 委托给 PostCollectService 处理收藏/取消收藏逻辑
+        // 该方法会自动处理收藏状态切换并更新收藏数
+        postCollectService.toggleCollect(postId, userId);
     }
 
     @Override
