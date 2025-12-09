@@ -71,18 +71,16 @@ public class PostCollectController {
     /**
      * 根据用户ID获取该用户收藏的所有帖子（支持分页）
      *
-     * @param userId   用户ID
      * @param page     页码（可选，默认1）
      * @param pageSize 每页大小（可选，默认20）
      * @return 用户收藏的帖子列表
      */
-    @GetMapping("/user/{userId}")
+    @GetMapping("/user")
     public Result<?> getUserCollectedPosts(
-            @PathVariable String userId,
             @RequestParam(value = "page", required = false, defaultValue = "1") int page,
             @RequestParam(value = "pageSize", required = false, defaultValue = "20") int pageSize) {
-        IPage<SysPost> collectedPostsPage = postCollectService.getPostCollectWithPage(userId, page, pageSize);
-
+        AuthSysUser authSysUser = GetUserDetail.getAuthenticatedUser();
+        IPage<SysPost> collectedPostsPage = postCollectService.getPostCollectWithPage(authSysUser.getSysUser().getId(), page, pageSize);
         return Result.success(collectedPostsPage);
     }
 }
