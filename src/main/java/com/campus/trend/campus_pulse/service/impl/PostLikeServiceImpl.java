@@ -8,6 +8,7 @@ import com.campus.trend.campus_pulse.entity.SysPostLike;
 import com.campus.trend.campus_pulse.mapper.SysPostLikeMapper;
 import com.campus.trend.campus_pulse.mapper.SysPostMapper;
 import com.campus.trend.campus_pulse.service.PostLikeService;
+import com.campus.trend.campus_pulse.service.UserProfileService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,9 +22,11 @@ import java.util.stream.Collectors;
 public class PostLikeServiceImpl extends ServiceImpl<SysPostLikeMapper, SysPostLike> implements PostLikeService {
 
     private final SysPostMapper postMapper;
+    private final UserProfileService userProfileService;
 
-    public PostLikeServiceImpl(SysPostMapper postMapper) {
+    public PostLikeServiceImpl(SysPostMapper postMapper, UserProfileService userProfileService) {
         this.postMapper = postMapper;
+        this.userProfileService = userProfileService;
     }
 
     /**
@@ -122,6 +125,9 @@ public class PostLikeServiceImpl extends ServiceImpl<SysPostLikeMapper, SysPostL
                 post.setLikeCount(currentLikeCount + 1);
                 postMapper.updateById(post);
                 log.info("用户 [{}] 点赞帖子 [{}] 成功，当前点赞数: {}", userId, postId, currentLikeCount + 1);
+
+                // 增加帖子作者获赞数
+                userProfileService.incrementLikesReceived(post.getUserId());
             }
         }
 
@@ -158,6 +164,9 @@ public class PostLikeServiceImpl extends ServiceImpl<SysPostLikeMapper, SysPostL
                 post.setLikeCount(Math.max(0, currentLikeCount - 1));
                 postMapper.updateById(post);
                 log.info("用户 [{}] 取消点赞帖子 [{}] 成功，当前点赞数: {}", userId, postId, Math.max(0, currentLikeCount - 1));
+
+                // 减少帖子作者获赞数
+                userProfileService.decrementLikesReceived(post.getUserId());
             }
         }
 

@@ -8,6 +8,7 @@ import com.campus.trend.campus_pulse.entity.SysPost;
 import com.campus.trend.campus_pulse.mapper.SysCommentMapper;
 import com.campus.trend.campus_pulse.mapper.SysPostMapper;
 import com.campus.trend.campus_pulse.service.CommentService;
+import com.campus.trend.campus_pulse.service.UserProfileService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,6 +23,7 @@ import java.util.stream.Collectors;
 public class CommentServiceImpl extends ServiceImpl<SysCommentMapper, SysComment> implements CommentService {
 
     private final SysPostMapper sysPostMapper;
+    private final UserProfileService userProfileService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -43,6 +45,10 @@ public class CommentServiceImpl extends ServiceImpl<SysCommentMapper, SysComment
             post.setCommentCount(post.getCommentCount() + 1);
             sysPostMapper.updateById(post);
         }
+
+        // 更新用户画像
+        userProfileService.addContribution(userId, 2); // 评论贡献值+2
+        userProfileService.updateLastActiveTime(userId);
     }
 
     @Override

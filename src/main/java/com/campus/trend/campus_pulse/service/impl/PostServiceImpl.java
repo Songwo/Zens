@@ -11,10 +11,12 @@ import com.campus.trend.campus_pulse.dto.request.PostSearchRequest;
 import com.campus.trend.campus_pulse.entity.SysPost;
 import com.campus.trend.campus_pulse.entity.SysTag;
 import com.campus.trend.campus_pulse.mapper.SysPostMapper;
+import com.campus.trend.campus_pulse.service.CategoryService;
 import com.campus.trend.campus_pulse.service.PostCollectService;
 import com.campus.trend.campus_pulse.service.PostLikeService;
 import com.campus.trend.campus_pulse.service.PostService;
 import com.campus.trend.campus_pulse.service.TagService;
+import com.campus.trend.campus_pulse.service.UserProfileService;
 import com.campus.trend.campus_pulse.utils.GenerateIDUtil;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -37,6 +39,8 @@ public class PostServiceImpl extends ServiceImpl<SysPostMapper, SysPost> impleme
     private final PostLikeService postLikeService;
     private final PostCollectService postCollectService;
     private final TagService tagService;
+    private final UserProfileService userProfileService;
+    private final CategoryService categoryService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Override
@@ -46,8 +50,14 @@ public class PostServiceImpl extends ServiceImpl<SysPostMapper, SysPost> impleme
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void createPost(CreatePostRequest createPostRequest, String userId) {
-        // 1.检查 category_id 的有效性 (TODO)
+        // 1.检查 category_id 的有效性
+        if (createPostRequest.getCategoryID() != null && !createPostRequest.getCategoryID().isEmpty()) {
+            if (!categoryService.existsById(createPostRequest.getCategoryID())) {
+                throw new RuntimeException("分类不存在: " + createPostRequest.getCategoryID());
+            }
+        }
 
         // 2.构造帖子
         String postID = GenerateIDUtil.genId("POST");
@@ -92,6 +102,17 @@ public class PostServiceImpl extends ServiceImpl<SysPostMapper, SysPost> impleme
 
         // 4.处理标签（自动创建标签并增加热度）
         processPostTags(createPostRequest.getTags());
+
+        // 5.更新用户画像
+        userProfileService.incrementTotalPosts(userId);
+        userProfileService.updateLastActiveTime(userId);
+        userProfileService.updatePreferredCategories(userId, createPostRequest.getCategoryID());
+        userProfileService.addContribution(userId, 5); // 发帖贡献值+5
+
+        // 6.更新活跃地点
+        if (createPostRequest.getLocationName() != null && !createPostRequest.getLocationName().isEmpty()) {
+            userProfileService.updateActiveRegion(userId, createPostRequest.getLocationName());
+        }
     }
 
     /**

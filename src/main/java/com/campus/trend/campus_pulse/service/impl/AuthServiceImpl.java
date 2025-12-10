@@ -10,6 +10,7 @@ import com.campus.trend.campus_pulse.exception.definexception.RegisterException;
 import com.campus.trend.campus_pulse.exception.definexception.UserNameAlreadyExisted;
 import com.campus.trend.campus_pulse.security.AuthSysUser;
 import com.campus.trend.campus_pulse.service.AuthService;
+import com.campus.trend.campus_pulse.service.UserProfileService;
 import com.campus.trend.campus_pulse.service.UserService;
 import com.campus.trend.campus_pulse.utils.GenerateIDUtil;
 import com.campus.trend.campus_pulse.utils.GetUserDetail;
@@ -22,6 +23,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Map;
 
@@ -39,21 +41,25 @@ public class AuthServiceImpl implements AuthService {
 
     private final UserService userService;
 
+    private final UserProfileService userProfileService;
+
     public AuthServiceImpl(AuthenticationManager authorizationManager,
             PasswordEncoder passwordEncoder,
             StringRedisTemplate stringRedisTemplate,
-            JwtUtil jwtUtil, UserService userService) {
+            JwtUtil jwtUtil, UserService userService,
+            UserProfileService userProfileService) {
         this.authorizationManager = authorizationManager;
         this.passwordEncoder = passwordEncoder;
         this.stringRedisTemplate = stringRedisTemplate;
         this.jwtUtil = jwtUtil;
         this.userService = userService;
+        this.userProfileService = userProfileService;
     }
 
     @Override
     public LoginResponse Login(LoginRequest req) {
 
-        // 1. 构造 Token（账户密码封装）
+        // 1. 构�?Token（账户密码封装）
         UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(req.getUsername(),
                 req.getPassword());
 
@@ -71,7 +77,7 @@ public class AuthServiceImpl implements AuthService {
         // 4. JWT 内容,构造自定义 JWT
         Map<String, Object> claims = jwtUtil.buildClaims(user.getUsername(), user.getRole(), user.getAvatar());
 
-        // 5. 生成 Token ,并存入 Redis
+        // 5. 生成 Token ,并存�?Redis
         String AccessToken = jwtUtil.generateAccessToken(user.getId(), claims);
         String RefreshToken = jwtUtil.generateRefreshToken(user.getId(), claims);
 
@@ -89,6 +95,7 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void Register(RegisterRequest req) {
 
         // 1. 用户名（学号）是否已存在
@@ -114,11 +121,14 @@ public class AuthServiceImpl implements AuthService {
         user.setRole(req.getRole());
         user.setStatus(1); // 默认正常
 
-        // 3. 保存
+        // 3. 保存用户
         boolean saved = userService.save(user);
         if (!saved) {
             throw new RegisterException("注册失败，请稍后重试");
         }
+
+        // 4. 同步创建用户画像
+        userProfileService.createProfile(user.getId());
     }
 
     @Override

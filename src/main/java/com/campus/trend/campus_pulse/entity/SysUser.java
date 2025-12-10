@@ -17,7 +17,7 @@ import java.time.LocalDateTime;
 @TableName("sys_user")
 public class SysUser implements Serializable {
 
-    @TableId(value = "id", type = IdType.ASSIGN_ID) // 假设使用雪花算法生成ID
+    @TableId(value = "id", type = IdType.ASSIGN_ID) // 使用雪花算法生成ID
     private String id;
 
     private String username;
