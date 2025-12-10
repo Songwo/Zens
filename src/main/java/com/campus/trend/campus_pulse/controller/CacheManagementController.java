@@ -32,6 +32,15 @@ public class CacheManagementController {
     }
 
     /**
+     * 清除所有Token缓存
+     */
+    @DeleteMapping("/token/clear")
+    public Result<?> clearTokenCache() {
+        cacheManagementService.clearAllTokenCache();
+        return Result.success("Token缓存已清除");
+    }
+
+    /**
      * 清除指定模式的缓存
      */
     @DeleteMapping("/clear")

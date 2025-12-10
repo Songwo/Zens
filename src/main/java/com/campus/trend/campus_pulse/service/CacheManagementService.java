@@ -12,6 +12,11 @@ public interface CacheManagementService {
     void clearAllTagCache();
 
     /**
+     * 清楚所有Token相关的缓存
+    */
+    void clearAllTokenCache();
+
+    /**
      * 清除指定前缀的缓存
      * 
      * @param keyPattern 缓存键模式（如 "tag:*"）

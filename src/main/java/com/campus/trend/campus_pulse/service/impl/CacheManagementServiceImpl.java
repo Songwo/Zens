@@ -26,6 +26,13 @@ public class CacheManagementServiceImpl implements CacheManagementService {
     }
 
     @Override
+    public void clearAllTokenCache(){
+        long access_cleared = clearCacheByPattern("access_token*");
+        long refresh_cleared = clearCacheByPattern("refresh_token*");
+        log.info("已清除所有Token缓存，共{}个", access_cleared+refresh_cleared);
+    }
+
+    @Override
     public long clearCacheByPattern(String keyPattern) {
         try {
             Set<String> keys = redisTemplate.keys(keyPattern);
