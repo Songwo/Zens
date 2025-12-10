@@ -8,7 +8,7 @@
 <h1 align="center">🏫 CampusPulse Backend</h1>
 
 <p align="center">
-  <b>校园智能内容与趋势分析与推荐平台后端</b>
+  <b>校园智能内容趋势分析与推荐平台后端</b>
 </p>
 
 <p align="center">

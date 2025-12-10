@@ -12,7 +12,6 @@ import com.campus.trend.campus_pulse.security.AuthSysUser;
 import com.campus.trend.campus_pulse.service.AuthService;
 import com.campus.trend.campus_pulse.service.UserProfileService;
 import com.campus.trend.campus_pulse.service.UserService;
-import com.campus.trend.campus_pulse.utils.GenerateIDUtil;
 import com.campus.trend.campus_pulse.utils.GetUserDetail;
 import com.campus.trend.campus_pulse.utils.JwtUtil;
 import lombok.extern.slf4j.Slf4j;
@@ -59,7 +58,7 @@ public class AuthServiceImpl implements AuthService {
     @Override
     public LoginResponse Login(LoginRequest req) {
 
-        // 1. 构�?Token（账户密码封装）
+        // 1. 构�?Token（账户密码封装）
         UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(req.getUsername(),
                 req.getPassword());
 
@@ -77,7 +76,7 @@ public class AuthServiceImpl implements AuthService {
         // 4. JWT 内容,构造自定义 JWT
         Map<String, Object> claims = jwtUtil.buildClaims(user.getUsername(), user.getRole(), user.getAvatar());
 
-        // 5. 生成 Token ,并存�?Redis
+        // 5. 生成 Token ,并存入Redis
         String AccessToken = jwtUtil.generateAccessToken(user.getId(), claims);
         String RefreshToken = jwtUtil.generateRefreshToken(user.getId(), claims);
 
