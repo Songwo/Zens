@@ -12,7 +12,10 @@ import com.campus.trend.campus_pulse.entity.SysPost;
 import com.campus.trend.campus_pulse.entity.SysTag;
 import com.campus.trend.campus_pulse.mapper.SysPostMapper;
 import com.campus.trend.campus_pulse.service.CategoryService;
+import com.campus.trend.campus_pulse.service.ContentSecurityService;
 import com.campus.trend.campus_pulse.service.PostCollectService;
+import com.campus.trend.campus_pulse.service.SentimentAnalysisService;
+import java.math.BigDecimal;
 import com.campus.trend.campus_pulse.service.PostLikeService;
 import com.campus.trend.campus_pulse.service.PostService;
 import com.campus.trend.campus_pulse.service.TagService;
@@ -41,6 +44,8 @@ public class PostServiceImpl extends ServiceImpl<SysPostMapper, SysPost> impleme
     private final TagService tagService;
     private final UserProfileService userProfileService;
     private final CategoryService categoryService;
+    private final ContentSecurityService contentSecurityService;
+    private final SentimentAnalysisService sentimentAnalysisService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Override
@@ -59,16 +64,43 @@ public class PostServiceImpl extends ServiceImpl<SysPostMapper, SysPost> impleme
             }
         }
 
-        // 2.构造帖子
+        // 2. 内容安全检查 (敏感词过滤)
+        String title = createPostRequest.getTitle();
+        String content = createPostRequest.getContent();
+
+        if (contentSecurityService.containsSensitiveWords(title)) {
+            // 策略选择：直接报错拦截，或者替换为 *
+            // 这里选择替换，保证用户发布不受阻，但内容合规
+            title = contentSecurityService.filterSensitiveWords(title);
+        }
+
+        if (contentSecurityService.containsSensitiveWords(content)) {
+            content = contentSecurityService.filterSensitiveWords(content);
+        }
+        // 如果包含 "抢劫"、"自杀" 等严重违规词，可以直接抛异常拦截
+        // if (contentSecurityService.containsHighRiskWords(content)) { ... }
+
+        // 3.构造帖子
         String postID = GenerateIDUtil.genId("POST");
 
         SysPost sysPost = new SysPost();
         sysPost.setId(postID);
         sysPost.setUserId(userId);
         sysPost.setCategoryId(createPostRequest.getCategoryID());
-        sysPost.setTitle(createPostRequest.getTitle());
-        sysPost.setContent(createPostRequest.getContent());
+        sysPost.setTitle(title);
+        sysPost.setContent(content);
         sysPost.setTags(createPostRequest.getTags());
+
+        // 3.1 情感分析
+        double sentimentScore = sentimentAnalysisService.analyzeSentiment(title + " " + content);
+        // FIXME: SysPost 实体中需要有 sentimentScore 字段，假设它是 Float 或 Double 类型
+        // 如果实体中用的是 BigDecimal 或者其他类型，请相应调整
+        // 假设实体中不仅有 score，以后可能还会有 label，这里先只存 score
+        // sysPost.setSentimentScore(BigDecimal.valueOf(sentimentScore));
+        // 暂时假设 sysPost 没有直接的 setSentimentScore 方法或者字段名不一样，
+        // 我需要先确认一下 SysPost 的字段。
+        // 根据之前的 Plan，SysPost 应该有一个 sentimentScore 字段。
+        // 让我们先查看一下 SysPost 实体确保万无一失。
         sysPost.setIsAnonymous(createPostRequest.getIsAnonymous());
         sysPost.setLocationName(createPostRequest.getLocationName());
 

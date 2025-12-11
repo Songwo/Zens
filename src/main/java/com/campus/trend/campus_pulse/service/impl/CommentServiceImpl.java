@@ -8,6 +8,7 @@ import com.campus.trend.campus_pulse.entity.SysPost;
 import com.campus.trend.campus_pulse.mapper.SysCommentMapper;
 import com.campus.trend.campus_pulse.mapper.SysPostMapper;
 import com.campus.trend.campus_pulse.service.CommentService;
+import com.campus.trend.campus_pulse.service.ContentSecurityService;
 import com.campus.trend.campus_pulse.service.UserProfileService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -24,6 +25,7 @@ public class CommentServiceImpl extends ServiceImpl<SysCommentMapper, SysComment
 
     private final SysPostMapper sysPostMapper;
     private final UserProfileService userProfileService;
+    private final ContentSecurityService contentSecurityService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -31,7 +33,15 @@ public class CommentServiceImpl extends ServiceImpl<SysCommentMapper, SysComment
         SysComment comment = new SysComment();
         comment.setPostId(request.getPostId());
         comment.setUserId(userId);
-        comment.setContent(request.getContent());
+        comment.setUserId(userId);
+
+        // 内容安全检查
+        String content = request.getContent();
+        if (contentSecurityService.containsSensitiveWords(content)) {
+            content = contentSecurityService.filterSensitiveWords(content);
+        }
+        comment.setContent(content);
+
         comment.setParentId(request.getParentId());
         comment.setReplyUserId(request.getReplyUserId());
         comment.setIsAnonymous(request.getIsAnonymous());

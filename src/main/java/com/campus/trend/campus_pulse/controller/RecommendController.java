@@ -5,6 +5,7 @@ import com.campus.trend.campus_pulse.common.Result;
 import com.campus.trend.campus_pulse.entity.SysPost;
 import com.campus.trend.campus_pulse.entity.SysTag;
 import com.campus.trend.campus_pulse.security.AuthSysUser;
+import com.campus.trend.campus_pulse.service.CollaborativeFilteringService;
 import com.campus.trend.campus_pulse.service.PostRecommendService;
 import com.campus.trend.campus_pulse.utils.GetUserDetail;
 import lombok.extern.slf4j.Slf4j;
@@ -15,7 +16,7 @@ import java.util.List;
 
 /**
  * 推荐控制器
- * 提供基于用户兴趣的帖子和标签推荐
+ * 提供基于用户兴趣的帖子和标签推荐，以及协同过滤推荐
  */
 @Slf4j
 @RestController
@@ -23,10 +24,13 @@ import java.util.List;
 public class RecommendController {
 
     private final PostRecommendService postRecommendService;
+    private final CollaborativeFilteringService collaborativeFilteringService;
 
     @Autowired
-    public RecommendController(PostRecommendService postRecommendService) {
+    public RecommendController(PostRecommendService postRecommendService,
+            CollaborativeFilteringService collaborativeFilteringService) {
         this.postRecommendService = postRecommendService;
+        this.collaborativeFilteringService = collaborativeFilteringService;
     }
 
     /**
@@ -63,5 +67,24 @@ public class RecommendController {
         List<SysTag> recommendedTags = postRecommendService.recommendTags(userId, limit);
 
         return Result.success(recommendedTags);
+    }
+
+    /**
+     * 获取相似帖子推荐（基于协同过滤）
+     * "看了这篇帖子的人还看了..."
+     *
+     * @param postId 当前帖子ID
+     * @param limit  返回数量（默认6）
+     * @return 相似帖子列表
+     */
+    @GetMapping("/similar/{postId}")
+    public Result<?> getSimilarPosts(
+            @PathVariable String postId,
+            @RequestParam(value = "limit", required = false, defaultValue = "6") int limit) {
+        log.info("获取帖子 [{}] 的相似推荐，数量: {}", postId, limit);
+
+        List<SysPost> similarPosts = collaborativeFilteringService.recommendByItemBased(postId, limit);
+
+        return Result.success(similarPosts);
     }
 }
