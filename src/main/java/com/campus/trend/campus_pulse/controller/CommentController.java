@@ -34,4 +34,11 @@ public class CommentController {
     public Result<?> getCommentsByPostId(@PathVariable String postId) {
         return Result.success(commentService.getCommentsByPostId(postId));
     }
+
+    @PostMapping("/{id}/like")
+    public Result<?> likeComment(@PathVariable String id) {
+        AuthSysUser authSysUser = GetUserDetail.getAuthenticatedUser();
+        commentService.toggleLike(id, authSysUser.getSysUser().getId());
+        return Result.success();
+    }
 }

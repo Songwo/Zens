@@ -13,4 +13,6 @@ public interface CommentService extends IService<SysComment> {
     void deleteComment(String commentId, String userId);
 
     List<SysComment> getCommentsByPostId(String postId);
+
+    void toggleLike(String commentId, String userId);
 }

@@ -42,23 +42,27 @@ public class AuthServiceImpl implements AuthService {
 
     private final UserProfileService userProfileService;
 
+    private final com.campus.trend.campus_pulse.service.VerificationCodeService verificationCodeService;
+
     public AuthServiceImpl(AuthenticationManager authorizationManager,
             PasswordEncoder passwordEncoder,
             StringRedisTemplate stringRedisTemplate,
             JwtUtil jwtUtil, UserService userService,
-            UserProfileService userProfileService) {
+            UserProfileService userProfileService,
+            com.campus.trend.campus_pulse.service.VerificationCodeService verificationCodeService) {
         this.authorizationManager = authorizationManager;
         this.passwordEncoder = passwordEncoder;
         this.stringRedisTemplate = stringRedisTemplate;
         this.jwtUtil = jwtUtil;
         this.userService = userService;
         this.userProfileService = userProfileService;
+        this.verificationCodeService = verificationCodeService;
     }
 
     @Override
     public LoginResponse Login(LoginRequest req) {
 
-        // 1. 构�?Token（账户密码封装）
+        // 1. 构?Token（账户密码封装）
         UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(req.getUsername(),
                 req.getPassword());
 
@@ -97,6 +101,11 @@ public class AuthServiceImpl implements AuthService {
     @Transactional(rollbackFor = Exception.class)
     public void Register(RegisterRequest req) {
 
+        // 0. 校验验证码
+        if (!verificationCodeService.verifyCode(req.getEmail(), req.getCode())) {
+            throw new RegisterException("验证码错误或已失效");
+        }
+
         // 1. 用户名（学号）是否已存在
         SysUser exist = userService.lambdaQuery()
                 .eq(SysUser::getUsername, req.getUsername())
@@ -106,6 +115,14 @@ public class AuthServiceImpl implements AuthService {
             throw new UserNameAlreadyExisted("该学号已注册");
         }
 
+        // 1.1 校验邮箱是否存在
+        SysUser existEmail = userService.lambdaQuery()
+                .eq(SysUser::getEmail, req.getEmail())
+                .one();
+        if (existEmail != null) {
+            throw new RegisterException("该邮箱已被其它账号注册");
+        }
+
         // 2. 创建用户实体
         SysUser user = new SysUser();
 
@@ -113,6 +130,7 @@ public class AuthServiceImpl implements AuthService {
         user.setPassword(passwordEncoder.encode(req.getPassword()));
         user.setNickname(req.getNickname());
         user.setAvatar(req.getAvatar());
+        user.setEmail(req.getEmail());
         user.setMajor(req.getMajor());
         user.setGrade(req.getGrade());
         user.setGender(req.getGender());

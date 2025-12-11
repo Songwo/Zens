@@ -93,14 +93,8 @@ public class PostServiceImpl extends ServiceImpl<SysPostMapper, SysPost> impleme
 
         // 3.1 情感分析
         double sentimentScore = sentimentAnalysisService.analyzeSentiment(title + " " + content);
-        // FIXME: SysPost 实体中需要有 sentimentScore 字段，假设它是 Float 或 Double 类型
-        // 如果实体中用的是 BigDecimal 或者其他类型，请相应调整
-        // 假设实体中不仅有 score，以后可能还会有 label，这里先只存 score
-        // sysPost.setSentimentScore(BigDecimal.valueOf(sentimentScore));
-        // 暂时假设 sysPost 没有直接的 setSentimentScore 方法或者字段名不一样，
-        // 我需要先确认一下 SysPost 的字段。
-        // 根据之前的 Plan，SysPost 应该有一个 sentimentScore 字段。
-        // 让我们先查看一下 SysPost 实体确保万无一失。
+        sysPost.setSentimentScore(BigDecimal.valueOf(sentimentScore));
+
         sysPost.setIsAnonymous(createPostRequest.getIsAnonymous());
         sysPost.setLocationName(createPostRequest.getLocationName());
 
@@ -214,6 +208,98 @@ public class PostServiceImpl extends ServiceImpl<SysPostMapper, SysPost> impleme
         // 委托给 PostCollectService 处理收藏/取消收藏逻辑
         // 该方法会自动处理收藏状态切换并更新收藏数
         postCollectService.toggleCollect(postId, userId);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void updatePost(com.campus.trend.campus_pulse.dto.request.UpdatePostRequest request, String userId) {
+        SysPost post = getById(request.getPostId());
+        if (post == null) {
+            throw new RuntimeException("帖子不存在");
+        }
+        if (!post.getUserId().equals(userId)) {
+            throw new RuntimeException("无权修改该帖子");
+        }
+
+        boolean contentChanged = false;
+        String title = request.getTitle();
+        String content = request.getContent();
+
+        // 1. 内容安全检查
+        if (StringUtils.hasText(title)) {
+            if (contentSecurityService.containsSensitiveWords(title)) {
+                title = contentSecurityService.filterSensitiveWords(title);
+            }
+            post.setTitle(title);
+            contentChanged = true;
+        }
+
+        if (StringUtils.hasText(content)) {
+            if (contentSecurityService.containsSensitiveWords(content)) {
+                content = contentSecurityService.filterSensitiveWords(content);
+            }
+            post.setContent(content);
+            contentChanged = true;
+        }
+
+        // 2. 如果内容变动，重新计算情感得分
+        if (contentChanged) {
+            double sentimentScore = sentimentAnalysisService
+                    .analyzeSentiment(post.getTitle() + " " + post.getContent());
+            post.setSentimentScore(BigDecimal.valueOf(sentimentScore));
+
+            // 重新审核状态
+            post.setAuditStatus("PENDING");
+        }
+
+        // 3. 其他字段
+        if (request.getIsAnonymous() != null) {
+            post.setIsAnonymous(request.getIsAnonymous());
+        }
+        if (StringUtils.hasText(request.getLocationName())) {
+            post.setLocationName(request.getLocationName());
+        }
+        if (StringUtils.hasText(request.getTags())) {
+            post.setTags(request.getTags());
+            processPostTags(request.getTags());
+        }
+
+        post.setUpdateTime(LocalDateTime.now());
+
+        // 图片处理 (简单实现: 如果传了就覆盖)
+        if (StringUtils.hasText(request.getImages())) {
+            try {
+                List<String> images = objectMapper.readValue(request.getImages(), new TypeReference<List<String>>() {
+                });
+                post.setImages(images);
+            } catch (Exception e) {
+                // ignore or log
+            }
+        }
+
+        this.updateById(post);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void deletePost(String postId, String userId) {
+        SysPost post = getById(postId);
+        if (post == null) {
+            throw new RuntimeException("帖子不存在");
+        }
+        // 校验权限 (作者或管理员，这里暂时只校验作者)
+        // 实际场景中管理员权限通常在 Controller 层或 Spring Security 中校验，这里作为兜底
+        if (!post.getUserId().equals(userId)) {
+            throw new RuntimeException("无权删除该帖子");
+        }
+
+        // 逻辑删除
+        post.setStatus(0);
+        post.setUpdateTime(LocalDateTime.now());
+        this.updateById(post);
+
+        // 同时可以考虑扣除用户贡献值等，或者清理浏览记录
+        // userProfileService.addContribution(userId, -5);
     }
 
     @Override

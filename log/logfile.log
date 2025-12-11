@@ -548,3 +548,187 @@ java.lang.NullPointerException: Cannot invoke "io.jsonwebtoken.Claims.getSubject
 2025-12-11 11:07:25.891 [tomcat-shutdown] INFO  o.s.b.w.e.t.GracefulShutdown - Graceful shutdown complete
 2025-12-11 11:07:26.113 [SpringApplicationShutdownHook] INFO  c.z.hikari.HikariDataSource - HikariPool-1 - Shutdown initiated...
 2025-12-11 11:07:26.168 [SpringApplicationShutdownHook] INFO  c.z.hikari.HikariDataSource - HikariPool-1 - Shutdown completed.
+2025-12-11 14:08:38.084 [main] INFO  c.c.t.c.CampusPulseApplication - Starting CampusPulseApplication using Java 17.0.15 with PID 3776 (D:\2026毕业设计\DaiMa\campus-pulse(back)\campus-pulse\target\classes started by lenovo in D:\2026毕业设计\DaiMa\campus-pulse(back)\campus-pulse)
+2025-12-11 14:08:38.087 [main] DEBUG c.c.t.c.CampusPulseApplication - Running with Spring Boot v3.5.8, Spring v6.2.14
+2025-12-11 14:08:38.087 [main] INFO  c.c.t.c.CampusPulseApplication - No active profile set, falling back to 1 default profile: "default"
+2025-12-11 14:08:38.990 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Multiple Spring Data modules found, entering strict repository configuration mode
+2025-12-11 14:08:38.993 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Bootstrapping Spring Data Redis repositories in DEFAULT mode.
+2025-12-11 14:08:39.041 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Finished Spring Data repository scanning in 31 ms. Found 0 Redis repository interfaces.
+2025-12-11 14:08:39.656 [main] INFO  o.s.b.w.e.t.TomcatWebServer - Tomcat initialized with port 7800 (http)
+2025-12-11 14:08:39.671 [main] INFO  o.a.c.core.StandardService - Starting service [Tomcat]
+2025-12-11 14:08:39.672 [main] INFO  o.a.c.core.StandardEngine - Starting Servlet engine: [Apache Tomcat/10.1.49]
+2025-12-11 14:08:39.754 [main] INFO  o.a.c.c.C.[.[localhost].[/] - Initializing Spring embedded WebApplicationContext
+2025-12-11 14:08:39.754 [main] INFO  o.s.b.w.s.c.ServletWebServerApplicationContext - Root WebApplicationContext: initialization completed in 1603 ms
+2025-12-11 14:08:40.707 [main] DEBUG c.c.t.c.f.JwtAuthenticationFilter - Filter 'jwtAuthenticationFilter' configured for use
+2025-12-11 14:08:40.804 [main] WARN  o.s.b.w.s.c.AnnotationConfigServletWebServerApplicationContext - Exception encountered during context initialization - cancelling refresh attempt: org.springframework.beans.factory.UnsatisfiedDependencyException: Error creating bean with name 'authController' defined in file [D:\2026毕业设计\DaiMa\campus-pulse(back)\campus-pulse\target\classes\com\campus\trend\campus_pulse\controller\AuthController.class]: Unsatisfied dependency expressed through constructor parameter 0: Error creating bean with name 'authServiceImpl' defined in file [D:\2026毕业设计\DaiMa\campus-pulse(back)\campus-pulse\target\classes\com\campus\trend\campus_pulse\service\impl\AuthServiceImpl.class]: Unsatisfied dependency expressed through constructor parameter 6: Error creating bean with name 'verificationCodeService' defined in file [D:\2026毕业设计\DaiMa\campus-pulse(back)\campus-pulse\target\classes\com\campus\trend\campus_pulse\service\VerificationCodeService.class]: Unsatisfied dependency expressed through constructor parameter 1: Error creating bean with name 'mailServiceImpl' defined in file [D:\2026毕业设计\DaiMa\campus-pulse(back)\campus-pulse\target\classes\com\campus\trend\campus_pulse\service\impl\MailServiceImpl.class]: Unsatisfied dependency expressed through constructor parameter 0: No qualifying bean of type 'org.springframework.mail.javamail.JavaMailSender' available: expected at least 1 bean which qualifies as autowire candidate. Dependency annotations: {}
+2025-12-11 14:08:40.922 [main] INFO  o.a.c.core.StandardService - Stopping service [Tomcat]
+2025-12-11 14:08:40.933 [main] INFO  o.s.b.a.l.ConditionEvaluationReportLogger - 
+
+Error starting ApplicationContext. To display the condition evaluation report re-run your application with 'debug' enabled.
+2025-12-11 14:08:40.952 [main] ERROR o.s.b.d.LoggingFailureAnalysisReporter - 
+
+***************************
+APPLICATION FAILED TO START
+***************************
+
+Description:
+
+Parameter 0 of constructor in com.campus.trend.campus_pulse.service.impl.MailServiceImpl required a bean of type 'org.springframework.mail.javamail.JavaMailSender' that could not be found.
+
+
+Action:
+
+Consider defining a bean of type 'org.springframework.mail.javamail.JavaMailSender' in your configuration.
+
+2025-12-11 14:25:50.928 [main] INFO  c.c.t.c.CampusPulseApplication - Starting CampusPulseApplication using Java 17.0.15 with PID 20108 (D:\2026毕业设计\DaiMa\campus-pulse(back)\campus-pulse\target\classes started by lenovo in D:\2026毕业设计\DaiMa\campus-pulse(back)\campus-pulse)
+2025-12-11 14:25:50.929 [main] DEBUG c.c.t.c.CampusPulseApplication - Running with Spring Boot v3.5.8, Spring v6.2.14
+2025-12-11 14:25:50.930 [main] INFO  c.c.t.c.CampusPulseApplication - No active profile set, falling back to 1 default profile: "default"
+2025-12-11 14:25:51.827 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Multiple Spring Data modules found, entering strict repository configuration mode
+2025-12-11 14:25:51.830 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Bootstrapping Spring Data Redis repositories in DEFAULT mode.
+2025-12-11 14:25:51.883 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Finished Spring Data repository scanning in 31 ms. Found 0 Redis repository interfaces.
+2025-12-11 14:25:52.512 [main] INFO  o.s.b.w.e.t.TomcatWebServer - Tomcat initialized with port 7800 (http)
+2025-12-11 14:25:52.530 [main] INFO  o.a.c.core.StandardService - Starting service [Tomcat]
+2025-12-11 14:25:52.530 [main] INFO  o.a.c.core.StandardEngine - Starting Servlet engine: [Apache Tomcat/10.1.49]
+2025-12-11 14:25:52.610 [main] INFO  o.a.c.c.C.[.[localhost].[/] - Initializing Spring embedded WebApplicationContext
+2025-12-11 14:25:52.611 [main] INFO  o.s.b.w.s.c.ServletWebServerApplicationContext - Root WebApplicationContext: initialization completed in 1617 ms
+2025-12-11 14:25:53.538 [main] DEBUG c.c.t.c.f.JwtAuthenticationFilter - Filter 'jwtAuthenticationFilter' configured for use
+2025-12-11 14:25:53.736 [main] INFO  c.c.t.c.s.i.ContentSecurityServiceImpl - 开始初始化敏感词库...
+2025-12-11 14:25:53.737 [main] INFO  c.c.t.c.s.i.ContentSecurityServiceImpl - 敏感词库初始化完成，共加载 45 个敏感词
+2025-12-11 14:25:53.863 [main] INFO  c.c.t.c.s.i.SentimentAnalysisServiceImpl - 情感分析词典加载完成. 正面词: 90, 负面词: 94
+2025-12-11 14:25:54.562 [main] INFO  o.s.b.w.e.t.TomcatWebServer - Tomcat started on port 7800 (http) with context path '/'
+2025-12-11 14:25:54.574 [main] INFO  c.c.t.c.CampusPulseApplication - Started CampusPulseApplication in 4.273 seconds (process running for 5.11)
+2025-12-11 14:26:56.899 [SpringApplicationShutdownHook] INFO  o.s.b.w.e.t.GracefulShutdown - Commencing graceful shutdown. Waiting for active requests to complete
+2025-12-11 14:26:57.526 [tomcat-shutdown] INFO  o.s.b.w.e.t.GracefulShutdown - Graceful shutdown complete
+2025-12-11 14:27:03.793 [main] INFO  c.c.t.c.CampusPulseApplication - Starting CampusPulseApplication using Java 17.0.15 with PID 31812 (D:\2026毕业设计\DaiMa\campus-pulse(back)\campus-pulse\target\classes started by lenovo in D:\2026毕业设计\DaiMa\campus-pulse(back)\campus-pulse)
+2025-12-11 14:27:03.797 [main] DEBUG c.c.t.c.CampusPulseApplication - Running with Spring Boot v3.5.8, Spring v6.2.14
+2025-12-11 14:27:03.798 [main] INFO  c.c.t.c.CampusPulseApplication - No active profile set, falling back to 1 default profile: "default"
+2025-12-11 14:27:04.595 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Multiple Spring Data modules found, entering strict repository configuration mode
+2025-12-11 14:27:04.598 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Bootstrapping Spring Data Redis repositories in DEFAULT mode.
+2025-12-11 14:27:04.642 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Finished Spring Data repository scanning in 30 ms. Found 0 Redis repository interfaces.
+2025-12-11 14:27:05.169 [main] INFO  o.s.b.w.e.t.TomcatWebServer - Tomcat initialized with port 7800 (http)
+2025-12-11 14:27:05.181 [main] INFO  o.a.c.core.StandardService - Starting service [Tomcat]
+2025-12-11 14:27:05.181 [main] INFO  o.a.c.core.StandardEngine - Starting Servlet engine: [Apache Tomcat/10.1.49]
+2025-12-11 14:27:05.244 [main] INFO  o.a.c.c.C.[.[localhost].[/] - Initializing Spring embedded WebApplicationContext
+2025-12-11 14:27:05.244 [main] INFO  o.s.b.w.s.c.ServletWebServerApplicationContext - Root WebApplicationContext: initialization completed in 1384 ms
+2025-12-11 14:27:06.062 [main] DEBUG c.c.t.c.f.JwtAuthenticationFilter - Filter 'jwtAuthenticationFilter' configured for use
+2025-12-11 14:27:06.245 [main] INFO  c.c.t.c.s.i.ContentSecurityServiceImpl - 开始初始化敏感词库...
+2025-12-11 14:27:06.246 [main] INFO  c.c.t.c.s.i.ContentSecurityServiceImpl - 敏感词库初始化完成，共加载 45 个敏感词
+2025-12-11 14:27:06.362 [main] INFO  c.c.t.c.s.i.SentimentAnalysisServiceImpl - 情感分析词典加载完成. 正面词: 90, 负面词: 94
+2025-12-11 14:27:06.978 [main] INFO  o.s.b.w.e.t.TomcatWebServer - Tomcat started on port 7800 (http) with context path '/'
+2025-12-11 14:27:06.992 [main] INFO  c.c.t.c.CampusPulseApplication - Started CampusPulseApplication in 3.943 seconds (process running for 4.899)
+2025-12-11 14:28:12.730 [http-nio-7800-exec-1] INFO  o.a.c.c.C.[.[localhost].[/] - Initializing Spring DispatcherServlet 'dispatcherServlet'
+2025-12-11 14:28:12.733 [http-nio-7800-exec-1] INFO  o.s.w.s.DispatcherServlet - Initializing Servlet 'dispatcherServlet'
+2025-12-11 14:28:12.751 [http-nio-7800-exec-1] INFO  o.s.w.s.DispatcherServlet - Completed initialization in 18 ms
+2025-12-11 14:28:12.907 [http-nio-7800-exec-1] INFO  c.c.t.c.utils.JwtUtil - JWT 解析失败: JWT expired at 2025-12-10T02:29:40Z. Current time: 2025-12-11T06:28:12Z, a difference of 100712904 milliseconds.  Allowed clock skew: 0 milliseconds.
+2025-12-11 14:28:12.909 [http-nio-7800-exec-1] ERROR o.a.c.c.C.[.[.[.[dispatcherServlet] - Servlet.service() for servlet [dispatcherServlet] in context with path [] threw exception
+java.lang.NullPointerException: Cannot invoke "io.jsonwebtoken.Claims.getSubject()" because "c" is null
+	at com.campus.trend.campus_pulse.utils.JwtUtil.getUserId(JwtUtil.java:89)
+	at com.campus.trend.campus_pulse.filter.JwtAuthenticationFilter.doFilterInternal(JwtAuthenticationFilter.java:46)
+	at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116)
+	at org.springframework.security.web.FilterChainProxy$VirtualFilterChain.doFilter(FilterChainProxy.java:374)
+	at org.springframework.security.web.authentication.logout.LogoutFilter.doFilter(LogoutFilter.java:107)
+	at org.springframework.security.web.authentication.logout.LogoutFilter.doFilter(LogoutFilter.java:93)
+	at org.springframework.security.web.FilterChainProxy$VirtualFilterChain.doFilter(FilterChainProxy.java:374)
+	at org.springframework.web.filter.CorsFilter.doFilterInternal(CorsFilter.java:91)
+	at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116)
+	at org.springframework.security.web.FilterChainProxy$VirtualFilterChain.doFilter(FilterChainProxy.java:374)
+	at org.springframework.security.web.header.HeaderWriterFilter.doHeadersAfter(HeaderWriterFilter.java:90)
+	at org.springframework.security.web.header.HeaderWriterFilter.doFilterInternal(HeaderWriterFilter.java:75)
+	at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116)
+	at org.springframework.security.web.FilterChainProxy$VirtualFilterChain.doFilter(FilterChainProxy.java:374)
+	at org.springframework.security.web.context.SecurityContextHolderFilter.doFilter(SecurityContextHolderFilter.java:82)
+	at org.springframework.security.web.context.SecurityContextHolderFilter.doFilter(SecurityContextHolderFilter.java:69)
+	at org.springframework.security.web.FilterChainProxy$VirtualFilterChain.doFilter(FilterChainProxy.java:374)
+	at org.springframework.security.web.context.request.async.WebAsyncManagerIntegrationFilter.doFilterInternal(WebAsyncManagerIntegrationFilter.java:62)
+	at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116)
+	at org.springframework.security.web.FilterChainProxy$VirtualFilterChain.doFilter(FilterChainProxy.java:374)
+	at org.springframework.security.web.session.DisableEncodeUrlFilter.doFilterInternal(DisableEncodeUrlFilter.java:42)
+	at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116)
+	at org.springframework.security.web.FilterChainProxy$VirtualFilterChain.doFilter(FilterChainProxy.java:374)
+	at org.springframework.security.web.FilterChainProxy.doFilterInternal(FilterChainProxy.java:233)
+	at org.springframework.security.web.FilterChainProxy.doFilter(FilterChainProxy.java:191)
+	at org.springframework.web.filter.CompositeFilter$VirtualFilterChain.doFilter(CompositeFilter.java:113)
+	at org.springframework.web.filter.ServletRequestPathFilter.doFilter(ServletRequestPathFilter.java:52)
+	at org.springframework.web.filter.CompositeFilter$VirtualFilterChain.doFilter(CompositeFilter.java:113)
+	at org.springframework.web.filter.CompositeFilter.doFilter(CompositeFilter.java:74)
+	at org.springframework.security.config.annotation.web.configuration.WebSecurityConfiguration$CompositeFilterChainProxy.doFilter(WebSecurityConfiguration.java:319)
+	at org.springframework.web.filter.CompositeFilter$VirtualFilterChain.doFilter(CompositeFilter.java:113)
+	at org.springframework.web.servlet.handler.HandlerMappingIntrospector.lambda$createCacheFilter$4(HandlerMappingIntrospector.java:267)
+	at org.springframework.web.filter.CompositeFilter$VirtualFilterChain.doFilter(CompositeFilter.java:113)
+	at org.springframework.web.filter.CompositeFilter.doFilter(CompositeFilter.java:74)
+	at org.springframework.security.config.annotation.web.configuration.WebMvcSecurityConfiguration$CompositeFilterChainProxy.doFilter(WebMvcSecurityConfiguration.java:240)
+	at org.springframework.web.filter.DelegatingFilterProxy.invokeDelegate(DelegatingFilterProxy.java:362)
+	at org.springframework.web.filter.DelegatingFilterProxy.doFilter(DelegatingFilterProxy.java:278)
+	at org.apache.catalina.core.ApplicationFilterChain.internalDoFilter(ApplicationFilterChain.java:162)
+	at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:138)
+	at org.springframework.web.filter.RequestContextFilter.doFilterInternal(RequestContextFilter.java:100)
+	at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116)
+	at org.apache.catalina.core.ApplicationFilterChain.internalDoFilter(ApplicationFilterChain.java:162)
+	at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:138)
+	at org.springframework.web.filter.FormContentFilter.doFilterInternal(FormContentFilter.java:93)
+	at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116)
+	at org.apache.catalina.core.ApplicationFilterChain.internalDoFilter(ApplicationFilterChain.java:162)
+	at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:138)
+	at org.springframework.web.filter.CharacterEncodingFilter.doFilterInternal(CharacterEncodingFilter.java:201)
+	at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116)
+	at org.apache.catalina.core.ApplicationFilterChain.internalDoFilter(ApplicationFilterChain.java:162)
+	at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:138)
+	at org.apache.catalina.core.StandardWrapperValve.invoke(StandardWrapperValve.java:165)
+	at org.apache.catalina.core.StandardContextValve.invoke(StandardContextValve.java:88)
+	at org.apache.catalina.authenticator.AuthenticatorBase.invoke(AuthenticatorBase.java:482)
+	at org.apache.catalina.core.StandardHostValve.invoke(StandardHostValve.java:113)
+	at org.apache.catalina.valves.ErrorReportValve.invoke(ErrorReportValve.java:83)
+	at org.apache.catalina.core.StandardEngineValve.invoke(StandardEngineValve.java:72)
+	at org.apache.catalina.connector.CoyoteAdapter.service(CoyoteAdapter.java:342)
+	at org.apache.coyote.http11.Http11Processor.service(Http11Processor.java:399)
+	at org.apache.coyote.AbstractProcessorLight.process(AbstractProcessorLight.java:63)
+	at org.apache.coyote.AbstractProtocol$ConnectionHandler.process(AbstractProtocol.java:903)
+	at org.apache.tomcat.util.net.NioEndpoint$SocketProcessor.doRun(NioEndpoint.java:1774)
+	at org.apache.tomcat.util.net.SocketProcessorBase.run(SocketProcessorBase.java:52)
+	at org.apache.tomcat.util.threads.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:973)
+	at org.apache.tomcat.util.threads.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:491)
+	at org.apache.tomcat.util.threads.TaskThread$WrappingRunnable.run(TaskThread.java:63)
+	at java.base/java.lang.Thread.run(Thread.java:840)
+2025-12-11 14:28:17.266 [http-nio-7800-exec-3] INFO  c.z.hikari.HikariDataSource - HikariPool-1 - Starting...
+2025-12-11 14:28:17.910 [http-nio-7800-exec-3] INFO  c.z.hikari.pool.HikariPool - HikariPool-1 - Added connection com.mysql.cj.jdbc.ConnectionImpl@31d8f12f
+2025-12-11 14:28:17.912 [http-nio-7800-exec-3] INFO  c.z.hikari.HikariDataSource - HikariPool-1 - Start completed.
+2025-12-11 14:28:17.918 [http-nio-7800-exec-3] DEBUG c.c.t.c.m.S.selectList - ==>  Preparing: SELECT id,username,email,password,nickname,avatar,gender,role,school,major,grade,status,create_time,update_time,last_grade_upgrade FROM sys_user WHERE (username = ?)
+2025-12-11 14:28:17.960 [http-nio-7800-exec-3] DEBUG c.c.t.c.m.S.selectList - ==> Parameters: 2022335(String)
+2025-12-11 14:29:34.107 [http-nio-7800-exec-4] DEBUG c.c.t.c.m.S.selectList - ==>  Preparing: SELECT id,username,email,password,nickname,avatar,gender,role,school,major,grade,status,create_time,update_time,last_grade_upgrade FROM sys_user WHERE (username = ?)
+2025-12-11 14:29:34.115 [http-nio-7800-exec-4] DEBUG c.c.t.c.m.S.selectList - ==> Parameters: 2022335(String)
+2025-12-11 14:29:34.228 [http-nio-7800-exec-4] DEBUG c.c.t.c.m.S.selectList - <==      Total: 1
+2025-12-11 14:29:34.232 [http-nio-7800-exec-4] INFO  c.c.t.c.s.SysUserDetailsServiceImpl - 用户 [2022335] 信息加载成功，角色：User
+2025-12-11 14:29:50.429 [http-nio-7800-exec-8] DEBUG c.c.t.c.m.S.selectList - ==>  Preparing: SELECT id,username,email,password,nickname,avatar,gender,role,school,major,grade,status,create_time,update_time,last_grade_upgrade FROM sys_user WHERE (username = ?)
+2025-12-11 14:29:50.431 [http-nio-7800-exec-8] DEBUG c.c.t.c.m.S.selectList - ==> Parameters: 2022335(String)
+2025-12-11 14:29:50.435 [http-nio-7800-exec-8] DEBUG c.c.t.c.m.S.selectList - <==      Total: 1
+2025-12-11 14:29:50.435 [http-nio-7800-exec-8] INFO  c.c.t.c.s.SysUserDetailsServiceImpl - 用户 [2022335] 信息加载成功，角色：User
+2025-12-11 14:29:50.443 [http-nio-7800-exec-8] INFO  c.c.t.c.f.JwtAuthenticationFilter - 认证通过
+2025-12-11 14:29:56.715 [http-nio-7800-exec-8] INFO  c.c.t.c.s.impl.MailServiceImpl - 邮件已发送至: 3381485209@qq.com
+2025-12-11 14:29:56.716 [http-nio-7800-exec-8] INFO  c.c.t.c.s.VerificationCodeService - 验证码 330563 已发送至 3381485209@qq.com
+2025-12-11 14:37:14.733 [http-nio-7800-exec-7] DEBUG c.c.t.c.m.S.selectList - ==>  Preparing: SELECT id,username,email,password,nickname,avatar,gender,role,school,major,grade,status,create_time,update_time,last_grade_upgrade FROM sys_user WHERE (username = ?)
+2025-12-11 14:37:14.739 [http-nio-7800-exec-7] DEBUG c.c.t.c.m.S.selectList - ==> Parameters: 2022335(String)
+2025-12-11 14:37:14.745 [http-nio-7800-exec-7] DEBUG c.c.t.c.m.S.selectList - <==      Total: 1
+2025-12-11 14:37:14.746 [http-nio-7800-exec-7] INFO  c.c.t.c.s.SysUserDetailsServiceImpl - 用户 [2022335] 信息加载成功，角色：User
+2025-12-11 14:37:14.751 [http-nio-7800-exec-7] INFO  c.c.t.c.f.JwtAuthenticationFilter - 认证通过
+2025-12-11 14:37:16.069 [http-nio-7800-exec-7] INFO  c.c.t.c.s.impl.MailServiceImpl - 邮件已发送至: 3381485209@qq.com
+2025-12-11 14:37:16.069 [http-nio-7800-exec-7] INFO  c.c.t.c.s.VerificationCodeService - 验证码 930993 已发送至 3381485209@qq.com
+2025-12-11 14:38:01.876 [http-nio-7800-exec-10] DEBUG c.c.t.c.m.S.selectList - ==>  Preparing: SELECT id,username,email,password,nickname,avatar,gender,role,school,major,grade,status,create_time,update_time,last_grade_upgrade FROM sys_user WHERE (username = ?)
+2025-12-11 14:38:01.878 [http-nio-7800-exec-10] DEBUG c.c.t.c.m.S.selectList - ==> Parameters: 89774510(String)
+2025-12-11 14:38:01.880 [http-nio-7800-exec-10] DEBUG c.c.t.c.m.S.selectList - <==      Total: 0
+2025-12-11 14:38:01.885 [http-nio-7800-exec-10] DEBUG c.c.t.c.m.S.selectList - ==>  Preparing: SELECT id,username,email,password,nickname,avatar,gender,role,school,major,grade,status,create_time,update_time,last_grade_upgrade FROM sys_user WHERE (email = ?)
+2025-12-11 14:38:01.885 [http-nio-7800-exec-10] DEBUG c.c.t.c.m.S.selectList - ==> Parameters: 3381485209@qq.com(String)
+2025-12-11 14:38:01.887 [http-nio-7800-exec-10] DEBUG c.c.t.c.m.S.selectList - <==      Total: 0
+2025-12-11 14:38:02.005 [http-nio-7800-exec-10] DEBUG c.c.t.c.m.SysUserMapper.insert - ==>  Preparing: INSERT INTO sys_user ( id, username, email, password, nickname, avatar, role, major, grade, status ) VALUES ( ?, ?, ?, ?, ?, ?, ?, ?, ?, ? )
+2025-12-11 14:38:02.007 [http-nio-7800-exec-10] DEBUG c.c.t.c.m.SysUserMapper.insert - ==> Parameters: 1999005736633413634(String), 89774510(String), 3381485209@qq.com(String), $2a$10$QZ.iuh/y/zUavnEr6d8fn.6kL/vfZzYsq4jd6v2l7NCAcvVBRVYta(String), ssss(String), ssssswww(String), 1(Integer), sadowd(String), 2021(Integer), 1(Integer)
+2025-12-11 14:38:02.021 [http-nio-7800-exec-10] DEBUG c.c.t.c.m.SysUserMapper.insert - <==    Updates: 1
+2025-12-11 14:38:02.022 [http-nio-7800-exec-10] DEBUG c.c.t.c.m.S.selectById - ==>  Preparing: SELECT user_id,reputation,contribution_val,active_region,preferred_cate_json,total_posts,total_likes_received,last_active_time FROM sys_user_profile WHERE user_id=?
+2025-12-11 14:38:02.022 [http-nio-7800-exec-10] DEBUG c.c.t.c.m.S.selectById - ==> Parameters: 1999005736633413634(String)
+2025-12-11 14:38:02.025 [http-nio-7800-exec-10] DEBUG c.c.t.c.m.S.selectById - <==      Total: 0
+2025-12-11 14:38:02.029 [http-nio-7800-exec-10] DEBUG c.c.t.c.m.S.insert - ==>  Preparing: INSERT INTO sys_user_profile ( user_id, reputation, contribution_val, total_posts, total_likes_received, last_active_time ) VALUES ( ?, ?, ?, ?, ?, ? )
+2025-12-11 14:38:02.030 [http-nio-7800-exec-10] DEBUG c.c.t.c.m.S.insert - ==> Parameters: 1999005736633413634(String), 100(Integer), 0(Integer), 0(Integer), 0(Integer), 2025-12-11T14:38:02.026776600(LocalDateTime)
+2025-12-11 14:38:02.036 [http-nio-7800-exec-10] DEBUG c.c.t.c.m.S.insert - <==    Updates: 1
+2025-12-11 14:38:02.038 [http-nio-7800-exec-10] INFO  c.c.t.c.s.i.UserProfileServiceImpl - 为用户 [1999005736633413634] 创建画像成功
+2025-12-11 14:38:45.340 [SpringApplicationShutdownHook] INFO  o.s.b.w.e.t.GracefulShutdown - Commencing graceful shutdown. Waiting for active requests to complete
+2025-12-11 14:38:45.862 [tomcat-shutdown] INFO  o.s.b.w.e.t.GracefulShutdown - Graceful shutdown complete
+2025-12-11 14:38:46.010 [SpringApplicationShutdownHook] INFO  c.z.hikari.HikariDataSource - HikariPool-1 - Shutdown initiated...
+2025-12-11 14:38:46.018 [SpringApplicationShutdownHook] INFO  c.z.hikari.HikariDataSource - HikariPool-1 - Shutdown completed.

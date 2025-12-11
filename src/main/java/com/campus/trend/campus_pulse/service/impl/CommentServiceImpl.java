@@ -26,13 +26,13 @@ public class CommentServiceImpl extends ServiceImpl<SysCommentMapper, SysComment
     private final SysPostMapper sysPostMapper;
     private final UserProfileService userProfileService;
     private final ContentSecurityService contentSecurityService;
+    private final org.springframework.data.redis.core.StringRedisTemplate stringRedisTemplate;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void addComment(CreateCommentRequest request, String userId) {
         SysComment comment = new SysComment();
         comment.setPostId(request.getPostId());
-        comment.setUserId(userId);
         comment.setUserId(userId);
 
         // 内容安全检查
@@ -69,7 +69,7 @@ public class CommentServiceImpl extends ServiceImpl<SysCommentMapper, SysComment
             throw new RuntimeException("评论不存在");
         }
 
-        // TODO: 只有评论作者可以删除 (或者管理员，只校验作者)
+        // 只有评论作者可以删除
         if (!comment.getUserId().equals(userId)) {
             throw new RuntimeException("无权删除该评论");
         }
@@ -95,6 +95,33 @@ public class CommentServiceImpl extends ServiceImpl<SysCommentMapper, SysComment
                 .filter(comment -> "0".equals(comment.getParentId()))
                 .peek(comment -> comment.setChildren(getChildrens(comment, sysCommentList)))
                 .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void toggleLike(String commentId, String userId) {
+        SysComment comment = getById(commentId);
+        if (comment == null) {
+            throw new RuntimeException("评论不存在");
+        }
+
+        String key = "comment:like:" + commentId + ":" + userId;
+        Boolean hasLiked = stringRedisTemplate.hasKey(key);
+
+        if (Boolean.TRUE.equals(hasLiked)) {
+            // 取消点赞
+            stringRedisTemplate.delete(key);
+            comment.setLikeCount(Math.max(0, comment.getLikeCount() - 1));
+            // 减少作者获赞数
+            userProfileService.decrementLikesReceived(comment.getUserId());
+        } else {
+            // 点赞
+            stringRedisTemplate.opsForValue().set(key, "1");
+            comment.setLikeCount(comment.getLikeCount() + 1);
+            // 增加作者获赞数
+            userProfileService.incrementLikesReceived(comment.getUserId());
+        }
+        updateById(comment);
     }
 
     /**

@@ -58,4 +58,18 @@ public class PostController {
         return Result.success();
     }
 
+    @PostMapping("/update-post")
+    public Result<?> updatePost(
+            @RequestBody com.campus.trend.campus_pulse.dto.request.UpdatePostRequest updatePostRequest) {
+        AuthSysUser authSysUser = GetUserDetail.getAuthenticatedUser();
+        postService.updatePost(updatePostRequest, authSysUser.getSysUser().getId());
+        return Result.success();
+    }
+
+    @DeleteMapping("/{id}")
+    public Result<?> deletePost(@PathVariable String id) {
+        AuthSysUser authSysUser = GetUserDetail.getAuthenticatedUser();
+        postService.deletePost(id, authSysUser.getSysUser().getId());
+        return Result.success();
+    }
 }
