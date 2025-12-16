@@ -31,6 +31,8 @@ public class SecurityWhitelist {
                         "/sys-trend-stat/**", // 趋势统计 (关键词云、分类饼图、热度排行)
                         "/heat-rank/**", // 实时热度排行
                         "/sys-comment/post/**", // 查看帖子评论
+                        "/sys-category/list/**",
+                        "/tag/hot/**"
         };
 
         /**

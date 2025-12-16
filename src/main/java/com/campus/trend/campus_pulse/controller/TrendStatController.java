@@ -34,6 +34,15 @@ public class TrendStatController {
     }
 
     /**
+     * 获取帖子发布趋势
+     */
+    @GetMapping("/post-trend")
+    public Result<?> getPostTrend() {
+        List<Map<String, Object>> data = trendStatService.getPostTrend();
+        return Result.success(data);
+    }
+
+    /**
      * 获取分类饼图数据
      */
     @GetMapping("/category-pie")

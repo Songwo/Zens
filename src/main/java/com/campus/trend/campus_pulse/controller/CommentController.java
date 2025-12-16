@@ -63,8 +63,10 @@ public class CommentController {
     }
 
     @GetMapping("/post/{postId}")
-    public Result<?> getCommentsByPostId(@PathVariable String postId) {
-        return Result.success(commentService.getCommentsByPostId(postId));
+    public Result<?> getCommentsByPostId(@PathVariable String postId,
+            @RequestParam(defaultValue = "1") Integer page,
+            @RequestParam(defaultValue = "10") Integer size) {
+        return Result.success(commentService.getCommentsByPostId(postId, page, size));
     }
 
     @PostMapping("/{id}/like")

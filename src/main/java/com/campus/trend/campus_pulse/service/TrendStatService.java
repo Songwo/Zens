@@ -51,6 +51,11 @@ public interface TrendStatService extends IService<SysTrendStat> {
      * 
      * @return 词云数据Map
      */
+    /**
+     * 获取最近7天的帖子发布趋势
+     */
+    List<Map<String, Object>> getPostTrend();
+
     Map<String, Object> getKeywordCloud();
 
     /**

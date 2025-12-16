@@ -4,10 +4,9 @@ import { useState, useEffect } from "react"
 import api from "@/lib/api"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { MessageCircle, Heart, Trash2, Reply, Loader2 } from "lucide-react"
+import { Heart, Trash2, Reply, Loader2 } from "lucide-react"
 import toast from "react-hot-toast"
-import { motion, AnimatePresence } from "framer-motion"
+import { motion } from "framer-motion"
 import { formatDistanceToNow } from "date-fns"
 import { zhCN } from "date-fns/locale"
 
@@ -35,12 +34,14 @@ export default function CommentSection({ postId }: CommentSectionProps) {
     const [replyTo, setReplyTo] = useState<{ id: string, userId: string, isAnonymous: number } | null>(null)
     const [isAnonymous, setIsAnonymous] = useState(false)
 
-    // 当前登录用户ID (简单从token解析或localStorage获取，这里假设存储了userId)
-    // 实际项目中应从全局状态获取
+    // Pagination
+    const [page, setPage] = useState(1)
+    const [hasMore, setHasMore] = useState(false)
+    const [loadingMore, setLoadingMore] = useState(false)
+
     const currentUserId = typeof window !== 'undefined' ? localStorage.getItem("user_id") : null
     const isLoggedIn = !!currentUserId
 
-    // 如果未登录，强制匿名
     useEffect(() => {
         if (!isLoggedIn) {
             setIsAnonymous(true)
@@ -48,28 +49,42 @@ export default function CommentSection({ postId }: CommentSectionProps) {
     }, [isLoggedIn])
 
     useEffect(() => {
-        loadComments()
+        loadComments(1, true)
     }, [postId])
 
-    const loadComments = async () => {
+    const loadComments = async (pageNum: number, isReset = false) => {
         try {
-            setLoading(true)
-            const res: any = await api.get(`/sys-comment/post/${postId}`)
+            if (isReset) {
+                setLoading(true)
+            } else {
+                setLoadingMore(true)
+            }
+
+            const res: any = await api.get(`/sys-comment/post/${postId}?page=${pageNum}&size=10`)
+
             if (res.code === 2000) {
-                setComments(res.data || [])
+                const records = res.data.records || []
+                const current = res.data.current || 1
+                const pages = res.data.pages || 1
+
+                if (isReset) {
+                    setComments(records)
+                } else {
+                    setComments(prev => [...prev, ...records])
+                }
+                setPage(current)
+                setHasMore(current < pages)
             }
         } catch (error) {
             console.error("加载评论失败", error)
         } finally {
             setLoading(false)
+            setLoadingMore(false)
         }
     }
 
     const handleSubmit = async () => {
-        if (!content.trim()) {
-            toast.error("请输入评论内容")
-            return
-        }
+        if (!content.trim()) return
 
         try {
             setSubmitting(true)
@@ -81,13 +96,12 @@ export default function CommentSection({ postId }: CommentSectionProps) {
                 isAnonymous: isAnonymous ? 1 : 0
             }
 
-            // 使用新的 create 接口，支持匿名
             const res: any = await api.post("/sys-comment/create", payload)
             if (res.code === 2000) {
-                toast.success("评论成功")
+                toast.success("回复成功")
                 setContent("")
                 setReplyTo(null)
-                loadComments() // 重新加载列表
+                loadComments(1, true)
             } else {
                 toast.error(res.message || "评论失败")
             }
@@ -102,155 +116,128 @@ export default function CommentSection({ postId }: CommentSectionProps) {
         try {
             const res: any = await api.post(`/sys-comment/${commentId}/like`)
             if (res.code === 2000) {
-                // 简单起见重新加载，优化方案是本地更新状态
-                loadComments()
+                setComments(prev => updateCommentLike(prev, commentId))
             }
-        } catch (error) {
-            // ignore
-        }
+        } catch (error) { }
+    }
+
+    const updateCommentLike = (list: Comment[], targetId: string): Comment[] => {
+        return list.map(c => {
+            if (c.id === targetId) return { ...c, likeCount: c.likeCount + 1 }
+            if (c.children) return { ...c, children: updateCommentLike(c.children, targetId) }
+            return c
+        })
     }
 
     const handleDelete = async (commentId: string) => {
-        if (!confirm("确定删除这条评论吗？")) return
-
+        if (!confirm("确定删除？")) return
         try {
             const res: any = await api.delete(`/sys-comment/${commentId}`)
             if (res.code === 2000) {
-                toast.success("删除成功")
-                loadComments()
+                loadComments(1, true)
             }
-        } catch (error) {
-            toast.error("删除失败")
-        }
+        } catch (error) { }
     }
 
-    // 递归渲染评论项
     const renderComment = (item: Comment, depth = 0) => {
-        const isMe = currentUserId === item.userId // 需要后端配合返回当前用户是否是作者，或者前端存userId
-
         return (
-            <motion.div
-                key={item.id}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className={`flex gap-3 mb-4 ${depth > 0 ? "ml-8 md:ml-12 border-l-2 border-gray-100 pl-4" : ""}`}
-            >
-                <div className={`shrink-0 w-8 h-8 md:w-10 md:h-10 rounded-full flex items-center justify-center font-bold text-white text-sm ${item.isAnonymous ? "bg-gray-400" : "bg-primary"}`}>
-                    {item.isAnonymous ? "A" : "U"}
-                </div>
-
-                <div className="flex-1 space-y-1">
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                            <span className="font-semibold text-sm text-gray-900 dark:text-gray-200">
-                                {item.isAnonymous ? "匿名同学" : `用户 ${item.userId.substring(0, 6)}`}
-                            </span>
-                            {item.replyUserId && (
-                                <span className="text-xs text-gray-400 flex items-center">
-                                    <Reply className="w-3 h-3 mx-1" />
-                                    {/* 这里最好显示被回复人昵称，目前只有ID暂且显示ID或隐式处理 */}
+            <div key={item.id} className={`group ${depth > 0 ? "mt-4 ml-10 border-l-2 border-gray-100 dark:border-gray-800 pl-4" : "border-b border-gray-100 dark:border-gray-800 py-6"}`}>
+                <div className="flex gap-3">
+                    <div className="flex-shrink-0 w-8 h-8 rounded bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-xs font-bold text-gray-500 dark:text-gray-400">
+                        {item.isAnonymous ? "A" : "U"}
+                    </div>
+                    <div className="flex-1">
+                        <div className="flex items-center justify-between mb-1">
+                            <div className="flex items-center gap-2">
+                                <span className="font-bold text-sm text-gray-900 dark:text-gray-200">
+                                    {item.isAnonymous ? "匿名用户" : `用户 ${item.userId.substring(0, 6)}`}
                                 </span>
+                                {item.replyUserId && <span className="text-xs text-gray-400">回复</span>}
+                                <span className="text-xs text-gray-400">
+                                    {formatDate(item.createTime)}
+                                </span>
+                            </div>
+                            <div className="text-xs text-gray-400">
+                                #{item.id.substring(0, 4)}
+                            </div>
+                        </div>
+
+                        <div className="text-sm text-gray-800 dark:text-gray-300 leading-relaxed mb-2">
+                            {item.content}
+                        </div>
+
+                        <div className="flex items-center gap-4 text-xs">
+                            <button onClick={() => handleLike(item.id)} className="flex items-center gap-1 text-gray-500 hover:text-pink-500">
+                                <Heart className="w-3 h-3" /> {item.likeCount || 0}
+                            </button>
+                            <button onClick={() => setReplyTo({ id: item.id, userId: item.userId, isAnonymous: item.isAnonymous })} className="flex items-center gap-1 text-gray-500 hover:text-blue-500">
+                                <Reply className="w-3 h-3" /> 回复
+                            </button>
+                            {currentUserId === item.userId && (
+                                <button onClick={() => handleDelete(item.id)} className="text-gray-500 hover:text-red-500 ml-auto">
+                                    <Trash2 className="w-3 h-3" />
+                                </button>
                             )}
-                            <span className="text-xs text-gray-400">
-                                {formatDistanceToNow(new Date(item.createTime), { addSuffix: true, locale: zhCN })}
-                            </span>
                         </div>
                     </div>
-
-                    <div className="text-gray-700 dark:text-gray-300 text-sm leading-relaxed whitespace-pre-wrap">
-                        {item.content}
-                    </div>
-
-                    <div className="flex items-center gap-4 pt-1">
-                        <button
-                            onClick={() => handleLike(item.id)}
-                            className="flex items-center gap-1 text-xs text-gray-500 hover:text-pink-500 transition-colors"
-                        >
-                            <Heart className={`w-3.5 h-3.5 ${item.likeCount > 0 ? "fill-pink-500 text-pink-500" : ""}`} />
-                            {item.likeCount > 0 ? item.likeCount : "赞"}
-                        </button>
-
-                        <button
-                            onClick={() => setReplyTo({ id: item.id, userId: item.userId, isAnonymous: item.isAnonymous })}
-                            className="flex items-center gap-1 text-xs text-gray-500 hover:text-blue-500 transition-colors"
-                        >
-                            <Reply className="w-3.5 h-3.5" />
-                            回复
-                        </button>
-
-                        {/* 模拟删除权限：实际应由后端控制或前端判断ID */}
-                        <button
-                            onClick={() => handleDelete(item.id)}
-                            className="flex items-center gap-1 text-xs text-gray-400 hover:text-red-500 transition-colors opacity-0 hover:opacity-100"
-                        >
-                            <Trash2 className="w-3.5 h-3.5" />
-                            删除
-                        </button>
-                    </div>
-
-                    {/* 递归渲染子评论 */}
-                    {item.children && item.children.map(child => renderComment(child, depth + 1))}
                 </div>
-            </motion.div>
+
+                {item.children?.map(child => renderComment(child, depth + 1))}
+            </div>
         )
     }
 
-    return (
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 p-6 md:p-8 mt-6">
-            <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
-                <MessageCircle className="w-5 h-5 text-primary" />
-                评论 ({comments.reduce((acc, curr) => acc + 1 + (curr.children?.length || 0), 0)})
-            </h3>
+    const formatDate = (dateStr: string) => {
+        try {
+            return formatDistanceToNow(new Date(dateStr), { addSuffix: true, locale: zhCN })
+        } catch (e) {
+            return ""
+        }
+    }
 
-            {/* 输入框 */}
-            <div className="mb-8 space-y-3">
+    return (
+        <div className="bg-transparent">
+            {/* Simple Editor */}
+            <div className="mb-8 bg-gray-50 dark:bg-gray-800/50 p-4 rounded-lg border border-gray-100 dark:border-gray-800">
                 {replyTo && (
-                    <div className="flex items-center justify-between bg-blue-50 text-blue-600 px-3 py-2 rounded-lg text-sm">
-                        <span>回复 @{replyTo.isAnonymous ? "匿名同学" : "用户"} 的评论</span>
-                        <button onClick={() => setReplyTo(null)} className="hover:underline">取消</button>
+                    <div className="flex items-center justify-between text-xs text-blue-500 mb-2">
+                        <span>回复 {replyTo.isAnonymous ? "匿名" : "用户"}</span>
+                        <button onClick={() => setReplyTo(null)}>取消</button>
                     </div>
                 )}
-
                 <Textarea
-                    placeholder={replyTo ? "写下你的回复..." : "发一条友善的评论..."}
                     value={content}
-                    onChange={(e: any) => setContent(e.target.value)}
-                    className="min-h-[100px] bg-gray-50 border-gray-200 resize-none focus:bg-white transition-colors"
+                    onChange={(e) => setContent(e.target.value)}
+                    placeholder="分享你的观点..."
+                    className="bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 min-h-[100px] mb-2"
                 />
-
                 <div className="flex justify-between items-center">
-                    <label className="flex items-center space-x-2 text-sm text-gray-600 cursor-pointer select-none">
-                        <input
-                            type="checkbox"
-                            checked={isAnonymous}
-                            onChange={(e) => setIsAnonymous(e.target.checked)}
-                            disabled={!isLoggedIn} // 未登录强制匿名，不可取消
-                            className="rounded border-gray-300 text-primary focus:ring-primary/20 disabled:opacity-50"
-                        />
-                        <span className={!isLoggedIn ? "text-gray-400" : ""}>
-                            {isLoggedIn ? "匿名发表" : "未登录 (将匿名发表)"}
-                        </span>
+                    <label className="flex items-center gap-2 text-xs text-gray-500 cursor-pointer">
+                        <input type="checkbox" checked={isAnonymous} onChange={e => setIsAnonymous(e.target.checked)} disabled={!isLoggedIn} />
+                        <span>匿名回复</span>
                     </label>
-
-                    <Button onClick={handleSubmit} disabled={submitting || !content.trim()}>
-                        {submitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                        {replyTo ? "回复" : "发表评论"}
+                    <Button size="sm" onClick={handleSubmit} disabled={submitting || !content.trim()}>
+                        {submitting ? "提交中..." : "发表回复"}
                     </Button>
                 </div>
             </div>
 
-            {/* 列表 */}
-            <div className="space-y-6">
+            <div className="space-y-1">
                 {loading ? (
-                    <div className="flex justify-center py-8">
-                        <Loader2 className="w-8 h-8 animate-spin text-gray-300" />
-                    </div>
+                    <div className="py-10 text-center"><Loader2 className="w-6 h-6 animate-spin mx-auto text-gray-400" /></div>
                 ) : comments.length > 0 ? (
-                    comments.map(c => renderComment(c))
+                    <>
+                        {comments.map(c => renderComment(c))}
+                        {hasMore && (
+                            <div className="py-4 text-center">
+                                <Button variant="ghost" size="sm" onClick={() => loadComments(page + 1)} disabled={loadingMore}>
+                                    {loadingMore ? "加载中..." : "加载更多评论"}
+                                </Button>
+                            </div>
+                        )}
+                    </>
                 ) : (
-                    <div className="text-center py-8 text-gray-400">
-                        暂无评论，来抢沙发吧~
-                    </div>
+                    <div className="py-10 text-center text-gray-400 text-sm">暂无评论，快来占楼吧</div>
                 )}
             </div>
         </div>

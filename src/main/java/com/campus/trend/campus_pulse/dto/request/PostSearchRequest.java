@@ -17,9 +17,12 @@ public class PostSearchRequest {
     // 状态
     private Integer status;
 
-    private Integer page;
-    private Integer pageSize;
+    private Integer page = 1;
+    private Integer pageSize = 10;
 
     // 排序方式: "new" (默认) 或 "hot"
     private String orderBy;
+
+    // 标签筛选
+    private String tag;
 }

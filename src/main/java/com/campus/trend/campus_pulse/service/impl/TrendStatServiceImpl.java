@@ -69,6 +69,19 @@ public class TrendStatServiceImpl extends ServiceImpl<SysTrendStatMapper, SysTre
     }
 
     @Override
+    public List<Map<String, Object>> getPostTrend() {
+        // 查询最近7天的数据
+        // 注意：数据库函数 DATE(create_time) 依赖于 MySQL
+        List<Map<String, Object>> list = sysPostMapper.selectMaps(
+                new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<com.campus.trend.campus_pulse.entity.SysPost>()
+                        .select("DATE_FORMAT(create_time, '%Y-%m-%d') as date", "count(*) as count")
+                        .groupBy("DATE_FORMAT(create_time, '%Y-%m-%d')")
+                        .orderByAsc("date")
+                        .last("LIMIT 7"));
+        return list;
+    }
+
+    @Override
     public Map<String, Object> getKeywordCloud() {
         SysTrendStat stat = getLatestStatByType(TYPE_KEYWORD_CLOUD);
         Map<String, Object> result = parseJsonToMap(stat);

@@ -1,6 +1,7 @@
 package com.campus.trend.campus_pulse.service.impl;
 
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.campus.trend.campus_pulse.dto.request.CreateCommentRequest;
 import com.campus.trend.campus_pulse.entity.SysComment;
@@ -88,16 +89,41 @@ public class CommentServiceImpl extends ServiceImpl<SysCommentMapper, SysComment
     }
 
     @Override
-    public List<SysComment> getCommentsByPostId(String postId) {
-        List<SysComment> sysCommentList = this.list(Wrappers.<SysComment>lambdaQuery()
+    public Object getCommentsByPostId(String postId, Integer pageNo, Integer pageSize) {
+        // 1. 分页查询根评论 (parentId = "0")
+        Page<SysComment> page = new Page<>(pageNo, pageSize);
+        Page<SysComment> rootPage = this.page(page, Wrappers.<SysComment>lambdaQuery()
                 .eq(SysComment::getPostId, postId)
-                .orderByAsc(SysComment::getCreateTime));
+                .eq(SysComment::getParentId, "0")
+                .orderByDesc(SysComment::getCreateTime)); // 按时间倒序，新的在前面
 
-        // 过滤出父ID为 "0" 的根节点，开始递归构建
-        return sysCommentList.stream()
-                .filter(comment -> "0".equals(comment.getParentId()))
-                .peek(comment -> comment.setChildren(getChildrens(comment, sysCommentList)))
-                .collect(Collectors.toList());
+        List<SysComment> roots = rootPage.getRecords();
+
+        // 2. 为每个根评论递归查询子评论
+        // 注意：这里为了性能，每页只加载10条根评论的子树，循环查询是可以接受的，或者可以用 IN 查询优化
+        // 简单实现：循环递归
+        roots.forEach(this::fillChildren);
+
+        return rootPage;
+    }
+
+    /**
+     * 递归填充子节点
+     * 为了避免一次加载过多，这里只查库取出直接子节点，然后递归
+     * 如果层级很深，建议改为前端按需加载（点击“查看回复”再查）
+     * 这里为了保持原有结构，先做全量递归
+     */
+    private void fillChildren(SysComment parent) {
+        // 查询当前节点的直接子节点
+        List<SysComment> children = this.list(Wrappers.<SysComment>lambdaQuery()
+                .eq(SysComment::getParentId, parent.getId())
+                .orderByAsc(SysComment::getCreateTime)); // 子评论通常按时间正序
+
+        if (children != null && !children.isEmpty()) {
+            parent.setChildren(children);
+            // 递归填充孙子节点
+            children.forEach(this::fillChildren);
+        }
     }
 
     @Override

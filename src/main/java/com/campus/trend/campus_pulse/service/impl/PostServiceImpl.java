@@ -331,7 +331,9 @@ public class PostServiceImpl extends ServiceImpl<SysPostMapper, SysPost> impleme
     @Override
     public IPage<SysPost> searchAllList(PostSearchRequest postSearchRequest) {
 
-        Page<SysPost> pagePram = new Page<>(postSearchRequest.getPage(), postSearchRequest.getPageSize());
+        int page = postSearchRequest.getPage() != null ? postSearchRequest.getPage() : 1;
+        int pageSize = postSearchRequest.getPageSize() != null ? postSearchRequest.getPageSize() : 10;
+        Page<SysPost> pagePram = new Page<>(page, pageSize);
 
         LambdaQueryWrapper<SysPost> wrapper = Wrappers.lambdaQuery();
 
@@ -348,6 +350,11 @@ public class PostServiceImpl extends ServiceImpl<SysPostMapper, SysPost> impleme
             wrapper.and(w -> w.like(SysPost::getTitle, postSearchRequest.getKeyword())
                     .or()
                     .like(SysPost::getContent, postSearchRequest.getKeyword()));
+        }
+
+        // 如果传入了 tag，拼接 WHERE tags LIKE %tag%
+        if (StringUtils.hasText(postSearchRequest.getTag())) {
+            wrapper.like(SysPost::getTags, postSearchRequest.getTag());
         }
 
         // 根据排序方式排序
