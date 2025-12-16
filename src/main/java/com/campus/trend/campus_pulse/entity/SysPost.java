@@ -74,4 +74,18 @@ public class SysPost implements Serializable {
 
     private LocalDateTime createTime;
     private LocalDateTime updateTime;
+
+    /**
+     * 当前用户是否已点赞
+     */
+    @TableField(exist = false)
+    @com.fasterxml.jackson.annotation.JsonProperty("isLiked")
+    private Boolean isLiked;
+
+    /**
+     * 当前用户是否已收藏
+     */
+    @TableField(exist = false)
+    @com.fasterxml.jackson.annotation.JsonProperty("isCollected")
+    private Boolean isCollected;
 }

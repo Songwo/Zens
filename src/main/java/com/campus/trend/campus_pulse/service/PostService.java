@@ -6,6 +6,7 @@ import com.campus.trend.campus_pulse.dto.request.CreatePostRequest;
 import com.campus.trend.campus_pulse.dto.request.ExtractTagsRequest;
 import com.campus.trend.campus_pulse.dto.request.PostSearchRequest;
 import com.campus.trend.campus_pulse.dto.request.UpdatePostRequest;
+import com.campus.trend.campus_pulse.dto.response.PostResponse;
 import com.campus.trend.campus_pulse.entity.SysPost;
 
 import java.util.List;
@@ -14,6 +15,16 @@ import java.util.Map;
 public interface PostService extends IService<SysPost> {
 
     SysPost searchByPostId(String postId);
+
+    /**
+     * 获取单个帖子详情（包含作者信息和趋势数据）
+     */
+    PostResponse getPostWithAuthor(String postId);
+
+    /**
+     * 分页搜索帖子列表（包含作者信息和趋势数据）
+     */
+    IPage<PostResponse> searchPostsWithAuthor(PostSearchRequest postSearchRequest);
 
     void createPost(CreatePostRequest createPostRequest, String userID);
 

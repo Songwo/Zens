@@ -20,4 +20,6 @@ public class PostSearchRequest {
     private Integer page;
     private Integer pageSize;
 
+    // 排序方式: "new" (默认) 或 "hot"
+    private String orderBy;
 }

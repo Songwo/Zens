@@ -62,20 +62,61 @@ public class AuthServiceImpl implements AuthService {
     @Override
     public LoginResponse Login(LoginRequest req) {
 
+        // 0.1 检查账号是否被锁定
+        if (verificationCodeService.isLocked(req.getUsername())) {
+            long timeLeft = verificationCodeService.getLockTimeLeft(req.getUsername());
+            throw new LoginException("账号已被锁定，请 " + (timeLeft / 60 + 1) + " 分钟后再试");
+        }
+
+        // 0.2 强制校验图形验证码
+        if (!verificationCodeService.verifyCaptcha(req.getUuid(), req.getCode())) {
+            throw new LoginException("图形验证码错误或已失效");
+        }
+
+        // 0. 检查是否需要验证码
+        if (verificationCodeService.needVerificationCode(req.getUsername())) {
+            if (req.getCode() == null || req.getCode().trim().isEmpty()) {
+                throw new LoginException("登录失败次数过多，请输入验证码");
+            }
+            // 校验验证码
+            if (!verificationCodeService.verifyLoginCode(req.getUsername(), req.getCode())) {
+                throw new LoginException("验证码错误或已失效");
+            }
+        }
+
         // 1. 构?Token（账户密码封装）
         UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(req.getUsername(),
                 req.getPassword());
 
         // 2. SecurityManager 进行实际认证
-        Authentication authentication = authorizationManager.authenticate(authToken);
+        Authentication authentication;
+        try {
+            authentication = authorizationManager.authenticate(authToken);
+        } catch (Exception e) {
+            // 登录失败，记录失败次数
+            int failCount = verificationCodeService.recordLoginFailure(req.getUsername());
+            if (failCount >= 3) {
+                long timeLeft = verificationCodeService.getLockTimeLeft(req.getUsername());
+                throw new LoginException("登录失败次数过多，账号已锁定，请 " + (timeLeft / 60 + 1) + " 分钟后再试");
+            }
+            throw new LoginException("登录失败，账号或密码错误（剩余尝试次数：" + (3 - failCount) + "）");
+        }
 
         if (authentication == null || !authentication.isAuthenticated()) {
-            throw new LoginException("登录失败，账号或密码错误");
+            int failCount = verificationCodeService.recordLoginFailure(req.getUsername());
+            if (failCount >= 3) {
+                long timeLeft = verificationCodeService.getLockTimeLeft(req.getUsername());
+                throw new LoginException("登录失败次数过多，账号已锁定，请 " + (timeLeft / 60 + 1) + " 分钟后再试");
+            }
+            throw new LoginException("登录失败，账号或密码错误（剩余尝试次数：" + (3 - failCount) + "）");
         }
 
         // 3. 获取登录用户信息
         AuthSysUser authUser = (AuthSysUser) authentication.getPrincipal();
         SysUser user = authUser.getSysUser();
+
+        // 登录成功，清除失败记录
+        verificationCodeService.clearLoginFailure(req.getUsername());
 
         // 4. JWT 内容,构造自定义 JWT
         Map<String, Object> claims = jwtUtil.buildClaims(user.getUsername(), user.getRole(), user.getAvatar());

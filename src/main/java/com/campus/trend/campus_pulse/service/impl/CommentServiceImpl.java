@@ -33,7 +33,8 @@ public class CommentServiceImpl extends ServiceImpl<SysCommentMapper, SysComment
     public void addComment(CreateCommentRequest request, String userId) {
         SysComment comment = new SysComment();
         comment.setPostId(request.getPostId());
-        comment.setUserId(userId);
+        // 数据库 user_id 字段非空，使用 "0" 作为匿名用户的占位ID
+        comment.setUserId(userId == null ? "0" : userId);
 
         // 内容安全检查
         String content = request.getContent();
@@ -56,9 +57,11 @@ public class CommentServiceImpl extends ServiceImpl<SysCommentMapper, SysComment
             sysPostMapper.updateById(post);
         }
 
-        // 更新用户画像
-        userProfileService.addContribution(userId, 2); // 评论贡献值+2
-        userProfileService.updateLastActiveTime(userId);
+        // 更新用户画像（只对已登录用户）
+        if (userId != null) {
+            userProfileService.addContribution(userId, 2); // 评论贡献值+2
+            userProfileService.updateLastActiveTime(userId);
+        }
     }
 
     @Override

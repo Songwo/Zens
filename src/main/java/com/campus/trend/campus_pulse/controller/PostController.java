@@ -24,7 +24,7 @@ public class PostController {
 
     @GetMapping("/{id}")
     public Result<?> searchByPostId(@PathVariable String id) {
-        return Result.success(postService.searchByPostId(id));
+        return Result.success(postService.getPostWithAuthor(id));
     }
 
     @PostMapping("/create-post")
@@ -41,7 +41,7 @@ public class PostController {
 
     @PostMapping("/search-lists")
     public Result<?> searchList(@RequestBody PostSearchRequest postSearchRequest) {
-        return Result.success(postService.searchAllList(postSearchRequest));
+        return Result.success(postService.searchPostsWithAuthor(postSearchRequest));
     }
 
     @PostMapping("/{id}/like")

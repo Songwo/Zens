@@ -25,6 +25,8 @@ public class TrendStatServiceImpl extends ServiceImpl<SysTrendStatMapper, SysTre
         implements TrendStatService {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
+    private final com.campus.trend.campus_pulse.mapper.SysPostMapper sysPostMapper;
+    private final com.campus.trend.campus_pulse.mapper.SysCategoryMapper sysCategoryMapper;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -69,28 +71,131 @@ public class TrendStatServiceImpl extends ServiceImpl<SysTrendStatMapper, SysTre
     @Override
     public Map<String, Object> getKeywordCloud() {
         SysTrendStat stat = getLatestStatByType(TYPE_KEYWORD_CLOUD);
-        return parseJsonToMap(stat);
+        Map<String, Object> result = parseJsonToMap(stat);
+
+        // 如果没有预生成数据，实时从帖子标签生成
+        if (result.isEmpty()) {
+            result = new HashMap<>(); // Fix: Ensure map is mutable
+            List<com.campus.trend.campus_pulse.entity.SysPost> posts = sysPostMapper.selectList(
+                    new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<com.campus.trend.campus_pulse.entity.SysPost>()
+                            .select("tags")
+                            .isNotNull("tags")
+                            .last("LIMIT 100") // 取最近100条
+            );
+
+            // 简单统计标签频率
+            Map<String, Integer> tagFreq = new HashMap<>();
+            for (com.campus.trend.campus_pulse.entity.SysPost post : posts) {
+                if (post.getTags() != null && !post.getTags().isEmpty()) {
+                    String[] tags = post.getTags().split(" ");
+                    for (String tag : tags) {
+                        tag = tag.replace("#", "").trim();
+                        if (!tag.isEmpty()) {
+                            tagFreq.put(tag, tagFreq.getOrDefault(tag, 0) + 1);
+                        }
+                    }
+                }
+            }
+
+            // 转换为前端需要的格式 List<{name, value}>
+            List<Map<String, Object>> keywords = new ArrayList<>();
+            tagFreq.forEach((k, v) -> {
+                Map<String, Object> item = new HashMap<>();
+                item.put("keyword", k); // Frontend expects "keyword" not "name"
+                item.put("count", v); // Frontend expects "count" not "value"
+                keywords.add(item);
+            });
+
+            // 按频率排序并取Top 30
+            keywords.sort((a, b) -> ((Integer) b.get("count")).compareTo((Integer) a.get("count")));
+            result.put("keywords", keywords.size() > 30 ? keywords.subList(0, 30) : keywords);
+        }
+
+        return result;
     }
 
     @Override
     public Map<String, Object> getCategoryPie() {
         SysTrendStat stat = getLatestStatByType(TYPE_CATEGORY_PIE);
-        return parseJsonToMap(stat);
+        Map<String, Object> result = parseJsonToMap(stat);
+
+        // 实时生成
+        if (result.isEmpty()) {
+            result = new HashMap<>(); // Fix: Ensure map is mutable
+            // 统计分类帖子数量
+            List<Map<String, Object>> categoryStats = sysPostMapper.selectMaps(
+                    new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<com.campus.trend.campus_pulse.entity.SysPost>()
+                            .select("category_id", "count(*) as count")
+                            .groupBy("category_id"));
+
+            List<Map<String, Object>> pieData = new ArrayList<>();
+            for (Map<String, Object> item : categoryStats) {
+                Map<String, Object> pieItem = new HashMap<>();
+                String catId = (String) item.get("category_id");
+                String catName = "未分类";
+                if (catId != null) {
+                    com.campus.trend.campus_pulse.entity.SysCategory category = sysCategoryMapper.selectById(catId);
+                    if (category != null) {
+                        catName = category.getName();
+                    }
+                }
+
+                pieItem.put("name", catName);
+                pieItem.put("count", item.get("count")); // Frontend expects "count"
+                pieData.add(pieItem);
+            }
+            result.put("categories", pieData); // Frontend expects "categories"
+            // Calculate total
+            long total = pieData.stream().mapToLong(m -> ((Number) m.get("count")).longValue()).sum();
+            result.put("total", total > 0 ? total : 1);
+        }
+
+        return result;
     }
 
     @Override
     public List<Map<String, Object>> getHeatRank() {
+        // 先尝试从缓存获取
         SysTrendStat stat = getLatestStatByType(TYPE_HEAT_RANK);
-        if (stat == null || stat.getDataJson() == null) {
-            return Collections.emptyList();
+        if (stat != null && stat.getDataJson() != null) {
+            try {
+                return objectMapper.readValue(stat.getDataJson(),
+                        new TypeReference<List<Map<String, Object>>>() {
+                        });
+            } catch (Exception e) {
+                log.warn("解析热度排行数据失败，将实时生成", e);
+            }
         }
 
+        // 如果没有预生成的数据，实时从数据库查询生成
+        log.info("实时生成热度排行数据");
+        return generateRealtimeHeatRank();
+    }
+
+    /**
+     * 实时生成热度排行
+     */
+    private List<Map<String, Object>> generateRealtimeHeatRank() {
         try {
-            return objectMapper.readValue(stat.getDataJson(),
-                    new TypeReference<List<Map<String, Object>>>() {
-                    });
+            // 从sys_post表查询热度最高的10条记录
+            List<com.campus.trend.campus_pulse.entity.SysPost> posts = sysPostMapper.selectList(
+                    new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<com.campus.trend.campus_pulse.entity.SysPost>()
+                            .orderByDesc("heat_score")
+                            .last("LIMIT 10"));
+
+            List<Map<String, Object>> heatRank = new ArrayList<>();
+            for (com.campus.trend.campus_pulse.entity.SysPost post : posts) {
+                Map<String, Object> item = new HashMap<>();
+                item.put("postId", post.getId());
+                item.put("title", post.getTitle());
+                // heatScore可能为null，给予默认值
+                item.put("heatScore", post.getHeatScore() != null ? post.getHeatScore() : 0.0);
+                item.put("viewCount", post.getViewCount() != null ? post.getViewCount() : 0);
+                heatRank.add(item);
+            }
+            return heatRank;
         } catch (Exception e) {
-            log.error("解析热度排行数据失败", e);
+            log.error("生成实时热度排行失败", e);
             return Collections.emptyList();
         }
     }

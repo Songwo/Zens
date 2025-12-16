@@ -50,6 +50,12 @@ public class PostRecommendServiceImpl implements PostRecommendService {
      */
     @Override
     public IPage<SysPost> recommendPosts(String userId, int page, int pageSize) {
+        // 如果 userId 为 null（匿名用户），直接返回热门帖子
+        if (userId == null) {
+            log.info("匿名用户访问，返回热门帖子");
+            return getHotPosts(page, pageSize);
+        }
+
         // 1. 获取用户关注的标签
         List<SysUserTagRelation> userTags = userTagRelationService.lambdaQuery()
                 .eq(SysUserTagRelation::getUserId, userId)
@@ -162,6 +168,13 @@ public class PostRecommendServiceImpl implements PostRecommendService {
      */
     @Override
     public List<SysTag> recommendTags(String userId, int limit) {
+        // 如果 userId 为 null（匿名用户），直接返回热门标签
+        if (userId == null) {
+            log.info("匿名用户访问，返回热门标签");
+            List<SysTag> hotTags = tagService.getHotTags(limit);
+            return hotTags;
+        }
+
         // 获取用户已关注的标签
         List<SysTag> followedTags = userTagRelationService.getUserFollowingTags(userId);
         Set<Long> followedTagIds = followedTags.stream()

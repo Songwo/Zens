@@ -35,6 +35,7 @@ public class RecommendController {
 
     /**
      * 获取推荐帖子（基于用户关注的标签）
+     * 支持匿名用户，返回热门帖子
      *
      * @param page     页码（默认1）
      * @param pageSize 每页大小（默认20）
@@ -44,16 +45,27 @@ public class RecommendController {
     public Result<?> getRecommendedPosts(
             @RequestParam(value = "page", required = false, defaultValue = "1") int page,
             @RequestParam(value = "pageSize", required = false, defaultValue = "20") int pageSize) {
-        AuthSysUser authSysUser = GetUserDetail.getAuthenticatedUser();
-        String userId = authSysUser.getSysUser().getId();
+        try {
+            // 尝试获取当前用户
+            AuthSysUser authSysUser = GetUserDetail.getAuthenticatedUser();
+            if (authSysUser != null && authSysUser.getSysUser() != null) {
+                String userId = authSysUser.getSysUser().getId();
+                IPage<SysPost> recommendedPosts = postRecommendService.recommendPosts(userId, page, pageSize);
+                return Result.success(recommendedPosts);
+            }
+        } catch (Exception e) {
+            // 未登录用户，继续执行下面的逻辑
+            log.debug("未登录用户访问推荐帖子，返回热门帖子");
+        }
 
-        IPage<SysPost> recommendedPosts = postRecommendService.recommendPosts(userId, page, pageSize);
-
-        return Result.success(recommendedPosts);
+        // 匿名用户：返回热门帖子
+        IPage<SysPost> hotPosts = postRecommendService.recommendPosts(null, page, pageSize);
+        return Result.success(hotPosts);
     }
 
     /**
      * 获取推荐标签
+     * 支持匿名用户，返回热门标签
      *
      * @param limit 返回数量（默认10）
      * @return 推荐的标签列表
@@ -61,11 +73,21 @@ public class RecommendController {
     @GetMapping("/tags")
     public Result<?> getRecommendedTags(
             @RequestParam(value = "limit", required = false, defaultValue = "10") int limit) {
-        AuthSysUser authSysUser = GetUserDetail.getAuthenticatedUser();
-        String userId = authSysUser.getSysUser().getId();
+        try {
+            // 尝试获取当前用户
+            AuthSysUser authSysUser = GetUserDetail.getAuthenticatedUser();
+            if (authSysUser != null && authSysUser.getSysUser() != null) {
+                String userId = authSysUser.getSysUser().getId();
+                List<SysTag> recommendedTags = postRecommendService.recommendTags(userId, limit);
+                return Result.success(recommendedTags);
+            }
+        } catch (Exception e) {
+            // 未登录用户，继续执行下面的逻辑
+            log.debug("未登录用户访问推荐标签，返回热门标签");
+        }
 
-        List<SysTag> recommendedTags = postRecommendService.recommendTags(userId, limit);
-
+        // 匿名用户：返回热门标签
+        List<SysTag> recommendedTags = postRecommendService.recommendTags(null, limit);
         return Result.success(recommendedTags);
     }
 

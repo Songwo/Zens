@@ -20,11 +20,16 @@ import com.campus.trend.campus_pulse.service.PostLikeService;
 import com.campus.trend.campus_pulse.service.PostService;
 import com.campus.trend.campus_pulse.service.TagService;
 import com.campus.trend.campus_pulse.service.UserProfileService;
+import com.campus.trend.campus_pulse.service.UserService;
+import com.campus.trend.campus_pulse.dto.response.PostResponse;
+import com.campus.trend.campus_pulse.entity.SysUser;
+import com.campus.trend.campus_pulse.entity.SysCategory;
 import com.campus.trend.campus_pulse.utils.GenerateIDUtil;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hankcs.hanlp.HanLP;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -37,6 +42,7 @@ import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class PostServiceImpl extends ServiceImpl<SysPostMapper, SysPost> implements PostService {
 
     private final PostLikeService postLikeService;
@@ -46,12 +52,32 @@ public class PostServiceImpl extends ServiceImpl<SysPostMapper, SysPost> impleme
     private final CategoryService categoryService;
     private final ContentSecurityService contentSecurityService;
     private final SentimentAnalysisService sentimentAnalysisService;
+    private final UserService userService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Override
     public SysPost searchByPostId(String postId) {
         viewAdd(postId);
-        return getById(postId);
+        SysPost post = getById(postId);
+        if (post != null) {
+            try {
+                // 尝试获取当前登录用户，若未登录会抛出异常，捕获后忽略即可
+                com.campus.trend.campus_pulse.security.AuthSysUser authUser = com.campus.trend.campus_pulse.utils.GetUserDetail
+                        .getAuthenticatedUser();
+                String userId = authUser.getSysUser().getId();
+
+                post.setIsLiked(postLikeService.isLike(postId, userId));
+                post.setIsCollected(postCollectService.isCollect(postId, userId));
+                log.info("Post detail: postId={}, userId={}, isLiked={}, isCollected={}", postId, userId,
+                        post.getIsLiked(), post.getIsCollected());
+            } catch (Exception e) {
+                // 未登录用户，保持默认值 (null 或 false)
+                log.warn("SearchByPostId - User not authenticated or error: {}", e.getMessage());
+                post.setIsLiked(false);
+                post.setIsCollected(false);
+            }
+        }
+        return post;
     }
 
     @Override
@@ -324,10 +350,142 @@ public class PostServiceImpl extends ServiceImpl<SysPostMapper, SysPost> impleme
                     .like(SysPost::getContent, postSearchRequest.getKeyword()));
         }
 
-        // 根据创建时间排序返回
-        wrapper.orderByDesc(SysPost::getCreateTime);
+        // 根据排序方式排序
+        String orderBy = postSearchRequest.getOrderBy();
+        if ("hot".equalsIgnoreCase(orderBy)) {
+            wrapper.orderByDesc(SysPost::getHeatScore);
+        } else {
+            // 默认按最新排序
+            wrapper.orderByDesc(SysPost::getCreateTime);
+        }
 
         return this.page(pagePram, wrapper);
+    }
+
+    // =================== 新增：带作者信息的帖子查询 ===================
+
+    @Override
+    public PostResponse getPostWithAuthor(String postId) {
+        SysPost post = searchByPostId(postId);
+        if (post == null) {
+            return null;
+        }
+        return convertToPostResponse(post);
+    }
+
+    @Override
+    public IPage<PostResponse> searchPostsWithAuthor(PostSearchRequest postSearchRequest) {
+        // 1. 先查询帖子分页数据
+        IPage<SysPost> postPage = searchAllList(postSearchRequest);
+
+        // 2. 转换为 PostResponse 分页
+        Page<PostResponse> responsePage = new Page<>(
+                postPage.getCurrent(),
+                postPage.getSize(),
+                postPage.getTotal());
+
+        // 3. 转换每个帖子为 PostResponse（包含作者信息）
+        List<PostResponse> responseList = new ArrayList<>();
+        for (SysPost post : postPage.getRecords()) {
+            responseList.add(convertToPostResponse(post));
+        }
+        responsePage.setRecords(responseList);
+
+        return responsePage;
+    }
+
+    /**
+     * 将 SysPost 转换为 PostResponse（填充作者信息和趋势数据）
+     */
+    private PostResponse convertToPostResponse(SysPost post) {
+        PostResponse response = new PostResponse();
+
+        // 复制基本字段
+        response.setId(post.getId());
+        response.setUserId(post.getUserId());
+        response.setCategoryId(post.getCategoryId());
+        response.setTitle(post.getTitle());
+        response.setContent(post.getContent());
+        response.setImages(post.getImages());
+        response.setTags(post.getTags());
+        response.setIsAnonymous(post.getIsAnonymous());
+        response.setLocationName(post.getLocationName());
+        response.setStatus(post.getStatus());
+        response.setAuditStatus(post.getAuditStatus());
+        response.setViewCount(post.getViewCount());
+        response.setLikeCount(post.getLikeCount());
+        response.setCollectCount(post.getCollectCount());
+        response.setCommentCount(post.getCommentCount());
+        response.setHeatScore(post.getHeatScore());
+        response.setCreateTime(post.getCreateTime());
+        response.setUpdateTime(post.getUpdateTime());
+        response.setIsLiked(post.getIsLiked());
+        response.setIsCollected(post.getIsCollected());
+        response.setSentimentScore(post.getSentimentScore());
+
+        // ===== 填充作者信息 =====
+        if (post.getIsAnonymous() != null && post.getIsAnonymous() == 1) {
+            // 匿名帖子
+            response.setAuthorName("匿名同学");
+            response.setAuthorAvatar(null);
+        } else {
+            // 非匿名帖子，查询用户信息
+            try {
+                SysUser author = userService.getById(post.getUserId());
+                if (author != null) {
+                    response.setAuthorName(author.getNickname() != null ? author.getNickname()
+                            : "用户" + post.getUserId().substring(0, 6));
+                    response.setAuthorAvatar(author.getAvatar());
+                } else {
+                    response.setAuthorName("未知用户");
+                    response.setAuthorAvatar(null);
+                }
+            } catch (Exception e) {
+                log.warn("获取用户信息失败: userId={}, error={}", post.getUserId(), e.getMessage());
+                response.setAuthorName("用户" + post.getUserId().substring(0, 6));
+                response.setAuthorAvatar(null);
+            }
+        }
+
+        // ===== 填充分类名称 =====
+        if (post.getCategoryId() != null) {
+            try {
+                SysCategory category = categoryService.getById(post.getCategoryId());
+                if (category != null) {
+                    response.setCategoryName(category.getName());
+                }
+            } catch (Exception e) {
+                log.warn("获取分类信息失败: categoryId={}", post.getCategoryId());
+            }
+        }
+
+        // ===== 填充情感标签 =====
+        if (post.getSentimentScore() != null) {
+            double score = post.getSentimentScore().doubleValue();
+            if (score >= 0.6) {
+                response.setSentimentLabel("positive");
+            } else if (score <= 0.4) {
+                response.setSentimentLabel("negative");
+            } else {
+                response.setSentimentLabel("neutral");
+            }
+        }
+
+        // ===== 填充趋势等级 =====
+        Double heatScore = post.getHeatScore();
+        if (heatScore != null) {
+            if (heatScore >= 100) {
+                response.setTrendLevel("hot");
+            } else if (heatScore >= 50) {
+                response.setTrendLevel("trending");
+            } else {
+                response.setTrendLevel("normal");
+            }
+        } else {
+            response.setTrendLevel("normal");
+        }
+
+        return response;
     }
 
     /******************* 内置方法 ********************/
