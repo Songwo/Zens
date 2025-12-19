@@ -46,7 +46,9 @@ public class UserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impleme
         SysUser sysUser = searchByUsername(auUser.getUsername());
         // 3.构造用户信息响应
         ProFileResponse proFileResponse = new ProFileResponse();
+        proFileResponse.setId(sysUser.getId());
         proFileResponse.setUsername(sysUser.getUsername());
+        proFileResponse.setEmail(sysUser.getEmail());
         proFileResponse.setAvatar(sysUser.getAvatar());
         proFileResponse.setNickname(sysUser.getNickname());
         proFileResponse.setMajor(sysUser.getMajor());
@@ -72,6 +74,7 @@ public class UserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impleme
         SysUser sysUser = searchByUsername(auUser.getUsername());
         // 3.构造用户信息响应
         SimpleProfileResponse simpleProfileResponse = new SimpleProfileResponse();
+        simpleProfileResponse.setId(sysUser.getId());
         simpleProfileResponse.setAvatar(sysUser.getAvatar());
         simpleProfileResponse.setNickname(sysUser.getNickname());
 

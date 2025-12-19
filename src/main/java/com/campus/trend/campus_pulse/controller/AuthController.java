@@ -9,8 +9,10 @@ import com.campus.trend.campus_pulse.service.VerificationCodeService;
 import jakarta.validation.Valid;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 
+@Slf4j
 @RestController
 @RequestMapping("/auth")
 public class AuthController {
@@ -30,8 +32,18 @@ public class AuthController {
             response.setStatus(400);
             return;
         }
-        cn.hutool.captcha.ICaptcha captcha = verificationCodeService.getCaptcha(uuid);
-        captcha.write(response.getOutputStream());
+        response.setContentType("image/png");
+        response.setHeader("Pragma", "No-cache");
+        response.setHeader("Cache-Control", "no-cache");
+        response.setDateHeader("Expires", 0);
+
+        try {
+            cn.hutool.captcha.ICaptcha captcha = verificationCodeService.getCaptcha(uuid);
+            captcha.write(response.getOutputStream());
+        } catch (Exception e) {
+            log.error("验证码生成失败 error processing captcha", e);
+            response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Captcha generation failed");
+        }
     }
 
     @PostMapping("/send-code")

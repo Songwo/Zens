@@ -25,6 +25,7 @@ public class SecurityWhitelist {
         public static final String[] PUBLIC_GET_URLS = {
                         "/sys-post/**", // 查看帖子详情 (注意 SecurityConfig 需配置仅限 GET)
                         "/sys-category/all", // 查看分类
+                        "/sys-category/**",
                         "/sys-category/tree",
                         "/sys-tag/hot", // 热门标签
                         "/recommend/**", // 推荐系统 (标签推荐、帖子推荐、相似推荐)

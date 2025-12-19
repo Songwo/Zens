@@ -25,4 +25,10 @@ public class PostSearchRequest {
 
     // 标签筛选
     private String tag;
+
+    // 筛选我点赞的 (User ID)
+    private String likedBy;
+
+    // 筛选我收藏的 (User ID)
+    private String collectedBy;
 }

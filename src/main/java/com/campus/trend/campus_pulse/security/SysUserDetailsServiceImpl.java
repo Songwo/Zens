@@ -8,14 +8,13 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.stereotype.Service;
 
-
 @Service
 @Slf4j
 public class SysUserDetailsServiceImpl implements UserDetailsService {
 
     /**
      * 构造方法注入用户方法
-    */
+     */
     private final UserService userService;
 
     public SysUserDetailsServiceImpl(UserService userService) {

@@ -25,8 +25,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private final StringRedisTemplate stringRedisTemplate;
 
     public JwtAuthenticationFilter(UserDetailsService userDetailsService,
-                                   JwtUtil jwtUtil,
-                                   StringRedisTemplate stringRedisTemplate) {
+            JwtUtil jwtUtil,
+            StringRedisTemplate stringRedisTemplate) {
         this.userDetailsService = userDetailsService;
         this.jwtUtil = jwtUtil;
         this.stringRedisTemplate = stringRedisTemplate;
@@ -34,7 +34,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
-                                    FilterChain filterChain) throws IOException, ServletException {
+            FilterChain filterChain) throws IOException, ServletException {
 
         String accessToken = jwtUtil.getToken(request);
 
@@ -50,8 +50,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
 
         // 从 Redis
-        String redisAccess = stringRedisTemplate.opsForValue().get("access_token"+userId);
-        String redisRefresh = stringRedisTemplate.opsForValue().get("refresh_token"+userId);
+        String redisAccess = stringRedisTemplate.opsForValue().get("access_token" + userId);
+        String redisRefresh = stringRedisTemplate.opsForValue().get("refresh_token" + userId);
 
         // accessToken 过期 → 刷新
         if (!jwtUtil.validate(accessToken)) {
@@ -61,15 +61,18 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
                 String newAccess = jwtUtil.generateAccessToken(userId, c);
 
-                stringRedisTemplate.opsForValue().set("access_token"+userId,newAccess);
+                stringRedisTemplate.opsForValue().set("access_token" + userId, newAccess);
 
                 response.setHeader("New-Access-Token", newAccess);
 
                 accessToken = newAccess;
 
             } else {
-                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-                response.getWriter().write("Token expired, please login again.");
+                // Token expired/invalid and cannot refresh -> Continue as anonymous
+                // Let Spring Security handle access control (Public endpoints will work,
+                // private will 403)
+                log.warn("Token expired for userId: {}, proceeding as anonymous", userId);
+                filterChain.doFilter(request, response);
                 return;
             }
         }
@@ -89,12 +92,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
             if (jwtUtil.validate(accessToken, ud)) {
 
-                UsernamePasswordAuthenticationToken auth =
-                        new UsernamePasswordAuthenticationToken(
-                                ud,
-                                null,
-                                ud.getAuthorities()
-                        );
+                UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
+                        ud,
+                        null,
+                        ud.getAuthorities());
 
                 auth.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                 SecurityContextHolder.getContext().setAuthentication(auth);

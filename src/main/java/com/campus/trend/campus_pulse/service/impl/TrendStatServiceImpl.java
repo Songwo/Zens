@@ -261,6 +261,56 @@ public class TrendStatServiceImpl extends ServiceImpl<SysTrendStatMapper, SysTre
         }
     }
 
+    @Override
+    public List<Map<String, Object>> getTrendPrediction() {
+        // 1. 获取当前热门标签和频次
+        Map<String, Object> currentCloud = getKeywordCloud();
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> keywords = (List<Map<String, Object>>) currentCloud.getOrDefault("keywords",
+                new ArrayList<>());
+
+        List<Map<String, Object>> prediction = new ArrayList<>();
+
+        // 2. 只预测前5个最热门话题
+        int limit = Math.min(keywords.size(), 5);
+        for (int i = 0; i < limit; i++) {
+            Map<String, Object> kw = keywords.get(i);
+            String name = (String) kw.get("keyword");
+            int count = (Integer) kw.get("count");
+            log.debug("Processing keyword: {}, count: {}", name, count);
+
+            Map<String, Object> item = new HashMap<>();
+            item.put("topic", name);
+
+            // 3. 模拟增长率和趋势 (实际可根据历史同比/环比计算)
+            // 这里我们模拟一个 15% - 150% 的增长率
+            double growth = 15.0 + (new Random().nextDouble() * 135.0);
+            item.put("growth", Math.round(growth * 10) / 10.0);
+
+            // 状态判断
+            String status = growth > 80 ? "rising" : (growth > 30 ? "stable" : "falling");
+            item.put("status", status);
+
+            // 4. 生成模拟AI洞察建议
+            String insight = generateInsight(name, status);
+            item.put("insight", insight);
+
+            prediction.add(item);
+        }
+
+        return prediction;
+    }
+
+    private String generateInsight(String topic, String status) {
+        if ("rising".equals(status)) {
+            return "话题「" + topic + "」讨论热度正在急剧上升，建议重点关注。相关讨论主要集中在近期突发事件。";
+        } else if ("stable".equals(status)) {
+            return "「" + topic + "」保持稳定讨论热度。用户群体相对固定，内容趋于高质量深度交流。";
+        } else {
+            return "「" + topic + "」热度有所回落。可能由于周期性话题结束，或讨论焦点发生转移。";
+        }
+    }
+
     /**
      * 解析JSON字符串为Map
      */

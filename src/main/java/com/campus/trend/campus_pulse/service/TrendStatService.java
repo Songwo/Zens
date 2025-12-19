@@ -91,6 +91,13 @@ public interface TrendStatService extends IService<SysTrendStat> {
     long deleteStatsBefore(Date beforeDate);
 
     /**
+     * 获取趋势预测数据
+     * 
+     * @return 预测数据列表
+     */
+    List<Map<String, Object>> getTrendPrediction();
+
+    /**
      * 触发生成当日统计数据（通常由定时任务调用）
      */
     void generateDailyStats();

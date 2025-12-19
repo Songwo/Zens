@@ -2,7 +2,6 @@ package com.campus.trend.campus_pulse.config;
 
 import com.campus.trend.campus_pulse.filter.JwtAuthenticationFilter;
 import com.campus.trend.campus_pulse.utils.JwtUtil;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.core.StringRedisTemplate;

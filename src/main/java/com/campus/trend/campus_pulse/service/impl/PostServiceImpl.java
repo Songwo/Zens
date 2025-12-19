@@ -357,6 +357,18 @@ public class PostServiceImpl extends ServiceImpl<SysPostMapper, SysPost> impleme
             wrapper.like(SysPost::getTags, postSearchRequest.getTag());
         }
 
+        // Filter by Liked
+        if (StringUtils.hasText(postSearchRequest.getLikedBy())) {
+            wrapper.inSql(SysPost::getId,
+                    "SELECT post_id FROM sys_post_like WHERE user_id = '" + postSearchRequest.getLikedBy() + "'");
+        }
+
+        // Filter by Collected
+        if (StringUtils.hasText(postSearchRequest.getCollectedBy())) {
+            wrapper.inSql(SysPost::getId, "SELECT post_id FROM sys_post_collect WHERE user_id = '"
+                    + postSearchRequest.getCollectedBy() + "'");
+        }
+
         // 根据排序方式排序
         String orderBy = postSearchRequest.getOrderBy();
         if ("hot".equalsIgnoreCase(orderBy)) {
@@ -490,6 +502,31 @@ public class PostServiceImpl extends ServiceImpl<SysPostMapper, SysPost> impleme
             }
         } else {
             response.setTrendLevel("normal");
+        }
+
+        // ===== 填充 AI 摘要 (新增) =====
+        if (StringUtils.hasText(post.getContent())) {
+            try {
+                String pureText = post.getContent()
+                        .replaceAll("<[^>]*>", "")
+                        .replaceAll("&nbsp;", " ")
+                        .replaceAll("\\s+", " ")
+                        .trim();
+                if (pureText.length() > 20) {
+                    List<String> summaryList = HanLP.extractSummary(pureText, 1);
+                    if (summaryList != null && !summaryList.isEmpty()) {
+                        response.setSummary(summaryList.get(0));
+                    } else {
+                        response.setSummary(pureText.length() > 100 ? pureText.substring(0, 100) + "..." : pureText);
+                    }
+                } else {
+                    response.setSummary(pureText);
+                }
+            } catch (Exception e) {
+                log.warn("AI 摘要生成失败: {}", e.getMessage());
+                String pureText = post.getContent().replaceAll("<[^>]*>", "").trim();
+                response.setSummary(pureText.length() > 100 ? pureText.substring(0, 100) + "..." : pureText);
+            }
         }
 
         return response;

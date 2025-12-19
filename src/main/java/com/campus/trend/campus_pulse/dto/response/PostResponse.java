@@ -82,4 +82,9 @@ public class PostResponse implements Serializable {
      * 趋势热度等级: hot(热门), trending(上升), normal(普通)
      */
     private String trendLevel;
+
+    /**
+     * AI 生成的摘要 (新增)
+     */
+    private String summary;
 }

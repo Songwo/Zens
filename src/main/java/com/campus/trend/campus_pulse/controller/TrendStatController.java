@@ -23,6 +23,7 @@ import java.util.Map;
 public class TrendStatController {
 
     private final TrendStatService trendStatService;
+    private final com.campus.trend.campus_pulse.service.PostService postService;
 
     /**
      * 获取关键词词云数据
@@ -39,6 +40,15 @@ public class TrendStatController {
     @GetMapping("/post-trend")
     public Result<?> getPostTrend() {
         List<Map<String, Object>> data = trendStatService.getPostTrend();
+        return Result.success(data);
+    }
+
+    /**
+     * 获取话题预测分析
+     */
+    @GetMapping("/prediction")
+    public Result<?> getTrendPrediction() {
+        List<Map<String, Object>> data = trendStatService.getTrendPrediction();
         return Result.success(data);
     }
 
@@ -71,10 +81,23 @@ public class TrendStatController {
      * 实时生成热度排行（当缓存数据不存在时）
      */
     private List<Map<String, Object>> generateRealtimeHeatRank() {
-        // 注入PostService来获取热门帖子
-        // 这里简化处理，直接返回空列表
-        // 实际应该查询 sys_post 表按 heat_score 排序
-        return new ArrayList<>();
+        List<Map<String, Object>> rankList = new ArrayList<>();
+        // 查询热度前10的帖子
+        List<com.campus.trend.campus_pulse.entity.SysPost> hotPosts = postService.lambdaQuery()
+                .orderByDesc(com.campus.trend.campus_pulse.entity.SysPost::getHeatScore)
+                .eq(com.campus.trend.campus_pulse.entity.SysPost::getStatus, 1)
+                .last("LIMIT 10")
+                .list();
+
+        for (com.campus.trend.campus_pulse.entity.SysPost post : hotPosts) {
+            Map<String, Object> item = new java.util.HashMap<>();
+            item.put("postId", post.getId());
+            item.put("title", post.getTitle());
+            item.put("heatScore", post.getHeatScore());
+            item.put("viewCount", post.getViewCount());
+            rankList.add(item);
+        }
+        return rankList;
     }
 
     /**
