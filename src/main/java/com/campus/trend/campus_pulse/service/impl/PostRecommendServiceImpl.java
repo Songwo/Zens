@@ -6,6 +6,7 @@ import com.campus.trend.campus_pulse.entity.SysPost;
 import com.campus.trend.campus_pulse.entity.SysTag;
 import com.campus.trend.campus_pulse.entity.SysUserTagRelation;
 import com.campus.trend.campus_pulse.mapper.SysPostMapper;
+import com.campus.trend.campus_pulse.service.CollaborativeFilteringService;
 import com.campus.trend.campus_pulse.service.PostRecommendService;
 import com.campus.trend.campus_pulse.service.TagService;
 import com.campus.trend.campus_pulse.service.UserTagRelationService;
@@ -26,14 +27,17 @@ public class PostRecommendServiceImpl implements PostRecommendService {
     private final UserTagRelationService userTagRelationService;
     private final TagService tagService;
     private final SysPostMapper postMapper;
+    private final CollaborativeFilteringService collaborativeFilteringService; // 注入 CF Service
 
     @Autowired
     public PostRecommendServiceImpl(UserTagRelationService userTagRelationService,
             TagService tagService,
-            SysPostMapper postMapper) {
+            SysPostMapper postMapper,
+            CollaborativeFilteringService collaborativeFilteringService) {
         this.userTagRelationService = userTagRelationService;
         this.tagService = tagService;
         this.postMapper = postMapper;
+        this.collaborativeFilteringService = collaborativeFilteringService;
     }
 
     /**
@@ -46,14 +50,24 @@ public class PostRecommendServiceImpl implements PostRecommendService {
      */
     @Override
     public IPage<SysPost> recommendPosts(String userId, int page, int pageSize) {
+        // 如果 userId 为 null（匿名用户），直接返回热门帖子
+        if (userId == null) {
+            log.info("匿名用户访问，返回热门帖子");
+            return getHotPosts(page, pageSize);
+        }
+
         // 1. 获取用户关注的标签
         List<SysUserTagRelation> userTags = userTagRelationService.lambdaQuery()
                 .eq(SysUserTagRelation::getUserId, userId)
                 .list();
 
         if (userTags.isEmpty()) {
-            log.info("用户 [{}] 未关注任何标签，返回热门帖子", userId);
-            // 返回热门帖子作为默认推荐
+            log.info("用户 [{}] 未关注任何标签，尝试协同过滤推荐或返回热门", userId);
+
+            // 尝试 User-Based 协同过滤 (TODO: 目前实现为空，此处略过)
+            // return collaborativeFilteringService.recommendByUserBased(userId, pageSize);
+
+            // 降级：返回热门帖子
             return getHotPosts(page, pageSize);
         }
 
@@ -154,6 +168,13 @@ public class PostRecommendServiceImpl implements PostRecommendService {
      */
     @Override
     public List<SysTag> recommendTags(String userId, int limit) {
+        // 如果 userId 为 null（匿名用户），直接返回热门标签
+        if (userId == null) {
+            log.info("匿名用户访问，返回热门标签");
+            List<SysTag> hotTags = tagService.getHotTags(limit);
+            return hotTags;
+        }
+
         // 获取用户已关注的标签
         List<SysTag> followedTags = userTagRelationService.getUserFollowingTags(userId);
         Set<Long> followedTagIds = followedTags.stream()

@@ -10,6 +10,7 @@ import org.springframework.validation.annotation.Validated;
 @MapperScan("com.campus.trend.campus_pulse.mapper")
 @Validated
 @EnableScheduling
+@org.springframework.scheduling.annotation.EnableAsync
 public class CampusPulseApplication {
 
 	public static void main(String[] args) {

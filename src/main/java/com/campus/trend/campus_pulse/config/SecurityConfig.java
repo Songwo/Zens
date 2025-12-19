@@ -2,7 +2,6 @@ package com.campus.trend.campus_pulse.config;
 
 import com.campus.trend.campus_pulse.filter.JwtAuthenticationFilter;
 import com.campus.trend.campus_pulse.utils.JwtUtil;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -33,8 +32,8 @@ public class SecurityConfig {
 
     @Bean
     public JwtAuthenticationFilter jwtAuthenticationFilter(UserDetailsService uds,
-                                                           JwtUtil jwtUtil,
-                                                           StringRedisTemplate redisTemplate) {
+            JwtUtil jwtUtil,
+            StringRedisTemplate redisTemplate) {
         return new JwtAuthenticationFilter(uds, jwtUtil, redisTemplate);
     }
 
@@ -52,7 +51,7 @@ public class SecurityConfig {
      */
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http,
-                                                   JwtAuthenticationFilter jwtAuthenticationFilter) throws Exception {
+            JwtAuthenticationFilter jwtAuthenticationFilter) throws Exception {
         http
                 // 1. 配置 CORS 策略
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
@@ -65,11 +64,19 @@ public class SecurityConfig {
 
                 // 4. 配置请求授权规则
                 .authorizeHttpRequests(authorize -> authorize
-                        // 允许匿名访问的接口（例如：注册、登录、公共内容、Swagger文档）
+                        // 1. 完全公开 (Login, Register, Static)
                         .requestMatchers(SecurityWhitelist.AUTH_WHITELIST).permitAll()
-                        // 其他所有请求都需要认证 (Authenticated)
-                        .anyRequest().authenticated()
-                )
+
+                        // 2. 仅公开 GET (Post Detail, Category, Tag)
+                        .requestMatchers(org.springframework.http.HttpMethod.GET, SecurityWhitelist.PUBLIC_GET_URLS)
+                        .permitAll()
+
+                        // 3. 仅公开 POST (Search Lists)
+                        .requestMatchers(org.springframework.http.HttpMethod.POST, SecurityWhitelist.PUBLIC_POST_URLS)
+                        .permitAll()
+
+                        // 4. 其他所有请求需要认证
+                        .anyRequest().authenticated())
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();

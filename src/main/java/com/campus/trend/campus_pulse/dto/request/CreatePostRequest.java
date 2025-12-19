@@ -17,7 +17,7 @@ public class CreatePostRequest {
      * 文章题目
      */
     @NotBlank(message = "文章题目不允许为空")
-    @Size(min = 30, max = 60, message = "文章题目长度字符最小30，最大60")
+    @Size(min = 5, max = 100, message = "文章题目长度需在5-100字符之间")
     private String title;
 
     /**

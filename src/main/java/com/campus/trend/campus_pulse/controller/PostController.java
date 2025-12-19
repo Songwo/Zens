@@ -24,7 +24,7 @@ public class PostController {
 
     @GetMapping("/{id}")
     public Result<?> searchByPostId(@PathVariable String id) {
-        return Result.success(postService.searchByPostId(id));
+        return Result.success(postService.getPostWithAuthor(id));
     }
 
     @PostMapping("/create-post")
@@ -41,7 +41,7 @@ public class PostController {
 
     @PostMapping("/search-lists")
     public Result<?> searchList(@RequestBody PostSearchRequest postSearchRequest) {
-        return Result.success(postService.searchAllList(postSearchRequest));
+        return Result.success(postService.searchPostsWithAuthor(postSearchRequest));
     }
 
     @PostMapping("/{id}/like")
@@ -58,4 +58,18 @@ public class PostController {
         return Result.success();
     }
 
+    @PostMapping("/update-post")
+    public Result<?> updatePost(
+            @RequestBody com.campus.trend.campus_pulse.dto.request.UpdatePostRequest updatePostRequest) {
+        AuthSysUser authSysUser = GetUserDetail.getAuthenticatedUser();
+        postService.updatePost(updatePostRequest, authSysUser.getSysUser().getId());
+        return Result.success();
+    }
+
+    @DeleteMapping("/{id}")
+    public Result<?> deletePost(@PathVariable String id) {
+        AuthSysUser authSysUser = GetUserDetail.getAuthenticatedUser();
+        postService.deletePost(id, authSysUser.getSysUser().getId());
+        return Result.success();
+    }
 }

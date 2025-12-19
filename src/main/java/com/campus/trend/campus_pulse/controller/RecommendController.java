@@ -5,6 +5,7 @@ import com.campus.trend.campus_pulse.common.Result;
 import com.campus.trend.campus_pulse.entity.SysPost;
 import com.campus.trend.campus_pulse.entity.SysTag;
 import com.campus.trend.campus_pulse.security.AuthSysUser;
+import com.campus.trend.campus_pulse.service.CollaborativeFilteringService;
 import com.campus.trend.campus_pulse.service.PostRecommendService;
 import com.campus.trend.campus_pulse.utils.GetUserDetail;
 import lombok.extern.slf4j.Slf4j;
@@ -15,7 +16,7 @@ import java.util.List;
 
 /**
  * 推荐控制器
- * 提供基于用户兴趣的帖子和标签推荐
+ * 提供基于用户兴趣的帖子和标签推荐，以及协同过滤推荐
  */
 @Slf4j
 @RestController
@@ -23,14 +24,18 @@ import java.util.List;
 public class RecommendController {
 
     private final PostRecommendService postRecommendService;
+    private final CollaborativeFilteringService collaborativeFilteringService;
 
     @Autowired
-    public RecommendController(PostRecommendService postRecommendService) {
+    public RecommendController(PostRecommendService postRecommendService,
+            CollaborativeFilteringService collaborativeFilteringService) {
         this.postRecommendService = postRecommendService;
+        this.collaborativeFilteringService = collaborativeFilteringService;
     }
 
     /**
      * 获取推荐帖子（基于用户关注的标签）
+     * 支持匿名用户，返回热门帖子
      *
      * @param page     页码（默认1）
      * @param pageSize 每页大小（默认20）
@@ -40,16 +45,27 @@ public class RecommendController {
     public Result<?> getRecommendedPosts(
             @RequestParam(value = "page", required = false, defaultValue = "1") int page,
             @RequestParam(value = "pageSize", required = false, defaultValue = "20") int pageSize) {
-        AuthSysUser authSysUser = GetUserDetail.getAuthenticatedUser();
-        String userId = authSysUser.getSysUser().getId();
+        try {
+            // 尝试获取当前用户
+            AuthSysUser authSysUser = GetUserDetail.getAuthenticatedUser();
+            if (authSysUser != null && authSysUser.getSysUser() != null) {
+                String userId = authSysUser.getSysUser().getId();
+                IPage<SysPost> recommendedPosts = postRecommendService.recommendPosts(userId, page, pageSize);
+                return Result.success(recommendedPosts);
+            }
+        } catch (Exception e) {
+            // 未登录用户，继续执行下面的逻辑
+            log.debug("未登录用户访问推荐帖子，返回热门帖子");
+        }
 
-        IPage<SysPost> recommendedPosts = postRecommendService.recommendPosts(userId, page, pageSize);
-
-        return Result.success(recommendedPosts);
+        // 匿名用户：返回热门帖子
+        IPage<SysPost> hotPosts = postRecommendService.recommendPosts(null, page, pageSize);
+        return Result.success(hotPosts);
     }
 
     /**
      * 获取推荐标签
+     * 支持匿名用户，返回热门标签
      *
      * @param limit 返回数量（默认10）
      * @return 推荐的标签列表
@@ -57,11 +73,40 @@ public class RecommendController {
     @GetMapping("/tags")
     public Result<?> getRecommendedTags(
             @RequestParam(value = "limit", required = false, defaultValue = "10") int limit) {
-        AuthSysUser authSysUser = GetUserDetail.getAuthenticatedUser();
-        String userId = authSysUser.getSysUser().getId();
+        try {
+            // 尝试获取当前用户
+            AuthSysUser authSysUser = GetUserDetail.getAuthenticatedUser();
+            if (authSysUser != null && authSysUser.getSysUser() != null) {
+                String userId = authSysUser.getSysUser().getId();
+                List<SysTag> recommendedTags = postRecommendService.recommendTags(userId, limit);
+                return Result.success(recommendedTags);
+            }
+        } catch (Exception e) {
+            // 未登录用户，继续执行下面的逻辑
+            log.debug("未登录用户访问推荐标签，返回热门标签");
+        }
 
-        List<SysTag> recommendedTags = postRecommendService.recommendTags(userId, limit);
-
+        // 匿名用户：返回热门标签
+        List<SysTag> recommendedTags = postRecommendService.recommendTags(null, limit);
         return Result.success(recommendedTags);
+    }
+
+    /**
+     * 获取相似帖子推荐（基于协同过滤）
+     * "看了这篇帖子的人还看了..."
+     *
+     * @param postId 当前帖子ID
+     * @param limit  返回数量（默认6）
+     * @return 相似帖子列表
+     */
+    @GetMapping("/similar/{postId}")
+    public Result<?> getSimilarPosts(
+            @PathVariable String postId,
+            @RequestParam(value = "limit", required = false, defaultValue = "6") int limit) {
+        log.info("获取帖子 [{}] 的相似推荐，数量: {}", postId, limit);
+
+        List<SysPost> similarPosts = collaborativeFilteringService.recommendByItemBased(postId, limit);
+
+        return Result.success(similarPosts);
     }
 }

@@ -29,6 +29,28 @@ spring:
           min-idle: 2
           max-wait: 3000ms
 
+  # 2.2 邮件服务配置
+  # 使用 QQ 邮箱示例，其他邮箱请修改 host 和 port
+  # 163邮箱: smtp.163.com:465 或 smtp.163.com:25
+  # Gmail: smtp.gmail.com:587
+  mail:
+    host: smtp.163.com          # SMTP 服务器地址
+    port: 465                  # 端口 (587=TLS, 465=SSL)
+    username: zhaoqsnyah@163.com   # 发件人邮箱
+    password: WCazQwuYpggCrm3y      # 授权码
+    protocol: smtp
+    default-encoding: UTF-8
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
+          ssl:
+            enable: true      # 如果使用465端口，改为true
+          timeout: 5000
+
 # 3.MyBatis-Plus 配置
 mybatis-plus:
   configuration:

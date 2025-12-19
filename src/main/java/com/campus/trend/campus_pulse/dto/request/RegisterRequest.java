@@ -29,6 +29,13 @@ public class RegisterRequest {
 
     private Integer role;
 
+    @NotBlank(message = "邮箱不能为空")
+    @Email(message = "邮箱格式不正确")
+    private String email;
+
+    @NotBlank(message = "验证码不能为空")
+    private String code;
+
     /**
      * 性别 0:未知 1:男 2:女
      */

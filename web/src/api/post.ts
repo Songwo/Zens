@@ -1,0 +1,34 @@
+import api from '@/lib/api'
+import type { Post, PostSearchRequest, Result, CreatePostRequest } from '@/types'
+
+export const postApi = {
+    // Search Posts (Feed)
+    searchList(data: PostSearchRequest) {
+        return api.post<any, Result<{ records: Post[]; total: number; pages: number }>>('/sys-post/search-lists', data)
+    },
+
+    // Get Detail
+    getDetail(id: string) {
+        return api.get<any, Result<Post>>(`/sys-post/${id}`)
+    },
+
+    // Create Post
+    create(data: CreatePostRequest) {
+        return api.post<any, Result<void>>('/sys-post/create-post', data)
+    },
+
+    // Like
+    like(id: string) {
+        return api.post<any, Result<void>>(`/sys-post/${id}/like`)
+    },
+
+    // Collect
+    collect(id: string) {
+        return api.post<any, Result<void>>(`/sys-post/${id}/collect`)
+    },
+
+    // Extract Tags (AI)
+    extractTags(data: { content: string; title: string }) {
+        return api.post<any, Result<{ tags: string; summary: string }>>('/sys-post/extract-tags', data)
+    }
+}
