@@ -1,231 +1,125 @@
+# 🏫 CampusPulse: 校园智能内容趋势分析与全功能管理平台
+
 <div align="center">
-  <img src="https://img.shields.io/badge/Spring%20Boot-3.5.8-green?style=for-the-badge&logo=springboot" alt="Spring Boot Version">
-  <img src="https://img.shields.io/badge/Java-17-orange?style=for-the-badge&logo=java" alt="Java Version">
-  <img src="https://img.shields.io/badge/MySQL-8.0-blue?style=for-the-badge&logo=mysql" alt="MySQL Version">
-  <img src="https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge" alt="License">
+  <img src="https://img.shields.io/badge/Spring%20Boot-3.5.8-green?style=for-the-badge&logo=springboot" alt="Spring Boot">
+  <img src="https://img.shields.io/badge/Vue-3.0-4FC08D?style=for-the-badge&logo=vue.js" alt="Vue 3">
+  <img src="https://img.shields.io/badge/Vite-Latest-646CFF?style=for-the-badge&logo=vite" alt="Vite">
+  <img src="https://img.shields.io/badge/Tailwind-3.0-38B2AC?style=for-the-badge&logo=tailwind-css" alt="Tailwind CSS">
+  <img src="https://img.shields.io/badge/MySQL-8.0-4479A1?style=for-the-badge&logo=mysql" alt="MySQL">
+  <img src="https://img.shields.io/badge/Redis-6.2-DC382D?style=for-the-badge&logo=redis" alt="Redis">
 </div>
 
-<h1 align="center">🏫 CampusPulse Backend</h1>
+---
 
-<p align="center">
-  <b>校园智能内容趋势分析与推荐平台后端</b>
-</p>
+## 🌟 项目愿景
 
-<p align="center">
-  基于 Spring Boot 3 构建，提供用户认证、个人信息管理、内容发布等功能，
-  为校园内容的热度分析、词云生成和个性化推荐奠定数据基础。
-</p>
+**CampusPulse** 旨在打造一个“懂学生、助学业”的智能化校园生态系统。它不仅是学生分享生活、探索趋势的社交港湾，更是集成了教务、学工、生活服务的高效数字化平台。通过数据驱动的决策支持，CampusPulse 能够精准感知校园脉搏，为每一位学生提供个性化的学业引导与内容推送。
 
 ---
 
-## 🌟 项目简介
+## ✨ 核心功能深度解析
 
-CampusPulse 是一个面向高校的智能化内容与趋势分析平台后端系统。该系统采用现代化的技术架构，实现了用户认证、个人信息管理、内容发布等核心功能，并通过收集用户行为数据，为后续的数据分析模块（热度排行、词云展示、个性化推荐等）提供坚实的基础。
+### 1. 🧠 智能内容大脑 (Intelligent Content Engine)
+*   **混合推荐算法 (Hybrid Recommendation)**:
+    - **兴趣画像 (40%)**: 基于用户关注的标签（Tags）计算相关度分数，并辅以时间衰减因子（1 / (1 + days/7)^1.2）确保内容新鲜度。
+    - **协同过滤 (30%)**: 采用 **Item-Based CF**。通过分析“看过该帖子的用户也看过的其他内容”，并根据用户行为加权（浏览:1.0, 点赞:3.0, 收藏:5.0）进行计算。
+    - **背景关联**: 自动识别学生专业，优先推荐同学院、同专业的高质量学术讨论或经验分享。
+*   **NLP 语义感知**:
+    - **趋势分析**: 实时提取校园动态中的高频热词，生成动态词云。
+    - **情感监测**: 基于 HanLP 分词与情感词典，对社区氛围进行正负向建模（0.0-1.0 评分制），自动过滤极端负面情绪。
 
-### ✨ 核心特性
+### 2. 🎓 全功能教务管理 (Integrated SIMS)
+*   **学籍档案中心**: 
+    - 数字化存储身份证、学号、入学时间等关键信息。
+    - **宿舍管理**: 精确到校区、楼栋、房间及床位的空间档案。
+*   **学业评价系统**:
+    - **成绩看板**: 按学期聚合展示分数与绩点，直观反馈学业状态。
+    - **毕业自检**: 核心逻辑自动扫描已获学分，对比毕业要求（如120学分），实时计算剩余差距。
+*   **互动选课系统**:
+    - **高并发适配**: 利用 Redis 缓存与数据库行锁，确保在高并发选课期间的容量（Capacity）控制准确无误。
+    - **逻辑校验**: 自动拦截重复选课、学分超额、时间冲突等异常申请。
 
-- 🔐 **安全认证** - 基于 JWT 和 Spring Security 的用户身份验证
-- 👤 **用户管理** - 完整的用户资料管理功能
-- 📝 **内容服务** - 支持多板块的内容发布与管理
-- 📊 **数据分析准备** - 结构化数据设计，为趋势分析预留接口
-- ⚡ **高性能** - 使用 Redis 缓存提升系统响应速度
-- 🛡️ **稳定性** - 完善的异常处理机制和参数校验
-
----
-
-## 🛠 技术栈
-
-| 技术 | 用途 | 版本 |
-|------|------|------|
-| ![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.5.8-green?style=flat-square&logo=springboot) | 核心框架 | 3.5.8 |
-| ![Spring MVC](https://img.shields.io/badge/Spring%20MVC-Framework-green?style=flat-square&logo=spring) | Web 层框架 | - |
-| ![Spring Security](https://img.shields.io/badge/Spring%20Security-Security-green?style=flat-square&logo=springsecurity) | 安全框架 | - |
-| ![JWT](https://img.shields.io/badge/JWT-Token%20Management-black?style=flat-square&logo=jsonwebtokens) | Token 管理 | jjwt |
-| ![MyBatis-Plus](https://img.shields.io/badge/MyBatis--Plus-ORM-green?style=flat-square&logo=apachemaven) | ORM 框架 | 3.5.7 |
-| ![MySQL](https://img.shields.io/badge/MySQL-Database-blue?style=flat-square&logo=mysql) | 主数据库 | >= 8.0 |
-| ![Redis](https://img.shields.io/badge/Redis-Cache-red?style=flat-square&logo=redis) | 缓存系统 | >= 6 |
-| ![HanLP](https://img.shields.io/badge/HanLP-NLP-yellow?style=flat-square&logo=nlp) | 中文分词 | portable-1.8.6 |
-| ![Lombok](https://img.shields.io/badge/Lombok-Utility-red?style=flat-square&logo=lombok) | 简化开发 | - |
+### 3. 📋 校园行政与生活 (Campus Services)
+*   **请假审批流**: 学生线上提交事假/病假申请（附带理由与时段），管理员后台一键审批，系统自动推送处理结果。
+*   **感知式弹窗**: 系统能够识别“首次登录”或“重要通知”，通过高度自定义的弹窗组件（WelcomePopup）确保关键公告的 100% 触达。
 
 ---
 
-## 🏗 运行环境
+## 🏗 技术架构与设计模式
 
-| 环境 | 版本要求 |
-|------|----------|
-| JDK | `17` |
-| Maven | `>= 3.8` |
-| MySQL | `>= 8.0` (默认 `localhost:3306`) |
-| Redis | `>= 6` (默认 `localhost:6379`) |
+### 1. 后端架构 (Spring Boot 3)
+- **安全体系**: **Spring Security + JWT**。采用无状态认证，JWT 存储在客户端，服务端通过拦截器校验权限，支持多角色（学生、老师、管理员）访问控制。
+- **持久化层**: **MyBatis-Plus** 配合雪花算法 ID 生成器，保证了海量数据下的查询性能与主键唯一性。
+- **性能优化**: 
+    - **Redis 二级缓存**: 针对热门帖子、标签排行等高频访问数据进行缓存，降低数据库负载。
+    - **异步处理**: 情感分析与标签提取采用异步处理，提升接口响应速度。
+
+### 2. 前端架构 (Vue 3 + Vite)
+- **现代 UI 方案**: 基于 **Tailwind CSS** 的 Utility-First 理念，配合 **Lucide Icons**，构建出符合 Z 世代审美的高颜值、响应式界面。
+- **状态管理**: **Pinia** 实现用户状态与配置的全局响应式流转。
+- **工程化**: 严格的 TypeScript 类型约束，配合 Vite 的极速热更新，大幅提升开发效率。
 
 ---
 
-## 🚀 快速开始
+## � 开发与部署指南
 
-### 1. 数据库初始化
+### 环境要求
+- **JDK 17+**
+- **Node.js 18+**
+- **MySQL 8.0.x**
+- **Redis 6.x+**
 
+### 1. 数据库配置
 ```bash
-# 导入初始数据结构和测试数据
-mysql -u root -p < src/main/resources/sql/Init.sql
+# 1. 创建数据库
+mysql -e "CREATE DATABASE IF NOT EXISTS campus_pulse DEFAULT CHARACTER SET utf8mb4;"
 
-# 可选：导入执行日志触发器
-mysql -u root -p < src/main/resources/sql/exec_log.sql
+# 2. 依次执行 SQL 脚本 (位于 src/main/resources/sql/)
+# - Init.sql (基础表)
+# - student_system_init.sql (教务模块)
+# - test_data_for_recommend.sql (算法测试数据)
 ```
 
-### 2. 配置文件调整
-
-编辑配置文件 `src/main/resources/application.yml`：
-
-```yaml
-server:
-  port: 7800  # 默认端口
-
-spring:
-  datasource:  # 数据库配置
-    url: jdbc:mysql://localhost:3306/campus_pulse?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
-    username: root
-    password: 123456
-    
-  data:
-    redis:  # Redis 配置
-      host: localhost
-      port: 6379
-
-jwt:
-  secret: "your-secret-key-here"  # JWT 密钥
-  access-expire: 3600000          # Access Token 过期时间 (1小时)
-  refresh-expire: 604800000       # Refresh Token 过期时间 (7天)
-```
-
-### 3. 构建与运行
-
-#### Windows 环境
-
-```powershell
-# 清理并打包
-mvn clean package
-
-# 运行应用
-java -jar .\target\campus-pulse-0.0.1-SNAPSHOT.jar
-```
-
-#### Linux/Mac 环境
-
+### 2. 后端启动
 ```bash
-# 清理并打包
-mvn clean package
-
-# 运行应用
-java -jar ./target/campus-pulse-0.0.1-SNAPSHOT.jar
+# 修改 application.yml 中的 mysql/redis 连接
+mvn clean install
+mvn spring-boot:run
 ```
 
-### 4. 验证部署
-
-启动成功后，访问以下地址确认服务正常运行：
-
-```
-http://localhost:7800/sys-user/test
-```
-
-如果返回 "test" 字符串，则说明服务已成功启动。
-
----
-
-## 📁 项目结构
-
-```
-src/main/java/com/campus/trend/campus_pulse/
-├── common/           # 通用类（统一返回结果、状态码等）
-├── config/           # 配置类（安全、Redis、Web、静态资源配置）
-├── controller/       # 控制器层
-├── dto/              # 数据传输对象
-│   ├── request/      # 请求DTO
-│   └── response/     # 响应DTO
-├── entity/           # 实体类
-├── enums/            # 枚举类
-├── exception/        # 异常处理
-├── filter/           # 过滤器
-├── mapper/           # MyBatis Mapper接口
-├── security/         # 安全相关
-├── service/          # 服务层
-│    └── impl/         # 服务实现
-├── utils/            # 工具类
-└── CampusPulseApplication.java  # 启动类
+### 3. 前端启动
+```bash
+cd web
+npm install
+npm run dev
 ```
 
 ---
 
-## 📞 API Endpoints
-
-### 认证相关
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/auth/login` | POST | 用户登录 |
-| `/auth/register` | POST | 用户注册 |
-| `/auth/logout` | POST | 用户登出 |
-
-### 用户相关
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/sys-user/profile` | GET | 获取用户详细信息 |
-| `/sys-user/simple-profile` | GET | 获取用户简要信息 |
-| `/sys-user/update-pwd` | POST | 更新用户密码 |
-| `/sys-user/update-udetail` | POST | 更新用户详细信息 |
-| `/sys-user/avatar` | PUT | 上传用户头像 |
-
-### 帖子相关
-
-| Endpoint                 | Method | Description |
-|--------------------------|--------|-------------|
-| `/sys-post/{id}}`        | GET    | 获取帖子详细信息    |
-| `/sys-post/create-post`  | POST   | 创建帖子        |
-| `/sys-post/extract-tags` | GET    | 根据文章内容加载标签  |
-| `/sys-post/search-lists` | POST   | 获取文章集合      |
-📝 /sys-post/search-lists — 文章列表查询接口说明
-📌 接口描述
-
-该接口用于 分页查询帖子列表，支持多条件组合查询，包括：
-
-分类 ID
-
-用户 ID
-
-发布状态
-
-标题/内容关键字模糊搜索
-
-分页功能
-
-搜索结果按 创建时间倒序 排序返回。
-
-📍 请求方式
-POST /sys-post/search-lists
-
-🧩 请求参数（JSON）
-字段名	类型	是否必填	说明
-
-categoryID	String	否	分类 ID，用于筛选指定分类下的文章
-
-userID	String	否	用户 ID，用于筛选该用户发布的帖子
-
-keyword	String	否	搜索关键词，可在标题和内容中模糊匹配
-
-status	Integer	否	帖子状态，例如：0=草稿 1=发布 2=隐藏
-
-page	Integer	是	第几页，从 1 开始
-
-pageSize	Integer	是	每页条数
+## 📁 项目关键目录
+```text
+campus-pulse/
+├── src/main/java/com/campus/trend/campus_pulse/
+│   ├── service/impl/           # 推荐算法与教务核心逻辑所在地
+│   │   ├── PostRecommendServiceImpl.java     # 混合推荐核心
+│   │   ├── SentimentAnalysisServiceImpl.java # 情感分析
+│   │   └── StudentServiceImpl.java           # 学籍与毕业检查
+│   ├── config/                  # 安全、Redis、CORS 全局配置
+│   └── filter/                  # JWT 权限拦截
+└── web/src/
+    ├── api/                     # 统一 API 调用封装
+    ├── views/                   # 业务页面 (Academic, Course, Profile)
+    └── store/                   # Pinia 状态树
+```
 
 ---
 
-## 🤝 贡献
-
-欢迎提交 Issue 或 Pull Request 来帮助改进这个项目！
+## 🔮 未来规划 (Roadmap)
+- [ ] **AI 辅导员**: 集成大语言模型（LLM），提供 24/7 的学业规划建议。
+- [ ] **实时通讯**: 基于 WebSocket 实现学生间的即时私聊与学术讨论组。
+- [ ] **可视化大屏**: 为校方提供校园热度与学生心理健康指数的实时监控大屏。
 
 ---
 
 ## 📄 许可证
-
-本项目采用 MIT 许可证，详见 [LICENSE](LICENSE) 文件。
+本项目采用 **MIT License**。欢迎用于毕业设计、学术研究或个人学习。
