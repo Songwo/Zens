@@ -77,7 +77,7 @@ onUnmounted(() => {
           v-model="searchQuery"
           type="text" 
           placeholder="搜索热门话题、校园动态..."
-          class="w-full bg-slate-100 border-none rounded-2xl py-2 pl-10 pr-4 text-sm focus:ring-2 focus:ring-brand-primary/20 transition-all outline-none"
+          class="w-full bg-white/50 backdrop-blur-sm border border-slate-200/50 rounded-2xl py-2.5 pl-10 pr-4 text-sm focus:ring-2 focus:ring-brand-primary/20 focus:bg-white transition-all outline-none placeholder:text-slate-400 font-medium shadow-sm"
           @keyup.enter="handleSearch"
         />
       </div>

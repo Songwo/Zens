@@ -25,50 +25,47 @@ onMounted(() => {
 <template>
   <aside class="w-80 h-[calc(100vh-64px)] overflow-y-auto py-6 flex flex-col gap-6 flex-shrink-0 px-4">
     <!-- Trend Prediction (BETA) -->
-    <div class="bg-gradient-to-br from-indigo-50 to-blue-50 border border-blue-100 rounded-2xl p-4 shadow-sm relative overflow-hidden group">
-      <div class="absolute -right-2 -top-2 w-16 h-16 bg-blue-500/10 rounded-full blur-xl group-hover:bg-blue-500/20 transition-all"></div>
-      
+    <div class="bg-gradient-to-br from-white to-blue-50 border border-blue-100 rounded-xl p-4 shadow-sm relative overflow-hidden group">
       <div class="flex items-center gap-2 mb-3">
-        <div class="p-1.5 bg-blue-600 rounded-lg text-white">
-          <Sparkles class="w-4 h-4" />
+        <div class="p-1.5 bg-blue-600 rounded text-white">
+          <Sparkles class="w-3.5 h-3.5" />
         </div>
         <span class="text-xs font-bold text-blue-900 uppercase tracking-wider">趋势预测 (BETA)</span>
       </div>
       
       <p class="text-[11px] text-blue-700 leading-relaxed mb-4">
-        AI 基于深度学习模型，实时预测校园内即将爆发的热点话题与讨论趋势。
+        AI 基于深度学习模型，实时预测校园内即将爆发的热点话题。
       </p>
       
-      <router-link to="/trends" class="flex items-center justify-between group/btn py-2 px-3 bg-white border border-blue-200 rounded-xl text-xs font-bold text-blue-600 hover:border-blue-400 transition-all shadow-sm">
+      <router-link to="/trends" class="flex items-center justify-between group/btn py-2 px-3 bg-white border border-blue-200 rounded-lg text-xs font-bold text-blue-600 hover:border-blue-400 transition-all shadow-sm">
         前往分析中心
         <ArrowUpRight class="w-3.5 h-3.5 group-hover/btn:translate-x-0.5 group-hover/btn:-translate-y-0.5 transition-transform" />
       </router-link>
     </div>
 
     <!-- Hot Topics List -->
-    <div class="bg-white border border-slate-200/60 rounded-2xl p-5 shadow-sm">
-      <div class="flex items-center gap-2 mb-4">
+    <div class="bg-white border border-slate-200 rounded-xl p-0 shadow-sm overflow-hidden">
+      <div class="px-4 py-3 border-b border-slate-100 flex items-center gap-2">
         <TrendingUp class="w-4 h-4 text-orange-500" />
         <h3 class="text-sm font-bold text-slate-900 tracking-tight">24小时热门排行</h3>
       </div>
       
-      <div class="flex flex-col">
+      <div class="flex flex-col divide-y divide-slate-50">
         <router-link 
           v-for="(topic, index) in hotTopics" 
           :key="topic.postId"
           :to="`/post/${topic.postId}`"
-          class="flex items-center gap-3 py-3 border-b last:border-0 border-slate-50 group cursor-pointer"
+          class="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 transition-colors group"
         >
-          <span class="text-lg font-black italic opacity-20 group-hover:opacity-40 transition-opacity" :class="index < 3 ? 'text-blue-600' : 'text-slate-400'">
-            0{{ index + 1 }}
+          <span class="text-sm font-black font-mono w-5 text-center" :class="index < 3 ? 'text-orange-500' : 'text-slate-300'">
+            {{ index + 1 }}
           </span>
           <div class="flex-1 min-w-0">
-            <h4 class="text-xs font-semibold text-slate-800 truncate group-hover:text-blue-600 transition-colors">
+            <h4 class="text-xs font-medium text-slate-700 truncate group-hover:text-blue-600 transition-colors mb-0.5">
               {{ topic.title }}
             </h4>
-            <div class="flex items-center gap-2 mt-1">
-              <span class="text-[10px] text-slate-400 font-medium">{{ topic.heatScore?.toFixed(0) || 0 }} 热度</span>
-              <span class="text-[10px] text-slate-400">{{ topic.viewCount }} 阅读</span>
+            <div class="flex items-center gap-2">
+              <span class="text-[10px] text-slate-400 font-mono">{{ topic.viewCount }} 阅读</span>
             </div>
           </div>
         </router-link>

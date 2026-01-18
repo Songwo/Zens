@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { MessageSquare, ThumbsUp, Eye, Clock, Share2, Star } from 'lucide-vue-next'
+import { MessageSquare, ThumbsUp, Eye, Clock, Share2, Star, Sparkles } from 'lucide-vue-next'
 
 interface Post {
   id: string
@@ -16,9 +16,10 @@ interface Post {
   trendLevel?: string    // hot/trending/normal
   isLiked?: boolean
   isCollected?: boolean
+  collectCount: number
 }
 
-defineProps<{
+const props = defineProps<{
   post: Post
 }>()
 
@@ -56,81 +57,89 @@ const handleCollect = async (e: Event) => {
 </script>
 
 <template>
-  <div class="group relative bg-white border border-slate-100 rounded-3xl p-5 hover:shadow-xl hover:shadow-blue-500/5 hover:border-blue-100 transition-all cursor-pointer overflow-hidden">
-    <!-- Sentiment/Trend Badge -->
-    <div class="absolute top-0 right-0 p-4">
-      <span 
-        v-if="post.trendLevel === 'hot'"
-        class="px-2 py-1 bg-red-500 text-white text-[10px] font-black italic rounded-lg shadow-lg shadow-red-500/20"
-      >HOT</span>
+  <div class="group relative p-6 cursor-pointer overflow-hidden transform hover:-translate-y-0.5 transition-all duration-200">
+    
+    <!-- Trending Badge -->
+    <div v-if="post.trendLevel === 'hot'" class="absolute top-0 right-0 p-4 z-10">
+      <div class="px-2 py-0.5 bg-rose-500 text-white text-[10px] font-bold uppercase tracking-wider rounded flex items-center gap-1 shadow-sm">
+        <Sparkles class="w-3 h-3 fill-white" />
+        HOT
+      </div>
     </div>
 
-    <div class="flex flex-col gap-4">
-      <!-- Author info -->
+    <div class="flex flex-col gap-4 relative z-10">
+      <!-- Header -->
       <div class="flex items-center justify-between">
-        <div class="flex items-center gap-2">
-          <div class="w-8 h-8 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center text-xs font-bold text-slate-500 overflow-hidden">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-sm font-bold text-slate-500 overflow-hidden">
             <img v-if="post.authorAvatar" :src="post.authorAvatar" class="w-full h-full object-cover" />
             <span v-else>{{ post.authorName.charAt(0) }}</span>
           </div>
           <div class="flex flex-col">
-            <span class="text-xs font-bold text-slate-900">{{ post.authorName }}</span>
-            <div class="flex items-center gap-1 text-[10px] text-slate-400">
-              <Clock class="w-3 h-3" />
+            <span class="text-sm font-bold text-slate-900">{{ post.authorName }}</span>
+            <div class="flex items-center gap-1.5 text-xs text-slate-500 font-medium font-mono">
               <span>{{ formatDate(post.createTime) }}</span>
             </div>
           </div>
         </div>
         
-        <span v-if="post.categoryName" class="px-2 py-0.5 bg-slate-50 text-slate-400 text-[10px] font-bold rounded-lg border border-slate-100">
+        <span v-if="post.categoryName" class="px-2.5 py-0.5 bg-slate-100 text-slate-600 text-xs font-medium rounded border border-slate-200">
           {{ post.categoryName }}
         </span>
       </div>
 
       <!-- Content -->
-      <router-link :to="'/post/' + post.id" class="flex flex-col gap-2">
-        <h3 class="text-lg font-bold text-slate-900 leading-snug group-hover:text-brand-primary transition-colors tracking-tight">
+      <router-link :to="'/post/' + post.id" class="space-y-2 block">
+        <h3 class="text-lg font-bold text-slate-900 leading-snug group-hover:text-blue-600 transition-colors">
           {{ post.title }}
         </h3>
-        <p class="text-sm text-slate-500 line-clamp-2 leading-relaxed">
+        <p class="text-sm text-slate-600 line-clamp-3 leading-relaxed">
           {{ post.content }}
         </p>
       </router-link>
 
-      <!-- Stats -->
-      <div class="flex items-center justify-between pt-2">
-        <div class="flex items-center gap-4">
+      <!-- Footer Actions -->
+      <div class="flex items-center justify-between pt-4 border-t border-slate-100 mt-2">
+        <div class="flex items-center gap-6">
           <button 
             @click.stop="handleLike"
-            :class="['flex items-center gap-1.5 transition-colors', post.isLiked ? 'text-pink-500' : 'text-slate-400 hover:text-brand-primary']"
+            :class="['flex items-center gap-2 transition-colors', post.isLiked ? 'text-pink-600' : 'text-slate-500 hover:text-pink-600']"
           >
             <ThumbsUp class="w-4 h-4" :class="{ 'fill-current': post.isLiked }" />
-            <span class="text-xs font-semibold">{{ post.likeCount }}</span>
+            <span class="text-xs font-bold font-mono">{{ post.likeCount }}</span>
           </button>
-          <button class="flex items-center gap-1.5 text-slate-400 hover:text-emerald-500 transition-colors">
+          
+          <button class="flex items-center gap-2 text-slate-500 hover:text-blue-600 transition-colors">
             <MessageSquare class="w-4 h-4" />
-            <span class="text-xs font-semibold">{{ post.commentCount }}</span>
+            <span class="text-xs font-bold font-mono">{{ post.commentCount }}</span>
           </button>
+          
           <button 
             @click.stop="handleCollect"
-            :class="['flex items-center gap-1.5 transition-colors', post.isCollected ? 'text-yellow-500' : 'text-slate-400 hover:text-yellow-500']"
+            :class="['flex items-center gap-2 transition-colors', post.isCollected ? 'text-amber-500' : 'text-slate-500 hover:text-amber-500']"
           >
             <Star class="w-4 h-4" :class="{ 'fill-current': post.isCollected }" />
-            <span class="text-xs font-semibold">{{ post.collectCount }}</span>
+            <span class="text-xs font-bold font-mono">{{ post.collectCount }}</span>
           </button>
-          <div class="flex items-center gap-1.5 text-slate-300">
-            <Eye class="w-4 h-4" />
-            <span class="text-xs font-semibold">{{ post.viewCount }}</span>
-          </div>
         </div>
         
-        <button class="p-2 text-slate-300 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-all">
-          <Share2 class="w-4 h-4" />
-        </button>
+        <div class="flex items-center gap-1.5 text-slate-400 text-xs font-mono">
+          <Eye class="w-4 h-4" />
+          <span>{{ post.viewCount }}</span>
+        </div>
       </div>
     </div>
-    
-    <!-- Hover Glass Reflection -->
-    <div class="absolute inset-0 pointer-events-none bg-gradient-to-tr from-white/0 via-white/0 to-white/20 opacity-0 group-hover:opacity-100 transition-opacity"></div>
   </div>
 </template>
+
+<style scoped>
+.group:hover .animate-shine {
+  animation: shine 0.75s;
+}
+
+@keyframes shine {
+  100% {
+    left: 125%;
+  }
+}
+</style>

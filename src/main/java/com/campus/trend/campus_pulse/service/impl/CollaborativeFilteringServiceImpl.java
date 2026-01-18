@@ -1,7 +1,12 @@
 package com.campus.trend.campus_pulse.service.impl;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.campus.trend.campus_pulse.entity.SysPost;
+import com.campus.trend.campus_pulse.entity.SysPostCollect;
+import com.campus.trend.campus_pulse.entity.SysPostLike;
 import com.campus.trend.campus_pulse.entity.SysViewLog;
+import com.campus.trend.campus_pulse.mapper.SysPostCollectMapper;
+import com.campus.trend.campus_pulse.mapper.SysPostLikeMapper;
 import com.campus.trend.campus_pulse.mapper.SysPostMapper;
 import com.campus.trend.campus_pulse.mapper.SysViewLogMapper;
 import com.campus.trend.campus_pulse.service.CollaborativeFilteringService;
@@ -22,21 +27,23 @@ public class CollaborativeFilteringServiceImpl implements CollaborativeFiltering
 
     private final SysViewLogMapper viewLogMapper;
     private final SysPostMapper postMapper;
+    private final SysPostLikeMapper postLikeMapper;
+    private final SysPostCollectMapper postCollectMapper;
 
     /**
      * 实现 Item-Based Collaborative Filtering
      * 逻辑：
      * 1. 找出看过当前帖子(targetPost)的所有用户
      * 2. 找出这些用户看过的其他帖子
-     * 3. 统计这些帖子的出现频次
-     * 4. 排除当前帖子，返回频次最高的Top N
+     * 3. 统计这些帖子的加权分数 (浏览=1, 点赞=3, 收藏=5)
+     * 4. 排除当前帖子，返回分数最高的Top N
      */
     @Override
     public List<SysPost> recommendByItemBased(String postId, int limit) {
         // 1. 获取看过该帖子的所有用户ID (最近30天数据)
         // SQL: SELECT DISTINCT user_id FROM sys_view_log WHERE post_id = ?
         List<SysViewLog> whoViewedLogs = viewLogMapper.selectList(
-                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<SysViewLog>()
+                new LambdaQueryWrapper<SysViewLog>()
                         .select(SysViewLog::getUserId) // 只查userId字段优化性能
                         .eq(SysViewLog::getPostId, postId)
                         .isNotNull(SysViewLog::getUserId) // 排除游客
@@ -52,24 +59,49 @@ public class CollaborativeFilteringServiceImpl implements CollaborativeFiltering
                 .distinct()
                 .collect(Collectors.toList());
 
-        // 2. 获取这些用户看过的其他帖子
-        // SQL: SELECT post_id FROM sys_view_log WHERE user_id IN (...)
+        // 3. 统计加权分数
+        Map<String, Double> postScore = new HashMap<>();
+
+        // 3.1 浏览行为 (权重 1.0)
         List<SysViewLog> otherViewLogs = viewLogMapper.selectList(
-                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<SysViewLog>()
+                new LambdaQueryWrapper<SysViewLog>()
                         .select(SysViewLog::getPostId)
                         .in(SysViewLog::getUserId, userIds)
                         .ne(SysViewLog::getPostId, postId) // 排除当前帖子
                         .orderByDesc(SysViewLog::getCreateTime)
-                        .last("LIMIT 500") // 同样限制数量
+                        .last("LIMIT 500")
         );
+        for (SysViewLog log : otherViewLogs) {
+            postScore.merge(log.getPostId(), 1.0, Double::sum);
+        }
 
-        // 3. 统计频次
-        Map<String, Long> postFrequency = otherViewLogs.stream()
-                .collect(Collectors.groupingBy(SysViewLog::getPostId, Collectors.counting()));
+        // 3.2 点赞行为 (权重 3.0)
+        List<SysPostLike> otherLikes = postLikeMapper.selectList(
+                new LambdaQueryWrapper<SysPostLike>()
+                        .select(SysPostLike::getPostId)
+                        .in(SysPostLike::getUserId, userIds)
+                        .ne(SysPostLike::getPostId, postId)
+                        .last("LIMIT 500")
+        );
+        for (SysPostLike like : otherLikes) {
+            postScore.merge(like.getPostId(), 3.0, Double::sum);
+        }
+
+        // 3.3 收藏行为 (权重 5.0)
+        List<SysPostCollect> otherCollects = postCollectMapper.selectList(
+                new LambdaQueryWrapper<SysPostCollect>()
+                        .select(SysPostCollect::getPostId)
+                        .in(SysPostCollect::getUserId, userIds)
+                        .ne(SysPostCollect::getPostId, postId)
+                        .last("LIMIT 500")
+        );
+        for (SysPostCollect collect : otherCollects) {
+            postScore.merge(collect.getPostId(), 5.0, Double::sum);
+        }
 
         // 4. 排序取出 Top N ID
-        List<String> recommendationIds = postFrequency.entrySet().stream()
-                .sorted(Map.Entry.<String, Long>comparingByValue().reversed())
+        List<String> recommendationIds = postScore.entrySet().stream()
+                .sorted(Map.Entry.<String, Double>comparingByValue().reversed())
                 .limit(limit)
                 .map(Map.Entry::getKey)
                 .collect(Collectors.toList());

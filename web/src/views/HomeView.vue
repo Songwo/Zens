@@ -80,20 +80,23 @@ onMounted(() => {
 </script>
 
 <template>
-  <DefaultLayout>
-    <div class="py-8 px-6">
-      <div class="flex items-center justify-between mb-10">
+  <DefaultLayout wide isFluid>
+    <div class="py-6 font-sans">
+      <div class="flex items-center justify-between mb-8 border-b border-slate-200 pb-6">
         <div>
-          <h1 class="text-3xl font-black text-slate-900 tracking-tighter">探索发现</h1>
+          <h1 class="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
+            <Sparkles class="w-6 h-6 text-brand-primary" />
+            探索发现
+          </h1>
           <p class="text-sm text-slate-500 mt-1 font-medium">捕捉校园每一个精彩瞬间 · 全校动态实时更新</p>
         </div>
         
-        <div class="flex items-center gap-3">
+        <div class="flex items-center gap-2">
           <button 
             @click="toggleOrder('new')"
             :class="[
-              'flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-colors',
-              orderBy === 'new' ? 'bg-slate-100 text-slate-600' : 'bg-white border border-slate-200 text-slate-400 hover:border-slate-400'
+              'px-3 py-1.5 rounded text-xs font-bold transition-all',
+              orderBy === 'new' ? 'bg-slate-900 text-white' : 'bg-white border border-slate-200 text-slate-500 hover:border-slate-400'
             ]"
           >
             最新发布
@@ -101,8 +104,8 @@ onMounted(() => {
           <button 
             @click="toggleOrder('hot')"
             :class="[
-              'flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-colors',
-              orderBy === 'hot' ? 'bg-slate-100 text-slate-600' : 'bg-white border border-slate-200 text-slate-400 hover:border-slate-400'
+              'px-3 py-1.5 rounded text-xs font-bold transition-all',
+              orderBy === 'hot' ? 'bg-slate-900 text-white' : 'bg-white border border-slate-200 text-slate-500 hover:border-slate-400'
             ]"
           >
             热度优先
@@ -130,12 +133,13 @@ onMounted(() => {
       </div>
 
       <!-- Feed Container -->
-      <div class="space-y-8 pb-20">
+      <div class="space-y-6 pb-20">
         <!-- Post List -->
         <PostCard 
           v-for="post in posts" 
           :key="post.id" 
           :post="post" 
+          class="bg-white border border-slate-200 shadow-sm hover:shadow-md transition-shadow duration-200 rounded-xl"
         />
         
         <!-- Loading State -->
