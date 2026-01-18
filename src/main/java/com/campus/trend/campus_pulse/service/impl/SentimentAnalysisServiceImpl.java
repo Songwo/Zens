@@ -1,6 +1,8 @@
 package com.campus.trend.campus_pulse.service.impl;
 
 import com.campus.trend.campus_pulse.service.SentimentAnalysisService;
+import com.hankcs.hanlp.HanLP;
+import com.hankcs.hanlp.seg.common.Term;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.ClassPathResource;
@@ -10,11 +12,12 @@ import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 /**
  * 情感分析服务实现类
- * 使用基于词典的简单情感分析算法
+ * 使用基于 HanLP 分词 + 情感词典的分析算法
  */
 @Service
 @Slf4j
@@ -63,16 +66,14 @@ public class SentimentAnalysisServiceImpl implements SentimentAnalysisService {
         int positiveCount = 0;
         int negativeCount = 0;
 
-        // 简单统计词频
-        // 优化点：可以使用分词工具(如HanLP/Jieba)分词后再匹配，这里简化为字符串包含匹配
-        for (String word : positiveWords) {
-            if (text.contains(word)) {
-                positiveCount++;
-            }
-        }
+        // 使用 HanLP 进行分词
+        List<Term> terms = HanLP.segment(text);
 
-        for (String word : negativeWords) {
-            if (text.contains(word)) {
+        for (Term term : terms) {
+            String word = term.word;
+            if (positiveWords.contains(word)) {
+                positiveCount++;
+            } else if (negativeWords.contains(word)) {
                 negativeCount++;
             }
         }

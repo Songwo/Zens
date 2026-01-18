@@ -2,6 +2,8 @@
 import Navbar from '@/components/Navbar.vue'
 import LeftSidebar from '@/components/LeftSidebar.vue'
 import RightSidebar from '@/components/RightSidebar.vue'
+import WelcomePopup from '@/components/WelcomePopup.vue'
+import { useUserStore } from '@/store/user'
 
 interface Props {
   showLeftSidebar?: boolean
@@ -16,47 +18,55 @@ const props = withDefaults(defineProps<Props>(), {
   wide: false,
   isFluid: false
 })
+
+const userStore = useUserStore()
 </script>
 
 <template>
-  <div class="flex flex-col min-h-screen bg-slate-50">
+  <div class="flex flex-col min-h-screen bg-[#F8FAFC]">
     <!-- Navbar (Fixed) -->
     <Navbar />
 
-    <!-- Centered Content Wrapper -->
-    <div class="w-full max-w-[1440px] mx-auto flex justify-center flex-1">
+    <!-- Full Width Content Wrapper -->
+    <div class="flex flex-1 pt-4 px-4 lg:px-6 xl:px-8 gap-6 justify-center">
+      
       <!-- Left Sidebar (Sticky) -->
-      <LeftSidebar v-if="props.showLeftSidebar" class="hidden xl:block sticky top-16" />
+      <LeftSidebar v-if="props.showLeftSidebar" class="hidden xl:block w-64 shrink-0 sticky top-20 h-[calc(100vh-6rem)] overflow-y-auto custom-scrollbar pb-10" />
 
-      <!-- Main Content (Scrollable) -->
+      <!-- Main Content (Flexible) -->
       <main 
         :class="[
-          'flex-1 min-w-0 border-x border-slate-200/60 bg-white min-h-[calc(100vh-64px)] overflow-x-hidden shadow-sm transition-all duration-300',
-          props.isFluid ? 'max-w-none' : (props.wide ? 'max-w-[1200px]' : 'max-w-[720px]')
+          'flex-1 min-w-0 transition-all duration-300',
+          props.isFluid ? 'w-full' : 'max-w-3xl'
         ]"
       >
         <slot />
       </main>
 
       <!-- Right Sidebar (Sticky) -->
-      <RightSidebar v-if="props.showRightSidebar" class="hidden lg:block sticky top-16" />
+      <RightSidebar v-if="props.showRightSidebar" class="hidden lg:block w-80 shrink-0 sticky top-20 h-[calc(100vh-6rem)] overflow-y-auto custom-scrollbar pb-10" />
+      
     </div>
+
+    <!-- Footer Space -->
+    <div class="h-20"></div>
+
+    <WelcomePopup v-if="userStore.isLoggedIn" />
   </div>
 </template>
 
 <style scoped>
-/* Scrollbar styling for sidebars */
-aside::-webkit-scrollbar {
+.custom-scrollbar::-webkit-scrollbar {
   width: 4px;
 }
-aside::-webkit-scrollbar-track {
+.custom-scrollbar::-webkit-scrollbar-track {
   background: transparent;
 }
-aside::-webkit-scrollbar-thumb {
-  background: #e2e8f0;
-  border-radius: 10px;
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #E2E8F0;
+  border-radius: 4px;
 }
-aside:hover::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+.custom-scrollbar:hover::-webkit-scrollbar-thumb {
+  background: #CBD5E1;
 }
 </style>

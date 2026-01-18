@@ -51,6 +51,11 @@ public class SysUser implements Serializable {
      */
     private Integer status;
 
+    /**
+     * 兴趣标签 (JSON字符串)
+     */
+    private String interestTags;
+
     private LocalDateTime createTime;
 
     private LocalDateTime updateTime;

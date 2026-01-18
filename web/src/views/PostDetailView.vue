@@ -5,10 +5,10 @@ import DefaultLayout from '@/layouts/DefaultLayout.vue'
 import { postApi } from '@/api/post'
 import { commentApi } from '@/api/comment'
 import { recommendApi } from '@/api/recommend'
-import type { Post, Comment } from '@/types'
+import type { Post, Comment, RecommendPost } from '@/types'
 import { toast } from 'vue-sonner'
 import MarkdownIt from 'markdown-it'
-import { Clock, Eye, ThumbsUp, MessageSquare, Share2, Star } from 'lucide-vue-next'
+import { Clock, Eye, ThumbsUp, MessageSquare, Share2, Star, Sparkles } from 'lucide-vue-next'
 import UserCardPopover from '@/components/UserCardPopover.vue'
 
 const route = useRoute()
@@ -16,7 +16,7 @@ const md = new MarkdownIt()
 
 const post = ref<Post | null>(null)
 const comments = ref<Comment[]>([])
-const similarPosts = ref<Post[]>([])
+const similarPosts = ref<RecommendPost[]>([])
 const loading = ref(true)
 const commentContent = ref('')
 
@@ -89,95 +89,130 @@ onMounted(() => {
 </script>
 
 <template>
-  <DefaultLayout>
-    <div class="py-6 px-4">
-      <div v-if="loading" class="animate-pulse space-y-6">
-        <div class="h-10 bg-slate-100 rounded-xl w-3/4"></div>
-        <div class="flex items-center gap-3">
-          <div class="w-8 h-8 bg-slate-100 rounded-full"></div>
-          <div class="h-4 bg-slate-100 rounded w-1/4"></div>
+  <DefaultLayout wide isFluid>
+    <div class="py-6 font-sans">
+      <div v-if="loading" class="animate-pulse space-y-8">
+        <div class="h-10 bg-slate-100 rounded-2xl w-3/4"></div>
+        <div class="flex items-center gap-4">
+          <div class="w-12 h-12 bg-slate-100 rounded-full"></div>
+          <div class="space-y-2 flex-1">
+            <div class="h-4 bg-slate-100 rounded w-1/4"></div>
+            <div class="h-3 bg-slate-100 rounded w-1/6"></div>
+          </div>
         </div>
-        <div class="space-y-3">
+        <div class="space-y-4">
           <div class="h-4 bg-slate-50 rounded w-full"></div>
           <div class="h-4 bg-slate-50 rounded w-full"></div>
-          <div class="h-4 bg-slate-50 rounded w-5/6"></div>
+          <div class="h-4 bg-slate-50 rounded w-full"></div>
+          <div class="h-4 bg-slate-50 rounded w-2/3"></div>
         </div>
       </div>
 
       <div v-else-if="post" class="pb-20">
-        <!-- Header -->
-        <h1 class="text-2xl font-black text-slate-900 mb-4">{{ post.title }}</h1>
-        
-        <div class="flex items-center justify-between mb-8 pb-6 border-b border-slate-100">
-            <div class="flex items-center gap-3">
+        <!-- Post Header -->
+        <div class="bg-white border border-slate-200 rounded-[2rem] p-8 md:p-10 mb-6 shadow-sm">
+          <h1 class="text-3xl font-bold text-slate-900 leading-tight mb-8 tracking-tight">
+            {{ post.title }}
+          </h1>
+          
+          <div class="flex flex-wrap items-center justify-between gap-6 pb-8 border-b border-slate-100">
+            <div class="flex items-center gap-4">
               <UserCardPopover :user="{ id: post.userId, nickname: post.authorName, avatar: post.authorAvatar }">
-                <div class="flex items-center gap-3 cursor-default">
-                  <div class="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center overflow-hidden cursor-pointer hover:ring-2 hover:ring-brand-primary/20 transition-all">
+                <div class="flex items-center gap-4 cursor-default">
+                  <div class="w-12 h-12 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center overflow-hidden hover:ring-4 hover:ring-slate-900/5 transition-all">
                     <img v-if="post.authorAvatar" :src="post.authorAvatar" class="w-full h-full object-cover" />
-                    <span v-else class="text-xs font-bold text-slate-500">{{ post.authorName?.charAt(0) || 'U' }}</span>
+                    <span v-else class="text-sm font-bold text-slate-400">{{ post.authorName?.charAt(0) || 'U' }}</span>
                   </div>
                   <div class="text-left">
-                    <div class="text-sm font-bold text-slate-900 cursor-pointer hover:text-brand-primary transition-colors">{{ post.authorName }}</div>
-                    <div class="flex items-center gap-2 text-xs text-slate-400 mt-0.5">
+                    <div class="text-base font-bold text-slate-900 hover:text-slate-600 transition-colors cursor-pointer">
+                      {{ post.authorName }}
+                    </div>
+                    <div class="flex items-center gap-2 text-xs font-bold text-slate-400 mt-1 uppercase tracking-widest">
                       <span>{{ new Date(post.createTime).toLocaleString() }}</span>
-                      <span>·</span>
-                      <span>{{ post.locationName || '未知地点' }}</span>
+                      <span class="text-slate-200">|</span>
+                      <span>{{ post.locationName || 'CAMPUS' }}</span>
                     </div>
                   </div>
                 </div>
               </UserCardPopover>
             </div>
-          
-          <div class="flex gap-2">
-            <span v-if="post.categoryName" class="px-3 py-1 bg-slate-50 text-slate-500 text-xs font-bold rounded-full">
-              {{ post.categoryName }}
-            </span>
+            
+            <div class="flex items-center gap-3">
+              <span v-if="post.categoryName" class="px-4 py-1.5 bg-slate-50 border border-slate-100 text-slate-500 text-[10px] font-black uppercase tracking-widest rounded-xl">
+                {{ post.categoryName }}
+              </span>
+              <div class="flex items-center gap-1.5 text-slate-400 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-100">
+                <Eye class="w-4 h-4" />
+                <span class="text-[10px] font-black">{{ post.viewCount }}</span>
+              </div>
+            </div>
           </div>
-        </div>
 
-        <!-- Content -->
-        <div class="prose prose-slate max-w-none mb-10" v-html="md.render(post.content)"></div>
+          <!-- Main Content Body -->
+          <div class="mt-10">
+            <div class="prose prose-slate max-w-none 
+              prose-headings:text-slate-900 prose-headings:font-bold 
+              prose-p:text-slate-600 prose-p:leading-relaxed prose-p:text-base
+              prose-strong:text-slate-900 prose-strong:font-bold
+              prose-img:rounded-2xl prose-img:border prose-img:border-slate-100
+              prose-a:text-slate-900 prose-a:font-bold hover:prose-a:text-slate-600 transition-colors" 
+              v-html="md.render(post.content)"
+            ></div>
+          </div>
 
-        <!-- Actions -->
-        <div class="flex items-center justify-between">
-          <div class="flex gap-4">
-            <button 
-              @click="handleLike"
-              :class="['flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all', post.isLiked ? 'bg-pink-50 text-pink-500' : 'bg-slate-50 text-slate-500 hover:bg-slate-100']"
-            >
-              <ThumbsUp class="w-4 h-4" :class="{ 'fill-current': post.isLiked }" />
-              {{ post.likeCount }}
-            </button>
-            <button 
-              @click="handleCollect"
-              :class="['flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all', post.isCollected ? 'bg-yellow-50 text-yellow-500' : 'bg-slate-50 text-slate-500 hover:bg-slate-100']"
-            >
-              <Star class="w-4 h-4" :class="{ 'fill-current': post.isCollected }" />
-              {{ post.collectCount }}
+          <!-- Post Footer Actions -->
+          <div class="flex items-center justify-between mt-12 pt-8 border-t border-slate-100">
+            <div class="flex gap-4">
+              <button 
+                @click="handleLike"
+                :class="[
+                  'flex items-center gap-2.5 px-6 py-3 rounded-2xl text-sm font-bold transition-all active:scale-95', 
+                  post.isLiked ? 'bg-rose-50 text-rose-500 border border-rose-100' : 'bg-slate-50 text-slate-500 border border-slate-100 hover:bg-slate-100 hover:border-slate-200'
+                ]"
+              >
+                <ThumbsUp class="w-4 h-4" :class="{ 'fill-current': post.isLiked }" />
+                {{ post.likeCount }}
+              </button>
+              <button 
+                @click="handleCollect"
+                :class="[
+                  'flex items-center gap-2.5 px-6 py-3 rounded-2xl text-sm font-bold transition-all active:scale-95', 
+                  post.isCollected ? 'bg-amber-50 text-amber-600 border border-amber-100' : 'bg-slate-50 text-slate-500 border border-slate-100 hover:bg-slate-100 hover:border-slate-200'
+                ]"
+              >
+                <Star class="w-4 h-4" :class="{ 'fill-current': post.isCollected }" />
+                {{ post.collectCount }}
+              </button>
+            </div>
+            
+            <button class="p-3 bg-slate-50 text-slate-400 border border-slate-100 rounded-2xl hover:bg-slate-100 hover:text-slate-600 transition-all">
+              <Share2 class="w-5 h-5" />
             </button>
           </div>
-          <span class="text-xs font-bold text-slate-400">{{ post.viewCount }} 阅读</span>
         </div>
 
         <!-- Comment Section -->
-        <div class="mt-12 pt-8 border-t border-slate-100">
-          <h3 class="text-lg font-bold text-slate-900 mb-6">评论 ({{ post.commentCount }})</h3>
+        <div class="bg-white border border-slate-200 rounded-[2rem] p-8 md:p-10 shadow-sm">
+          <div class="flex items-center gap-3 mb-10">
+            <MessageSquare class="w-6 h-6 text-slate-900" />
+            <h3 class="text-xl font-bold text-slate-900 tracking-tight">全部评论 <span class="text-slate-400 font-mono ml-2">{{ post.commentCount }}</span></h3>
+          </div>
           
-          <!-- Input -->
-          <div class="flex gap-4 mb-10">
-            <div class="w-10 h-10 rounded-full bg-slate-100 flex-shrink-0 overflow-hidden">
+          <!-- Comment Input Area -->
+          <div class="flex gap-5 mb-12">
+            <div class="w-12 h-12 rounded-full bg-slate-100 border border-slate-200 flex-shrink-0 overflow-hidden shadow-sm">
                 <img v-if="post.authorAvatar" :src="post.authorAvatar" class="w-full h-full object-cover" />
             </div>
-            <div class="flex-1">
+            <div class="flex-1 space-y-3">
               <textarea 
                 v-model="commentContent"
-                placeholder="写下你的想法..."
-                class="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary outline-none transition-all resize-none h-24"
+                placeholder="尊重是交流的基础，发表你的精彩见解..."
+                class="w-full bg-slate-50 border border-slate-200 rounded-2xl p-5 text-sm font-medium focus:ring-4 focus:ring-slate-900/5 focus:border-slate-900 focus:bg-white outline-none transition-all resize-none h-32 placeholder:text-slate-400"
               ></textarea>
-              <div class="flex justify-end mt-2">
+              <div class="flex justify-end">
                 <button 
                   @click="handleComment"
-                  class="px-6 py-2 bg-brand-primary text-white text-xs font-bold rounded-xl hover:bg-blue-700 transition-colors"
+                  class="px-8 py-3 bg-slate-900 text-white text-sm font-bold rounded-xl hover:bg-slate-800 transition-all shadow-lg shadow-slate-200 active:scale-95"
                 >
                   发表评论
                 </button>
@@ -185,9 +220,9 @@ onMounted(() => {
             </div>
           </div>
 
-          <!-- List -->
-          <div class="space-y-6">
-            <div v-for="comment in comments" :key="comment.id" class="flex gap-4 group/comment">
+          <!-- Comments List -->
+          <div class="space-y-10">
+            <div v-for="comment in comments" :key="comment.id" class="group/comment">
               <UserCardPopover 
                 :user="{ 
                   id: comment.userId, 
@@ -195,53 +230,69 @@ onMounted(() => {
                   avatar: comment.userAvatar 
                 }"
               >
-                <div class="flex gap-4 text-left">
-                  <div class="w-10 h-10 rounded-full bg-slate-100 flex-shrink-0 overflow-hidden cursor-pointer hover:ring-2 hover:ring-brand-primary/20 transition-all">
+                <div class="flex gap-5 text-left">
+                  <div class="w-12 h-12 rounded-full bg-slate-50 border border-slate-200 flex-shrink-0 overflow-hidden cursor-pointer hover:ring-4 hover:ring-slate-900/5 transition-all">
                     <img v-if="comment.userAvatar" :src="comment.userAvatar" class="w-full h-full object-cover" />
-                    <div v-else class="w-full h-full flex items-center justify-center bg-slate-100 text-slate-400 font-bold text-xs uppercase">{{ comment.nickname?.charAt(0) || 'A' }}</div>
+                    <div v-else class="w-full h-full flex items-center justify-center text-slate-400 font-bold text-xs uppercase">{{ comment.nickname?.charAt(0) || 'A' }}</div>
                   </div>
                   
-                  <div class="flex-1">
-                    <div class="flex items-center justify-between mb-1">
-                      <div class="flex items-center gap-2">
-                        <span class="text-sm font-bold text-slate-900 cursor-pointer hover:text-brand-primary transition-colors">{{ comment.nickname }}</span>
-                        <span v-if="comment.replyUserNickname" class="text-xs text-slate-400">回复 <span class="text-slate-600 font-bold">@{{ comment.replyUserNickname }}</span></span>
+                  <div class="flex-1 pb-10 border-b border-slate-50 last:border-0 last:pb-0">
+                    <div class="flex items-center justify-between mb-2">
+                      <div class="flex items-center gap-3">
+                        <span class="text-sm font-bold text-slate-900 cursor-pointer hover:text-slate-600 transition-colors">{{ comment.nickname }}</span>
+                        <span v-if="comment.replyUserNickname" class="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-lg font-bold">
+                          回复 <span class="text-slate-900">@{{ comment.replyUserNickname }}</span>
+                        </span>
+                        <span class="text-[10px] font-bold text-slate-300 uppercase tracking-tighter">{{ new Date(comment.createTime).toLocaleDateString() }}</span>
                       </div>
-                      <span class="text-xs text-slate-400">{{ new Date(comment.createTime).toLocaleDateString() }}</span>
                     </div>
-                    <p class="text-sm text-slate-600 leading-relaxed">{{ comment.content }}</p>
+                    <p class="text-sm text-slate-600 leading-relaxed font-medium mb-4">{{ comment.content }}</p>
                     
-                    <div class="flex items-center gap-4 mt-2">
-                      <button class="flex items-center gap-1 text-xs text-slate-400 hover:text-brand-primary transition-colors font-bold">
-                        <ThumbsUp class="w-3 h-3" /> {{ comment.likeCount }}
+                    <div class="flex items-center gap-6">
+                      <button class="flex items-center gap-1.5 text-xs text-slate-400 hover:text-rose-500 transition-colors font-bold">
+                        <ThumbsUp class="w-3.5 h-3.5" /> {{ comment.likeCount }}
                       </button>
-                      <button class="text-xs text-slate-400 hover:text-brand-primary transition-colors font-bold">回复</button>
+                      <button class="text-xs text-slate-400 hover:text-slate-900 transition-colors font-bold">回复</button>
                     </div>
                   </div>
                 </div>
               </UserCardPopover>
             </div>
+            
+            <div v-if="comments.length === 0" class="text-center py-12">
+              <div class="text-slate-300 text-sm font-medium italic">暂无评论，快来抢占沙发吧！</div>
+            </div>
           </div>
         </div>
 
-        <!-- Similar Posts Recommendation -->
-        <div v-if="similarPosts.length > 0" class="mt-16 pt-8 border-t border-slate-100">
-             <h3 class="text-lg font-bold text-slate-900 mb-6 flex items-center gap-2">
-                <div class="w-1 h-5 bg-brand-primary rounded-full"></div>
-                猜你喜欢
-             </h3>
+        <!-- Similar Content Recommendation -->
+        <div v-if="similarPosts.length > 0" class="mt-12">
+             <div class="flex items-center gap-3 mb-6 px-4">
+                <Sparkles class="w-5 h-5 text-slate-900" />
+                <h3 class="text-lg font-bold text-slate-900 tracking-tight">猜你喜欢</h3>
+             </div>
              <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <router-link 
                   v-for="post in similarPosts" 
                   :key="post.id" 
                   :to="`/post/${post.id}`"
-                  class="bg-white p-5 rounded-2xl border border-slate-100 hover:shadow-lg hover:shadow-slate-200/40 transition-all group"
+                  class="bg-white p-6 rounded-[2rem] border border-slate-200 hover:border-slate-400 hover:shadow-xl hover:shadow-slate-200/50 transition-all group relative"
                 >
-                   <h4 class="font-bold text-slate-800 mb-2 truncate group-hover:text-brand-primary transition-colors">{{ post.title }}</h4>
-                   <p class="text-xs text-slate-400 line-clamp-2 mb-3">{{ post.summary || post.content.substring(0, 50) }}...</p>
-                   <div class="flex items-center gap-2 text-[10px] text-slate-400 font-bold">
-                      <span class="bg-slate-50 px-2 py-0.5 rounded">{{ post.categoryName }}</span>
-                      <span>{{ post.viewCount }} 阅读</span>
+                   <div v-if="post.recommendReason" class="absolute -top-2.5 left-6 px-2 py-0.5 bg-slate-900 text-white text-[9px] font-black uppercase tracking-widest rounded shadow-lg">
+                      {{ post.recommendReason }}
+                   </div>
+                   <h4 class="font-bold text-slate-800 text-base mb-3 truncate group-hover:text-slate-900 transition-colors tracking-tight">{{ post.title }}</h4>
+                   <p class="text-xs text-slate-500 line-clamp-2 mb-4 leading-relaxed">{{ post.summary || post.content.substring(0, 50) }}...</p>
+                   <div class="flex items-center justify-between">
+                      <div class="flex items-center gap-2">
+                        <span class="px-2 py-0.5 bg-slate-50 border border-slate-100 text-[9px] font-black text-slate-400 uppercase tracking-widest rounded-lg">
+                          {{ post.categoryName }}
+                        </span>
+                      </div>
+                      <div class="flex items-center gap-1 text-[10px] font-bold text-slate-300 uppercase tracking-tighter">
+                        <Eye class="w-3 h-3" />
+                        <span>{{ post.viewCount }}</span>
+                      </div>
                    </div>
                 </router-link>
              </div>

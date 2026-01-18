@@ -19,6 +19,7 @@ DROP TABLE IF EXISTS `sys_user`;
 CREATE TABLE `sys_user` (
                             `id` varchar(64) NOT NULL COMMENT '主键ID',
                             `username` varchar(50) NOT NULL COMMENT '学号/工号',
+                            `email` varchar(100) DEFAULT NULL COMMENT '邮箱地址',
                             `password` varchar(100) NOT NULL COMMENT '加密密码',
                             `nickname` varchar(50) DEFAULT NULL COMMENT '昵称',
                             `avatar` varchar(255) DEFAULT NULL COMMENT '头像URL',
@@ -31,6 +32,7 @@ CREATE TABLE `sys_user` (
                             `grade` int DEFAULT NULL COMMENT '入学年份 (如: 2023)',
 
                             `status` tinyint DEFAULT 1 COMMENT '状态 1:正常 0:封禁 (风控基础)',
+                            `interest_tags` text COMMENT '兴趣标签',
                             `create_time` datetime DEFAULT CURRENT_TIMESTAMP,
                             `update_time` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
                             `last_grade_upgrade` datetime,

@@ -1,7 +1,11 @@
 package com.campus.trend.campus_pulse.config;
 
+import com.campus.trend.campus_pulse.common.Result;
+import com.campus.trend.campus_pulse.common.ResultCode;
 import com.campus.trend.campus_pulse.filter.JwtAuthenticationFilter;
 import com.campus.trend.campus_pulse.utils.JwtUtil;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -14,7 +18,9 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
@@ -30,10 +36,16 @@ import java.util.List;
 @EnableWebSecurity
 public class SecurityConfig {
 
+    private final ObjectMapper objectMapper;
+
+    public SecurityConfig(ObjectMapper objectMapper) {
+        this.objectMapper = objectMapper;
+    }
+
     @Bean
     public JwtAuthenticationFilter jwtAuthenticationFilter(UserDetailsService uds,
-            JwtUtil jwtUtil,
-            StringRedisTemplate redisTemplate) {
+                                                           JwtUtil jwtUtil,
+                                                           StringRedisTemplate redisTemplate) {
         return new JwtAuthenticationFilter(uds, jwtUtil, redisTemplate);
     }
 
@@ -42,66 +54,75 @@ public class SecurityConfig {
      */
     @Bean
     public PasswordEncoder passwordEncoder() {
-        // BCrypt算法强度默认为10
         return new BCryptPasswordEncoder();
     }
 
     /**
-     * 配置安全过滤链：定义认证、授权、CORS
+     * 配置安全过滤链
      */
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http,
             JwtAuthenticationFilter jwtAuthenticationFilter) throws Exception {
         http
-                // 1. 配置 CORS 策略
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-
-                // 2. 禁用 CSRF ,由于使用token所以不需要 CSRF 保护
                 .csrf(AbstractHttpConfigurer::disable)
-
-                // 3. 配置 Session 管理：设置为无状态 (STATELESS)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-
-                // 4. 配置请求授权规则
                 .authorizeHttpRequests(authorize -> authorize
-                        // 1. 完全公开 (Login, Register, Static)
                         .requestMatchers(SecurityWhitelist.AUTH_WHITELIST).permitAll()
-
-                        // 2. 仅公开 GET (Post Detail, Category, Tag)
-                        .requestMatchers(org.springframework.http.HttpMethod.GET, SecurityWhitelist.PUBLIC_GET_URLS)
-                        .permitAll()
-
-                        // 3. 仅公开 POST (Search Lists)
-                        .requestMatchers(org.springframework.http.HttpMethod.POST, SecurityWhitelist.PUBLIC_POST_URLS)
-                        .permitAll()
-
-                        // 4. 其他所有请求需要认证
+                        .requestMatchers(org.springframework.http.HttpMethod.GET, SecurityWhitelist.PUBLIC_GET_URLS).permitAll()
+                        .requestMatchers(org.springframework.http.HttpMethod.POST, SecurityWhitelist.PUBLIC_POST_URLS).permitAll()
                         .anyRequest().authenticated())
+                .exceptionHandling(exceptions -> exceptions
+                        .authenticationEntryPoint(authenticationEntryPoint())
+                        .accessDeniedHandler(accessDeniedHandler()))
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }
 
     /**
-     * 配置 CORS (跨域资源共享) 策略
+     * 自定义 401 处理器：未认证
+     */
+    @Bean
+    public AuthenticationEntryPoint authenticationEntryPoint() {
+        return (request, response, authException) -> {
+            response.setCharacterEncoding("UTF-8");
+            response.setContentType("application/json");
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            response.getWriter().write(objectMapper.writeValueAsString(
+                    Result.error(ResultCode.TOKEN_INVALID, "身份认证已过期或无效，请重新登录")));
+        };
+    }
+
+    /**
+     * 自定义 403 处理器：无权限
+     */
+    @Bean
+    public AccessDeniedHandler accessDeniedHandler() {
+        return (request, response, accessDeniedException) -> {
+            response.setCharacterEncoding("UTF-8");
+            response.setContentType("application/json");
+            response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+            response.getWriter().write(objectMapper.writeValueAsString(
+                    Result.error(ResultCode.NO_PERMISSION, "您没有执行该操作的权限")));
+        };
+    }
+
+    /**
+     * 配置 CORS 策略
      */
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        // 允许所有来源
-        configuration.setAllowedOrigins(List.of("*"));
-        // 允许所有请求方法 (GET, POST, PUT, DELETE)，最重要的需要允许 OPTIONS
+        // 生产环境下建议配置具体的域名，例如 "https://campus-pulse.edu"
+        configuration.setAllowedOriginPatterns(List.of("*"));
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
-        // 允许所有请求头
         configuration.setAllowedHeaders(List.of("*"));
-        // 是否允许发送 Cookie 或 HTTP 认证信息
-        configuration.setAllowCredentials(false);
+        configuration.setAllowCredentials(true);
+        configuration.setExposedHeaders(List.of("Authorization"));
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-
-        // 对所有路径生效
         source.registerCorsConfiguration("/**", configuration);
-
         return source;
     }
 

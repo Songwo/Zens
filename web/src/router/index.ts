@@ -47,6 +47,26 @@ const router = createRouter({
             path: '/my/collections',
             name: 'my-collections',
             component: () => import('@/views/MyCollectionsView.vue'),
+        },
+        {
+            path: '/student/profile',
+            name: 'student-profile',
+            component: () => import('@/views/StudentProfileView.vue'),
+        },
+        {
+            path: '/academic',
+            name: 'academic',
+            component: () => import('@/views/AcademicView.vue'),
+        },
+        {
+            path: '/course-selection',
+            name: 'course-selection',
+            component: () => import('@/views/CourseSelectionView.vue'),
+        },
+        {
+            path: '/leave',
+            name: 'leave',
+            component: () => import('@/views/LeaveManagementView.vue'),
         }
     ],
 })

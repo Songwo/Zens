@@ -25,80 +25,78 @@ onMounted(() => {
 <template>
   <aside class="w-80 h-[calc(100vh-64px)] overflow-y-auto py-6 flex flex-col gap-6 flex-shrink-0 px-4">
     <!-- Trend Prediction (BETA) -->
-    <div class="bg-gradient-to-br from-indigo-50 to-blue-50 border border-blue-100 rounded-2xl p-4 shadow-sm relative overflow-hidden group">
-      <div class="absolute -right-2 -top-2 w-16 h-16 bg-blue-500/10 rounded-full blur-xl group-hover:bg-blue-500/20 transition-all"></div>
-      
+    <div class="bg-white border border-slate-200 rounded-xl p-5 shadow-sm relative overflow-hidden group">
       <div class="flex items-center gap-2 mb-3">
-        <div class="p-1.5 bg-blue-600 rounded-lg text-white">
-          <Sparkles class="w-4 h-4" />
+        <div class="p-1.5 bg-slate-900 rounded text-white shadow-sm">
+          <Sparkles class="w-3.5 h-3.5" />
         </div>
-        <span class="text-xs font-bold text-blue-900 uppercase tracking-wider">趋势预测 (BETA)</span>
+        <span class="text-[10px] font-black text-slate-900 uppercase tracking-widest">趋势预测</span>
+        <span class="px-1.5 py-0.5 bg-slate-100 text-[9px] text-slate-500 rounded font-bold uppercase">Beta</span>
       </div>
       
-      <p class="text-[11px] text-blue-700 leading-relaxed mb-4">
-        AI 基于深度学习模型，实时预测校园内即将爆发的热点话题与讨论趋势。
+      <p class="text-[11px] text-slate-500 leading-relaxed mb-4">
+        基于深度学习模型，实时发现并预测校园内即将爆发的热点话题与讨论。
       </p>
       
-      <router-link to="/trends" class="flex items-center justify-between group/btn py-2 px-3 bg-white border border-blue-200 rounded-xl text-xs font-bold text-blue-600 hover:border-blue-400 transition-all shadow-sm">
+      <router-link to="/trends" class="flex items-center justify-between group/btn py-2.5 px-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 hover:bg-white hover:border-slate-400 transition-all">
         前往分析中心
         <ArrowUpRight class="w-3.5 h-3.5 group-hover/btn:translate-x-0.5 group-hover/btn:-translate-y-0.5 transition-transform" />
       </router-link>
     </div>
 
     <!-- Hot Topics List -->
-    <div class="bg-white border border-slate-200/60 rounded-2xl p-5 shadow-sm">
-      <div class="flex items-center gap-2 mb-4">
-        <TrendingUp class="w-4 h-4 text-orange-500" />
-        <h3 class="text-sm font-bold text-slate-900 tracking-tight">24小时热门排行</h3>
+    <div class="bg-white border border-slate-200 rounded-xl p-0 shadow-sm overflow-hidden">
+      <div class="px-5 py-4 border-b border-slate-50 flex items-center gap-2.5">
+        <TrendingUp class="w-4 h-4 text-slate-900" />
+        <h3 class="text-xs font-black text-slate-900 uppercase tracking-widest">24小时热门排行</h3>
       </div>
       
-      <div class="flex flex-col">
+      <div class="flex flex-col divide-y divide-slate-50">
         <router-link 
           v-for="(topic, index) in hotTopics" 
           :key="topic.postId"
           :to="`/post/${topic.postId}`"
-          class="flex items-center gap-3 py-3 border-b last:border-0 border-slate-50 group cursor-pointer"
+          class="flex items-center gap-3.5 px-5 py-3.5 hover:bg-slate-50 transition-colors group"
         >
-          <span class="text-lg font-black italic opacity-20 group-hover:opacity-40 transition-opacity" :class="index < 3 ? 'text-blue-600' : 'text-slate-400'">
-            0{{ index + 1 }}
+          <span class="text-xs font-black font-mono w-5 text-center" :class="index < 3 ? 'text-slate-900' : 'text-slate-300'">
+            {{ (index + 1).toString().padStart(2, '0') }}
           </span>
           <div class="flex-1 min-w-0">
-            <h4 class="text-xs font-semibold text-slate-800 truncate group-hover:text-blue-600 transition-colors">
+            <h4 class="text-[12px] font-bold text-slate-700 truncate group-hover:text-slate-900 transition-colors mb-0.5">
               {{ topic.title }}
             </h4>
-            <div class="flex items-center gap-2 mt-1">
-              <span class="text-[10px] text-slate-400 font-medium">{{ topic.heatScore?.toFixed(0) || 0 }} 热度</span>
-              <span class="text-[10px] text-slate-400">{{ topic.viewCount }} 阅读</span>
+            <div class="flex items-center gap-2">
+              <span class="text-[9px] text-slate-400 font-bold uppercase tracking-tighter">{{ topic.viewCount }} 次阅读</span>
             </div>
           </div>
         </router-link>
         
-        <div v-if="hotTopics.length === 0" class="text-center py-6 text-slate-400 text-xs">
+        <div v-if="hotTopics.length === 0" class="text-center py-8 text-slate-400 text-[11px] font-medium">
           暂无热门内容
         </div>
       </div>
     </div>
 
     <!-- Stats Card -->
-    <div class="bg-slate-900 rounded-2xl p-5 text-white shadow-xl shadow-slate-900/10">
-      <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">全站实时概览</h3>
-      <div class="grid grid-cols-2 gap-4">
+    <div class="bg-slate-900 rounded-2xl p-6 text-white shadow-xl shadow-slate-200">
+      <h3 class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-5">全站实时概览</h3>
+      <div class="grid grid-cols-2 gap-6">
         <div>
-          <span class="block text-xl font-bold italic">1.2k</span>
-          <span class="text-[10px] text-slate-500 uppercase font-semibold">今日动态</span>
+          <span class="block text-2xl font-bold tracking-tighter">1,248</span>
+          <span class="text-[9px] text-slate-500 uppercase font-black tracking-widest">今日动态</span>
         </div>
         <div>
-          <span class="block text-xl font-bold italic">45k</span>
-          <span class="text-[10px] text-slate-500 uppercase font-semibold">互动总量</span>
+          <span class="block text-2xl font-bold tracking-tighter">45.2k</span>
+          <span class="text-[9px] text-slate-500 uppercase font-black tracking-widest">互动总量</span>
         </div>
       </div>
-      <div class="mt-4 pt-4 border-t border-white/10">
-        <div class="flex items-center justify-between text-[10px] text-slate-400 mb-1.5">
-          <span>系统状态: 极度活跃</span>
-          <span>98%</span>
+      <div class="mt-6 pt-5 border-t border-white/5">
+        <div class="flex items-center justify-between text-[9px] text-slate-400 uppercase font-black tracking-widest mb-2">
+          <span>系统活跃度</span>
+          <span class="text-white">98%</span>
         </div>
         <div class="w-full h-1 bg-white/5 rounded-full overflow-hidden">
-          <div class="w-[98%] h-full bg-blue-500 rounded-full shadow-[0_0_8px_rgba(59,130,246,0.5)]"></div>
+          <div class="w-[98%] h-full bg-white rounded-full"></div>
         </div>
       </div>
     </div>
