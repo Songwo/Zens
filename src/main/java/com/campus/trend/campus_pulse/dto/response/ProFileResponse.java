@@ -18,7 +18,7 @@ public class ProFileResponse {
     private Integer gender;
     private Integer role;
     private Integer status;
-    private String interest_tags;
+    private String interestTags;
     private LocalDateTime CreatTime;
     private LocalDateTime UpdateTime;
 

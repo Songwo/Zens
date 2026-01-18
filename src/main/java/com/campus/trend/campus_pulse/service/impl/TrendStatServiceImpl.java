@@ -130,39 +130,26 @@ public class TrendStatServiceImpl extends ServiceImpl<SysTrendStatMapper, SysTre
     @Override
     public Map<String, Object> getCategoryPie() {
         SysTrendStat stat = getLatestStatByType(TYPE_CATEGORY_PIE);
-        Map<String, Object> result = parseJsonToMap(stat);
-
+        
         // 实时生成
-        if (result.isEmpty()) {
-            result = new HashMap<>(); // Fix: Ensure map is mutable
-            // 统计分类帖子数量
-            List<Map<String, Object>> categoryStats = sysPostMapper.selectMaps(
-                    new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<com.campus.trend.campus_pulse.entity.SysPost>()
-                            .select("category_id", "count(*) as count")
-                            .groupBy("category_id"));
+        Map<String, Object> result = new HashMap<>();
+        // 统计分类帖子数量
+        List<Map<String, Object>> categoryStats = sysPostMapper.selectMaps(
+                new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<com.campus.trend.campus_pulse.entity.SysPost>()
+                        .select("category_id", "count(*) as count")
+                        .groupBy("category_id"));
 
-            List<Map<String, Object>> pieData = new ArrayList<>();
-            for (Map<String, Object> item : categoryStats) {
-                Map<String, Object> pieItem = new HashMap<>();
-                String catId = (String) item.get("category_id");
-                String catName = "未分类";
-                if (catId != null) {
-                    com.campus.trend.campus_pulse.entity.SysCategory category = sysCategoryMapper.selectById(catId);
-                    if (category != null) {
-                        catName = category.getName();
-                    }
+        for (Map<String, Object> item : categoryStats) {
+            String catId = (String) item.get("category_id");
+            String catName = "未分类";
+            if (catId != null) {
+                com.campus.trend.campus_pulse.entity.SysCategory category = sysCategoryMapper.selectById(catId);
+                if (category != null) {
+                    catName = category.getName();
                 }
-
-                pieItem.put("name", catName);
-                pieItem.put("count", item.get("count")); // Frontend expects "count"
-                pieData.add(pieItem);
             }
-            result.put("categories", pieData); // Frontend expects "categories"
-            // Calculate total
-            long total = pieData.stream().mapToLong(m -> ((Number) m.get("count")).longValue()).sum();
-            result.put("total", total > 0 ? total : 1);
+            result.put(catName, item.get("count"));
         }
-
         return result;
     }
 
@@ -285,7 +272,7 @@ public class TrendStatServiceImpl extends ServiceImpl<SysTrendStatMapper, SysTre
             // 3. 模拟增长率和趋势 (实际可根据历史同比/环比计算)
             // 这里我们模拟一个 15% - 150% 的增长率
             double growth = 15.0 + (new Random().nextDouble() * 135.0);
-            item.put("growth", Math.round(growth * 10) / 10.0);
+            item.put("growthRate", Math.round(growth * 10) / 10.0);
 
             // 状态判断
             String status = growth > 80 ? "rising" : (growth > 30 ? "stable" : "falling");

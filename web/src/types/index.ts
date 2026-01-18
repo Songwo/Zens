@@ -112,6 +112,10 @@ export interface CreateCommentRequest {
     isAnonymous?: number
 }
 
+export interface RecommendPost extends Post {
+    recommendReason: string
+}
+
 export interface PostSearchRequest {
     categoryID?: string
     userID?: string

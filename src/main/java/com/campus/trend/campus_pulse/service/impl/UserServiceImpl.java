@@ -59,6 +59,7 @@ public class UserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impleme
         proFileResponse.setStatus(sysUser.getStatus());
         proFileResponse.setCreatTime(sysUser.getCreateTime());
         proFileResponse.setUpdateTime(sysUser.getUpdateTime());
+        proFileResponse.setInterestTags(sysUser.getInterestTags());
 
         autoUpgradeGrade(sysUser);
 
@@ -143,6 +144,7 @@ public class UserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impleme
         sysUser.setAvatar(updateUserDetailRequest.getAvatar());
         sysUser.setGender(updateUserDetailRequest.getGender());
         sysUser.setSchool(updateUserDetailRequest.getSchool());
+        sysUser.setInterestTags(updateUserDetailRequest.getInterestTags());
 
         sysUser.setUpdateTime(LocalDateTime.now());
 

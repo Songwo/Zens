@@ -2,111 +2,45 @@ package com.campus.trend.campus_pulse.controller;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.campus.trend.campus_pulse.common.Result;
-import com.campus.trend.campus_pulse.entity.SysPost;
-import com.campus.trend.campus_pulse.entity.SysTag;
-import com.campus.trend.campus_pulse.security.AuthSysUser;
-import com.campus.trend.campus_pulse.service.CollaborativeFilteringService;
+import com.campus.trend.campus_pulse.dto.response.RecommendPostResponse;
 import com.campus.trend.campus_pulse.service.PostRecommendService;
-import com.campus.trend.campus_pulse.utils.GetUserDetail;
-import lombok.extern.slf4j.Slf4j;
+import com.campus.trend.campus_pulse.utils.SecurityUtils;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
-/**
- * 推荐控制器
- * 提供基于用户兴趣的帖子和标签推荐，以及协同过滤推荐
- */
-@Slf4j
+@Tag(name = "推荐管理", description = "内容推荐相关接口")
 @RestController
 @RequestMapping("/recommend")
 public class RecommendController {
 
     private final PostRecommendService postRecommendService;
-    private final CollaborativeFilteringService collaborativeFilteringService;
 
     @Autowired
-    public RecommendController(PostRecommendService postRecommendService,
-            CollaborativeFilteringService collaborativeFilteringService) {
+    public RecommendController(PostRecommendService postRecommendService) {
         this.postRecommendService = postRecommendService;
-        this.collaborativeFilteringService = collaborativeFilteringService;
     }
 
-    /**
-     * 获取推荐帖子（基于用户关注的标签）
-     * 支持匿名用户，返回热门帖子
-     *
-     * @param page     页码（默认1）
-     * @param pageSize 每页大小（默认20）
-     * @return 推荐的帖子列表
-     */
-    @GetMapping("/posts")
-    public Result<?> getRecommendedPosts(
-            @RequestParam(value = "page", required = false, defaultValue = "1") int page,
-            @RequestParam(value = "pageSize", required = false, defaultValue = "20") int pageSize) {
-        try {
-            // 尝试获取当前用户
-            AuthSysUser authSysUser = GetUserDetail.getAuthenticatedUser();
-            if (authSysUser != null && authSysUser.getSysUser() != null) {
-                String userId = authSysUser.getSysUser().getId();
-                IPage<SysPost> recommendedPosts = postRecommendService.recommendPosts(userId, page, pageSize);
-                return Result.success(recommendedPosts);
-            }
-        } catch (Exception e) {
-            // 未登录用户，继续执行下面的逻辑
-            log.debug("未登录用户访问推荐帖子，返回热门帖子");
-        }
-
-        // 匿名用户：返回热门帖子
-        IPage<SysPost> hotPosts = postRecommendService.recommendPosts(null, page, pageSize);
-        return Result.success(hotPosts);
+    @Operation(summary = "获取混合推荐列表", description = "基于用户兴趣、行为、协同过滤及热门程度的综合推荐")
+    @GetMapping("/list")
+    public Result<IPage<RecommendPostResponse>> getRecommendList(
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "10") int pageSize) {
+        
+        String userId = SecurityUtils.getCurrentUserId();
+        IPage<RecommendPostResponse> recommendations = postRecommendService.getHybridRecommendations(userId, page, pageSize);
+        return Result.success(recommendations);
     }
 
-    /**
-     * 获取推荐标签
-     * 支持匿名用户，返回热门标签
-     *
-     * @param limit 返回数量（默认10）
-     * @return 推荐的标签列表
-     */
-    @GetMapping("/tags")
-    public Result<?> getRecommendedTags(
-            @RequestParam(value = "limit", required = false, defaultValue = "10") int limit) {
-        try {
-            // 尝试获取当前用户
-            AuthSysUser authSysUser = GetUserDetail.getAuthenticatedUser();
-            if (authSysUser != null && authSysUser.getSysUser() != null) {
-                String userId = authSysUser.getSysUser().getId();
-                List<SysTag> recommendedTags = postRecommendService.recommendTags(userId, limit);
-                return Result.success(recommendedTags);
-            }
-        } catch (Exception e) {
-            // 未登录用户，继续执行下面的逻辑
-            log.debug("未登录用户访问推荐标签，返回热门标签");
-        }
-
-        // 匿名用户：返回热门标签
-        List<SysTag> recommendedTags = postRecommendService.recommendTags(null, limit);
-        return Result.success(recommendedTags);
-    }
-
-    /**
-     * 获取相似帖子推荐（基于协同过滤）
-     * "看了这篇帖子的人还看了..."
-     *
-     * @param postId 当前帖子ID
-     * @param limit  返回数量（默认6）
-     * @return 相似帖子列表
-     */
-    @GetMapping("/similar/{postId}")
-    public Result<?> getSimilarPosts(
+    @Operation(summary = "获取帖子详情页底部推荐", description = "同专业发布、相同分类标签、热度兜底")
+    @GetMapping("/post-detail/{postId}")
+    public Result<List<RecommendPostResponse>> getPostDetailRecommend(
             @PathVariable String postId,
-            @RequestParam(value = "limit", required = false, defaultValue = "6") int limit) {
-        log.info("获取帖子 [{}] 的相似推荐，数量: {}", postId, limit);
-
-        List<SysPost> similarPosts = collaborativeFilteringService.recommendByItemBased(postId, limit);
-
-        return Result.success(similarPosts);
+            @RequestParam(defaultValue = "6") int limit) {
+        String userId = SecurityUtils.getCurrentUserId();
+        return Result.success(postRecommendService.getPostDetailRecommendations(postId, userId, limit));
     }
 }

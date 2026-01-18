@@ -4,18 +4,18 @@ import { useRoute, useRouter } from 'vue-router'
 import DefaultLayout from '@/layouts/DefaultLayout.vue'
 import PostCard from '@/components/PostCard.vue'
 import { postApi } from '@/api/post'
-import type { Post } from '@/types'
+import { recommendApi } from '@/api/recommend'
+import type { Post, RecommendPost } from '@/types'
 import { toast } from 'vue-sonner'
-import { Loader2 } from 'lucide-vue-next'
+import { Loader2, Sparkles, Flame, Clock, LayoutGrid } from 'lucide-vue-next'
 
 const route = useRoute()
 const router = useRouter()
-const posts = ref<Post[]>([])
+const posts = ref<Post[] | RecommendPost[]>([])
 const loading = ref(false)
 const page = ref(1)
 const hasMore = ref(true)
-const orderBy = ref<'new' | 'hot'>('new')
-const currentCategory = ref<string | undefined>(undefined)
+const feedMode = ref<'recommend' | 'new' | 'hot'>('recommend')
 
 const fetchPosts = async (reset = false) => {
   if (reset) {
@@ -32,15 +32,25 @@ const fetchPosts = async (reset = false) => {
     const tag = route.query.tag as string
     const search = route.query.search as string
 
-    const res = await postApi.searchList({
-      page: page.value,
-      pageSize: 10,
-      orderBy: orderBy.value,
-      categoryID: categoryID || undefined,
-      tag: tag || undefined,
-      keyword: search || undefined,
-      status: 1 // Published posts only
-    })
+    // If there's any filter (category, tag, search), force mode to 'new' or 'hot'
+    if (categoryID || tag || search) {
+      if (feedMode.value === 'recommend') feedMode.value = 'new'
+    }
+
+    let res;
+    if (feedMode.value === 'recommend') {
+      res = await recommendApi.getHybridList(page.value, 10)
+    } else {
+      res = await postApi.searchList({
+        page: page.value,
+        pageSize: 10,
+        orderBy: feedMode.value === 'hot' ? 'hot' : 'new',
+        categoryID: categoryID || undefined,
+        tag: tag || undefined,
+        keyword: search || undefined,
+        status: 1
+      })
+    }
     
     if (res.data.records.length > 0) {
       posts.value.push(...res.data.records)
@@ -59,9 +69,9 @@ const fetchPosts = async (reset = false) => {
   }
 }
 
-const toggleOrder = (newOrder: 'new' | 'hot') => {
-  if (orderBy.value === newOrder) return
-  orderBy.value = newOrder
+const changeMode = (newMode: 'recommend' | 'new' | 'hot') => {
+  if (feedMode.value === newMode) return
+  feedMode.value = newMode
   fetchPosts(true)
 }
 
@@ -82,33 +92,42 @@ onMounted(() => {
 <template>
   <DefaultLayout wide isFluid>
     <div class="py-6 font-sans">
-      <div class="flex items-center justify-between mb-8 border-b border-slate-200 pb-6">
+      <div class="flex flex-col md:flex-row md:items-center justify-between mb-10 gap-6 border-b border-slate-100 pb-8">
         <div>
-          <h1 class="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
-            <Sparkles class="w-6 h-6 text-brand-primary" />
-            探索发现
+          <h1 class="text-3xl font-black text-slate-900 tracking-tighter flex items-center gap-3">
+            <LayoutGrid class="w-8 h-8 text-slate-900" />
+            探索校园
           </h1>
-          <p class="text-sm text-slate-500 mt-1 font-medium">捕捉校园每一个精彩瞬间 · 全校动态实时更新</p>
+          <p class="text-sm text-slate-500 mt-1.5 font-medium">发现你感兴趣的内容与同学</p>
         </div>
         
-        <div class="flex items-center gap-2">
+        <div class="flex items-center bg-slate-100 p-1.5 rounded-2xl border border-slate-200/50">
           <button 
-            @click="toggleOrder('new')"
+            @click="changeMode('recommend')"
             :class="[
-              'px-3 py-1.5 rounded text-xs font-bold transition-all',
-              orderBy === 'new' ? 'bg-slate-900 text-white' : 'bg-white border border-slate-200 text-slate-500 hover:border-slate-400'
+              'flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black transition-all tracking-widest uppercase',
+              feedMode === 'recommend' ? 'bg-white text-slate-900 shadow-xl shadow-slate-200' : 'text-slate-400 hover:text-slate-600'
             ]"
           >
-            最新发布
+            <Sparkles class="w-4 h-4" /> 为你推荐
           </button>
           <button 
-            @click="toggleOrder('hot')"
+            @click="changeMode('new')"
             :class="[
-              'px-3 py-1.5 rounded text-xs font-bold transition-all',
-              orderBy === 'hot' ? 'bg-slate-900 text-white' : 'bg-white border border-slate-200 text-slate-500 hover:border-slate-400'
+              'flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black transition-all tracking-widest uppercase',
+              feedMode === 'new' ? 'bg-white text-slate-900 shadow-xl shadow-slate-200' : 'text-slate-400 hover:text-slate-600'
             ]"
           >
-            热度优先
+            <Clock class="w-4 h-4" /> 最新发布
+          </button>
+          <button 
+            @click="changeMode('hot')"
+            :class="[
+              'flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black transition-all tracking-widest uppercase',
+              feedMode === 'hot' ? 'bg-white text-slate-900 shadow-xl shadow-slate-200' : 'text-slate-400 hover:text-slate-600'
+            ]"
+          >
+            <Flame class="w-4 h-4" /> 热度优先
           </button>
         </div>
       </div>

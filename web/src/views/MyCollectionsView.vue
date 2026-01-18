@@ -35,47 +35,47 @@ onMounted(() => {
 </script>
 
 <template>
-  <DefaultLayout :showLeftSidebar="false" :showRightSidebar="false" wide>
-    <div class="min-h-screen bg-slate-50/50 py-10 px-6">
-      <div class="max-w-2xl mx-auto">
+  <DefaultLayout wide isFluid>
+    <div class="py-6 font-sans">
+      <div class="max-w-4xl">
         <!-- Header -->
-        <div class="flex items-center justify-between mb-8">
-            <div class="flex items-center gap-4">
+        <div class="flex items-center justify-between mb-10 pb-6 border-b border-slate-200">
+            <div class="flex items-center gap-5">
                 <button 
                   @click="router.back()"
-                  class="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-slate-500 shadow-sm border border-slate-100 hover:bg-slate-50 transition-colors"
+                  class="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-slate-500 shadow-sm border border-slate-100 hover:bg-slate-900 hover:text-white transition-all active:scale-95"
                 >
                     <ArrowLeft class="w-5 h-5" />
                 </button>
                 <div>
-                    <h1 class="text-2xl font-black text-slate-900">我的收藏</h1>
-                    <p class="text-xs text-slate-400 font-bold mt-1">珍藏了 {{ posts.length }} 份宝贵资料</p>
+                    <h1 class="text-2xl font-black text-slate-900 tracking-tight">我的收藏</h1>
+                    <p class="text-[11px] text-slate-400 font-black uppercase tracking-widest mt-1">珍藏了 {{ posts.length }} 份宝贵内容</p>
                 </div>
             </div>
-            <div class="p-3 bg-yellow-50 text-yellow-500 rounded-2xl shadow-sm">
+            <div class="w-12 h-12 bg-amber-50 text-amber-500 rounded-2xl flex items-center justify-center shadow-sm border border-amber-100">
                 <Star class="w-6 h-6 fill-current" />
             </div>
         </div>
 
         <!-- Content -->
-        <div v-if="loading" class="flex flex-col items-center justify-center py-20">
+        <div v-if="loading" class="flex flex-col items-center justify-center py-32 bg-white rounded-[2rem] border border-slate-100 shadow-xl shadow-slate-200/20">
             <Loader2 class="w-10 h-10 text-brand-primary animate-spin mb-4" />
-            <p class="text-sm text-slate-400 font-bold">正在整理你的收藏宝库...</p>
+            <p class="text-xs font-black text-slate-300 uppercase tracking-widest">正在开启收藏宝库...</p>
         </div>
         
         <div v-else-if="posts.length > 0" class="space-y-6">
-            <PostCard v-for="post in posts" :key="post.id" :post="post" class="shadow-xl shadow-slate-200/40" />
+            <PostCard v-for="post in posts" :key="post.id" :post="post" />
         </div>
         
-        <div v-else class="text-center py-32 bg-white rounded-[2.5rem] border border-slate-100 shadow-xl shadow-slate-200/30">
+        <div v-else class="text-center py-32 bg-white rounded-[2rem] border border-slate-100 shadow-xl shadow-slate-200/30">
             <div class="w-24 h-24 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-6 text-slate-200">
                 <Star class="w-12 h-12" />
             </div>
-            <h3 class="text-lg font-black text-slate-800">宝库还是空的</h3>
-            <p class="text-sm text-slate-400 font-bold mt-2">遇到有用的内容别忘了点击收藏噢～</p>
+            <h3 class="text-xl font-black text-slate-800 tracking-tight">宝库目前空空如也</h3>
+            <p class="text-sm text-slate-400 font-bold mt-2">遇到有用的内容别忘了点击收藏噢</p>
             <button 
               @click="router.push('/')"
-              class="mt-8 px-8 py-3 bg-brand-primary text-white font-black rounded-xl shadow-lg shadow-blue-500/20 hover:bg-blue-600 transition-all active:scale-95"
+              class="mt-10 px-10 py-3.5 bg-slate-900 text-white font-black rounded-2xl shadow-xl shadow-slate-900/20 hover:bg-slate-800 transition-all active:scale-95 text-xs uppercase tracking-widest"
             >
               寻找宝藏
             </button>

@@ -81,104 +81,114 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="min-h-screen bg-slate-50 flex items-center justify-center p-6 relative overflow-hidden">
-    <!-- Abstract Background Orbs -->
-    <div class="absolute top-1/4 -left-20 w-80 h-80 bg-blue-400/20 rounded-full blur-3xl animate-pulse"></div>
-    <div class="absolute bottom-1/4 -right-20 w-80 h-80 bg-indigo-400/20 rounded-full blur-3xl animate-pulse" style="animation-delay: 2s"></div>
+  <div class="min-h-screen bg-[#F8FAFC] flex items-center justify-center p-6 relative overflow-hidden">
+    <!-- Subtle Grid Pattern -->
+    <div class="absolute inset-0 opacity-[0.03] pointer-events-none" 
+         style="background-image: radial-gradient(#000 1px, transparent 1px); background-size: 24px 24px;"></div>
 
     <div class="w-full max-w-md relative z-10">
-      <div class="glass border border-white/40 rounded-[2.5rem] p-10 shadow-2xl shadow-blue-500/10 backdrop-blur-2xl bg-white/40">
+      <div class="bg-white border border-slate-200 rounded-[2rem] p-10 shadow-xl shadow-slate-200/50">
         <!-- Logo -->
         <div class="flex flex-col items-center gap-4 mb-10">
-          <div class="w-16 h-16 bg-brand-primary rounded-2xl flex items-center justify-center text-white shadow-xl shadow-blue-500/30 transform -rotate-6">
+          <div class="w-16 h-16 bg-slate-900 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-slate-200">
             <LayoutGrid class="w-10 h-10" />
           </div>
           <div class="text-center">
-            <h1 class="text-2xl font-black text-slate-900 tracking-tighter">欢迎回来</h1>
-            <p class="text-sm text-slate-500 font-medium">登录 CampusPulse 开启智慧校园生活</p>
+            <h1 class="text-2xl font-bold text-slate-900 tracking-tight">欢迎回来</h1>
+            <p class="text-sm text-slate-500 font-medium mt-1">登录 CampusPulse 开启校园新体验</p>
           </div>
         </div>
 
         <form @submit.prevent="handleLogin" class="space-y-6">
           <div class="space-y-4">
             <!-- Username -->
-            <div class="relative group">
-              <User class="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-brand-primary transition-colors" />
-              <input 
-                v-model="username"
-                type="text" 
-                placeholder="用户名 / 学号"
-                class="w-full bg-slate-50/50 border border-slate-200 rounded-2xl py-4 pl-12 pr-4 text-sm focus:ring-4 focus:ring-brand-primary/10 focus:border-brand-primary transition-all outline-none"
-                required
-              />
+            <div class="space-y-1.5">
+              <label class="text-xs font-bold text-slate-700 ml-1">用户名 / 学号</label>
+              <div class="relative group">
+                <User class="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-slate-900 transition-colors" />
+                <input 
+                  v-model="username"
+                  type="text" 
+                  placeholder="请输入您的学号"
+                  class="w-full bg-slate-50 border border-slate-200 rounded-xl py-3.5 pl-12 pr-4 text-sm focus:ring-4 focus:ring-slate-900/5 focus:border-slate-900 focus:bg-white transition-all outline-none"
+                  required
+                />
+              </div>
             </div>
 
             <!-- Password -->
-            <div class="relative group">
-              <Lock class="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-brand-primary transition-colors" />
-              <input 
-                v-model="password"
-                type="password" 
-                placeholder="登录密码"
-                class="w-full bg-slate-50/50 border border-slate-200 rounded-2xl py-4 pl-12 pr-4 text-sm focus:ring-4 focus:ring-brand-primary/10 focus:border-brand-primary transition-all outline-none"
-                required
-              />
+            <div class="space-y-1.5">
+              <label class="text-xs font-bold text-slate-700 ml-1">登录密码</label>
+              <div class="relative group">
+                <Lock class="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-slate-900 transition-colors" />
+                <input 
+                  v-model="password"
+                  type="password" 
+                  placeholder="请输入密码"
+                  class="w-full bg-slate-50 border border-slate-200 rounded-xl py-3.5 pl-12 pr-4 text-sm focus:ring-4 focus:ring-slate-900/5 focus:border-slate-900 focus:bg-white transition-all outline-none"
+                  required
+                />
+              </div>
             </div>
 
             <!-- Captcha -->
-            <div class="flex gap-3">
-              <input 
-                v-model="verifyCode"
-                type="text" 
-                placeholder="验证码"
-                class="flex-1 bg-slate-50/50 border border-slate-200 rounded-2xl py-4 px-4 text-center text-sm focus:ring-4 focus:ring-brand-primary/10 focus:border-brand-primary transition-all outline-none"
-                required
-              />
-              <div 
-                class="w-32 h-[54px] bg-slate-100 rounded-2xl overflow-hidden cursor-pointer relative group border border-slate-200"
-                @click="refreshCaptcha"
-              >
-                <img v-if="captchaUrl" :src="captchaUrl" class="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" />
-                <div v-else class="w-full h-full flex items-center justify-center text-slate-400">
-                  <RefreshCw class="w-5 h-5 animate-spin" />
+            <div class="space-y-1.5">
+              <label class="text-xs font-bold text-slate-700 ml-1">图形验证码</label>
+              <div class="flex gap-3">
+                <input 
+                  v-model="verifyCode"
+                  type="text" 
+                  placeholder="结果"
+                  class="w-24 bg-slate-50 border border-slate-200 rounded-xl py-3.5 px-4 text-center text-sm font-bold focus:ring-4 focus:ring-slate-900/5 focus:border-slate-900 focus:bg-white transition-all outline-none"
+                  required
+                />
+                <div 
+                  class="flex-1 h-[50px] bg-slate-50 rounded-xl overflow-hidden cursor-pointer relative group border border-slate-200"
+                  @click="refreshCaptcha"
+                >
+                  <img v-if="captchaUrl" :src="captchaUrl" class="w-full h-full object-contain p-1" />
+                  <div v-else class="w-full h-full flex items-center justify-center text-slate-400">
+                    <RefreshCw class="w-5 h-5 animate-spin" />
+                  </div>
+                  <div class="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
+                    <RefreshCw class="w-4 h-4 text-slate-600" />
+                  </div>
                 </div>
               </div>
             </div>
           </div>
 
-          <div class="flex items-center justify-between px-2">
+          <div class="flex items-center justify-between px-1">
             <label class="flex items-center gap-2 cursor-pointer group">
-              <input type="checkbox" class="w-4 h-4 rounded border-slate-300 text-brand-primary focus:ring-brand-primary/20 transition-all" />
-              <span class="text-xs text-slate-500 font-medium group-hover:text-slate-700">记住我</span>
+              <input type="checkbox" class="w-4 h-4 rounded border-slate-300 text-slate-900 focus:ring-slate-900/20 transition-all" />
+              <span class="text-xs text-slate-500 font-medium group-hover:text-slate-700 transition-colors">记住我</span>
             </label>
-            <button class="text-xs font-bold text-brand-primary hover:underline">忘记密码?</button>
+            <button type="button" class="text-xs font-bold text-slate-900 hover:text-slate-600 transition-colors">忘记密码?</button>
           </div>
 
           <button 
             type="submit"
             :disabled="loading"
-            class="w-full bg-brand-primary text-white font-bold py-4 rounded-2xl shadow-xl shadow-blue-500/20 hover:bg-blue-700 hover:shadow-blue-500/30 transition-all active:scale-[0.98] flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
+            class="w-full bg-slate-900 text-white font-bold py-4 rounded-xl shadow-lg shadow-slate-200 hover:bg-slate-800 transition-all active:scale-[0.98] flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
           >
-            <span v-if="loading">登录中...</span>
-            <span v-else class="flex items-center gap-2">立即登录 <ArrowRight class="w-5 h-5" /></span>
+            <span v-if="loading">正在验证身份...</span>
+            <span v-else class="flex items-center gap-2">登录账户 <ArrowRight class="w-5 h-5" /></span>
           </button>
         </form>
 
         <!-- Divider -->
         <div class="relative my-10 text-center">
-          <div class="absolute inset-0 flex items-center"><div class="w-full border-t border-slate-200"></div></div>
-          <span class="relative px-4 bg-white/0 text-[10px] uppercase font-black text-slate-400 tracking-widest">其他登录方式</span>
+          <div class="absolute inset-0 flex items-center"><div class="w-full border-t border-slate-100"></div></div>
+          <span class="relative px-4 bg-white text-[10px] uppercase font-black text-slate-400 tracking-widest">其他通行方式</span>
         </div>
 
         <!-- Social Login -->
-        <div class="grid grid-cols-1 gap-3">
-          <button class="w-full flex items-center justify-center gap-3 py-3 bg-white border border-slate-200 rounded-2xl text-xs font-bold text-slate-700 hover:bg-slate-50 transition-all">
-            <Github class="w-4 h-4" /> 使用 GitHub 账号登录
-          </button>
-        </div>
+        <button class="w-full flex items-center justify-center gap-3 py-3.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all shadow-sm">
+          <Github class="w-4 h-4" /> 通过 GitHub 继续
+        </button>
 
         <p class="mt-8 text-center text-xs text-slate-500 font-medium">
-          还没有账号? <router-link to="/auth/register" class="text-brand-primary font-black hover:underline">立即注册</router-link>
+          还没有加入我们? <router-link to="/auth/register" class="text-slate-900 font-black hover:underline">立即注册</router-link>
         </p>
       </div>
     </div>

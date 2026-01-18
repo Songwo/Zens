@@ -2,6 +2,8 @@
 import Navbar from '@/components/Navbar.vue'
 import LeftSidebar from '@/components/LeftSidebar.vue'
 import RightSidebar from '@/components/RightSidebar.vue'
+import WelcomePopup from '@/components/WelcomePopup.vue'
+import { useUserStore } from '@/store/user'
 
 interface Props {
   showLeftSidebar?: boolean
@@ -16,6 +18,8 @@ const props = withDefaults(defineProps<Props>(), {
   wide: false,
   isFluid: false
 })
+
+const userStore = useUserStore()
 </script>
 
 <template>
@@ -43,6 +47,11 @@ const props = withDefaults(defineProps<Props>(), {
       <RightSidebar v-if="props.showRightSidebar" class="hidden lg:block w-80 shrink-0 sticky top-20 h-[calc(100vh-6rem)] overflow-y-auto custom-scrollbar pb-10" />
       
     </div>
+
+    <!-- Footer Space -->
+    <div class="h-20"></div>
+
+    <WelcomePopup v-if="userStore.isLoggedIn" />
   </div>
 </template>
 

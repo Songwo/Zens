@@ -1,23 +1,29 @@
 package com.campus.trend.campus_pulse.service.impl;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.campus.trend.campus_pulse.dto.response.RecommendPostResponse;
 import com.campus.trend.campus_pulse.entity.SysPost;
 import com.campus.trend.campus_pulse.entity.SysTag;
 import com.campus.trend.campus_pulse.entity.SysUserTagRelation;
+import com.campus.trend.campus_pulse.mapper.SysCategoryMapper;
 import com.campus.trend.campus_pulse.mapper.SysPostMapper;
+import com.campus.trend.campus_pulse.mapper.SysUserMapper;
 import com.campus.trend.campus_pulse.service.CollaborativeFilteringService;
 import com.campus.trend.campus_pulse.service.PostRecommendService;
 import com.campus.trend.campus_pulse.service.TagService;
 import com.campus.trend.campus_pulse.service.UserTagRelationService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 @Service
@@ -27,17 +33,205 @@ public class PostRecommendServiceImpl implements PostRecommendService {
     private final UserTagRelationService userTagRelationService;
     private final TagService tagService;
     private final SysPostMapper postMapper;
-    private final CollaborativeFilteringService collaborativeFilteringService; // 注入 CF Service
+    private final SysUserMapper userMapper;
+    private final SysCategoryMapper categoryMapper;
+    private final CollaborativeFilteringService collaborativeFilteringService;
+    private final StringRedisTemplate redisTemplate;
 
     @Autowired
     public PostRecommendServiceImpl(UserTagRelationService userTagRelationService,
             TagService tagService,
             SysPostMapper postMapper,
-            CollaborativeFilteringService collaborativeFilteringService) {
+            SysUserMapper userMapper,
+            SysCategoryMapper categoryMapper,
+            CollaborativeFilteringService collaborativeFilteringService,
+            StringRedisTemplate redisTemplate) {
         this.userTagRelationService = userTagRelationService;
         this.tagService = tagService;
         this.postMapper = postMapper;
+        this.userMapper = userMapper;
+        this.categoryMapper = categoryMapper;
         this.collaborativeFilteringService = collaborativeFilteringService;
+        this.redisTemplate = redisTemplate;
+    }
+
+    private static final String RECOMMEND_CACHE_KEY = "user:recommend:";
+
+    @Override
+    public List<RecommendPostResponse> getPostDetailRecommendations(String postId, String userId, int limit) {
+        SysPost currentPost = postMapper.selectById(postId);
+        if (currentPost == null) return Collections.emptyList();
+
+        List<SysPost> recommendations = new ArrayList<>();
+        Set<String> recommendedIds = new HashSet<>();
+        recommendedIds.add(postId);
+
+        // 1. 同专业推荐 (如果登录且作者/用户有专业信息)
+        if (userId != null) {
+            var currentUser = userMapper.selectById(userId);
+            if (currentUser != null && currentUser.getMajor() != null) {
+                List<SysPost> majorPosts = postMapper.selectList(new LambdaQueryWrapper<SysPost>()
+                        .eq(SysPost::getStatus, 1)
+                        .ne(SysPost::getId, postId)
+                        .last("AND user_id IN (SELECT id FROM sys_user WHERE major = '" + currentUser.getMajor() + "') LIMIT " + limit));
+                for (SysPost p : majorPosts) {
+                    if (recommendedIds.add(p.getId())) {
+                        recommendations.add(p);
+                    }
+                }
+            }
+        }
+
+        // 2. 相同分类或标签 (如果还没满)
+        if (recommendations.size() < limit) {
+            List<SysPost> catPosts = postMapper.selectList(new LambdaQueryWrapper<SysPost>()
+                    .eq(SysPost::getStatus, 1)
+                    .eq(SysPost::getCategoryId, currentPost.getCategoryId())
+                    .ne(SysPost::getId, postId)
+                    .last("LIMIT " + limit));
+            for (SysPost p : catPosts) {
+                if (recommendedIds.add(p.getId())) {
+                    recommendations.add(p);
+                }
+            }
+        }
+
+        // 3. 热度兜底
+        if (recommendations.size() < limit) {
+            List<SysPost> hotPosts = getHotPostsList(limit * 2);
+            for (SysPost p : hotPosts) {
+                if (recommendedIds.add(p.getId())) {
+                    recommendations.add(p);
+                }
+            }
+        }
+
+        // 裁剪到 limit
+        List<SysPost> resultPosts = recommendations.stream().limit(limit).collect(Collectors.toList());
+        return convertToRecommendDTO(resultPosts, "相关内容推荐");
+    }
+
+    @Override
+    public IPage<RecommendPostResponse> getHybridRecommendations(String userId, int page, int pageSize) {
+        // 1. 尝试从缓存获取
+        String cacheKey = RECOMMEND_CACHE_KEY + (userId == null ? "anonymous" : userId);
+        // 为了简化，这里演示逻辑，实际分页通常缓存全量列表或按页缓存
+        
+        List<RecommendPostResponse> allRecommendations = new ArrayList<>();
+
+        if (userId == null) {
+            // 匿名用户：仅推荐热门
+            List<SysPost> hotPosts = getHotPostsList(50);
+            allRecommendations = convertToRecommendDTO(hotPosts, "校园热门推荐");
+        } else {
+            // 登录用户：混合推荐
+            
+            // A. 基于兴趣标签 (40%)
+            List<SysPost> interestPosts = recommendPostsList(userId, 20);
+            allRecommendations.addAll(convertToRecommendDTO(interestPosts, "基于你的兴趣标签"));
+
+            // B. 协同过滤 (30%)
+            List<SysPost> cfPosts = collaborativeFilteringService.recommendByUserBased(userId, 10);
+            allRecommendations.addAll(convertToRecommendDTO(cfPosts, "志趣相投的同学也在看"));
+
+            // C. 热门兜底 (30%)
+            List<SysPost> hotPosts = getHotPostsList(20);
+            allRecommendations.addAll(convertToRecommendDTO(hotPosts, "全校都在看"));
+        }
+
+        // 2. 去重 & 随机打乱 (增加新鲜感)
+        Map<String, RecommendPostResponse> uniqueMap = new LinkedHashMap<>();
+        for (RecommendPostResponse resp : allRecommendations) {
+            uniqueMap.putIfAbsent(resp.getId(), resp);
+        }
+        
+        List<RecommendPostResponse> resultList = new ArrayList<>(uniqueMap.values());
+        Collections.shuffle(resultList);
+
+        // 3. 手动分页
+        int start = (page - 1) * pageSize;
+        int end = Math.min(start + pageSize, resultList.size());
+        
+        List<RecommendPostResponse> paginatedList = new ArrayList<>();
+        if (start < resultList.size()) {
+            paginatedList = resultList.subList(start, end);
+        }
+
+        Page<RecommendPostResponse> resultPage = new Page<>(page, pageSize);
+        resultPage.setRecords(paginatedList);
+        resultPage.setTotal(resultList.size());
+
+        return resultPage;
+    }
+
+    private List<RecommendPostResponse> convertToRecommendDTO(List<SysPost> posts, String reason) {
+        return posts.stream().map(post -> {
+            RecommendPostResponse dto = new RecommendPostResponse();
+            dto.setId(post.getId());
+            dto.setTitle(post.getTitle());
+            // 摘要逻辑：取内容前100字
+            String content = post.getContent();
+            dto.setSummary(content != null ? (content.length() > 100 ? content.substring(0, 100) + "..." : content) : "");
+            
+            // 关联查询作者信息
+            var author = userMapper.selectById(post.getUserId());
+            if (author != null) {
+                dto.setAuthorName(author.getNickname());
+                dto.setAuthorAvatar(author.getAvatar());
+            } else {
+                dto.setAuthorName("未知用户");
+            }
+            
+            // 关联分类
+            var cat = categoryMapper.selectById(post.getCategoryId());
+            if (cat != null) {
+                dto.setCategoryName(cat.getName());
+            } else {
+                dto.setCategoryName("默认分类");
+            }
+
+            // 标签处理
+            if (StringUtils.hasText(post.getTags())) {
+                dto.setTags(Arrays.asList(post.getTags().split("[\\s#]+")).stream().filter(t -> !t.isEmpty()).collect(Collectors.toList()));
+            }
+
+            dto.setViewCount(post.getViewCount());
+            dto.setLikeCount(post.getLikeCount());
+            dto.setCollectCount(post.getCollectCount());
+            dto.setCommentCount(post.getCommentCount());
+            dto.setCreateTime(post.getCreateTime().toString());
+            dto.setRecommendReason(reason);
+            dto.setIsLiked(post.getIsLiked());
+            dto.setIsCollected(post.getIsCollected());
+            return dto;
+        }).collect(Collectors.toList());
+    }
+
+    private List<SysPost> recommendPostsList(String userId, int limit) {
+        // 复用原有逻辑但返回 List
+        List<SysUserTagRelation> userTags = userTagRelationService.lambdaQuery()
+                .eq(SysUserTagRelation::getUserId, userId)
+                .list();
+        if (userTags.isEmpty()) return Collections.emptyList();
+
+        Set<String> tagNames = userTags.stream()
+                .map(rel -> tagService.getById(rel.getTagId()))
+                .filter(Objects::nonNull)
+                .map(SysTag::getName)
+                .collect(Collectors.toSet());
+
+        return postMapper.selectList(null).stream()
+                .filter(post -> post.getStatus() == 1 && containsAnyTag(post.getTags(), tagNames))
+                .sorted((a, b) -> Double.compare(calculateScore(b, userTags), calculateScore(a, userTags)))
+                .limit(limit)
+                .collect(Collectors.toList());
+    }
+
+    private List<SysPost> getHotPostsList(int limit) {
+        return postMapper.selectList(new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<SysPost>()
+                .eq(SysPost::getStatus, 1)
+                .orderByDesc(SysPost::getHeatScore)
+                .last("LIMIT " + limit));
     }
 
     /**
