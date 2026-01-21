@@ -5,12 +5,12 @@ import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import com.campus.trend.campus_pulse.dto.request.CreatePostRequest;
-import com.campus.trend.campus_pulse.dto.request.ExtractTagsRequest;
-import com.campus.trend.campus_pulse.dto.request.PostSearchRequest;
-import com.campus.trend.campus_pulse.entity.SysPost;
-import com.campus.trend.campus_pulse.entity.SysTag;
-import com.campus.trend.campus_pulse.mapper.SysPostMapper;
+import com.campus.trend.campus_pulse.dto.request.PostCreateReq;
+import com.campus.trend.campus_pulse.dto.request.TagsExtractReq;
+import com.campus.trend.campus_pulse.dto.request.PostSearchReq;
+import com.campus.trend.campus_pulse.entity.Post;
+import com.campus.trend.campus_pulse.entity.Tag;
+import com.campus.trend.campus_pulse.mapper.PostMapper;
 import com.campus.trend.campus_pulse.service.CategoryService;
 import com.campus.trend.campus_pulse.service.ContentSecurityService;
 import com.campus.trend.campus_pulse.service.PostCollectService;
@@ -21,10 +21,10 @@ import com.campus.trend.campus_pulse.service.PostService;
 import com.campus.trend.campus_pulse.service.TagService;
 import com.campus.trend.campus_pulse.service.UserProfileService;
 import com.campus.trend.campus_pulse.service.UserService;
-import com.campus.trend.campus_pulse.dto.response.PostResponse;
-import com.campus.trend.campus_pulse.entity.SysUser;
-import com.campus.trend.campus_pulse.entity.SysCategory;
-import com.campus.trend.campus_pulse.utils.GenerateIDUtil;
+import com.campus.trend.campus_pulse.dto.response.PostResp;
+import com.campus.trend.campus_pulse.entity.User;
+import com.campus.trend.campus_pulse.entity.Category;
+import com.campus.trend.campus_pulse.utils.IdUtils;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hankcs.hanlp.HanLP;
@@ -43,7 +43,7 @@ import java.util.Map;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class PostServiceImpl extends ServiceImpl<SysPostMapper, SysPost> implements PostService {
+public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements PostService {
 
     private final PostLikeService postLikeService;
     private final PostCollectService postCollectService;
@@ -56,15 +56,15 @@ public class PostServiceImpl extends ServiceImpl<SysPostMapper, SysPost> impleme
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Override
-    public SysPost searchByPostId(String postId) {
+    public Post searchByPostId(String postId) {
         viewAdd(postId);
-        SysPost post = getById(postId);
+        Post post = getById(postId);
         if (post != null) {
             try {
                 // 尝试获取当前登录用户，若未登录会抛出异常，捕获后忽略即可
-                com.campus.trend.campus_pulse.security.AuthSysUser authUser = com.campus.trend.campus_pulse.utils.GetUserDetail
+                com.campus.trend.campus_pulse.security.AuthUser authUser = com.campus.trend.campus_pulse.utils.SecurityUtils
                         .getAuthenticatedUser();
-                String userId = authUser.getSysUser().getId();
+                String userId = authUser.getUser().getId();
 
                 post.setIsLiked(postLikeService.isLike(postId, userId));
                 post.setIsCollected(postCollectService.isCollect(postId, userId));
@@ -82,7 +82,7 @@ public class PostServiceImpl extends ServiceImpl<SysPostMapper, SysPost> impleme
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public void createPost(CreatePostRequest createPostRequest, String userId) {
+    public void createPost(PostCreateReq createPostRequest, String userId) {
         // 1.检查 category_id 的有效性
         if (createPostRequest.getCategoryID() != null && !createPostRequest.getCategoryID().isEmpty()) {
             if (!categoryService.existsById(createPostRequest.getCategoryID())) {
@@ -107,14 +107,15 @@ public class PostServiceImpl extends ServiceImpl<SysPostMapper, SysPost> impleme
         // if (contentSecurityService.containsHighRiskWords(content)) { ... }
 
         // 3.构造帖子
-        String postID = GenerateIDUtil.genId("POST");
+        String postID = IdUtils.genId("POST");
 
-        SysPost sysPost = new SysPost();
+        Post sysPost = new Post();
         sysPost.setId(postID);
         sysPost.setUserId(userId);
         sysPost.setCategoryId(createPostRequest.getCategoryID());
         sysPost.setTitle(title);
         sysPost.setContent(content);
+        sysPost.setCoverImage(createPostRequest.getCoverImage());
         sysPost.setTags(createPostRequest.getTags());
 
         // 3.1 情感分析
@@ -185,7 +186,7 @@ public class PostServiceImpl extends ServiceImpl<SysPostMapper, SysPost> impleme
             if (StringUtils.hasText(trimmedTag) && !trimmedTag.isEmpty()) {
                 try {
                     // 获取或创建标签
-                    SysTag tag = tagService.getOrCreateTag(trimmedTag);
+                    Tag tag = tagService.getOrCreateTag(trimmedTag);
                     // 增加标签热度
                     tagService.increaseHeat(tag.getId());
                 } catch (Exception e) {
@@ -196,7 +197,7 @@ public class PostServiceImpl extends ServiceImpl<SysPostMapper, SysPost> impleme
     }
 
     @Override
-    public Map<String, Object> extractTagsAndSummary(ExtractTagsRequest extractTagsRequest) {
+    public Map<String, Object> extractTagsAndSummary(TagsExtractReq extractTagsRequest) {
 
         // 1. 清洗 HTML，提取纯文本
         String pureText = extractTagsRequest.getContent()
@@ -238,8 +239,8 @@ public class PostServiceImpl extends ServiceImpl<SysPostMapper, SysPost> impleme
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public void updatePost(com.campus.trend.campus_pulse.dto.request.UpdatePostRequest request, String userId) {
-        SysPost post = getById(request.getPostId());
+    public void updatePost(com.campus.trend.campus_pulse.dto.request.PostUpdateReq request, String userId) {
+        Post post = getById(request.getPostId());
         if (post == null) {
             throw new RuntimeException("帖子不存在");
         }
@@ -285,6 +286,9 @@ public class PostServiceImpl extends ServiceImpl<SysPostMapper, SysPost> impleme
         if (StringUtils.hasText(request.getLocationName())) {
             post.setLocationName(request.getLocationName());
         }
+        if (StringUtils.hasText(request.getCoverImage())) {
+            post.setCoverImage(request.getCoverImage());
+        }
         if (StringUtils.hasText(request.getTags())) {
             post.setTags(request.getTags());
             processPostTags(request.getTags());
@@ -309,7 +313,7 @@ public class PostServiceImpl extends ServiceImpl<SysPostMapper, SysPost> impleme
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void deletePost(String postId, String userId) {
-        SysPost post = getById(postId);
+        Post post = getById(postId);
         if (post == null) {
             throw new RuntimeException("帖子不存在");
         }
@@ -329,53 +333,53 @@ public class PostServiceImpl extends ServiceImpl<SysPostMapper, SysPost> impleme
     }
 
     @Override
-    public IPage<SysPost> searchAllList(PostSearchRequest postSearchRequest) {
+    public IPage<Post> searchAllList(PostSearchReq postSearchRequest) {
 
         int page = postSearchRequest.getPage() != null ? postSearchRequest.getPage() : 1;
         int pageSize = postSearchRequest.getPageSize() != null ? postSearchRequest.getPageSize() : 10;
-        Page<SysPost> pagePram = new Page<>(page, pageSize);
+        Page<Post> pagePram = new Page<>(page, pageSize);
 
-        LambdaQueryWrapper<SysPost> wrapper = Wrappers.lambdaQuery();
+        LambdaQueryWrapper<Post> wrapper = Wrappers.lambdaQuery();
 
         // 如果帖子分类 ID 不为空则执行 Sql 查询
-        wrapper.eq(postSearchRequest.getCategoryID() != null, SysPost::getCategoryId,
+        wrapper.eq(postSearchRequest.getCategoryID() != null, Post::getCategoryId,
                 postSearchRequest.getCategoryID());
         // 如果帖子用户 ID 不为空则执行 Sql 查询
-        wrapper.eq(postSearchRequest.getUserID() != null, SysPost::getUserId, postSearchRequest.getUserID());
+        wrapper.eq(postSearchRequest.getUserID() != null, Post::getUserId, postSearchRequest.getUserID());
         // 如果帖子状态不为空则执行 Sql 查询
-        wrapper.eq(postSearchRequest.getStatus() != null, SysPost::getStatus, postSearchRequest.getStatus());
+        wrapper.eq(postSearchRequest.getStatus() != null, Post::getStatus, postSearchRequest.getStatus());
 
         // 如果传入了 keyword，拼接 WHERE (title LIKE %?% OR content LIKE %?%)
         if (StringUtils.hasText(postSearchRequest.getKeyword())) {
-            wrapper.and(w -> w.like(SysPost::getTitle, postSearchRequest.getKeyword())
+            wrapper.and(w -> w.like(Post::getTitle, postSearchRequest.getKeyword())
                     .or()
-                    .like(SysPost::getContent, postSearchRequest.getKeyword()));
+                    .like(Post::getContent, postSearchRequest.getKeyword()));
         }
 
         // 如果传入了 tag，拼接 WHERE tags LIKE %tag%
         if (StringUtils.hasText(postSearchRequest.getTag())) {
-            wrapper.like(SysPost::getTags, postSearchRequest.getTag());
+            wrapper.like(Post::getTags, postSearchRequest.getTag());
         }
 
         // Filter by Liked
         if (StringUtils.hasText(postSearchRequest.getLikedBy())) {
-            wrapper.inSql(SysPost::getId,
+            wrapper.inSql(Post::getId,
                     "SELECT post_id FROM sys_post_like WHERE user_id = '" + postSearchRequest.getLikedBy() + "'");
         }
 
         // Filter by Collected
         if (StringUtils.hasText(postSearchRequest.getCollectedBy())) {
-            wrapper.inSql(SysPost::getId, "SELECT post_id FROM sys_post_collect WHERE user_id = '"
+            wrapper.inSql(Post::getId, "SELECT post_id FROM sys_post_collect WHERE user_id = '"
                     + postSearchRequest.getCollectedBy() + "'");
         }
 
         // 根据排序方式排序
         String orderBy = postSearchRequest.getOrderBy();
         if ("hot".equalsIgnoreCase(orderBy)) {
-            wrapper.orderByDesc(SysPost::getHeatScore);
+            wrapper.orderByDesc(Post::getHeatScore);
         } else {
             // 默认按最新排序
-            wrapper.orderByDesc(SysPost::getCreateTime);
+            wrapper.orderByDesc(Post::getCreateTime);
         }
 
         return this.page(pagePram, wrapper);
@@ -384,40 +388,67 @@ public class PostServiceImpl extends ServiceImpl<SysPostMapper, SysPost> impleme
     // =================== 新增：带作者信息的帖子查询 ===================
 
     @Override
-    public PostResponse getPostWithAuthor(String postId) {
-        SysPost post = searchByPostId(postId);
+    public PostResp getPostWithAuthor(String postId) {
+        Post post = searchByPostId(postId);
         if (post == null) {
             return null;
         }
-        return convertToPostResponse(post);
+        return convertToPostResp(post);
     }
 
     @Override
-    public IPage<PostResponse> searchPostsWithAuthor(PostSearchRequest postSearchRequest) {
+    public IPage<PostResp> searchPostsWithAuthor(PostSearchReq postSearchRequest) {
         // 1. 先查询帖子分页数据
-        IPage<SysPost> postPage = searchAllList(postSearchRequest);
+        IPage<Post> postPage = searchAllList(postSearchRequest);
+        List<Post> posts = postPage.getRecords();
 
-        // 2. 转换为 PostResponse 分页
-        Page<PostResponse> responsePage = new Page<>(
+        if (posts.isEmpty()) {
+            return new Page<>(postPage.getCurrent(), postPage.getSize(), postPage.getTotal());
+        }
+
+        // 2. 批量收集 ID
+        List<String> userIds = posts.stream().map(Post::getUserId).distinct().toList();
+        List<String> categoryIds = posts.stream().map(Post::getCategoryId).distinct().toList();
+
+        // 3. 批量查询用户和分类
+        Map<String, User> userMap = new HashMap<>();
+        if (!userIds.isEmpty()) {
+            List<User> users = userService.listByIds(userIds);
+            for (User user : users) {
+                userMap.put(user.getId(), user);
+            }
+        }
+
+        Map<String, Category> categoryMap = new HashMap<>();
+        if (!categoryIds.isEmpty()) {
+            List<Category> categories = categoryService.listByIds(categoryIds);
+            for (Category category : categories) {
+                categoryMap.put(category.getId(), category);
+            }
+        }
+
+        // 4. 转换每个帖子为 PostResp
+        List<PostResp> responseList = new ArrayList<>();
+        for (Post post : posts) {
+            responseList.add(convertToPostResp(post, userMap, categoryMap));
+        }
+
+        // 5. 构造结果页
+        Page<PostResp> responsePage = new Page<>(
                 postPage.getCurrent(),
                 postPage.getSize(),
                 postPage.getTotal());
-
-        // 3. 转换每个帖子为 PostResponse（包含作者信息）
-        List<PostResponse> responseList = new ArrayList<>();
-        for (SysPost post : postPage.getRecords()) {
-            responseList.add(convertToPostResponse(post));
-        }
         responsePage.setRecords(responseList);
 
         return responsePage;
     }
 
     /**
-     * 将 SysPost 转换为 PostResponse（填充作者信息和趋势数据）
+     * 将 Post 转换为 PostResp（填充作者信息和趋势数据）
+     * 优化版：支持传入预加载的 Map
      */
-    private PostResponse convertToPostResponse(SysPost post) {
-        PostResponse response = new PostResponse();
+    private PostResp convertToPostResp(Post post, Map<String, User> userMap, Map<String, Category> categoryMap) {
+        PostResp response = new PostResp();
 
         // 复制基本字段
         response.setId(post.getId());
@@ -425,6 +456,7 @@ public class PostServiceImpl extends ServiceImpl<SysPostMapper, SysPost> impleme
         response.setCategoryId(post.getCategoryId());
         response.setTitle(post.getTitle());
         response.setContent(post.getContent());
+        response.setCoverImage(post.getCoverImage());
         response.setImages(post.getImages());
         response.setTags(post.getTags());
         response.setIsAnonymous(post.getIsAnonymous());
@@ -448,33 +480,36 @@ public class PostServiceImpl extends ServiceImpl<SysPostMapper, SysPost> impleme
             response.setAuthorName("匿名同学");
             response.setAuthorAvatar(null);
         } else {
-            // 非匿名帖子，查询用户信息
-            try {
-                SysUser author = userService.getById(post.getUserId());
-                if (author != null) {
-                    response.setAuthorName(author.getNickname() != null ? author.getNickname()
-                            : "用户" + post.getUserId().substring(0, 6));
-                    response.setAuthorAvatar(author.getAvatar());
-                } else {
-                    response.setAuthorName("未知用户");
-                    response.setAuthorAvatar(null);
-                }
-            } catch (Exception e) {
-                log.warn("获取用户信息失败: userId={}, error={}", post.getUserId(), e.getMessage());
-                response.setAuthorName("用户" + post.getUserId().substring(0, 6));
+            // 非匿名帖子
+            User author = userMap != null ? userMap.get(post.getUserId()) : null;
+            // 如果 userMap 为 null (兼容旧方法调用)，则尝试单独查询
+            if (userMap == null) {
+                 try {
+                    author = userService.getById(post.getUserId());
+                 } catch (Exception ignored) {}
+            }
+
+            if (author != null) {
+                response.setAuthorName(author.getNickname() != null ? author.getNickname()
+                        : "用户" + post.getUserId().substring(0, 6));
+                response.setAuthorAvatar(author.getAvatar());
+            } else {
+                response.setAuthorName("未知用户");
                 response.setAuthorAvatar(null);
             }
         }
 
         // ===== 填充分类名称 =====
         if (post.getCategoryId() != null) {
-            try {
-                SysCategory category = categoryService.getById(post.getCategoryId());
-                if (category != null) {
-                    response.setCategoryName(category.getName());
-                }
-            } catch (Exception e) {
-                log.warn("获取分类信息失败: categoryId={}", post.getCategoryId());
+            Category category = categoryMap != null ? categoryMap.get(post.getCategoryId()) : null;
+             if (categoryMap == null) {
+                 try {
+                    category = categoryService.getById(post.getCategoryId());
+                 } catch (Exception ignored) {}
+            }
+
+            if (category != null) {
+                response.setCategoryName(category.getName());
             }
         }
 
@@ -504,7 +539,17 @@ public class PostServiceImpl extends ServiceImpl<SysPostMapper, SysPost> impleme
             response.setTrendLevel("normal");
         }
 
-        // ===== 填充 AI 摘要 (新增) =====
+        // ===== 填充 AI 摘要 =====
+        fillSummary(response, post);
+
+        return response;
+    }
+
+    private PostResp convertToPostResp(Post post) {
+        return convertToPostResp(post, null, null);
+    }
+
+    private void fillSummary(PostResp response, Post post) {
         if (StringUtils.hasText(post.getContent())) {
             try {
                 String pureText = post.getContent()
@@ -528,14 +573,12 @@ public class PostServiceImpl extends ServiceImpl<SysPostMapper, SysPost> impleme
                 response.setSummary(pureText.length() > 100 ? pureText.substring(0, 100) + "..." : pureText);
             }
         }
-
-        return response;
     }
 
     /******************* 内置方法 ********************/
     // 观看量加 1
     void viewAdd(String postId) {
-        SysPost sysPost = lambdaQuery().eq(SysPost::getId, postId).one();
+        Post sysPost = lambdaQuery().eq(Post::getId, postId).one();
         if (sysPost != null) {
             sysPost.setViewCount(sysPost.getViewCount() + 1);
             this.saveOrUpdate(sysPost);

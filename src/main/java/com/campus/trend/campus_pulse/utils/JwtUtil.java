@@ -49,14 +49,20 @@ public class JwtUtil {
     }
 
     /** 生成 AccessToken */
-    public String generateAccessToken(String userId, Map<String, Object> claims) {
+    public String generateAccessToken(String userId, Map<String, Object> claims, boolean rememberMe) {
+        long expire = rememberMe ? accessExpire * 7 : accessExpire; // 记住我：延长7倍时间 (示例策略)
         return Jwts.builder()
                 .setClaims(claims)
                 .setSubject(userId)
                 .setIssuedAt(new Date())
-                .setExpiration(new Date(System.currentTimeMillis() + accessExpire))
+                .setExpiration(new Date(System.currentTimeMillis() + expire))
                 .signWith(getKey())
                 .compact();
+    }
+    
+    /** 兼容旧方法 */
+    public String generateAccessToken(String userId, Map<String, Object> claims) {
+        return generateAccessToken(userId, claims, false);
     }
 
     /** 生成 RefreshToken */

@@ -1,11 +1,11 @@
 package com.campus.trend.campus_pulse.controller;
 
-import com.campus.trend.campus_pulse.common.Result;
-import com.campus.trend.campus_pulse.entity.SysTag;
-import com.campus.trend.campus_pulse.security.AuthSysUser;
+import com.campus.trend.campus_pulse.common.api.Result;
+import com.campus.trend.campus_pulse.entity.Tag;
+import com.campus.trend.campus_pulse.security.AuthUser;
 import com.campus.trend.campus_pulse.service.TagService;
 import com.campus.trend.campus_pulse.service.UserTagRelationService;
-import com.campus.trend.campus_pulse.utils.GetUserDetail;
+import com.campus.trend.campus_pulse.utils.SecurityUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
@@ -41,7 +41,7 @@ public class TagController {
      */
     @GetMapping("/hot")
     public Result<?> getHotTags(@RequestParam(value = "limit", required = false, defaultValue = "10") int limit) {
-        List<SysTag> hotTags = tagService.getHotTags(limit);
+        List<Tag> hotTags = tagService.getHotTags(limit);
         return Result.success(hotTags);
     }
 
@@ -53,7 +53,7 @@ public class TagController {
      */
     @GetMapping("/search")
     public Result<?> searchTags(@RequestParam("keyword") String keyword) {
-        List<SysTag> tags = tagService.searchTags(keyword);
+        List<Tag> tags = tagService.searchTags(keyword);
         return Result.success(tags);
     }
 
@@ -68,8 +68,8 @@ public class TagController {
     public Result<?> toggleFollow(
             @PathVariable Long tagId,
             @RequestParam(value = "score", required = false, defaultValue = "3.0") BigDecimal score) {
-        AuthSysUser authSysUser = GetUserDetail.getAuthenticatedUser();
-        String userId = authSysUser.getSysUser().getId();
+        AuthUser authUser = SecurityUtils.getAuthenticatedUser();
+        String userId = authUser.getUser().getId();
 
         boolean isFollowing = userTagRelationService.toggleFollow(userId, tagId, score);
 
@@ -91,8 +91,8 @@ public class TagController {
     public Result<?> followTag(
             @PathVariable Long tagId,
             @RequestParam(value = "score", required = false, defaultValue = "3.0") BigDecimal score) {
-        AuthSysUser authSysUser = GetUserDetail.getAuthenticatedUser();
-        String userId = authSysUser.getSysUser().getId();
+        AuthUser authUser = SecurityUtils.getAuthenticatedUser();
+        String userId = authUser.getUser().getId();
 
         boolean success = userTagRelationService.followTag(userId, tagId, score);
 
@@ -111,8 +111,8 @@ public class TagController {
      */
     @DeleteMapping("/{tagId}/unfollow")
     public Result<?> unfollowTag(@PathVariable Long tagId) {
-        AuthSysUser authSysUser = GetUserDetail.getAuthenticatedUser();
-        String userId = authSysUser.getSysUser().getId();
+        AuthUser authUser = SecurityUtils.getAuthenticatedUser();
+        String userId = authUser.getUser().getId();
 
         boolean success = userTagRelationService.unfollowTag(userId, tagId);
 
@@ -131,8 +131,8 @@ public class TagController {
      */
     @GetMapping("/{tagId}/status")
     public Result<?> checkFollowStatus(@PathVariable Long tagId) {
-        AuthSysUser authSysUser = GetUserDetail.getAuthenticatedUser();
-        String userId = authSysUser.getSysUser().getId();
+        AuthUser authUser = SecurityUtils.getAuthenticatedUser();
+        String userId = authUser.getUser().getId();
 
         boolean isFollowing = userTagRelationService.isFollowing(userId, tagId);
 
@@ -149,10 +149,10 @@ public class TagController {
      */
     @GetMapping("/my-following")
     public Result<?> getMyFollowingTags() {
-        AuthSysUser authSysUser = GetUserDetail.getAuthenticatedUser();
-        String userId = authSysUser.getSysUser().getId();
+        AuthUser authUser = SecurityUtils.getAuthenticatedUser();
+        String userId = authUser.getUser().getId();
 
-        List<SysTag> tags = userTagRelationService.getUserFollowingTags(userId);
+        List<Tag> tags = userTagRelationService.getUserFollowingTags(userId);
 
         return Result.success(tags);
     }
@@ -168,8 +168,8 @@ public class TagController {
     public Result<?> updateTagScore(
             @PathVariable Long tagId,
             @RequestParam("score") BigDecimal score) {
-        AuthSysUser authSysUser = GetUserDetail.getAuthenticatedUser();
-        String userId = authSysUser.getSysUser().getId();
+        AuthUser authUser = SecurityUtils.getAuthenticatedUser();
+        String userId = authUser.getUser().getId();
 
         boolean success = userTagRelationService.updateScore(userId, tagId, score);
 

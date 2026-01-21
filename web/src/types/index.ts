@@ -9,6 +9,7 @@ export interface LoginRequest {
     password: string
     uuid: string
     code: string
+    rememberMe?: boolean
 }
 
 export interface RegisterRequest {
@@ -25,13 +26,12 @@ export interface RegisterRequest {
 }
 
 export interface CreatePostRequest {
-    categoryID: string
-    title: string
-    content: string
-    images?: string
-    tags: string
-    isAnonymous?: number
-    locationName?: string
+  title: string
+  content: string
+  categoryID: string
+  coverImage?: string
+  tags: string
+  status: number
 }
 
 export interface UserInfo {
@@ -62,6 +62,7 @@ export interface Post {
     categoryId: string
     title: string
     content: string
+    coverImage?: string
     images: string[]
     tags: string
     isAnonymous: number

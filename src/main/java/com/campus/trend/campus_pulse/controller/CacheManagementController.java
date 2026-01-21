@@ -1,6 +1,6 @@
 package com.campus.trend.campus_pulse.controller;
 
-import com.campus.trend.campus_pulse.common.Result;
+import com.campus.trend.campus_pulse.common.api.Result;
 import com.campus.trend.campus_pulse.service.CacheManagementService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;

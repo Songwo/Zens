@@ -2,10 +2,10 @@ package com.campus.trend.campus_pulse.service;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.service.IService;
-import com.campus.trend.campus_pulse.entity.SysPost;
-import com.campus.trend.campus_pulse.entity.SysPostCollect;
+import com.campus.trend.campus_pulse.entity.Post;
+import com.campus.trend.campus_pulse.entity.PostCollect;
 
-public interface PostCollectService extends IService<SysPostCollect> {
+public interface PostCollectService extends IService<PostCollect> {
 
     /**
      * 判断用户是否已收藏该帖子
@@ -24,7 +24,7 @@ public interface PostCollectService extends IService<SysPostCollect> {
      * @param pageSize 每页大小
      * @return 分页的收藏帖子列表
      */
-    IPage<SysPost> getPostCollectWithPage(String userId, int page, int pageSize);
+    IPage<Post> getPostCollectWithPage(String userId, int page, int pageSize);
 
     /**
      * 用户收藏帖子

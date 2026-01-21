@@ -3,13 +3,13 @@ package com.campus.trend.campus_pulse.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.campus.trend.campus_pulse.dto.response.RecommendPostResponse;
-import com.campus.trend.campus_pulse.entity.SysPost;
-import com.campus.trend.campus_pulse.entity.SysTag;
-import com.campus.trend.campus_pulse.entity.SysUserTagRelation;
-import com.campus.trend.campus_pulse.mapper.SysCategoryMapper;
-import com.campus.trend.campus_pulse.mapper.SysPostMapper;
-import com.campus.trend.campus_pulse.mapper.SysUserMapper;
+import com.campus.trend.campus_pulse.dto.response.PostRecommendResp;
+import com.campus.trend.campus_pulse.entity.Post;
+import com.campus.trend.campus_pulse.entity.Tag;
+import com.campus.trend.campus_pulse.entity.UserTagRelation;
+import com.campus.trend.campus_pulse.mapper.CategoryMapper;
+import com.campus.trend.campus_pulse.mapper.PostMapper;
+import com.campus.trend.campus_pulse.mapper.UserMapper;
 import com.campus.trend.campus_pulse.service.CollaborativeFilteringService;
 import com.campus.trend.campus_pulse.service.PostRecommendService;
 import com.campus.trend.campus_pulse.service.TagService;
@@ -32,18 +32,18 @@ public class PostRecommendServiceImpl implements PostRecommendService {
 
     private final UserTagRelationService userTagRelationService;
     private final TagService tagService;
-    private final SysPostMapper postMapper;
-    private final SysUserMapper userMapper;
-    private final SysCategoryMapper categoryMapper;
+    private final PostMapper postMapper;
+    private final UserMapper userMapper;
+    private final CategoryMapper categoryMapper;
     private final CollaborativeFilteringService collaborativeFilteringService;
     private final StringRedisTemplate redisTemplate;
 
     @Autowired
     public PostRecommendServiceImpl(UserTagRelationService userTagRelationService,
             TagService tagService,
-            SysPostMapper postMapper,
-            SysUserMapper userMapper,
-            SysCategoryMapper categoryMapper,
+            PostMapper postMapper,
+            UserMapper userMapper,
+            CategoryMapper categoryMapper,
             CollaborativeFilteringService collaborativeFilteringService,
             StringRedisTemplate redisTemplate) {
         this.userTagRelationService = userTagRelationService;
@@ -58,11 +58,11 @@ public class PostRecommendServiceImpl implements PostRecommendService {
     private static final String RECOMMEND_CACHE_KEY = "user:recommend:";
 
     @Override
-    public List<RecommendPostResponse> getPostDetailRecommendations(String postId, String userId, int limit) {
-        SysPost currentPost = postMapper.selectById(postId);
+    public List<PostRecommendResp> getPostDetailRecommendations(String postId, String userId, int limit) {
+        Post currentPost = postMapper.selectById(postId);
         if (currentPost == null) return Collections.emptyList();
 
-        List<SysPost> recommendations = new ArrayList<>();
+        List<Post> recommendations = new ArrayList<>();
         Set<String> recommendedIds = new HashSet<>();
         recommendedIds.add(postId);
 
@@ -70,11 +70,11 @@ public class PostRecommendServiceImpl implements PostRecommendService {
         if (userId != null) {
             var currentUser = userMapper.selectById(userId);
             if (currentUser != null && currentUser.getMajor() != null) {
-                List<SysPost> majorPosts = postMapper.selectList(new LambdaQueryWrapper<SysPost>()
-                        .eq(SysPost::getStatus, 1)
-                        .ne(SysPost::getId, postId)
+                List<Post> majorPosts = postMapper.selectList(new LambdaQueryWrapper<Post>()
+                        .eq(Post::getStatus, 1)
+                        .ne(Post::getId, postId)
                         .last("AND user_id IN (SELECT id FROM sys_user WHERE major = '" + currentUser.getMajor() + "') LIMIT " + limit));
-                for (SysPost p : majorPosts) {
+                for (Post p : majorPosts) {
                     if (recommendedIds.add(p.getId())) {
                         recommendations.add(p);
                     }
@@ -84,12 +84,12 @@ public class PostRecommendServiceImpl implements PostRecommendService {
 
         // 2. 相同分类或标签 (如果还没满)
         if (recommendations.size() < limit) {
-            List<SysPost> catPosts = postMapper.selectList(new LambdaQueryWrapper<SysPost>()
-                    .eq(SysPost::getStatus, 1)
-                    .eq(SysPost::getCategoryId, currentPost.getCategoryId())
-                    .ne(SysPost::getId, postId)
+            List<Post> catPosts = postMapper.selectList(new LambdaQueryWrapper<Post>()
+                    .eq(Post::getStatus, 1)
+                    .eq(Post::getCategoryId, currentPost.getCategoryId())
+                    .ne(Post::getId, postId)
                     .last("LIMIT " + limit));
-            for (SysPost p : catPosts) {
+            for (Post p : catPosts) {
                 if (recommendedIds.add(p.getId())) {
                     recommendations.add(p);
                 }
@@ -98,8 +98,8 @@ public class PostRecommendServiceImpl implements PostRecommendService {
 
         // 3. 热度兜底
         if (recommendations.size() < limit) {
-            List<SysPost> hotPosts = getHotPostsList(limit * 2);
-            for (SysPost p : hotPosts) {
+            List<Post> hotPosts = getHotPostsList(limit * 2);
+            for (Post p : hotPosts) {
                 if (recommendedIds.add(p.getId())) {
                     recommendations.add(p);
                 }
@@ -107,66 +107,66 @@ public class PostRecommendServiceImpl implements PostRecommendService {
         }
 
         // 裁剪到 limit
-        List<SysPost> resultPosts = recommendations.stream().limit(limit).collect(Collectors.toList());
+        List<Post> resultPosts = recommendations.stream().limit(limit).collect(Collectors.toList());
         return convertToRecommendDTO(resultPosts, "相关内容推荐");
     }
 
     @Override
-    public IPage<RecommendPostResponse> getHybridRecommendations(String userId, int page, int pageSize) {
+    public IPage<PostRecommendResp> getHybridRecommendations(String userId, int page, int pageSize) {
         // 1. 尝试从缓存获取
         String cacheKey = RECOMMEND_CACHE_KEY + (userId == null ? "anonymous" : userId);
         // 为了简化，这里演示逻辑，实际分页通常缓存全量列表或按页缓存
         
-        List<RecommendPostResponse> allRecommendations = new ArrayList<>();
+        List<PostRecommendResp> allRecommendations = new ArrayList<>();
 
         if (userId == null) {
             // 匿名用户：仅推荐热门
-            List<SysPost> hotPosts = getHotPostsList(50);
+            List<Post> hotPosts = getHotPostsList(50);
             allRecommendations = convertToRecommendDTO(hotPosts, "校园热门推荐");
         } else {
             // 登录用户：混合推荐
             
             // A. 基于兴趣标签 (40%)
-            List<SysPost> interestPosts = recommendPostsList(userId, 20);
+            List<Post> interestPosts = recommendPostsList(userId, 20);
             allRecommendations.addAll(convertToRecommendDTO(interestPosts, "基于你的兴趣标签"));
 
             // B. 协同过滤 (30%)
-            List<SysPost> cfPosts = collaborativeFilteringService.recommendByUserBased(userId, 10);
+            List<Post> cfPosts = collaborativeFilteringService.recommendByUserBased(userId, 10);
             allRecommendations.addAll(convertToRecommendDTO(cfPosts, "志趣相投的同学也在看"));
 
             // C. 热门兜底 (30%)
-            List<SysPost> hotPosts = getHotPostsList(20);
+            List<Post> hotPosts = getHotPostsList(20);
             allRecommendations.addAll(convertToRecommendDTO(hotPosts, "全校都在看"));
         }
 
         // 2. 去重 & 随机打乱 (增加新鲜感)
-        Map<String, RecommendPostResponse> uniqueMap = new LinkedHashMap<>();
-        for (RecommendPostResponse resp : allRecommendations) {
+        Map<String, PostRecommendResp> uniqueMap = new LinkedHashMap<>();
+        for (PostRecommendResp resp : allRecommendations) {
             uniqueMap.putIfAbsent(resp.getId(), resp);
         }
         
-        List<RecommendPostResponse> resultList = new ArrayList<>(uniqueMap.values());
+        List<PostRecommendResp> resultList = new ArrayList<>(uniqueMap.values());
         Collections.shuffle(resultList);
 
         // 3. 手动分页
         int start = (page - 1) * pageSize;
         int end = Math.min(start + pageSize, resultList.size());
         
-        List<RecommendPostResponse> paginatedList = new ArrayList<>();
+        List<PostRecommendResp> paginatedList = new ArrayList<>();
         if (start < resultList.size()) {
             paginatedList = resultList.subList(start, end);
         }
 
-        Page<RecommendPostResponse> resultPage = new Page<>(page, pageSize);
+        Page<PostRecommendResp> resultPage = new Page<>(page, pageSize);
         resultPage.setRecords(paginatedList);
         resultPage.setTotal(resultList.size());
 
         return resultPage;
     }
 
-    private List<RecommendPostResponse> convertToRecommendDTO(List<SysPost> posts, String reason) {
+    private List<PostRecommendResp> convertToRecommendDTO(List<Post> posts, String reason) {
         return posts.stream().map(post -> {
-            RecommendPostResponse dto = new RecommendPostResponse();
+            PostRecommendResp dto = new PostRecommendResp();
             dto.setId(post.getId());
             dto.setTitle(post.getTitle());
             // 摘要逻辑：取内容前100字
@@ -207,17 +207,17 @@ public class PostRecommendServiceImpl implements PostRecommendService {
         }).collect(Collectors.toList());
     }
 
-    private List<SysPost> recommendPostsList(String userId, int limit) {
+    private List<Post> recommendPostsList(String userId, int limit) {
         // 复用原有逻辑但返回 List
-        List<SysUserTagRelation> userTags = userTagRelationService.lambdaQuery()
-                .eq(SysUserTagRelation::getUserId, userId)
+        List<UserTagRelation> userTags = userTagRelationService.lambdaQuery()
+                .eq(UserTagRelation::getUserId, userId)
                 .list();
         if (userTags.isEmpty()) return Collections.emptyList();
 
         Set<String> tagNames = userTags.stream()
                 .map(rel -> tagService.getById(rel.getTagId()))
                 .filter(Objects::nonNull)
-                .map(SysTag::getName)
+                .map(Tag::getName)
                 .collect(Collectors.toSet());
 
         return postMapper.selectList(null).stream()
@@ -227,10 +227,10 @@ public class PostRecommendServiceImpl implements PostRecommendService {
                 .collect(Collectors.toList());
     }
 
-    private List<SysPost> getHotPostsList(int limit) {
-        return postMapper.selectList(new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<SysPost>()
-                .eq(SysPost::getStatus, 1)
-                .orderByDesc(SysPost::getHeatScore)
+    private List<Post> getHotPostsList(int limit) {
+        return postMapper.selectList(new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<Post>()
+                .eq(Post::getStatus, 1)
+                .orderByDesc(Post::getHeatScore)
                 .last("LIMIT " + limit));
     }
 
@@ -243,7 +243,7 @@ public class PostRecommendServiceImpl implements PostRecommendService {
      * @return 推荐的帖子列表
      */
     @Override
-    public IPage<SysPost> recommendPosts(String userId, int page, int pageSize) {
+    public IPage<Post> recommendPosts(String userId, int page, int pageSize) {
         // 如果 userId 为 null（匿名用户），直接返回热门帖子
         if (userId == null) {
             log.info("匿名用户访问，返回热门帖子");
@@ -251,8 +251,8 @@ public class PostRecommendServiceImpl implements PostRecommendService {
         }
 
         // 1. 获取用户关注的标签
-        List<SysUserTagRelation> userTags = userTagRelationService.lambdaQuery()
-                .eq(SysUserTagRelation::getUserId, userId)
+        List<UserTagRelation> userTags = userTagRelationService.lambdaQuery()
+                .eq(UserTagRelation::getUserId, userId)
                 .list();
 
         if (userTags.isEmpty()) {
@@ -266,17 +266,17 @@ public class PostRecommendServiceImpl implements PostRecommendService {
         }
 
         // 2. 提取标签名称
-        List<SysTag> tags = userTags.stream()
+        List<Tag> tags = userTags.stream()
                 .map(rel -> tagService.getById(rel.getTagId()))
                 .filter(Objects::nonNull)
                 .collect(Collectors.toList());
 
         Set<String> tagNames = tags.stream()
-                .map(SysTag::getName)
+                .map(Tag::getName)
                 .collect(Collectors.toSet());
 
         // 3. 查询包含这些标签的帖子
-        List<SysPost> candidatePosts = postMapper.selectList(null).stream()
+        List<Post> candidatePosts = postMapper.selectList(null).stream()
                 .filter(post -> post.getStatus() != null && post.getStatus() == 1) // 只要状态正常的
                 .filter(post -> StringUtils.hasText(post.getTags())) // 有标签的
                 .filter(post -> containsAnyTag(post.getTags(), tagNames)) // 包含用户关注的标签
@@ -295,14 +295,14 @@ public class PostRecommendServiceImpl implements PostRecommendService {
         int start = (page - 1) * pageSize;
         int end = Math.min(start + pageSize, scoredPosts.size());
 
-        List<SysPost> paginatedPosts = new ArrayList<>();
+        List<Post> paginatedPosts = new ArrayList<>();
         if (start < scoredPosts.size()) {
             paginatedPosts = scoredPosts.subList(start, end).stream()
                     .map(ps -> ps.post)
                     .collect(Collectors.toList());
         }
 
-        Page<SysPost> resultPage = new Page<>(page, pageSize);
+        Page<Post> resultPage = new Page<>(page, pageSize);
         resultPage.setRecords(paginatedPosts);
         resultPage.setTotal(scoredPosts.size());
 
@@ -320,7 +320,7 @@ public class PostRecommendServiceImpl implements PostRecommendService {
      * @return 相关度分数
      */
     @Override
-    public double calculateScore(SysPost post, List<SysUserTagRelation> userTags) {
+    public double calculateScore(Post post, List<UserTagRelation> userTags) {
         if (post.getTags() == null || post.getTags().isEmpty()) {
             return 0.0;
         }
@@ -333,8 +333,8 @@ public class PostRecommendServiceImpl implements PostRecommendService {
                 .filter(t -> !t.isEmpty())
                 .collect(Collectors.toSet());
 
-        for (SysUserTagRelation userTag : userTags) {
-            SysTag tag = tagService.getById(userTag.getTagId());
+        for (UserTagRelation userTag : userTags) {
+            Tag tag = tagService.getById(userTag.getTagId());
             if (tag != null && postTagSet.contains(tag.getName())) {
                 // 用户兴趣权重 × 标签匹配度(1.0)
                 tagScore += userTag.getScore().doubleValue();
@@ -361,23 +361,23 @@ public class PostRecommendServiceImpl implements PostRecommendService {
      * @return 推荐的标签列表
      */
     @Override
-    public List<SysTag> recommendTags(String userId, int limit) {
+    public List<Tag> recommendTags(String userId, int limit) {
         // 如果 userId 为 null（匿名用户），直接返回热门标签
         if (userId == null) {
             log.info("匿名用户访问，返回热门标签");
-            List<SysTag> hotTags = tagService.getHotTags(limit);
+            List<Tag> hotTags = tagService.getHotTags(limit);
             return hotTags;
         }
 
         // 获取用户已关注的标签
-        List<SysTag> followedTags = userTagRelationService.getUserFollowingTags(userId);
+        List<Tag> followedTags = userTagRelationService.getUserFollowingTags(userId);
         Set<Long> followedTagIds = followedTags.stream()
-                .map(SysTag::getId)
+                .map(Tag::getId)
                 .collect(Collectors.toSet());
 
         // 获取热门标签并过滤已关注的
-        List<SysTag> hotTags = tagService.getHotTags(limit * 2);
-        List<SysTag> recommendations = hotTags.stream()
+        List<Tag> hotTags = tagService.getHotTags(limit * 2);
+        List<Tag> recommendations = hotTags.stream()
                 .filter(tag -> !followedTagIds.contains(tag.getId()))
                 .limit(limit)
                 .collect(Collectors.toList());
@@ -390,13 +390,13 @@ public class PostRecommendServiceImpl implements PostRecommendService {
     /**
      * 获取热门帖子
      */
-    private IPage<SysPost> getHotPosts(int page, int pageSize) {
-        Page<SysPost> queryPage = new Page<>(page, pageSize);
+    private IPage<Post> getHotPosts(int page, int pageSize) {
+        Page<Post> queryPage = new Page<>(page, pageSize);
         return postMapper.selectPage(queryPage,
-                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<SysPost>()
-                        .eq(SysPost::getStatus, 1)
-                        .orderByDesc(SysPost::getHeatScore)
-                        .orderByDesc(SysPost::getCreateTime));
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<Post>()
+                        .eq(Post::getStatus, 1)
+                        .orderByDesc(Post::getHeatScore)
+                        .orderByDesc(Post::getCreateTime));
     }
 
     /**
@@ -432,7 +432,7 @@ public class PostRecommendServiceImpl implements PostRecommendService {
     /**
      * 计算互动因子（点赞/评论/收藏越多分数越高）
      */
-    private double calculateEngagementFactor(SysPost post) {
+    private double calculateEngagementFactor(Post post) {
         int likes = post.getLikeCount() != null ? post.getLikeCount() : 0;
         int comments = post.getCommentCount() != null ? post.getCommentCount() : 0;
         int collects = post.getCollectCount() != null ? post.getCollectCount() : 0;
@@ -448,10 +448,10 @@ public class PostRecommendServiceImpl implements PostRecommendService {
      * 内部类：帖子+分数
      */
     private static class PostWithScore {
-        SysPost post;
+        Post post;
         double score;
 
-        PostWithScore(SysPost post, double score) {
+        PostWithScore(Post post, double score) {
             this.post = post;
             this.score = score;
         }

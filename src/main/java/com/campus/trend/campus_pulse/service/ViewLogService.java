@@ -1,7 +1,7 @@
 package com.campus.trend.campus_pulse.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
-import com.campus.trend.campus_pulse.entity.SysViewLog;
+import com.campus.trend.campus_pulse.entity.ViewLog;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -10,7 +10,7 @@ import java.util.Map;
 /**
  * 浏览日志服务接口 - 用于记录和分析用户浏览行为
  */
-public interface ViewLogService extends IService<SysViewLog> {
+public interface ViewLogService extends IService<ViewLog> {
 
     /**
      * 记录一次浏览
@@ -56,7 +56,7 @@ public interface ViewLogService extends IService<SysViewLog> {
      * @param limit  返回数量
      * @return 浏览记录列表
      */
-    List<SysViewLog> getUserViewHistory(String userId, int limit);
+    List<ViewLog> getUserViewHistory(String userId, int limit);
 
     /**
      * 获取每日访问统计

@@ -1,10 +1,10 @@
 package com.campus.trend.campus_pulse.service.impl;
 
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import com.campus.trend.campus_pulse.entity.SysCategory;
-import com.campus.trend.campus_pulse.entity.SysPost;
-import com.campus.trend.campus_pulse.mapper.SysCategoryMapper;
-import com.campus.trend.campus_pulse.mapper.SysPostMapper;
+import com.campus.trend.campus_pulse.entity.Category;
+import com.campus.trend.campus_pulse.entity.Post;
+import com.campus.trend.campus_pulse.mapper.CategoryMapper;
+import com.campus.trend.campus_pulse.mapper.PostMapper;
 import com.campus.trend.campus_pulse.service.CategoryService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -19,33 +19,33 @@ import java.util.List;
 @Service
 @Slf4j
 @RequiredArgsConstructor
-public class CategoryServiceImpl extends ServiceImpl<SysCategoryMapper, SysCategory>
+public class CategoryServiceImpl extends ServiceImpl<CategoryMapper, Category>
         implements CategoryService {
 
-    private final SysPostMapper postMapper;
+    private final PostMapper postMapper;
 
     @Override
-    public List<SysCategory> getAllCategories() {
+    public List<Category> getAllCategories() {
         return lambdaQuery()
-                .orderByAsc(SysCategory::getSort)
+                .orderByAsc(Category::getSort)
                 .list();
     }
 
     @Override
-    public SysCategory getCategoryById(String categoryId) {
+    public Category getCategoryById(String categoryId) {
         return getById(categoryId);
     }
 
     @Override
-    public SysCategory getCategoryByCode(String code) {
+    public Category getCategoryByCode(String code) {
         return lambdaQuery()
-                .eq(SysCategory::getCode, code)
+                .eq(Category::getCode, code)
                 .one();
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public SysCategory createCategory(SysCategory category) {
+    public Category createCategory(Category category) {
         // 检查code是否已存在
         if (existsByCode(category.getCode())) {
             throw new RuntimeException("分类代码已存在: " + category.getCode());
@@ -58,9 +58,9 @@ public class CategoryServiceImpl extends ServiceImpl<SysCategoryMapper, SysCateg
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public boolean updateCategory(SysCategory category) {
+    public boolean updateCategory(Category category) {
         // 检查是否存在
-        SysCategory existing = getById(category.getId());
+        Category existing = getById(category.getId());
         if (existing == null) {
             throw new RuntimeException("分类不存在: " + category.getId());
         }
@@ -97,7 +97,7 @@ public class CategoryServiceImpl extends ServiceImpl<SysCategoryMapper, SysCateg
     @Override
     public boolean existsByCode(String code) {
         Long count = lambdaQuery()
-                .eq(SysCategory::getCode, code)
+                .eq(Category::getCode, code)
                 .count();
         return count != null && count > 0;
     }
@@ -105,9 +105,9 @@ public class CategoryServiceImpl extends ServiceImpl<SysCategoryMapper, SysCateg
     @Override
     public long getPostCountByCategory(String categoryId) {
         Long count = postMapper.selectCount(
-                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<SysPost>()
-                        .eq(SysPost::getCategoryId, categoryId)
-                        .eq(SysPost::getStatus, 1));
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<Post>()
+                        .eq(Post::getCategoryId, categoryId)
+                        .eq(Post::getStatus, 1));
         return count != null ? count : 0;
     }
 

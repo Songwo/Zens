@@ -1,18 +1,18 @@
 package com.campus.trend.campus_pulse.service.impl;
 
-import com.campus.trend.campus_pulse.dto.request.LoginRequest;
-import com.campus.trend.campus_pulse.dto.request.RegisterRequest;
+import com.campus.trend.campus_pulse.dto.request.LoginReq;
+import com.campus.trend.campus_pulse.dto.request.RegisterReq;
 import com.campus.trend.campus_pulse.dto.response.LoginResponse;
-import com.campus.trend.campus_pulse.entity.SysUser;
-import com.campus.trend.campus_pulse.exception.definexception.LoginException;
-import com.campus.trend.campus_pulse.exception.definexception.RedisDeleteException;
-import com.campus.trend.campus_pulse.exception.definexception.RegisterException;
-import com.campus.trend.campus_pulse.exception.definexception.UserNameAlreadyExisted;
-import com.campus.trend.campus_pulse.security.AuthSysUser;
+import com.campus.trend.campus_pulse.entity.User;
+import com.campus.trend.campus_pulse.exception.custom.LoginException;
+import com.campus.trend.campus_pulse.exception.custom.RedisOperationException;
+import com.campus.trend.campus_pulse.exception.custom.RegisterException;
+import com.campus.trend.campus_pulse.exception.custom.UserAlreadyExistsException;
+import com.campus.trend.campus_pulse.security.AuthUser;
 import com.campus.trend.campus_pulse.service.AuthService;
 import com.campus.trend.campus_pulse.service.UserProfileService;
 import com.campus.trend.campus_pulse.service.UserService;
-import com.campus.trend.campus_pulse.utils.GetUserDetail;
+import com.campus.trend.campus_pulse.utils.SecurityUtils;
 import com.campus.trend.campus_pulse.utils.JwtUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -60,7 +60,7 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
-    public LoginResponse Login(LoginRequest req) {
+    public LoginResponse login(LoginReq req) {
 
         // 0.1 检查账号是否被锁定
         if (verificationCodeService.isLocked(req.getUsername())) {
@@ -112,8 +112,8 @@ public class AuthServiceImpl implements AuthService {
         }
 
         // 3. 获取登录用户信息
-        AuthSysUser authUser = (AuthSysUser) authentication.getPrincipal();
-        SysUser user = authUser.getSysUser();
+        AuthUser authUser = (AuthUser) authentication.getPrincipal();
+        User user = authUser.getUser();
 
         // 登录成功，清除失败记录
         verificationCodeService.clearLoginFailure(req.getUsername());
@@ -122,7 +122,7 @@ public class AuthServiceImpl implements AuthService {
         Map<String, Object> claims = jwtUtil.buildClaims(user.getUsername(), user.getRole(), user.getAvatar());
 
         // 5. 生成 Token ,并存入Redis
-        String AccessToken = jwtUtil.generateAccessToken(user.getId(), claims);
+        String AccessToken = jwtUtil.generateAccessToken(user.getId(), claims, req.isRememberMe());
         String RefreshToken = jwtUtil.generateRefreshToken(user.getId(), claims);
 
         LoginResponse response = new LoginResponse();
@@ -133,14 +133,14 @@ public class AuthServiceImpl implements AuthService {
         stringRedisTemplate.opsForValue().set("access_token" + user.getId(), AccessToken);
         stringRedisTemplate.opsForValue().set("refresh_token" + user.getId(), RefreshToken);
 
-        userService.autoUpgradeGrade(user);
+        userService.checkAndUpgradeGrade(user);
 
         return response;
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public void Register(RegisterRequest req) {
+    public void register(RegisterReq req) {
 
         // 0. 校验验证码
         if (!verificationCodeService.verifyCode(req.getEmail(), req.getCode())) {
@@ -148,24 +148,24 @@ public class AuthServiceImpl implements AuthService {
         }
 
         // 1. 用户名（学号）是否已存在
-        SysUser exist = userService.lambdaQuery()
-                .eq(SysUser::getUsername, req.getUsername())
+        User exist = userService.lambdaQuery()
+                .eq(User::getUsername, req.getUsername())
                 .one();
 
         if (exist != null) {
-            throw new UserNameAlreadyExisted("该学号已注册");
+            throw new UserAlreadyExistsException("该学号已注册");
         }
 
         // 1.1 校验邮箱是否存在
-        SysUser existEmail = userService.lambdaQuery()
-                .eq(SysUser::getEmail, req.getEmail())
+        User existEmail = userService.lambdaQuery()
+                .eq(User::getEmail, req.getEmail())
                 .one();
         if (existEmail != null) {
             throw new RegisterException("该邮箱已被其它账号注册");
         }
 
         // 2. 创建用户实体
-        SysUser user = new SysUser();
+        User user = new User();
 
         user.setUsername(req.getUsername());
         user.setPassword(passwordEncoder.encode(req.getPassword()));
@@ -190,15 +190,15 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
-    public void Logout() {
+    public void logout() {
         // 1. 获取当前登录用户
-        AuthSysUser authSysUser = GetUserDetail.getAuthenticatedUser();
-        String userId = authSysUser.getSysUser().getId();
+        AuthUser authUser = SecurityUtils.getAuthenticatedUser();
+        String userId = authUser.getUser().getId();
 
         // 2. 删除 Redis Token
         if (!stringRedisTemplate.delete("access_token" + userId)
                 || !stringRedisTemplate.delete("refresh_token" + userId)) {
-            throw new RedisDeleteException("Redis 登录信息删除失败");
+            throw new RedisOperationException("Redis 登录信息删除失败");
         }
 
         // 3. 清除 SecurityContext

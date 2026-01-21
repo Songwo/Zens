@@ -1,8 +1,8 @@
 package com.campus.trend.campus_pulse.service.impl;
 
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import com.campus.trend.campus_pulse.entity.SysTag;
-import com.campus.trend.campus_pulse.mapper.SysTagMapper;
+import com.campus.trend.campus_pulse.entity.Tag;
+import com.campus.trend.campus_pulse.mapper.TagMapper;
 import com.campus.trend.campus_pulse.service.TagService;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -21,7 +21,7 @@ import java.util.stream.Collectors;
 
 @Service
 @Slf4j
-public class TagServiceImpl extends ServiceImpl<SysTagMapper, SysTag> implements TagService {
+public class TagServiceImpl extends ServiceImpl<TagMapper, Tag> implements TagService {
 
     private final StringRedisTemplate redisTemplate;
     private final ObjectMapper objectMapper;
@@ -43,13 +43,13 @@ public class TagServiceImpl extends ServiceImpl<SysTagMapper, SysTag> implements
      */
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public SysTag getOrCreateTag(String tagName) {
+    public Tag getOrCreateTag(String tagName) {
         // 去除空格并转小写进行查询（不区分大小写）
         String normalizedName = tagName.trim();
 
         // 查询是否已存在
-        SysTag existingTag = lambdaQuery()
-                .eq(SysTag::getName, normalizedName)
+        Tag existingTag = lambdaQuery()
+                .eq(Tag::getName, normalizedName)
                 .one();
 
         if (existingTag != null) {
@@ -57,7 +57,7 @@ public class TagServiceImpl extends ServiceImpl<SysTagMapper, SysTag> implements
         }
 
         // 不存在则创建新标签（用户生成标签）
-        SysTag newTag = new SysTag()
+        Tag newTag = new Tag()
                 .setName(normalizedName)
                 .setType(2) // 2:用户生成
                 .setHeat(0)
@@ -77,7 +77,7 @@ public class TagServiceImpl extends ServiceImpl<SysTagMapper, SysTag> implements
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void increaseHeat(Long tagId) {
-        SysTag tag = getById(tagId);
+        Tag tag = getById(tagId);
         if (tag != null) {
             int newHeat = (tag.getHeat() != null ? tag.getHeat() : 0) + 1;
             tag.setHeat(newHeat);
@@ -98,7 +98,7 @@ public class TagServiceImpl extends ServiceImpl<SysTagMapper, SysTag> implements
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void decreaseHeat(Long tagId) {
-        SysTag tag = getById(tagId);
+        Tag tag = getById(tagId);
         if (tag != null) {
             int currentHeat = tag.getHeat() != null ? tag.getHeat() : 0;
             int newHeat = Math.max(0, currentHeat - 1);
@@ -134,14 +134,14 @@ public class TagServiceImpl extends ServiceImpl<SysTagMapper, SysTag> implements
      * @return 热门标签列表
      */
     @Override
-    public List<SysTag> getHotTags(int limit) {
+    public List<Tag> getHotTags(int limit) {
         String cacheKey = "tag:hot:" + limit;
 
         try {
             // 1. 尝试从缓存获取
             String cached = redisTemplate.opsForValue().get(cacheKey);
             if (cached != null && !cached.isEmpty()) {
-                List<SysTag> cachedTags = objectMapper.readValue(cached, new TypeReference<List<SysTag>>() {
+                List<Tag> cachedTags = objectMapper.readValue(cached, new TypeReference<List<Tag>>() {
                 });
                 log.debug("从缓存获取热门标签 TOP{}", limit);
                 return cachedTags;
@@ -157,9 +157,9 @@ public class TagServiceImpl extends ServiceImpl<SysTagMapper, SysTag> implements
         }
 
         // 2. 查询数据库
-        List<SysTag> hotTags = lambdaQuery()
-                .orderByDesc(SysTag::getHeat)
-                .orderByDesc(SysTag::getCreateTime)
+        List<Tag> hotTags = lambdaQuery()
+                .orderByDesc(Tag::getHeat)
+                .orderByDesc(Tag::getCreateTime)
                 .last("LIMIT " + limit)
                 .list();
 
@@ -173,7 +173,7 @@ public class TagServiceImpl extends ServiceImpl<SysTagMapper, SysTag> implements
         }
 
         log.info("获取热门标签 TOP{}: {}", limit,
-                hotTags.stream().map(SysTag::getName).collect(Collectors.toList()));
+                hotTags.stream().map(Tag::getName).collect(Collectors.toList()));
 
         return hotTags;
     }
@@ -185,14 +185,14 @@ public class TagServiceImpl extends ServiceImpl<SysTagMapper, SysTag> implements
      * @return 匹配的标签列表
      */
     @Override
-    public List<SysTag> searchTags(String keyword) {
+    public List<Tag> searchTags(String keyword) {
         if (keyword == null || keyword.trim().isEmpty()) {
             return new ArrayList<>();
         }
 
-        List<SysTag> results = lambdaQuery()
-                .like(SysTag::getName, keyword.trim())
-                .orderByDesc(SysTag::getHeat)
+        List<Tag> results = lambdaQuery()
+                .like(Tag::getName, keyword.trim())
+                .orderByDesc(Tag::getHeat)
                 .last("LIMIT 20")
                 .list();
 
@@ -209,12 +209,12 @@ public class TagServiceImpl extends ServiceImpl<SysTagMapper, SysTag> implements
      */
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public List<SysTag> batchGetOrCreateTags(List<String> tagNames) {
-        List<SysTag> tags = new ArrayList<>();
+    public List<Tag> batchGetOrCreateTags(List<String> tagNames) {
+        List<Tag> tags = new ArrayList<>();
 
         for (String tagName : tagNames) {
             if (tagName != null && !tagName.trim().isEmpty()) {
-                SysTag tag = getOrCreateTag(tagName.trim());
+                Tag tag = getOrCreateTag(tagName.trim());
                 tags.add(tag);
             }
         }

@@ -1,10 +1,10 @@
 package com.campus.trend.campus_pulse.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.campus.trend.campus_pulse.entity.SysAnnouncement;
-import com.campus.trend.campus_pulse.entity.SysUserPopupLog;
-import com.campus.trend.campus_pulse.mapper.SysAnnouncementMapper;
-import com.campus.trend.campus_pulse.mapper.SysUserPopupLogMapper;
+import com.campus.trend.campus_pulse.entity.Announcement;
+import com.campus.trend.campus_pulse.entity.UserPopupLog;
+import com.campus.trend.campus_pulse.mapper.AnnouncementMapper;
+import com.campus.trend.campus_pulse.mapper.UserPopupLogMapper;
 import com.campus.trend.campus_pulse.service.AnnouncementService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -15,33 +15,33 @@ import java.time.LocalDateTime;
 public class AnnouncementServiceImpl implements AnnouncementService {
 
     @Autowired
-    private SysAnnouncementMapper announcementMapper;
+    private AnnouncementMapper announcementMapper;
 
     @Autowired
-    private SysUserPopupLogMapper popupLogMapper;
+    private UserPopupLogMapper popupLogMapper;
 
     @Override
-    public SysAnnouncement getPendingPopup(String userId) {
+    public Announcement getPendingPopup(String userId) {
         // 获取最新的欢迎弹窗
-        SysAnnouncement welcome = announcementMapper.selectOne(new LambdaQueryWrapper<SysAnnouncement>()
-                .eq(SysAnnouncement::getType, "WELCOME")
-                .eq(SysAnnouncement::getIsActive, 1)
-                .orderByDesc(SysAnnouncement::getCreateTime)
+        Announcement welcome = announcementMapper.selectOne(new LambdaQueryWrapper<Announcement>()
+                .eq(Announcement::getType, "WELCOME")
+                .eq(Announcement::getIsActive, 1)
+                .orderByDesc(Announcement::getCreateTime)
                 .last("LIMIT 1"));
         
         if (welcome == null) return null;
 
         // 检查用户是否已读
-        SysUserPopupLog log = popupLogMapper.selectOne(new LambdaQueryWrapper<SysUserPopupLog>()
-                .eq(SysUserPopupLog::getUserId, userId)
-                .eq(SysUserPopupLog::getAnnouncementId, welcome.getId()));
+        UserPopupLog log = popupLogMapper.selectOne(new LambdaQueryWrapper<UserPopupLog>()
+                .eq(UserPopupLog::getUserId, userId)
+                .eq(UserPopupLog::getAnnouncementId, welcome.getId()));
         
         return log == null ? welcome : null;
     }
 
     @Override
     public void markAsSeen(String userId, Long announcementId) {
-        SysUserPopupLog log = new SysUserPopupLog();
+        UserPopupLog log = new UserPopupLog();
         log.setUserId(userId);
         log.setAnnouncementId(announcementId);
         log.setShowTime(LocalDateTime.now());
@@ -49,7 +49,7 @@ public class AnnouncementServiceImpl implements AnnouncementService {
     }
 
     @Override
-    public void saveAnnouncement(SysAnnouncement announcement) {
+    public void saveAnnouncement(Announcement announcement) {
         if (announcement.getId() == null) {
             announcementMapper.insert(announcement);
         } else {

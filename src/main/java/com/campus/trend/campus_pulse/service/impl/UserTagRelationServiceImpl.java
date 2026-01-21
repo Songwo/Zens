@@ -1,10 +1,10 @@
 package com.campus.trend.campus_pulse.service.impl;
 
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import com.campus.trend.campus_pulse.entity.SysTag;
-import com.campus.trend.campus_pulse.entity.SysUserTagRelation;
-import com.campus.trend.campus_pulse.mapper.SysTagMapper;
-import com.campus.trend.campus_pulse.mapper.SysUserTagRelationMapper;
+import com.campus.trend.campus_pulse.entity.Tag;
+import com.campus.trend.campus_pulse.entity.UserTagRelation;
+import com.campus.trend.campus_pulse.mapper.TagMapper;
+import com.campus.trend.campus_pulse.mapper.UserTagRelationMapper;
 import com.campus.trend.campus_pulse.service.UserTagRelationService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -18,13 +18,13 @@ import java.util.stream.Collectors;
 
 @Service
 @Slf4j
-public class UserTagRelationServiceImpl extends ServiceImpl<SysUserTagRelationMapper, SysUserTagRelation>
+public class UserTagRelationServiceImpl extends ServiceImpl<UserTagRelationMapper, UserTagRelation>
         implements UserTagRelationService {
 
-    private final SysTagMapper tagMapper;
+    private final TagMapper tagMapper;
 
     @Autowired
-    public UserTagRelationServiceImpl(SysTagMapper tagMapper) {
+    public UserTagRelationServiceImpl(TagMapper tagMapper) {
         this.tagMapper = tagMapper;
     }
 
@@ -52,7 +52,7 @@ public class UserTagRelationServiceImpl extends ServiceImpl<SysUserTagRelationMa
         }
 
         // 3. 创建关注关系
-        SysUserTagRelation relation = new SysUserTagRelation()
+        UserTagRelation relation = new UserTagRelation()
                 .setUserId(userId)
                 .setTagId(tagId)
                 .setScore(validScore)
@@ -85,8 +85,8 @@ public class UserTagRelationServiceImpl extends ServiceImpl<SysUserTagRelationMa
 
         // 2. 删除关注关系
         boolean removed = lambdaUpdate()
-                .eq(SysUserTagRelation::getUserId, userId)
-                .eq(SysUserTagRelation::getTagId, tagId)
+                .eq(UserTagRelation::getUserId, userId)
+                .eq(UserTagRelation::getTagId, tagId)
                 .remove();
 
         if (removed) {
@@ -106,8 +106,8 @@ public class UserTagRelationServiceImpl extends ServiceImpl<SysUserTagRelationMa
     @Override
     public boolean isFollowing(String userId, Long tagId) {
         Long count = lambdaQuery()
-                .eq(SysUserTagRelation::getUserId, userId)
-                .eq(SysUserTagRelation::getTagId, tagId)
+                .eq(UserTagRelation::getUserId, userId)
+                .eq(UserTagRelation::getTagId, tagId)
                 .count();
         return count != null && count > 0;
     }
@@ -119,12 +119,12 @@ public class UserTagRelationServiceImpl extends ServiceImpl<SysUserTagRelationMa
      * @return 标签列表
      */
     @Override
-    public List<SysTag> getUserFollowingTags(String userId) {
+    public List<Tag> getUserFollowingTags(String userId) {
         // 1. 查询用户关注的标签关系
-        List<SysUserTagRelation> relations = lambdaQuery()
-                .eq(SysUserTagRelation::getUserId, userId)
-                .orderByDesc(SysUserTagRelation::getScore) // 按权重排序
-                .orderByDesc(SysUserTagRelation::getCreateTime)
+        List<UserTagRelation> relations = lambdaQuery()
+                .eq(UserTagRelation::getUserId, userId)
+                .orderByDesc(UserTagRelation::getScore) // 按权重排序
+                .orderByDesc(UserTagRelation::getCreateTime)
                 .list();
 
         if (relations.isEmpty()) {
@@ -134,11 +134,11 @@ public class UserTagRelationServiceImpl extends ServiceImpl<SysUserTagRelationMa
 
         // 2. 提取标签ID
         List<Long> tagIds = relations.stream()
-                .map(SysUserTagRelation::getTagId)
+                .map(UserTagRelation::getTagId)
                 .collect(Collectors.toList());
 
         // 3. 批量查询标签信息
-        List<SysTag> tags = tagMapper.selectBatchIds(tagIds);
+        List<Tag> tags = tagMapper.selectBatchIds(tagIds);
 
         log.info("用户 [{}] 关注了 {} 个标签", userId, tags.size());
 
@@ -170,9 +170,9 @@ public class UserTagRelationServiceImpl extends ServiceImpl<SysUserTagRelationMa
 
         // 3. 更新权重
         boolean updated = lambdaUpdate()
-                .eq(SysUserTagRelation::getUserId, userId)
-                .eq(SysUserTagRelation::getTagId, tagId)
-                .set(SysUserTagRelation::getScore, score)
+                .eq(UserTagRelation::getUserId, userId)
+                .eq(UserTagRelation::getTagId, tagId)
+                .set(UserTagRelation::getScore, score)
                 .update();
 
         if (updated) {

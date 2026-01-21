@@ -1,11 +1,11 @@
 package com.campus.trend.campus_pulse.controller;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
-import com.campus.trend.campus_pulse.common.Result;
-import com.campus.trend.campus_pulse.entity.SysPost;
-import com.campus.trend.campus_pulse.security.AuthSysUser;
+import com.campus.trend.campus_pulse.common.api.Result;
+import com.campus.trend.campus_pulse.entity.Post;
+import com.campus.trend.campus_pulse.security.AuthUser;
 import com.campus.trend.campus_pulse.service.PostCollectService;
-import com.campus.trend.campus_pulse.utils.GetUserDetail;
+import com.campus.trend.campus_pulse.utils.SecurityUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
@@ -37,8 +37,8 @@ public class PostCollectController {
      */
     @PostMapping("/{postId}/toggle")
     public Result<?> toggleCollect(@PathVariable String postId) {
-        AuthSysUser authSysUser = GetUserDetail.getAuthenticatedUser();
-        String userId = authSysUser.getSysUser().getId();
+        AuthUser authUser = SecurityUtils.getAuthenticatedUser();
+        String userId = authUser.getUser().getId();
 
         boolean isCollected = postCollectService.toggleCollect(postId, userId);
 
@@ -57,8 +57,8 @@ public class PostCollectController {
      */
     @GetMapping("/{postId}/status")
     public Result<?> checkCollectStatus(@PathVariable String postId) {
-        AuthSysUser authSysUser = GetUserDetail.getAuthenticatedUser();
-        String userId = authSysUser.getSysUser().getId();
+        AuthUser authUser = SecurityUtils.getAuthenticatedUser();
+        String userId = authUser.getUser().getId();
 
         boolean isCollected = postCollectService.isCollect(postId, userId);
 
@@ -79,8 +79,8 @@ public class PostCollectController {
     public Result<?> getUserCollectedPosts(
             @RequestParam(value = "page", required = false, defaultValue = "1") int page,
             @RequestParam(value = "pageSize", required = false, defaultValue = "20") int pageSize) {
-        AuthSysUser authSysUser = GetUserDetail.getAuthenticatedUser();
-        IPage<SysPost> collectedPostsPage = postCollectService.getPostCollectWithPage(authSysUser.getSysUser().getId(), page, pageSize);
+        AuthUser authUser = SecurityUtils.getAuthenticatedUser();
+        IPage<Post> collectedPostsPage = postCollectService.getPostCollectWithPage(authUser.getUser().getId(), page, pageSize);
         return Result.success(collectedPostsPage);
     }
 }

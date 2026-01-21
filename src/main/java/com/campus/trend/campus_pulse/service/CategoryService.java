@@ -1,21 +1,21 @@
 package com.campus.trend.campus_pulse.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
-import com.campus.trend.campus_pulse.entity.SysCategory;
+import com.campus.trend.campus_pulse.entity.Category;
 
 import java.util.List;
 
 /**
  * 分类服务接口
  */
-public interface CategoryService extends IService<SysCategory> {
+public interface CategoryService extends IService<Category> {
 
     /**
      * 获取所有分类（按排序返回）
      * 
      * @return 分类列表
      */
-    List<SysCategory> getAllCategories();
+    List<Category> getAllCategories();
 
     /**
      * 根据ID获取分类
@@ -23,7 +23,7 @@ public interface CategoryService extends IService<SysCategory> {
      * @param categoryId 分类ID
      * @return 分类实体，不存在返回null
      */
-    SysCategory getCategoryById(String categoryId);
+    Category getCategoryById(String categoryId);
 
     /**
      * 根据code获取分类
@@ -31,7 +31,7 @@ public interface CategoryService extends IService<SysCategory> {
      * @param code 分类代码
      * @return 分类实体
      */
-    SysCategory getCategoryByCode(String code);
+    Category getCategoryByCode(String code);
 
     /**
      * 创建分类
@@ -39,7 +39,7 @@ public interface CategoryService extends IService<SysCategory> {
      * @param category 分类实体
      * @return 创建后的分类
      */
-    SysCategory createCategory(SysCategory category);
+    Category createCategory(Category category);
 
     /**
      * 更新分类
@@ -47,7 +47,7 @@ public interface CategoryService extends IService<SysCategory> {
      * @param category 分类实体
      * @return 是否成功
      */
-    boolean updateCategory(SysCategory category);
+    boolean updateCategory(Category category);
 
     /**
      * 删除分类（需要检查是否有帖子使用）

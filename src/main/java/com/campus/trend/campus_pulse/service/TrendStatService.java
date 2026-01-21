@@ -1,7 +1,7 @@
 package com.campus.trend.campus_pulse.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
-import com.campus.trend.campus_pulse.entity.SysTrendStat;
+import com.campus.trend.campus_pulse.entity.TrendStat;
 
 import java.util.Date;
 import java.util.List;
@@ -10,7 +10,7 @@ import java.util.Map;
 /**
  * 趋势统计服务接口 - 用于缓存和查询统计数据
  */
-public interface TrendStatService extends IService<SysTrendStat> {
+public interface TrendStatService extends IService<TrendStat> {
 
     // ========== 统计类型常量 ==========
     String TYPE_KEYWORD_CLOUD = "keyword_cloud"; // 关键词词云
@@ -36,7 +36,7 @@ public interface TrendStatService extends IService<SysTrendStat> {
      * @param type     统计类型
      * @return 统计实体
      */
-    SysTrendStat getStatByDateAndType(Date statDate, String type);
+    TrendStat getStatByDateAndType(Date statDate, String type);
 
     /**
      * 获取最新的统计数据（按类型）
@@ -44,7 +44,7 @@ public interface TrendStatService extends IService<SysTrendStat> {
      * @param type 统计类型
      * @return 最新的统计实体
      */
-    SysTrendStat getLatestStatByType(String type);
+    TrendStat getLatestStatByType(String type);
 
     /**
      * 获取关键词词云数据
@@ -80,7 +80,7 @@ public interface TrendStatService extends IService<SysTrendStat> {
      * @param type      统计类型
      * @return 统计列表
      */
-    List<SysTrendStat> getStatsByDateRange(Date startDate, Date endDate, String type);
+    List<TrendStat> getStatsByDateRange(Date startDate, Date endDate, String type);
 
     /**
      * 删除指定日期之前的统计数据

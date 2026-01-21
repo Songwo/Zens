@@ -15,17 +15,17 @@ export interface UserProfile {
 }
 
 export const userApi = {
-    getProfile: () => api.get<any, Result<UserProfile>>('/sys-user/profile'),
-    getSimpleProfile: () => api.get<any, Result<any>>('/sys-user/simple-profile'),
+    getProfile: () => api.get<any, Result<UserProfile>>('/user/profile'),
+    getSimpleProfile: () => api.get<any, Result<any>>('/user/simple-profile'),
     updateAvatar: (file: File) => {
         const formData = new FormData()
         formData.append('avatar', file)
-        return api.put<any, Result<string>>('/sys-user/avatar', formData, {
+        return api.put<any, Result<string>>('/user/avatar', formData, {
             headers: {
                 'Content-Type': 'multipart/form-data'
             }
         })
     },
-    updateUserDetails: (data: any) => api.post('/sys-user/update-udetail', data),
-    updatePwd: (data: any) => api.post('/sys-user/update-pwd', data)
+    updateUserDetails: (data: any) => api.post('/user/update-udetail', data),
+    updatePwd: (data: any) => api.post('/user/update-pwd', data)
 }

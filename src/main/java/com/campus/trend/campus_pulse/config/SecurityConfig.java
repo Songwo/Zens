@@ -1,7 +1,7 @@
 package com.campus.trend.campus_pulse.config;
 
-import com.campus.trend.campus_pulse.common.Result;
-import com.campus.trend.campus_pulse.common.ResultCode;
+import com.campus.trend.campus_pulse.common.api.Result;
+import com.campus.trend.campus_pulse.common.api.ResultCode;
 import com.campus.trend.campus_pulse.filter.JwtAuthenticationFilter;
 import com.campus.trend.campus_pulse.utils.JwtUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;

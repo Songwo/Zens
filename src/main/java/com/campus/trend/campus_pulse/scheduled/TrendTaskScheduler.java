@@ -62,7 +62,7 @@ public class TrendTaskScheduler {
 
     /**
      * 每 10 分钟刷新一次实时热榜缓存 (示例)
-     * 如果热榜计算比较重，可以在这里定时计算并缓存到 Redis 或 SysTrendStat 中
+     * 如果热榜计算比较重，可以在这里定时计算并缓存到 Redis 或 TrendStat 中
      */
     @Scheduled(fixedRate = 10 * 60 * 1000)
     public void refreshHotTrendsCache() {

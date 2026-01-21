@@ -1,9 +1,9 @@
 package com.campus.trend.campus_pulse.controller;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
-import com.campus.trend.campus_pulse.common.Result;
-import com.campus.trend.campus_pulse.entity.SysCourse;
-import com.campus.trend.campus_pulse.entity.SysGrade;
+import com.campus.trend.campus_pulse.common.api.Result;
+import com.campus.trend.campus_pulse.entity.Course;
+import com.campus.trend.campus_pulse.entity.Grade;
 import com.campus.trend.campus_pulse.service.CourseService;
 import com.campus.trend.campus_pulse.utils.SecurityUtils;
 import io.swagger.v3.oas.annotations.Operation;
@@ -23,7 +23,7 @@ public class CourseController {
 
     @Operation(summary = "获取选课列表")
     @GetMapping("/list")
-    public Result<IPage<SysCourse>> getCourseList(
+    public Result<IPage<Course>> getCourseList(
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "10") int pageSize,
             @RequestParam(required = false) String keyword) {
@@ -48,21 +48,21 @@ public class CourseController {
 
     @Operation(summary = "获取我已选的课程")
     @GetMapping("/my-courses")
-    public Result<List<SysCourse>> getMyCourses() {
+    public Result<List<Course>> getMyCourses() {
         String userId = SecurityUtils.getCurrentUserId();
         return Result.success(courseService.getMySelectedCourses(userId));
     }
 
     @Operation(summary = "获取我的成绩单")
     @GetMapping("/my-grades")
-    public Result<List<SysGrade>> getMyGrades(@RequestParam(required = false) String semester) {
+    public Result<List<Grade>> getMyGrades(@RequestParam(required = false) String semester) {
         String userId = SecurityUtils.getCurrentUserId();
         return Result.success(courseService.getMyGrades(userId, semester));
     }
 
     @Operation(summary = "录入成绩 (管理员)")
     @PostMapping("/grade/save")
-    public Result<Void> saveGrade(@RequestBody SysGrade grade) {
+    public Result<Void> saveGrade(@RequestBody Grade grade) {
         courseService.saveGrade(grade);
         return Result.success();
     }

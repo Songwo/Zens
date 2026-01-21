@@ -1,34 +1,33 @@
 package com.campus.trend.campus_pulse.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
-import com.campus.trend.campus_pulse.dto.request.UpdatePasswordRequest;
-import com.campus.trend.campus_pulse.dto.request.UpdateUserDetailRequest;
-import com.campus.trend.campus_pulse.dto.response.ProFileResponse;
-import com.campus.trend.campus_pulse.dto.response.SimpleProfileResponse;
-import com.campus.trend.campus_pulse.entity.SysUser;
+import com.campus.trend.campus_pulse.dto.request.UserPasswordUpdateReq;
+import com.campus.trend.campus_pulse.dto.request.UserDetailUpdateReq;
+import com.campus.trend.campus_pulse.dto.response.UserDetailResp;
+import com.campus.trend.campus_pulse.dto.response.UserSimpleResp;
+import com.campus.trend.campus_pulse.entity.User;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
-public interface UserService extends IService<SysUser> {
+public interface UserService extends IService<User> {
 
-    ProFileResponse GetProFile();
+    UserDetailResp getProfile();
 
-    SimpleProfileResponse GetSimpleProfile();
+    UserSimpleResp getSimpleProfile();
 
-    List<SysUser> GetUsers();
+    List<User> getUsers();
 
-    String UploadAvatar(MultipartFile file);
+    String uploadAvatar(MultipartFile file);
 
-    void UpdateUserPassword(UpdatePasswordRequest updatePasswordRequest);
+    void updateUserPassword(UserPasswordUpdateReq updatePasswordRequest);
 
-    void UpdateUserDetails(UpdateUserDetailRequest updateUserDetailRequest);
+    void updateUserDetails(UserDetailUpdateReq updateUserDetailRequest);
 
-    SysUser searchByUsername(String username);
+    User searchByUsername(String username);
 
-    List<SysUser> searchByGrade(int grade);
+    List<User> searchByGrade(int grade);
 
     // Warning ：内置方法禁止本服务引入自己的方法 ！！！
-    void autoUpgradeGrade(SysUser user);
-
+    void checkAndUpgradeGrade(User user);
 }

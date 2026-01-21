@@ -1,7 +1,7 @@
 package com.campus.trend.campus_pulse.controller;
 
-import com.campus.trend.campus_pulse.common.Result;
-import com.campus.trend.campus_pulse.entity.SysViewLog;
+import com.campus.trend.campus_pulse.common.api.Result;
+import com.campus.trend.campus_pulse.entity.ViewLog;
 import com.campus.trend.campus_pulse.service.ViewLogService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -15,7 +15,7 @@ import java.util.Map;
  * 浏览日志控制器 - 用于数据分析和统计
  */
 @RestController
-@RequestMapping("/sys-view-log")
+@RequestMapping("/view-log")
 @RequiredArgsConstructor
 public class ViewLogController {
 
@@ -70,7 +70,7 @@ public class ViewLogController {
     @GetMapping("/user-history/{userId}")
     public Result<?> getUserHistory(@PathVariable String userId,
             @RequestParam(defaultValue = "20") int limit) {
-        List<SysViewLog> history = viewLogService.getUserViewHistory(userId, limit);
+        List<ViewLog> history = viewLogService.getUserViewHistory(userId, limit);
         return Result.success(history);
     }
 

@@ -1,13 +1,13 @@
 package com.campus.trend.campus_pulse.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
-import com.campus.trend.campus_pulse.entity.SysTag;
-import com.campus.trend.campus_pulse.entity.SysUserTagRelation;
+import com.campus.trend.campus_pulse.entity.Tag;
+import com.campus.trend.campus_pulse.entity.UserTagRelation;
 
 import java.math.BigDecimal;
 import java.util.List;
 
-public interface UserTagRelationService extends IService<SysUserTagRelation> {
+public interface UserTagRelationService extends IService<UserTagRelation> {
 
     /**
      * 关注标签
@@ -43,7 +43,7 @@ public interface UserTagRelationService extends IService<SysUserTagRelation> {
      * @param userId 用户ID
      * @return 标签列表
      */
-    List<SysTag> getUserFollowingTags(String userId);
+    List<Tag> getUserFollowingTags(String userId);
 
     /**
      * 更新兴趣权重

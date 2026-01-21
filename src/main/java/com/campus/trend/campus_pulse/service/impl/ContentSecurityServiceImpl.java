@@ -97,9 +97,9 @@ public class ContentSecurityServiceImpl implements ContentSecurityService {
     private Set<String> loadSensitiveWordsFromFile() {
         Set<String> words = new HashSet<>();
         try {
-            ClassPathResource resource = new ClassPathResource("sensitive_words.txt");
+            ClassPathResource resource = new ClassPathResource("analysis/sensitive_words.txt");
             if (!resource.exists()) {
-                log.warn("敏感词字典文件 sensitive_words.txt 不存在");
+                log.warn("敏感词字典文件 analysis/sensitive_words.txt 不存在");
                 // 添加一些默认测试词
                 words.add("笨蛋");
                 words.add("傻瓜");

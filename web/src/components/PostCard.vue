@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { MessageSquare, ThumbsUp, Eye, Clock, Share2, Star, Sparkles } from 'lucide-vue-next'
+import { MessageSquare, ThumbsUp, Eye, Clock, Share2, Star, Sparkles, Image as ImageIcon } from 'lucide-vue-next'
 
 interface Post {
   id: string
@@ -76,6 +76,12 @@ const handleCollect = async (e: Event) => {
     ></div>
 
     <div class="flex flex-col gap-4">
+      <!-- Cover Image -->
+      <router-link v-if="post.coverImage" :to="'/post/' + post.id" class="relative w-full aspect-[21/9] rounded-2xl overflow-hidden border border-slate-100 mb-2">
+        <img :src="post.coverImage" class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+        <div class="absolute inset-0 bg-gradient-to-t from-slate-900/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+      </router-link>
+
       <!-- Header -->
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-3">

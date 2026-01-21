@@ -1,12 +1,12 @@
 package com.campus.trend.campus_pulse.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
-import com.campus.trend.campus_pulse.entity.SysUserProfile;
+import com.campus.trend.campus_pulse.entity.UserProfile;
 
 /**
  * 用户画像服务接口
  */
-public interface UserProfileService extends IService<SysUserProfile> {
+public interface UserProfileService extends IService<UserProfile> {
 
     /**
      * 创建用户画像（初始化）
@@ -14,7 +14,7 @@ public interface UserProfileService extends IService<SysUserProfile> {
      * @param userId 用户ID
      * @return 创建的画像
      */
-    SysUserProfile createProfile(String userId);
+    UserProfile createProfile(String userId);
 
     /**
      * 根据用户ID获取画像
@@ -22,7 +22,7 @@ public interface UserProfileService extends IService<SysUserProfile> {
      * @param userId 用户ID
      * @return 用户画像，不存在返回null
      */
-    SysUserProfile getProfileByUserId(String userId);
+    UserProfile getProfileByUserId(String userId);
 
     /**
      * 获取或创建用户画像（懒加载模式）
@@ -30,7 +30,7 @@ public interface UserProfileService extends IService<SysUserProfile> {
      * @param userId 用户ID
      * @return 用户画像
      */
-    SysUserProfile getOrCreateProfile(String userId);
+    UserProfile getOrCreateProfile(String userId);
 
     /**
      * 增加发帖数

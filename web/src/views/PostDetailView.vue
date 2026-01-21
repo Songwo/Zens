@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import DefaultLayout from '@/layouts/DefaultLayout.vue'
 import { postApi } from '@/api/post'
@@ -9,10 +9,12 @@ import type { Post, Comment, RecommendPost } from '@/types'
 import { toast } from 'vue-sonner'
 import MarkdownIt from 'markdown-it'
 import { Clock, Eye, ThumbsUp, MessageSquare, Share2, Star, Sparkles } from 'lucide-vue-next'
+import { useUserStore } from '@/store/user'
 import UserCardPopover from '@/components/UserCardPopover.vue'
 
 const route = useRoute()
 const md = new MarkdownIt()
+const userStore = useUserStore()
 
 const post = ref<Post | null>(null)
 const comments = ref<Comment[]>([])
@@ -21,6 +23,7 @@ const loading = ref(true)
 const commentContent = ref('')
 
 const fetchPost = async () => {
+  loading.value = true
   try {
     const id = route.params.id as string
     const res = await postApi.getDetail(id)
@@ -37,6 +40,9 @@ const fetchPost = async () => {
     toast.error('获取详情失败')
   } finally {
     loading.value = false
+    nextTick(() => {
+      window.scrollTo(0, 0)
+    })
   }
 }
 
@@ -85,6 +91,13 @@ const handleComment = async () => {
 
 onMounted(() => {
   fetchPost()
+})
+
+watch(() => route.params.id, (newId) => {
+  if (newId) {
+    fetchPost()
+    window.scrollTo(0, 0)
+  }
 })
 </script>
 
@@ -200,8 +213,9 @@ onMounted(() => {
           
           <!-- Comment Input Area -->
           <div class="flex gap-5 mb-12">
-            <div class="w-12 h-12 rounded-full bg-slate-100 border border-slate-200 flex-shrink-0 overflow-hidden shadow-sm">
-                <img v-if="post.authorAvatar" :src="post.authorAvatar" class="w-full h-full object-cover" />
+            <div class="w-12 h-12 rounded-full bg-slate-100 border border-slate-200 flex-shrink-0 overflow-hidden shadow-sm flex items-center justify-center">
+                <img v-if="userStore.userInfo?.avatar" :src="userStore.userInfo.avatar" class="w-full h-full object-cover" />
+                <span v-else class="text-sm font-bold text-slate-400 uppercase">{{ userStore.userInfo?.nickname?.charAt(0) || 'Me' }}</span>
             </div>
             <div class="flex-1 space-y-3">
               <textarea 
@@ -232,8 +246,15 @@ onMounted(() => {
               >
                 <div class="flex gap-5 text-left">
                   <div class="w-12 h-12 rounded-full bg-slate-50 border border-slate-200 flex-shrink-0 overflow-hidden cursor-pointer hover:ring-4 hover:ring-slate-900/5 transition-all">
-                    <img v-if="comment.userAvatar" :src="comment.userAvatar" class="w-full h-full object-cover" />
-                    <div v-else class="w-full h-full flex items-center justify-center text-slate-400 font-bold text-xs uppercase">{{ comment.nickname?.charAt(0) || 'A' }}</div>
+                    <img 
+                      v-if="comment.userId === userStore.userInfo?.id ? userStore.userInfo?.avatar : comment.userAvatar" 
+                      :src="comment.userId === userStore.userInfo?.id ? userStore.userInfo?.avatar : comment.userAvatar" 
+                      class="w-full h-full object-cover" 
+                      @error="(e) => (e.target as HTMLImageElement).style.display = 'none'"
+                    />
+                    <div v-if="!(comment.userId === userStore.userInfo?.id ? userStore.userInfo?.avatar : comment.userAvatar) || $event?.target?.style?.display === 'none'" class="w-full h-full flex items-center justify-center text-slate-400 font-bold text-xs uppercase bg-slate-100">
+                      {{ (comment.userId === userStore.userInfo?.id ? userStore.userInfo?.nickname : comment.nickname)?.charAt(0) || 'A' }}
+                    </div>
                   </div>
                   
                   <div class="flex-1 pb-10 border-b border-slate-50 last:border-0 last:pb-0">

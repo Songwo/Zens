@@ -1,12 +1,12 @@
 package com.campus.trend.campus_pulse.controller;
 
-import com.campus.trend.campus_pulse.common.Result;
-import com.campus.trend.campus_pulse.dto.request.UpdateUserProfileRequest;
-import com.campus.trend.campus_pulse.dto.response.UserProfileResponse;
-import com.campus.trend.campus_pulse.entity.SysUserProfile;
-import com.campus.trend.campus_pulse.security.AuthSysUser;
+import com.campus.trend.campus_pulse.common.api.Result;
+import com.campus.trend.campus_pulse.dto.request.UserProfileUpdateReq;
+import com.campus.trend.campus_pulse.dto.response.UserProfileResp;
+import com.campus.trend.campus_pulse.entity.UserProfile;
+import com.campus.trend.campus_pulse.security.AuthUser;
 import com.campus.trend.campus_pulse.service.UserProfileService;
-import com.campus.trend.campus_pulse.utils.GetUserDetail;
+import com.campus.trend.campus_pulse.utils.SecurityUtils;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -15,7 +15,7 @@ import org.springframework.web.bind.annotation.*;
  * 用户画像控制器
  */
 @RestController
-@RequestMapping("/sys-user-profile")
+@RequestMapping("/user-profile")
 @RequiredArgsConstructor
 public class UserProfileController {
 
@@ -26,10 +26,10 @@ public class UserProfileController {
      */
     @GetMapping
     public Result<?> getMyProfile() {
-        AuthSysUser authUser = GetUserDetail.getAuthenticatedUser();
-        String userId = authUser.getSysUser().getId();
+        AuthUser authUser = SecurityUtils.getAuthenticatedUser();
+        String userId = authUser.getUser().getId();
 
-        SysUserProfile profile = userProfileService.getOrCreateProfile(userId);
+        UserProfile profile = userProfileService.getOrCreateProfile(userId);
         return Result.success(convertToResponse(profile));
     }
 
@@ -38,7 +38,7 @@ public class UserProfileController {
      */
     @GetMapping("/{userId}")
     public Result<?> getProfile(@PathVariable String userId) {
-        SysUserProfile profile = userProfileService.getProfileByUserId(userId);
+        UserProfile profile = userProfileService.getProfileByUserId(userId);
         if (profile == null) {
             return Result.success(null);
         }
@@ -49,9 +49,9 @@ public class UserProfileController {
      * 更新当前用户的画像（手动设置部分）
      */
     @PutMapping
-    public Result<?> updateMyProfile(@Valid @RequestBody UpdateUserProfileRequest request) {
-        AuthSysUser authUser = GetUserDetail.getAuthenticatedUser();
-        String userId = authUser.getSysUser().getId();
+    public Result<?> updateMyProfile(@Valid @RequestBody UserProfileUpdateReq request) {
+        AuthUser authUser = SecurityUtils.getAuthenticatedUser();
+        String userId = authUser.getUser().getId();
 
         // 更新活跃地点
         if (request.getActiveRegion() != null && !request.getActiveRegion().isEmpty()) {
@@ -66,10 +66,10 @@ public class UserProfileController {
      */
     @GetMapping("/stats")
     public Result<?> getMyStats() {
-        AuthSysUser authUser = GetUserDetail.getAuthenticatedUser();
-        String userId = authUser.getSysUser().getId();
+        AuthUser authUser = SecurityUtils.getAuthenticatedUser();
+        String userId = authUser.getUser().getId();
 
-        SysUserProfile profile = userProfileService.getOrCreateProfile(userId);
+        UserProfile profile = userProfileService.getOrCreateProfile(userId);
 
         // 返回简要统计数据
         return Result.success(new Object() {
@@ -83,8 +83,8 @@ public class UserProfileController {
     /**
      * 将实体转换为响应DTO
      */
-    private UserProfileResponse convertToResponse(SysUserProfile profile) {
-        UserProfileResponse response = new UserProfileResponse();
+    private UserProfileResp convertToResponse(UserProfile profile) {
+        UserProfileResp response = new UserProfileResp();
         response.setUserId(profile.getUserId());
         response.setReputation(profile.getReputation());
         response.setContributionVal(profile.getContributionVal());

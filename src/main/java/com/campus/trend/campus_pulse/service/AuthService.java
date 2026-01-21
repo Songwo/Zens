@@ -1,16 +1,17 @@
 package com.campus.trend.campus_pulse.service;
 
-import com.campus.trend.campus_pulse.dto.request.LoginRequest;
-import com.campus.trend.campus_pulse.dto.request.RegisterRequest;
+import com.campus.trend.campus_pulse.dto.request.LoginReq;
+import com.campus.trend.campus_pulse.dto.request.RegisterReq;
 import com.campus.trend.campus_pulse.dto.response.LoginResponse;
 
 public interface AuthService {
 
-    LoginResponse Login(LoginRequest loginRequest);
+    LoginResponse login(LoginReq loginRequest);
 
-    void Register(RegisterRequest registerRequest);
+    void register(RegisterReq registerRequest);
 
-    void Logout();
+    void logout();
+
 
     //TODO 待实现列表
     // 1.用户获取详细个人信息 ✔

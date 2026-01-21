@@ -1,10 +1,10 @@
 package com.campus.trend.campus_pulse.service.impl;
 
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import com.campus.trend.campus_pulse.entity.SysTrendStat;
-import com.campus.trend.campus_pulse.mapper.SysTrendStatMapper;
+import com.campus.trend.campus_pulse.entity.TrendStat;
+import com.campus.trend.campus_pulse.mapper.TrendStatMapper;
 import com.campus.trend.campus_pulse.service.TrendStatService;
-import com.campus.trend.campus_pulse.utils.GenerateIDUtil;
+import com.campus.trend.campus_pulse.utils.IdUtils;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -21,17 +21,17 @@ import java.util.*;
 @Service
 @Slf4j
 @RequiredArgsConstructor
-public class TrendStatServiceImpl extends ServiceImpl<SysTrendStatMapper, SysTrendStat>
+public class TrendStatServiceImpl extends ServiceImpl<TrendStatMapper, TrendStat>
         implements TrendStatService {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
-    private final com.campus.trend.campus_pulse.mapper.SysPostMapper sysPostMapper;
-    private final com.campus.trend.campus_pulse.mapper.SysCategoryMapper sysCategoryMapper;
+    private final com.campus.trend.campus_pulse.mapper.PostMapper sysPostMapper;
+    private final com.campus.trend.campus_pulse.mapper.CategoryMapper sysCategoryMapper;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void saveOrUpdateStat(Date statDate, String type, String dataJson) {
-        SysTrendStat existing = getStatByDateAndType(statDate, type);
+        TrendStat existing = getStatByDateAndType(statDate, type);
 
         if (existing != null) {
             existing.setDataJson(dataJson);
@@ -39,8 +39,8 @@ public class TrendStatServiceImpl extends ServiceImpl<SysTrendStatMapper, SysTre
             updateById(existing);
             log.info("更新统计数据: {} - {}", type, statDate);
         } else {
-            SysTrendStat stat = new SysTrendStat()
-                    .setId(GenerateIDUtil.genId("STAT"))
+            TrendStat stat = new TrendStat()
+                    .setId(IdUtils.genId("STAT"))
                     .setStatDate(statDate)
                     .setType(type)
                     .setDataJson(dataJson)
@@ -51,19 +51,19 @@ public class TrendStatServiceImpl extends ServiceImpl<SysTrendStatMapper, SysTre
     }
 
     @Override
-    public SysTrendStat getStatByDateAndType(Date statDate, String type) {
+    public TrendStat getStatByDateAndType(Date statDate, String type) {
         return lambdaQuery()
-                .eq(SysTrendStat::getStatDate, statDate)
-                .eq(SysTrendStat::getType, type)
+                .eq(TrendStat::getStatDate, statDate)
+                .eq(TrendStat::getType, type)
                 .one();
     }
 
     @Override
-    public SysTrendStat getLatestStatByType(String type) {
+    public TrendStat getLatestStatByType(String type) {
         return lambdaQuery()
-                .eq(SysTrendStat::getType, type)
-                .orderByDesc(SysTrendStat::getStatDate)
-                .orderByDesc(SysTrendStat::getCreateTime)
+                .eq(TrendStat::getType, type)
+                .orderByDesc(TrendStat::getStatDate)
+                .orderByDesc(TrendStat::getCreateTime)
                 .last("LIMIT 1")
                 .one();
     }
@@ -73,7 +73,7 @@ public class TrendStatServiceImpl extends ServiceImpl<SysTrendStatMapper, SysTre
         // 查询最近7天的数据
         // 注意：数据库函数 DATE(create_time) 依赖于 MySQL
         List<Map<String, Object>> list = sysPostMapper.selectMaps(
-                new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<com.campus.trend.campus_pulse.entity.SysPost>()
+                new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<com.campus.trend.campus_pulse.entity.Post>()
                         .select("DATE_FORMAT(create_time, '%Y-%m-%d') as date", "count(*) as count")
                         .groupBy("DATE_FORMAT(create_time, '%Y-%m-%d')")
                         .orderByAsc("date")
@@ -83,14 +83,14 @@ public class TrendStatServiceImpl extends ServiceImpl<SysTrendStatMapper, SysTre
 
     @Override
     public Map<String, Object> getKeywordCloud() {
-        SysTrendStat stat = getLatestStatByType(TYPE_KEYWORD_CLOUD);
+        TrendStat stat = getLatestStatByType(TYPE_KEYWORD_CLOUD);
         Map<String, Object> result = parseJsonToMap(stat);
 
         // 如果没有预生成数据，实时从帖子标签生成
         if (result.isEmpty()) {
             result = new HashMap<>(); // Fix: Ensure map is mutable
-            List<com.campus.trend.campus_pulse.entity.SysPost> posts = sysPostMapper.selectList(
-                    new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<com.campus.trend.campus_pulse.entity.SysPost>()
+            List<com.campus.trend.campus_pulse.entity.Post> posts = sysPostMapper.selectList(
+                    new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<com.campus.trend.campus_pulse.entity.Post>()
                             .select("tags")
                             .isNotNull("tags")
                             .last("LIMIT 100") // 取最近100条
@@ -98,7 +98,7 @@ public class TrendStatServiceImpl extends ServiceImpl<SysTrendStatMapper, SysTre
 
             // 简单统计标签频率
             Map<String, Integer> tagFreq = new HashMap<>();
-            for (com.campus.trend.campus_pulse.entity.SysPost post : posts) {
+            for (com.campus.trend.campus_pulse.entity.Post post : posts) {
                 if (post.getTags() != null && !post.getTags().isEmpty()) {
                     String[] tags = post.getTags().split(" ");
                     for (String tag : tags) {
@@ -129,13 +129,13 @@ public class TrendStatServiceImpl extends ServiceImpl<SysTrendStatMapper, SysTre
 
     @Override
     public Map<String, Object> getCategoryPie() {
-        SysTrendStat stat = getLatestStatByType(TYPE_CATEGORY_PIE);
+        TrendStat stat = getLatestStatByType(TYPE_CATEGORY_PIE);
         
         // 实时生成
         Map<String, Object> result = new HashMap<>();
         // 统计分类帖子数量
         List<Map<String, Object>> categoryStats = sysPostMapper.selectMaps(
-                new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<com.campus.trend.campus_pulse.entity.SysPost>()
+                new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<com.campus.trend.campus_pulse.entity.Post>()
                         .select("category_id", "count(*) as count")
                         .groupBy("category_id"));
 
@@ -143,7 +143,7 @@ public class TrendStatServiceImpl extends ServiceImpl<SysTrendStatMapper, SysTre
             String catId = (String) item.get("category_id");
             String catName = "未分类";
             if (catId != null) {
-                com.campus.trend.campus_pulse.entity.SysCategory category = sysCategoryMapper.selectById(catId);
+                com.campus.trend.campus_pulse.entity.Category category = sysCategoryMapper.selectById(catId);
                 if (category != null) {
                     catName = category.getName();
                 }
@@ -156,7 +156,7 @@ public class TrendStatServiceImpl extends ServiceImpl<SysTrendStatMapper, SysTre
     @Override
     public List<Map<String, Object>> getHeatRank() {
         // 先尝试从缓存获取
-        SysTrendStat stat = getLatestStatByType(TYPE_HEAT_RANK);
+        TrendStat stat = getLatestStatByType(TYPE_HEAT_RANK);
         if (stat != null && stat.getDataJson() != null) {
             try {
                 return objectMapper.readValue(stat.getDataJson(),
@@ -178,13 +178,13 @@ public class TrendStatServiceImpl extends ServiceImpl<SysTrendStatMapper, SysTre
     private List<Map<String, Object>> generateRealtimeHeatRank() {
         try {
             // 从sys_post表查询热度最高的10条记录
-            List<com.campus.trend.campus_pulse.entity.SysPost> posts = sysPostMapper.selectList(
-                    new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<com.campus.trend.campus_pulse.entity.SysPost>()
+            List<com.campus.trend.campus_pulse.entity.Post> posts = sysPostMapper.selectList(
+                    new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<com.campus.trend.campus_pulse.entity.Post>()
                             .orderByDesc("heat_score")
                             .last("LIMIT 10"));
 
             List<Map<String, Object>> heatRank = new ArrayList<>();
-            for (com.campus.trend.campus_pulse.entity.SysPost post : posts) {
+            for (com.campus.trend.campus_pulse.entity.Post post : posts) {
                 Map<String, Object> item = new HashMap<>();
                 item.put("postId", post.getId());
                 item.put("title", post.getTitle());
@@ -201,12 +201,12 @@ public class TrendStatServiceImpl extends ServiceImpl<SysTrendStatMapper, SysTre
     }
 
     @Override
-    public List<SysTrendStat> getStatsByDateRange(Date startDate, Date endDate, String type) {
+    public List<TrendStat> getStatsByDateRange(Date startDate, Date endDate, String type) {
         return lambdaQuery()
-                .eq(type != null, SysTrendStat::getType, type)
-                .ge(startDate != null, SysTrendStat::getStatDate, startDate)
-                .le(endDate != null, SysTrendStat::getStatDate, endDate)
-                .orderByDesc(SysTrendStat::getStatDate)
+                .eq(type != null, TrendStat::getType, type)
+                .ge(startDate != null, TrendStat::getStatDate, startDate)
+                .le(endDate != null, TrendStat::getStatDate, endDate)
+                .orderByDesc(TrendStat::getStatDate)
                 .list();
     }
 
@@ -214,12 +214,12 @@ public class TrendStatServiceImpl extends ServiceImpl<SysTrendStatMapper, SysTre
     @Transactional(rollbackFor = Exception.class)
     public long deleteStatsBefore(Date beforeDate) {
         long count = lambdaQuery()
-                .lt(SysTrendStat::getStatDate, beforeDate)
+                .lt(TrendStat::getStatDate, beforeDate)
                 .count();
 
         if (count > 0) {
             remove(lambdaQuery()
-                    .lt(SysTrendStat::getStatDate, beforeDate)
+                    .lt(TrendStat::getStatDate, beforeDate)
                     .getWrapper());
             log.info("删除了 {} 条旧统计数据", count);
         }
@@ -301,7 +301,7 @@ public class TrendStatServiceImpl extends ServiceImpl<SysTrendStatMapper, SysTre
     /**
      * 解析JSON字符串为Map
      */
-    private Map<String, Object> parseJsonToMap(SysTrendStat stat) {
+    private Map<String, Object> parseJsonToMap(TrendStat stat) {
         if (stat == null || stat.getDataJson() == null) {
             return Collections.emptyMap();
         }

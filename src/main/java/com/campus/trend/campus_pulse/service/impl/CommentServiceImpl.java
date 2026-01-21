@@ -3,19 +3,16 @@ package com.campus.trend.campus_pulse.service.impl;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import com.campus.trend.campus_pulse.dto.request.CreateCommentRequest;
-import com.campus.trend.campus_pulse.dto.response.CommentResponse;
-import com.campus.trend.campus_pulse.entity.SysComment;
-import com.campus.trend.campus_pulse.entity.SysPost;
-import com.campus.trend.campus_pulse.entity.SysUser;
-import com.campus.trend.campus_pulse.mapper.SysCommentMapper;
-import com.campus.trend.campus_pulse.mapper.SysPostMapper;
-import com.campus.trend.campus_pulse.security.AuthSysUser;
-import com.campus.trend.campus_pulse.service.CommentService;
-import com.campus.trend.campus_pulse.service.ContentSecurityService;
-import com.campus.trend.campus_pulse.service.UserProfileService;
-import com.campus.trend.campus_pulse.service.UserService;
-import com.campus.trend.campus_pulse.utils.GetUserDetail;
+import com.campus.trend.campus_pulse.dto.request.CommentCreateReq;
+import com.campus.trend.campus_pulse.dto.response.CommentResp;
+import com.campus.trend.campus_pulse.entity.Comment;
+import com.campus.trend.campus_pulse.entity.Post;
+import com.campus.trend.campus_pulse.entity.User;
+import com.campus.trend.campus_pulse.mapper.CommentMapper;
+import com.campus.trend.campus_pulse.mapper.PostMapper;
+import com.campus.trend.campus_pulse.security.AuthUser;
+import com.campus.trend.campus_pulse.service.*;
+import com.campus.trend.campus_pulse.utils.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
@@ -27,18 +24,19 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
-public class CommentServiceImpl extends ServiceImpl<SysCommentMapper, SysComment> implements CommentService {
+public class CommentServiceImpl extends ServiceImpl<CommentMapper, Comment> implements CommentService {
 
-    private final SysPostMapper sysPostMapper;
+    private final PostMapper sysPostMapper;
     private final UserProfileService userProfileService;
     private final ContentSecurityService contentSecurityService;
     private final org.springframework.data.redis.core.StringRedisTemplate stringRedisTemplate;
     private final UserService userService;
+    private final SysNotificationService notificationService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public void addComment(CreateCommentRequest request, String userId) {
-        SysComment comment = new SysComment();
+    public void addComment(CommentCreateReq request, String userId) {
+        Comment comment = new Comment();
         comment.setPostId(request.getPostId());
         comment.setUserId(userId == null ? "0" : userId);
 
@@ -55,10 +53,48 @@ public class CommentServiceImpl extends ServiceImpl<SysCommentMapper, SysComment
         comment.setLikeCount(0);
         this.save(comment);
 
-        SysPost post = sysPostMapper.selectById(comment.getPostId());
+        Post post = sysPostMapper.selectById(comment.getPostId());
         if (post != null) {
             post.setCommentCount(post.getCommentCount() + 1);
             sysPostMapper.updateById(post);
+            
+            // Notification Logic
+            // 1. Notify Post Author
+            if (!post.getUserId().equals(userId)) {
+                 User sender = userService.getById(userId);
+                 String senderName = (request.getIsAnonymous() != null && request.getIsAnonymous() == 1) ? "匿名用户" : (sender != null ? sender.getNickname() : "有人");
+                 String senderAvatar = (request.getIsAnonymous() != null && request.getIsAnonymous() == 1) ? null : (sender != null ? sender.getAvatar() : null);
+                 
+                 notificationService.createNotification(
+                     post.getUserId(),
+                     userId,
+                     senderName,
+                     senderAvatar,
+                     "收到新评论",
+                     "评论了你的动态: " + post.getTitle(),
+                     2, // Reply
+                     post.getId()
+                 );
+            }
+        }
+        
+        // 2. Notify Reply Target
+        if (request.getReplyUserId() != null && !request.getReplyUserId().equals(userId) && (post == null || !request.getReplyUserId().equals(post.getUserId()))) {
+             // Only notify if not already notified as post author
+             User sender = userService.getById(userId);
+             String senderName = (request.getIsAnonymous() != null && request.getIsAnonymous() == 1) ? "匿名用户" : (sender != null ? sender.getNickname() : "有人");
+             String senderAvatar = (request.getIsAnonymous() != null && request.getIsAnonymous() == 1) ? null : (sender != null ? sender.getAvatar() : null);
+
+             notificationService.createNotification(
+                 request.getReplyUserId(),
+                 userId,
+                 senderName,
+                 senderAvatar,
+                 "收到新回复",
+                 "回复了你的评论: " + content,
+                 2, // Reply
+                 post != null ? post.getId() : null
+             );
         }
 
         if (userId != null) {
@@ -70,7 +106,7 @@ public class CommentServiceImpl extends ServiceImpl<SysCommentMapper, SysComment
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void deleteComment(String commentId, String userId) {
-        SysComment comment = getById(commentId);
+        Comment comment = getById(commentId);
         if (comment == null) {
             throw new RuntimeException("评论不存在");
         }
@@ -81,7 +117,7 @@ public class CommentServiceImpl extends ServiceImpl<SysCommentMapper, SysComment
 
         removeById(commentId);
 
-        SysPost post = sysPostMapper.selectById(comment.getPostId());
+        Post post = sysPostMapper.selectById(comment.getPostId());
         if (post != null) {
             post.setCommentCount(Math.max(0, post.getCommentCount() - 1));
             sysPostMapper.updateById(post);
@@ -89,36 +125,36 @@ public class CommentServiceImpl extends ServiceImpl<SysCommentMapper, SysComment
     }
 
     @Override
-    public com.baomidou.mybatisplus.core.metadata.IPage<CommentResponse> getCommentsByPostId(String postId,
+    public com.baomidou.mybatisplus.core.metadata.IPage<CommentResp> getCommentsByPostId(String postId,
             Integer pageNo, Integer pageSize) {
-        Page<SysComment> page = new Page<>(pageNo, pageSize);
-        Page<SysComment> rootPage = this.page(page, Wrappers.<SysComment>lambdaQuery()
-                .eq(SysComment::getPostId, postId)
-                .eq(SysComment::getParentId, "0")
-                .orderByDesc(SysComment::getCreateTime));
+        Page<Comment> page = new Page<>(pageNo, pageSize);
+        Page<Comment> rootPage = this.page(page, Wrappers.<Comment>lambdaQuery()
+                .eq(Comment::getPostId, postId)
+                .eq(Comment::getParentId, "0")
+                .orderByDesc(Comment::getCreateTime));
 
-        List<SysComment> roots = rootPage.getRecords();
+        List<Comment> roots = rootPage.getRecords();
         if (roots.isEmpty()) {
-            return new Page<CommentResponse>(pageNo, pageSize).setRecords(Collections.emptyList());
+            return new Page<CommentResp>(pageNo, pageSize).setRecords(Collections.emptyList());
         }
 
-        List<CommentResponse> responseList = roots.stream().map(root -> {
+        List<CommentResp> responseList = roots.stream().map(root -> {
             fillChildren(root);
             return mapToResponse(root);
         }).collect(Collectors.toList());
 
         fillUserInfo(responseList);
 
-        Page<CommentResponse> resultPage = new Page<>(pageNo, pageSize);
+        Page<CommentResp> resultPage = new Page<>(pageNo, pageSize);
         resultPage.setTotal(rootPage.getTotal());
         resultPage.setPages(rootPage.getPages());
         resultPage.setCurrent(rootPage.getCurrent());
         resultPage.setRecords(responseList);
 
         try {
-            AuthSysUser authSysUser = GetUserDetail.getAuthenticatedUser();
-            if (authSysUser != null) {
-                String currentUserId = authSysUser.getSysUser().getId();
+            AuthUser authUser = SecurityUtils.getAuthenticatedUser();
+            if (authUser != null) {
+                String currentUserId = authUser.getUser().getId();
                 fillLikeStatus(responseList, currentUserId);
             }
         } catch (Exception ignored) {
@@ -131,7 +167,7 @@ public class CommentServiceImpl extends ServiceImpl<SysCommentMapper, SysComment
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void toggleLike(String commentId, String userId) {
-        SysComment comment = getById(commentId);
+        Comment comment = getById(commentId);
         if (comment == null) {
             throw new RuntimeException("评论不存在");
         }
@@ -151,10 +187,10 @@ public class CommentServiceImpl extends ServiceImpl<SysCommentMapper, SysComment
         updateById(comment);
     }
 
-    private void fillChildren(SysComment parent) {
-        List<SysComment> children = this.list(Wrappers.<SysComment>lambdaQuery()
-                .eq(SysComment::getParentId, parent.getId())
-                .orderByAsc(SysComment::getCreateTime));
+    private void fillChildren(Comment parent) {
+        List<Comment> children = this.list(Wrappers.<Comment>lambdaQuery()
+                .eq(Comment::getParentId, parent.getId())
+                .orderByAsc(Comment::getCreateTime));
 
         if (children != null && !children.isEmpty()) {
             parent.setChildren(children);
@@ -162,12 +198,12 @@ public class CommentServiceImpl extends ServiceImpl<SysCommentMapper, SysComment
         }
     }
 
-    private CommentResponse mapToResponse(SysComment comment) {
-        CommentResponse response = new CommentResponse();
+    private CommentResp mapToResponse(Comment comment) {
+        CommentResp response = new CommentResp();
         BeanUtils.copyProperties(comment, response);
 
         if (comment.getChildren() != null && !comment.getChildren().isEmpty()) {
-            List<CommentResponse> childrenDtos = comment.getChildren().stream()
+            List<CommentResp> childrenDtos = comment.getChildren().stream()
                     .map(this::mapToResponse)
                     .collect(Collectors.toList());
             response.setChildren(childrenDtos);
@@ -175,7 +211,7 @@ public class CommentServiceImpl extends ServiceImpl<SysCommentMapper, SysComment
         return response;
     }
 
-    private void fillUserInfo(List<CommentResponse> responses) {
+    private void fillUserInfo(List<CommentResp> responses) {
         if (responses == null || responses.isEmpty())
             return;
 
@@ -185,15 +221,15 @@ public class CommentServiceImpl extends ServiceImpl<SysCommentMapper, SysComment
         if (userIds.isEmpty())
             return;
 
-        List<SysUser> users = userService.listByIds(userIds);
-        Map<String, SysUser> userMap = users.stream()
-                .collect(Collectors.toMap(SysUser::getId, u -> u));
+        List<User> users = userService.listByIds(userIds);
+        Map<String, User> userMap = users.stream()
+                .collect(Collectors.toMap(User::getId, u -> u));
 
         populateInfo(responses, userMap);
     }
 
-    private void collectUserIds(List<CommentResponse> responses, Set<String> userIds) {
-        for (CommentResponse c : responses) {
+    private void collectUserIds(List<CommentResp> responses, Set<String> userIds) {
+        for (CommentResp c : responses) {
             if (c.getUserId() != null && !"0".equals(c.getUserId())) {
                 userIds.add(c.getUserId());
             }
@@ -206,12 +242,12 @@ public class CommentServiceImpl extends ServiceImpl<SysCommentMapper, SysComment
         }
     }
 
-    private void populateInfo(List<CommentResponse> responses, Map<String, SysUser> userMap) {
-        for (CommentResponse c : responses) {
+    private void populateInfo(List<CommentResp> responses, Map<String, User> userMap) {
+        for (CommentResp c : responses) {
             if (c.getIsAnonymous() != null && c.getIsAnonymous() == 1) {
                 // Keep anonymous
             } else {
-                SysUser user = userMap.get(c.getUserId());
+                User user = userMap.get(c.getUserId());
                 if (user != null) {
                     c.setNickname(user.getNickname());
                     c.setUserAvatar(user.getAvatar());
@@ -219,7 +255,7 @@ public class CommentServiceImpl extends ServiceImpl<SysCommentMapper, SysComment
             }
 
             if (c.getReplyUserId() != null) {
-                SysUser replyUser = userMap.get(c.getReplyUserId());
+                User replyUser = userMap.get(c.getReplyUserId());
                 if (replyUser != null) {
                     c.setReplyUserNickname(replyUser.getNickname());
                 }
@@ -231,8 +267,8 @@ public class CommentServiceImpl extends ServiceImpl<SysCommentMapper, SysComment
         }
     }
 
-    private void fillLikeStatus(List<CommentResponse> responses, String currentUserId) {
-        for (CommentResponse c : responses) {
+    private void fillLikeStatus(List<CommentResp> responses, String currentUserId) {
+        for (CommentResp c : responses) {
             String key = "comment:like:" + c.getId() + ":" + currentUserId;
             c.setIsLiked(stringRedisTemplate.hasKey(key));
             if (c.getChildren() != null) {

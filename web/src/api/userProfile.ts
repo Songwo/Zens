@@ -20,8 +20,8 @@ export interface UserProfileDetail {
 }
 
 export const userProfileApi = {
-    getMyProfile: () => api.get<any, Result<UserProfileDetail>>('/sys-user-profile'),
-    getUserProfile: (userId: string) => api.get<any, Result<UserProfileDetail>>(`/sys-user-profile/${userId}`),
-    updateMyProfile: (data: any) => api.put('/sys-user-profile', data),
-    getMyStats: () => api.get<any, Result<UserProfileStats>>('/sys-user-profile/stats')
+    getMyProfile: () => api.get<any, Result<UserProfileDetail>>('/user-profile'),
+    getUserProfile: (userId: string) => api.get<any, Result<UserProfileDetail>>(`/user-profile/${userId}`),
+    updateMyProfile: (data: any) => api.put('/user-profile', data),
+    getMyStats: () => api.get<any, Result<UserProfileStats>>('/user-profile/stats')
 }

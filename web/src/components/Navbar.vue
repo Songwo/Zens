@@ -1,16 +1,34 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
-import { Search, Bell, User, LayoutGrid, Settings, Heart, Star, LogOut, ChevronDown } from 'lucide-vue-next'
+import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { Search, Bell, User, LayoutGrid, Settings, Heart, Star, LogOut, ChevronDown, Plus } from 'lucide-vue-next'
 import { useUserStore } from '@/store/user'
 import { useRouter } from 'vue-router'
+import CreatePostModal from '@/components/CreatePostModal.vue'
+import NotificationPopover from '@/components/NotificationPopover.vue'
+import { notificationApi } from '@/api/notification'
+import { toast } from 'vue-sonner'
 
 const userStore = useUserStore()
 const router = useRouter()
 const searchQuery = ref('')
 const showDropdown = ref(false)
+const showCreatePost = ref(false)
+const showNotifications = ref(false)
+const unreadCount = ref(0)
+const notificationRef = ref()
+let pollingTimer: number | null = null
 
 const toggleDropdown = () => {
   showDropdown.value = !showDropdown.value
+  showNotifications.value = false
+}
+
+const toggleNotifications = () => {
+  showNotifications.value = !showNotifications.value
+  showDropdown.value = false
+  if (showNotifications.value) {
+    notificationRef.value?.refresh()
+  }
 }
 
 const closeDropdown = (e: MouseEvent) => {
@@ -18,12 +36,40 @@ const closeDropdown = (e: MouseEvent) => {
   if (!target.closest('.user-dropdown-trigger')) {
     showDropdown.value = false
   }
+  if (!target.closest('.notification-trigger')) {
+    showNotifications.value = false
+  }
+}
+
+const fetchUnreadCount = async () => {
+  if (!userStore.isLoggedIn) return
+  try {
+    const res = await notificationApi.getUnreadCount()
+    const newCount = res.data
+    
+    // Toast notification if count increased
+    if (newCount > unreadCount.value && unreadCount.value !== 0) {
+       toast.info(`收到 ${newCount - unreadCount.value} 条新消息`, {
+         description: '点击右上角铃铛查看详情'
+       })
+    }
+    unreadCount.value = newCount
+  } catch (e) {
+    // silent
+  }
+}
+
+const startPolling = () => {
+  if (pollingTimer) clearInterval(pollingTimer)
+  fetchUnreadCount() // Initial fetch
+  pollingTimer = window.setInterval(fetchUnreadCount, 10000) // Poll every 10s
 }
 
 const handleLogout = () => {
   userStore.logout()
   router.push('/auth/login')
   showDropdown.value = false
+  if (pollingTimer) clearInterval(pollingTimer)
 }
 
 const handleSearch = () => {
@@ -36,10 +82,23 @@ const handleSearch = () => {
 
 onMounted(() => {
   window.addEventListener('click', closeDropdown)
+  if (userStore.isLoggedIn) {
+    startPolling()
+  }
 })
 
 onUnmounted(() => {
   window.removeEventListener('click', closeDropdown)
+  if (pollingTimer) clearInterval(pollingTimer)
+})
+
+watch(() => userStore.isLoggedIn, (loggedIn) => {
+  if (loggedIn) {
+    startPolling()
+  } else {
+    if (pollingTimer) clearInterval(pollingTimer)
+    unreadCount.value = 0
+  }
 })
 </script>
 
@@ -85,10 +144,30 @@ onUnmounted(() => {
 
     <!-- Actions -->
     <div class="flex items-center gap-4">
-      <button class="p-2.5 hover:bg-slate-100 rounded-xl text-slate-500 transition-colors relative">
-        <Bell class="w-5 h-5" />
-        <span class="absolute top-2.5 right-2.5 w-2 h-2 bg-rose-500 rounded-full border-2 border-white"></span>
+      <button 
+        v-if="userStore.isLoggedIn"
+        @click="showCreatePost = true"
+        class="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-slate-800 transition-all shadow-lg shadow-slate-200 active:scale-95"
+      >
+        <Plus class="w-4 h-4" /> 发布
       </button>
+
+      <div class="relative notification-trigger" v-if="userStore.isLoggedIn">
+        <button 
+          @click="toggleNotifications"
+          class="p-2.5 hover:bg-slate-100 rounded-xl text-slate-500 transition-colors relative"
+        >
+          <Bell class="w-5 h-5" />
+          <span v-if="unreadCount > 0" class="absolute top-2.5 right-2.5 w-2 h-2 bg-rose-500 rounded-full border-2 border-white animate-pulse"></span>
+        </button>
+        
+        <NotificationPopover 
+          ref="notificationRef"
+          :show="showNotifications"
+          @close="showNotifications = false"
+          @read="fetchUnreadCount"
+        />
+      </div>
 
       <template v-if="userStore.isLoggedIn">
         <div class="relative user-dropdown-trigger">
@@ -156,5 +235,7 @@ onUnmounted(() => {
         </router-link>
       </template>
     </div>
+
+    <CreatePostModal v-model="showCreatePost" />
   </nav>
 </template>

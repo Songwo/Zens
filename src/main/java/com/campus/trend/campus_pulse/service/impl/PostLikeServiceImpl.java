@@ -3,10 +3,10 @@ package com.campus.trend.campus_pulse.service.impl;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import com.campus.trend.campus_pulse.entity.SysPost;
-import com.campus.trend.campus_pulse.entity.SysPostLike;
-import com.campus.trend.campus_pulse.mapper.SysPostLikeMapper;
-import com.campus.trend.campus_pulse.mapper.SysPostMapper;
+import com.campus.trend.campus_pulse.entity.Post;
+import com.campus.trend.campus_pulse.entity.PostLike;
+import com.campus.trend.campus_pulse.mapper.PostLikeMapper;
+import com.campus.trend.campus_pulse.mapper.PostMapper;
 import com.campus.trend.campus_pulse.service.PostLikeService;
 import com.campus.trend.campus_pulse.service.UserProfileService;
 import lombok.extern.slf4j.Slf4j;
@@ -19,12 +19,12 @@ import java.util.stream.Collectors;
 
 @Service
 @Slf4j
-public class PostLikeServiceImpl extends ServiceImpl<SysPostLikeMapper, SysPostLike> implements PostLikeService {
+public class PostLikeServiceImpl extends ServiceImpl<PostLikeMapper, PostLike> implements PostLikeService {
 
-    private final SysPostMapper postMapper;
+    private final PostMapper postMapper;
     private final UserProfileService userProfileService;
 
-    public PostLikeServiceImpl(SysPostMapper postMapper, UserProfileService userProfileService) {
+    public PostLikeServiceImpl(PostMapper postMapper, UserProfileService userProfileService) {
         this.postMapper = postMapper;
         this.userProfileService = userProfileService;
     }
@@ -39,8 +39,8 @@ public class PostLikeServiceImpl extends ServiceImpl<SysPostLikeMapper, SysPostL
     @Override
     public boolean isLike(String postId, String userId) {
         Long count = lambdaQuery()
-                .eq(SysPostLike::getPostId, postId)
-                .eq(SysPostLike::getUserId, userId)
+                .eq(PostLike::getPostId, postId)
+                .eq(PostLike::getUserId, userId)
                 .count();
         return count != null && count > 0;
     }
@@ -54,34 +54,34 @@ public class PostLikeServiceImpl extends ServiceImpl<SysPostLikeMapper, SysPostL
      * @return 分页的点赞帖子列表
      */
     @Override
-    public IPage<SysPost> getPostLikeWithPage(String userId, int page, int pageSize) {
+    public IPage<Post> getPostLikeWithPage(String userId, int page, int pageSize) {
         // 1. 查询该用户所有的点赞记录（分页）
-        Page<SysPostLike> postLikePage = new Page<>(page, pageSize);
-        IPage<SysPostLike> postLikes = lambdaQuery()
-                .eq(SysPostLike::getUserId, userId)
-                .orderByDesc(SysPostLike::getCreateTime)
+        Page<PostLike> postLikePage = new Page<>(page, pageSize);
+        IPage<PostLike> postLikes = lambdaQuery()
+                .eq(PostLike::getUserId, userId)
+                .orderByDesc(PostLike::getCreateTime)
                 .page(postLikePage);
 
         // 2. 如果没有点赞记录，返回空分页
         if (postLikes.getRecords() == null || postLikes.getRecords().isEmpty()) {
             log.info("用户 [{}] 暂无点赞记录", userId);
-            Page<SysPost> emptyPage = new Page<>(page, pageSize);
+            Page<Post> emptyPage = new Page<>(page, pageSize);
             emptyPage.setTotal(0);
             return emptyPage;
         }
 
         // 3. 提取所有帖子ID
         List<String> postIds = postLikes.getRecords().stream()
-                .map(SysPostLike::getPostId)
+                .map(PostLike::getPostId)
                 .collect(Collectors.toList());
 
         // 4. 批量查询帖子信息（只查询状态正常的帖子）
-        List<SysPost> posts = postMapper.selectBatchIds(postIds).stream()
+        List<Post> posts = postMapper.selectBatchIds(postIds).stream()
                 .filter(post -> post.getStatus() != null && post.getStatus() == 1)
                 .collect(Collectors.toList());
 
         // 5. 封装为分页结果
-        Page<SysPost> resultPage = new Page<>(page, pageSize);
+        Page<Post> resultPage = new Page<>(page, pageSize);
         resultPage.setRecords(posts);
         resultPage.setTotal(postLikes.getTotal()); // 使用原始点赞总数
         resultPage.setCurrent(postLikes.getCurrent());
@@ -110,7 +110,7 @@ public class PostLikeServiceImpl extends ServiceImpl<SysPostLikeMapper, SysPostL
         }
 
         // 2. 创建点赞记录
-        SysPostLike postLike = new SysPostLike()
+        PostLike postLike = new PostLike()
                 .setPostId(postId)
                 .setUserId(userId)
                 .setCreateTime(LocalDateTime.now());
@@ -119,7 +119,7 @@ public class PostLikeServiceImpl extends ServiceImpl<SysPostLikeMapper, SysPostL
 
         // 3. 更新帖子的点赞数
         if (saved) {
-            SysPost post = postMapper.selectById(postId);
+            Post post = postMapper.selectById(postId);
             if (post != null) {
                 int currentLikeCount = post.getLikeCount() != null ? post.getLikeCount() : 0;
                 post.setLikeCount(currentLikeCount + 1);
@@ -152,13 +152,13 @@ public class PostLikeServiceImpl extends ServiceImpl<SysPostLikeMapper, SysPostL
 
         // 2. 删除点赞记录
         boolean removed = lambdaUpdate()
-                .eq(SysPostLike::getPostId, postId)
-                .eq(SysPostLike::getUserId, userId)
+                .eq(PostLike::getPostId, postId)
+                .eq(PostLike::getUserId, userId)
                 .remove();
 
         // 3. 更新帖子的点赞数
         if (removed) {
-            SysPost post = postMapper.selectById(postId);
+            Post post = postMapper.selectById(postId);
             if (post != null) {
                 int currentLikeCount = post.getLikeCount() != null ? post.getLikeCount() : 0;
                 post.setLikeCount(Math.max(0, currentLikeCount - 1));

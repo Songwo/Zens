@@ -1,7 +1,7 @@
 package com.campus.trend.campus_pulse.controller;
 
-import com.campus.trend.campus_pulse.common.Result;
-import com.campus.trend.campus_pulse.entity.SysStudentProfile;
+import com.campus.trend.campus_pulse.common.api.Result;
+import com.campus.trend.campus_pulse.entity.StudentProfile;
 import com.campus.trend.campus_pulse.service.StudentService;
 import com.campus.trend.campus_pulse.utils.SecurityUtils;
 import io.swagger.v3.oas.annotations.Operation;
@@ -19,15 +19,17 @@ public class StudentController {
 
     @Operation(summary = "获取我的档案")
     @GetMapping("/profile")
-    public Result<SysStudentProfile> getMyProfile() {
+    public Result<StudentProfile> getMyProfile() {
         String userId = SecurityUtils.getCurrentUserId();
         return Result.success(studentService.getStudentProfile(userId));
     }
 
     @Operation(summary = "更新档案 (管理员或本人)")
     @PostMapping("/profile/update")
-    public Result<Void> updateProfile(@RequestBody SysStudentProfile profile) {
-        // 权限校验逻辑可在 Filter 或此处实现
+    public Result<Void> updateProfile(@RequestBody StudentProfile profile) {
+        // 强制设置当前登录用户ID，防止越权
+        String userId = SecurityUtils.getCurrentUserId();
+        profile.setUserId(userId);
         studentService.updateProfile(profile);
         return Result.success();
     }

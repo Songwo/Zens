@@ -1,7 +1,7 @@
 package com.campus.trend.campus_pulse.controller;
 
-import com.campus.trend.campus_pulse.common.Result;
-import com.campus.trend.campus_pulse.entity.SysTrendStat;
+import com.campus.trend.campus_pulse.common.api.Result;
+import com.campus.trend.campus_pulse.entity.TrendStat;
 import com.campus.trend.campus_pulse.service.TrendStatService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -18,7 +18,7 @@ import java.util.Map;
  */
 @Slf4j
 @RestController
-@RequestMapping("/sys-trend-stat")
+@RequestMapping("/trend-stat")
 @RequiredArgsConstructor
 public class TrendStatController {
 
@@ -83,13 +83,13 @@ public class TrendStatController {
     private List<Map<String, Object>> generateRealtimeHeatRank() {
         List<Map<String, Object>> rankList = new ArrayList<>();
         // 查询热度前10的帖子
-        List<com.campus.trend.campus_pulse.entity.SysPost> hotPosts = postService.lambdaQuery()
-                .orderByDesc(com.campus.trend.campus_pulse.entity.SysPost::getHeatScore)
-                .eq(com.campus.trend.campus_pulse.entity.SysPost::getStatus, 1)
+        List<com.campus.trend.campus_pulse.entity.Post> hotPosts = postService.lambdaQuery()
+                .orderByDesc(com.campus.trend.campus_pulse.entity.Post::getHeatScore)
+                .eq(com.campus.trend.campus_pulse.entity.Post::getStatus, 1)
                 .last("LIMIT 10")
                 .list();
 
-        for (com.campus.trend.campus_pulse.entity.SysPost post : hotPosts) {
+        for (com.campus.trend.campus_pulse.entity.Post post : hotPosts) {
             Map<String, Object> item = new java.util.HashMap<>();
             item.put("postId", post.getId());
             item.put("title", post.getTitle());
@@ -105,7 +105,7 @@ public class TrendStatController {
      */
     @GetMapping("/latest/{type}")
     public Result<?> getLatestByType(@PathVariable String type) {
-        SysTrendStat stat = trendStatService.getLatestStatByType(type);
+        TrendStat stat = trendStatService.getLatestStatByType(type);
         return Result.success(stat);
     }
 
@@ -115,7 +115,7 @@ public class TrendStatController {
     @GetMapping("/by-date")
     public Result<?> getByDateAndType(@RequestParam @DateTimeFormat(pattern = "yyyy-MM-dd") Date statDate,
             @RequestParam String type) {
-        SysTrendStat stat = trendStatService.getStatByDateAndType(statDate, type);
+        TrendStat stat = trendStatService.getStatByDateAndType(statDate, type);
         return Result.success(stat);
     }
 
@@ -126,7 +126,7 @@ public class TrendStatController {
     public Result<?> getStatsByRange(@RequestParam @DateTimeFormat(pattern = "yyyy-MM-dd") Date startDate,
             @RequestParam @DateTimeFormat(pattern = "yyyy-MM-dd") Date endDate,
             @RequestParam(required = false) String type) {
-        List<SysTrendStat> stats = trendStatService.getStatsByDateRange(startDate, endDate, type);
+        List<TrendStat> stats = trendStatService.getStatsByDateRange(startDate, endDate, type);
         return Result.success(stats);
     }
 

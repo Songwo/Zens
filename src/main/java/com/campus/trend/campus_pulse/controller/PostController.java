@@ -1,18 +1,18 @@
 package com.campus.trend.campus_pulse.controller;
 
-import com.campus.trend.campus_pulse.common.Result;
-import com.campus.trend.campus_pulse.dto.request.CreatePostRequest;
-import com.campus.trend.campus_pulse.dto.request.ExtractTagsRequest;
-import com.campus.trend.campus_pulse.dto.request.PostSearchRequest;
-import com.campus.trend.campus_pulse.security.AuthSysUser;
+import com.campus.trend.campus_pulse.common.api.Result;
+import com.campus.trend.campus_pulse.dto.request.PostCreateReq;
+import com.campus.trend.campus_pulse.dto.request.TagsExtractReq;
+import com.campus.trend.campus_pulse.dto.request.PostSearchReq;
+import com.campus.trend.campus_pulse.security.AuthUser;
 import com.campus.trend.campus_pulse.service.PostService;
-import com.campus.trend.campus_pulse.utils.GetUserDetail;
+import com.campus.trend.campus_pulse.utils.SecurityUtils;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/sys-post")
+@RequestMapping("/post")
 public class PostController {
 
     private final PostService postService;
@@ -28,48 +28,48 @@ public class PostController {
     }
 
     @PostMapping("/create-post")
-    public Result<?> createPost(@Valid @RequestBody CreatePostRequest createPostRequest) {
-        AuthSysUser authSysUser = GetUserDetail.getAuthenticatedUser();
-        postService.createPost(createPostRequest, authSysUser.getSysUser().getId());
+    public Result<?> createPost(@Valid @RequestBody PostCreateReq createPostRequest) {
+        AuthUser authUser = SecurityUtils.getAuthenticatedUser();
+        postService.createPost(createPostRequest, authUser.getUser().getId());
         return Result.success();
     }
 
     @PostMapping("/extract-tags")
-    public Result<?> extractTags(@Valid @RequestBody ExtractTagsRequest extractTagsRequest) {
+    public Result<?> extractTags(@Valid @RequestBody TagsExtractReq extractTagsRequest) {
         return Result.success(postService.extractTagsAndSummary(extractTagsRequest));
     }
 
     @PostMapping("/search-lists")
-    public Result<?> searchList(@RequestBody PostSearchRequest postSearchRequest) {
+    public Result<?> searchList(@RequestBody PostSearchReq postSearchRequest) {
         return Result.success(postService.searchPostsWithAuthor(postSearchRequest));
     }
 
     @PostMapping("/{id}/like")
     public Result<?> likePost(@PathVariable String id) {
-        AuthSysUser authSysUser = GetUserDetail.getAuthenticatedUser();
-        postService.likePost(id, authSysUser.getSysUser().getId());
+        AuthUser authUser = SecurityUtils.getAuthenticatedUser();
+        postService.likePost(id, authUser.getUser().getId());
         return Result.success();
     }
 
     @PostMapping("/{id}/collect")
     public Result<?> collectPost(@PathVariable String id) {
-        AuthSysUser authSysUser = GetUserDetail.getAuthenticatedUser();
-        postService.collectPost(id, authSysUser.getSysUser().getId());
+        AuthUser authUser = SecurityUtils.getAuthenticatedUser();
+        postService.collectPost(id, authUser.getUser().getId());
         return Result.success();
     }
 
     @PostMapping("/update-post")
     public Result<?> updatePost(
-            @RequestBody com.campus.trend.campus_pulse.dto.request.UpdatePostRequest updatePostRequest) {
-        AuthSysUser authSysUser = GetUserDetail.getAuthenticatedUser();
-        postService.updatePost(updatePostRequest, authSysUser.getSysUser().getId());
+            @RequestBody com.campus.trend.campus_pulse.dto.request.PostUpdateReq updatePostRequest) {
+        AuthUser authUser = SecurityUtils.getAuthenticatedUser();
+        postService.updatePost(updatePostRequest, authUser.getUser().getId());
         return Result.success();
     }
 
     @DeleteMapping("/{id}")
     public Result<?> deletePost(@PathVariable String id) {
-        AuthSysUser authSysUser = GetUserDetail.getAuthenticatedUser();
-        postService.deletePost(id, authSysUser.getSysUser().getId());
+        AuthUser authUser = SecurityUtils.getAuthenticatedUser();
+        postService.deletePost(id, authUser.getUser().getId());
         return Result.success();
     }
 }

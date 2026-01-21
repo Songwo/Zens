@@ -2,10 +2,10 @@ package com.campus.trend.campus_pulse.service;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.service.IService;
-import com.campus.trend.campus_pulse.entity.SysPost;
-import com.campus.trend.campus_pulse.entity.SysPostLike;
+import com.campus.trend.campus_pulse.entity.Post;
+import com.campus.trend.campus_pulse.entity.PostLike;
 
-public interface PostLikeService extends IService<SysPostLike> {
+public interface PostLikeService extends IService<PostLike> {
 
     /**
      * 判断用户是否已点赞该帖子
@@ -24,7 +24,7 @@ public interface PostLikeService extends IService<SysPostLike> {
      * @param pageSize 每页大小
      * @return 分页的点赞帖子列表
      */
-    IPage<SysPost> getPostLikeWithPage(String userId, int page, int pageSize);
+    IPage<Post> getPostLikeWithPage(String userId, int page, int pageSize);
 
     /**
      * 用户点赞帖子

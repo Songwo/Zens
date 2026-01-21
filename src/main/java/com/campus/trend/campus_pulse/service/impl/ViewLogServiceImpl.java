@@ -2,8 +2,8 @@ package com.campus.trend.campus_pulse.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import com.campus.trend.campus_pulse.entity.SysViewLog;
-import com.campus.trend.campus_pulse.mapper.SysViewLogMapper;
+import com.campus.trend.campus_pulse.entity.ViewLog;
+import com.campus.trend.campus_pulse.mapper.ViewLogMapper;
 import com.campus.trend.campus_pulse.service.ViewLogService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -18,13 +18,13 @@ import java.util.stream.Collectors;
  */
 @Service
 @Slf4j
-public class ViewLogServiceImpl extends ServiceImpl<SysViewLogMapper, SysViewLog>
+public class ViewLogServiceImpl extends ServiceImpl<ViewLogMapper, ViewLog>
         implements ViewLogService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void recordView(String postId, String userId, String ip, String device) {
-        SysViewLog viewLog = new SysViewLog()
+        ViewLog viewLog = new ViewLog()
                 .setPostId(postId)
                 .setUserId(userId)
                 .setIp(ip)
@@ -38,9 +38,9 @@ public class ViewLogServiceImpl extends ServiceImpl<SysViewLogMapper, SysViewLog
     @Override
     public long getViewCount(String postId, LocalDateTime startTime, LocalDateTime endTime) {
         Long count = lambdaQuery()
-                .eq(SysViewLog::getPostId, postId)
-                .ge(startTime != null, SysViewLog::getCreateTime, startTime)
-                .le(endTime != null, SysViewLog::getCreateTime, endTime)
+                .eq(ViewLog::getPostId, postId)
+                .ge(startTime != null, ViewLog::getCreateTime, startTime)
+                .le(endTime != null, ViewLog::getCreateTime, endTime)
                 .count();
         return count != null ? count : 0;
     }
@@ -48,7 +48,7 @@ public class ViewLogServiceImpl extends ServiceImpl<SysViewLogMapper, SysViewLog
     @Override
     public long getTotalViewCount(String postId) {
         Long count = lambdaQuery()
-                .eq(SysViewLog::getPostId, postId)
+                .eq(ViewLog::getPostId, postId)
                 .count();
         return count != null ? count : 0;
     }
@@ -56,14 +56,14 @@ public class ViewLogServiceImpl extends ServiceImpl<SysViewLogMapper, SysViewLog
     @Override
     public List<Map<String, Object>> getHotPostsByViews(LocalDateTime startTime, int limit) {
         // 使用原生查询或者group by统计
-        List<SysViewLog> logs = lambdaQuery()
-                .ge(startTime != null, SysViewLog::getCreateTime, startTime)
+        List<ViewLog> logs = lambdaQuery()
+                .ge(startTime != null, ViewLog::getCreateTime, startTime)
                 .list();
 
         // 按postId分组统计
         Map<String, Long> postViewCounts = logs.stream()
                 .collect(Collectors.groupingBy(
-                        SysViewLog::getPostId,
+                        ViewLog::getPostId,
                         Collectors.counting()));
 
         // 排序并取top N
@@ -80,19 +80,19 @@ public class ViewLogServiceImpl extends ServiceImpl<SysViewLogMapper, SysViewLog
     }
 
     @Override
-    public List<SysViewLog> getUserViewHistory(String userId, int limit) {
+    public List<ViewLog> getUserViewHistory(String userId, int limit) {
         return lambdaQuery()
-                .eq(SysViewLog::getUserId, userId)
-                .orderByDesc(SysViewLog::getCreateTime)
+                .eq(ViewLog::getUserId, userId)
+                .orderByDesc(ViewLog::getCreateTime)
                 .last("LIMIT " + limit)
                 .list();
     }
 
     @Override
     public List<Map<String, Object>> getDailyViewStats(LocalDateTime startDate, LocalDateTime endDate) {
-        List<SysViewLog> logs = lambdaQuery()
-                .ge(startDate != null, SysViewLog::getCreateTime, startDate)
-                .le(endDate != null, SysViewLog::getCreateTime, endDate)
+        List<ViewLog> logs = lambdaQuery()
+                .ge(startDate != null, ViewLog::getCreateTime, startDate)
+                .le(endDate != null, ViewLog::getCreateTime, endDate)
                 .list();
 
         // 按日期分组统计
@@ -114,11 +114,11 @@ public class ViewLogServiceImpl extends ServiceImpl<SysViewLogMapper, SysViewLog
 
     @Override
     public Map<String, Long> getDeviceDistribution() {
-        List<SysViewLog> logs = list();
+        List<ViewLog> logs = list();
         return logs.stream()
                 .filter(log -> log.getDevice() != null)
                 .collect(Collectors.groupingBy(
-                        SysViewLog::getDevice,
+                        ViewLog::getDevice,
                         Collectors.counting()));
     }
 
@@ -128,12 +128,12 @@ public class ViewLogServiceImpl extends ServiceImpl<SysViewLogMapper, SysViewLog
         LocalDateTime cutoffTime = LocalDateTime.now().minusDays(daysToKeep);
 
         long count = lambdaQuery()
-                .lt(SysViewLog::getCreateTime, cutoffTime)
+                .lt(ViewLog::getCreateTime, cutoffTime)
                 .count();
 
         if (count > 0) {
-            remove(new LambdaQueryWrapper<SysViewLog>()
-                    .lt(SysViewLog::getCreateTime, cutoffTime));
+            remove(new LambdaQueryWrapper<ViewLog>()
+                    .lt(ViewLog::getCreateTime, cutoffTime));
 
             log.info("清理了 {} 条超过 {} 天的浏览日志", count, daysToKeep);
         }

@@ -17,6 +17,7 @@ const verifyCode = ref('')
 const captchaUrl = ref('')
 const uuid = ref('')
 const loading = ref(false)
+const rememberMe = ref(false)
 
 const refreshCaptcha = async () => {
   try {
@@ -40,7 +41,8 @@ const handleLogin = async () => {
       username: username.value,
       password: password.value,
       code: verifyCode.value,
-      uuid: uuid.value
+      uuid: uuid.value,
+      rememberMe: rememberMe.value
     })
 
     if (res.code === ResultCode.SUCCESS) {
@@ -160,7 +162,7 @@ onMounted(() => {
 
           <div class="flex items-center justify-between px-1">
             <label class="flex items-center gap-2 cursor-pointer group">
-              <input type="checkbox" class="w-4 h-4 rounded border-slate-300 text-slate-900 focus:ring-slate-900/20 transition-all" />
+              <input v-model="rememberMe" type="checkbox" class="w-4 h-4 rounded border-slate-300 text-slate-900 focus:ring-slate-900/20 transition-all" />
               <span class="text-xs text-slate-500 font-medium group-hover:text-slate-700 transition-colors">记住我</span>
             </label>
             <button type="button" class="text-xs font-bold text-slate-900 hover:text-slate-600 transition-colors">忘记密码?</button>

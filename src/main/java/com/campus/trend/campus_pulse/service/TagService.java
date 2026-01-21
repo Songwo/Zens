@@ -1,11 +1,11 @@
 package com.campus.trend.campus_pulse.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
-import com.campus.trend.campus_pulse.entity.SysTag;
+import com.campus.trend.campus_pulse.entity.Tag;
 
 import java.util.List;
 
-public interface TagService extends IService<SysTag> {
+public interface TagService extends IService<Tag> {
 
     /**
      * 获取或创建标签（不存在时自动创建）
@@ -13,7 +13,7 @@ public interface TagService extends IService<SysTag> {
      * @param tagName 标签名称
      * @return 标签对象
      */
-    SysTag getOrCreateTag(String tagName);
+    Tag getOrCreateTag(String tagName);
 
     /**
      * 增加标签热度
@@ -35,7 +35,7 @@ public interface TagService extends IService<SysTag> {
      * @param limit 返回数量
      * @return 热门标签列表
      */
-    List<SysTag> getHotTags(int limit);
+    List<Tag> getHotTags(int limit);
 
     /**
      * 搜索标签
@@ -43,7 +43,7 @@ public interface TagService extends IService<SysTag> {
      * @param keyword 关键词
      * @return 匹配的标签列表
      */
-    List<SysTag> searchTags(String keyword);
+    List<Tag> searchTags(String keyword);
 
     /**
      * 批量获取或创建标签
@@ -51,5 +51,5 @@ public interface TagService extends IService<SysTag> {
      * @param tagNames 标签名称列表
      * @return 标签列表
      */
-    List<SysTag> batchGetOrCreateTags(List<String> tagNames);
+    List<Tag> batchGetOrCreateTags(List<String> tagNames);
 }

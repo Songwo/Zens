@@ -1,8 +1,8 @@
 package com.campus.trend.campus_pulse.controller;
 
-import com.campus.trend.campus_pulse.common.Result;
-import com.campus.trend.campus_pulse.dto.request.LoginRequest;
-import com.campus.trend.campus_pulse.dto.request.RegisterRequest;
+import com.campus.trend.campus_pulse.common.api.Result;
+import com.campus.trend.campus_pulse.dto.request.LoginReq;
+import com.campus.trend.campus_pulse.dto.request.RegisterReq;
 import com.campus.trend.campus_pulse.dto.request.SendCodeRequest;
 import com.campus.trend.campus_pulse.service.AuthService;
 import com.campus.trend.campus_pulse.service.VerificationCodeService;
@@ -67,19 +67,19 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public Result<?> login(@Valid @RequestBody LoginRequest loginRequest) {
-        return Result.success(authService.Login(loginRequest));
+    public Result<?> login(@Valid @RequestBody LoginReq loginRequest) {
+        return Result.success(authService.login(loginRequest));
     }
 
     @PostMapping("/register")
-    public Result<?> register(@Valid @RequestBody RegisterRequest registerRequest) {
-        authService.Register(registerRequest);
+    public Result<?> register(@Valid @RequestBody RegisterReq registerRequest) {
+        authService.register(registerRequest);
         return Result.success();
     }
 
     @PostMapping("/logout")
     public Result<?> logout() {
-        authService.Logout();
+        authService.logout();
         return Result.success();
     }
 

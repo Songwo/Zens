@@ -1,9 +1,9 @@
 package com.campus.trend.campus_pulse.controller;
 
-import com.campus.trend.campus_pulse.common.Result;
-import com.campus.trend.campus_pulse.dto.request.CategoryRequest;
-import com.campus.trend.campus_pulse.dto.response.CategoryResponse;
-import com.campus.trend.campus_pulse.entity.SysCategory;
+import com.campus.trend.campus_pulse.common.api.Result;
+import com.campus.trend.campus_pulse.dto.request.CategoryReq;
+import com.campus.trend.campus_pulse.dto.response.CategoryResp;
+import com.campus.trend.campus_pulse.entity.Category;
 import com.campus.trend.campus_pulse.service.CategoryService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -16,7 +16,7 @@ import java.util.stream.Collectors;
  * 分类控制器
  */
 @RestController
-@RequestMapping("/sys-category")
+@RequestMapping("/category")
 @RequiredArgsConstructor
 public class CategoryController {
 
@@ -27,8 +27,8 @@ public class CategoryController {
      */
     @GetMapping("/list")
     public Result<?> getAllCategories() {
-        List<SysCategory> categories = categoryService.getAllCategories();
-        List<CategoryResponse> responses = categories.stream()
+        List<Category> categories = categoryService.getAllCategories();
+        List<CategoryResp> responses = categories.stream()
                 .map(this::convertToResponse)
                 .collect(Collectors.toList());
         return Result.success(responses);
@@ -39,7 +39,7 @@ public class CategoryController {
      */
     @GetMapping("/{id}")
     public Result<?> getCategoryById(@PathVariable String id) {
-        SysCategory category = categoryService.getCategoryById(id);
+        Category category = categoryService.getCategoryById(id);
         if (category == null) {
             return Result.success(null);
         }
@@ -51,7 +51,7 @@ public class CategoryController {
      */
     @GetMapping("/code/{code}")
     public Result<?> getCategoryByCode(@PathVariable String code) {
-        SysCategory category = categoryService.getCategoryByCode(code);
+        Category category = categoryService.getCategoryByCode(code);
         if (category == null) {
             return Result.success(null);
         }
@@ -62,14 +62,14 @@ public class CategoryController {
      * 创建分类（管理员）
      */
     @PostMapping
-    public Result<?> createCategory(@Valid @RequestBody CategoryRequest request) {
-        SysCategory category = new SysCategory()
+    public Result<?> createCategory(@Valid @RequestBody CategoryReq request) {
+        Category category = new Category()
                 .setName(request.getName())
                 .setCode(request.getCode())
                 .setIcon(request.getIcon())
                 .setSort(request.getSort() != null ? request.getSort() : 0);
 
-        SysCategory created = categoryService.createCategory(category);
+        Category created = categoryService.createCategory(category);
         return Result.success(convertToResponse(created));
     }
 
@@ -77,12 +77,12 @@ public class CategoryController {
      * 更新分类（管理员）
      */
     @PutMapping
-    public Result<?> updateCategory(@Valid @RequestBody CategoryRequest request) {
+    public Result<?> updateCategory(@Valid @RequestBody CategoryReq request) {
         if (request.getId() == null || request.getId().isEmpty()) {
             throw new RuntimeException("分类ID不能为空");
         }
 
-        SysCategory category = new SysCategory()
+        Category category = new Category()
                 .setId(request.getId())
                 .setName(request.getName())
                 .setCode(request.getCode())
@@ -114,8 +114,8 @@ public class CategoryController {
     /**
      * 转换实体为响应DTO
      */
-    private CategoryResponse convertToResponse(SysCategory category) {
-        CategoryResponse response = new CategoryResponse();
+    private CategoryResp convertToResponse(Category category) {
+        CategoryResp response = new CategoryResp();
         response.setId(category.getId());
         response.setName(category.getName());
         response.setCode(category.getCode());

@@ -1,8 +1,8 @@
 package com.campus.trend.campus_pulse.service.impl;
 
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import com.campus.trend.campus_pulse.entity.SysUserProfile;
-import com.campus.trend.campus_pulse.mapper.SysUserProfileMapper;
+import com.campus.trend.campus_pulse.entity.UserProfile;
+import com.campus.trend.campus_pulse.mapper.UserProfileMapper;
 import com.campus.trend.campus_pulse.service.UserProfileService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -17,21 +17,21 @@ import java.util.Map;
  */
 @Service
 @Slf4j
-public class UserProfileServiceImpl extends ServiceImpl<SysUserProfileMapper, SysUserProfile>
+public class UserProfileServiceImpl extends ServiceImpl<UserProfileMapper, UserProfile>
         implements UserProfileService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public SysUserProfile createProfile(String userId) {
+    public UserProfile createProfile(String userId) {
         // 检查是否已存在
-        SysUserProfile existing = getById(userId);
+        UserProfile existing = getById(userId);
         if (existing != null) {
             log.warn("用户 [{}] 的画像已存在，跳过创建", userId);
             return existing;
         }
 
         // 创建新画像
-        SysUserProfile profile = new SysUserProfile()
+        UserProfile profile = new UserProfile()
                 .setUserId(userId)
                 .setReputation(100) // 初始信誉积分
                 .setContributionVal(0) // 初始贡献值
@@ -45,14 +45,14 @@ public class UserProfileServiceImpl extends ServiceImpl<SysUserProfileMapper, Sy
     }
 
     @Override
-    public SysUserProfile getProfileByUserId(String userId) {
+    public UserProfile getProfileByUserId(String userId) {
         return getById(userId);
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public SysUserProfile getOrCreateProfile(String userId) {
-        SysUserProfile profile = getById(userId);
+    public UserProfile getOrCreateProfile(String userId) {
+        UserProfile profile = getById(userId);
         if (profile == null) {
             log.info("用户 [{}] 画像不存在，自动创建", userId);
             profile = createProfile(userId);
@@ -63,7 +63,7 @@ public class UserProfileServiceImpl extends ServiceImpl<SysUserProfileMapper, Sy
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void incrementTotalPosts(String userId) {
-        SysUserProfile profile = getOrCreateProfile(userId);
+        UserProfile profile = getOrCreateProfile(userId);
         int currentPosts = profile.getTotalPosts() != null ? profile.getTotalPosts() : 0;
         profile.setTotalPosts(currentPosts + 1);
         updateById(profile);
@@ -73,7 +73,7 @@ public class UserProfileServiceImpl extends ServiceImpl<SysUserProfileMapper, Sy
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void incrementLikesReceived(String userId) {
-        SysUserProfile profile = getOrCreateProfile(userId);
+        UserProfile profile = getOrCreateProfile(userId);
         int currentLikes = profile.getTotalLikesReceived() != null ? profile.getTotalLikesReceived() : 0;
         profile.setTotalLikesReceived(currentLikes + 1);
         updateById(profile);
@@ -83,7 +83,7 @@ public class UserProfileServiceImpl extends ServiceImpl<SysUserProfileMapper, Sy
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void decrementLikesReceived(String userId) {
-        SysUserProfile profile = getOrCreateProfile(userId);
+        UserProfile profile = getOrCreateProfile(userId);
         int currentLikes = profile.getTotalLikesReceived() != null ? profile.getTotalLikesReceived() : 0;
         profile.setTotalLikesReceived(Math.max(0, currentLikes - 1));
         updateById(profile);
@@ -93,7 +93,7 @@ public class UserProfileServiceImpl extends ServiceImpl<SysUserProfileMapper, Sy
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void addContribution(String userId, int value) {
-        SysUserProfile profile = getOrCreateProfile(userId);
+        UserProfile profile = getOrCreateProfile(userId);
         int currentVal = profile.getContributionVal() != null ? profile.getContributionVal() : 0;
         profile.setContributionVal(currentVal + value);
         updateById(profile);
@@ -103,7 +103,7 @@ public class UserProfileServiceImpl extends ServiceImpl<SysUserProfileMapper, Sy
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void updateLastActiveTime(String userId) {
-        SysUserProfile profile = getOrCreateProfile(userId);
+        UserProfile profile = getOrCreateProfile(userId);
         profile.setLastActiveTime(LocalDateTime.now());
         updateById(profile);
     }
@@ -115,7 +115,7 @@ public class UserProfileServiceImpl extends ServiceImpl<SysUserProfileMapper, Sy
             return;
         }
 
-        SysUserProfile profile = getOrCreateProfile(userId);
+        UserProfile profile = getOrCreateProfile(userId);
         Map<String, Double> prefMap = profile.getPreferredCateJson();
 
         if (prefMap == null) {
@@ -146,7 +146,7 @@ public class UserProfileServiceImpl extends ServiceImpl<SysUserProfileMapper, Sy
             return;
         }
 
-        SysUserProfile profile = getOrCreateProfile(userId);
+        UserProfile profile = getOrCreateProfile(userId);
         profile.setActiveRegion(region);
         updateById(profile);
         log.debug("用户 [{}] 活跃地点更新为: {}", userId, region);
@@ -155,7 +155,7 @@ public class UserProfileServiceImpl extends ServiceImpl<SysUserProfileMapper, Sy
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void adjustReputation(String userId, int delta) {
-        SysUserProfile profile = getOrCreateProfile(userId);
+        UserProfile profile = getOrCreateProfile(userId);
         int currentRep = profile.getReputation() != null ? profile.getReputation() : 100;
         int newRep = Math.max(0, currentRep + delta); // 信誉不能为负
         profile.setReputation(newRep);

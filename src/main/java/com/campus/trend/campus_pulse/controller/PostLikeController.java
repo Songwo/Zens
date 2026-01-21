@@ -1,11 +1,11 @@
 package com.campus.trend.campus_pulse.controller;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
-import com.campus.trend.campus_pulse.common.Result;
-import com.campus.trend.campus_pulse.entity.SysPost;
-import com.campus.trend.campus_pulse.security.AuthSysUser;
+import com.campus.trend.campus_pulse.common.api.Result;
+import com.campus.trend.campus_pulse.entity.Post;
+import com.campus.trend.campus_pulse.security.AuthUser;
 import com.campus.trend.campus_pulse.service.PostLikeService;
-import com.campus.trend.campus_pulse.utils.GetUserDetail;
+import com.campus.trend.campus_pulse.utils.SecurityUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
@@ -37,8 +37,8 @@ public class PostLikeController {
      */
     @PostMapping("/{postId}/toggle")
     public Result<?> toggleLike(@PathVariable String postId) {
-        AuthSysUser authSysUser = GetUserDetail.getAuthenticatedUser();
-        String userId = authSysUser.getSysUser().getId();
+        AuthUser authUser = SecurityUtils.getAuthenticatedUser();
+        String userId = authUser.getUser().getId();
 
         boolean isLiked = postLikeService.toggleLike(postId, userId);
 
@@ -57,8 +57,8 @@ public class PostLikeController {
      */
     @GetMapping("/{postId}/status")
     public Result<?> checkLikeStatus(@PathVariable String postId) {
-        AuthSysUser authSysUser = GetUserDetail.getAuthenticatedUser();
-        String userId = authSysUser.getSysUser().getId();
+        AuthUser authUser = SecurityUtils.getAuthenticatedUser();
+        String userId = authUser.getUser().getId();
 
         boolean isLiked = postLikeService.isLike(postId, userId);
 
@@ -79,8 +79,8 @@ public class PostLikeController {
     public Result<?> getUserLikedPosts(
             @RequestParam(value = "page", required = false, defaultValue = "1") int page,
             @RequestParam(value = "pageSize", required = false, defaultValue = "20") int pageSize) {
-        AuthSysUser authSysUser = GetUserDetail.getAuthenticatedUser();
-        IPage<SysPost> likedPostsPage = postLikeService.getPostLikeWithPage(authSysUser.getSysUser().getId(), page, pageSize);
+        AuthUser authUser = SecurityUtils.getAuthenticatedUser();
+        IPage<Post> likedPostsPage = postLikeService.getPostLikeWithPage(authUser.getUser().getId(), page, pageSize);
         return Result.success(likedPostsPage);
     }
 }

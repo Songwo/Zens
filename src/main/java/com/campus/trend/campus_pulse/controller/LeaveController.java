@@ -1,8 +1,8 @@
 package com.campus.trend.campus_pulse.controller;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
-import com.campus.trend.campus_pulse.common.Result;
-import com.campus.trend.campus_pulse.entity.SysLeaveRequest;
+import com.campus.trend.campus_pulse.common.api.Result;
+import com.campus.trend.campus_pulse.entity.LeaveRequest;
 import com.campus.trend.campus_pulse.service.LeaveService;
 import com.campus.trend.campus_pulse.utils.SecurityUtils;
 import io.swagger.v3.oas.annotations.Operation;
@@ -20,7 +20,7 @@ public class LeaveController {
 
     @Operation(summary = "学生提交请假申请")
     @PostMapping("/submit")
-    public Result<Void> submit(@RequestBody SysLeaveRequest request) {
+    public Result<Void> submit(@RequestBody LeaveRequest request) {
         request.setUserId(SecurityUtils.getCurrentUserId());
         leaveService.submitRequest(request);
         return Result.success();
@@ -28,7 +28,7 @@ public class LeaveController {
 
     @Operation(summary = "获取我的请假记录")
     @GetMapping("/my-list")
-    public Result<IPage<SysLeaveRequest>> getMyList(
+    public Result<IPage<LeaveRequest>> getMyList(
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "10") int pageSize) {
         String userId = SecurityUtils.getCurrentUserId();
@@ -37,7 +37,7 @@ public class LeaveController {
 
     @Operation(summary = "获取待审批列表 (管理员)")
     @GetMapping("/pending")
-    public Result<IPage<SysLeaveRequest>> getPending(
+    public Result<IPage<LeaveRequest>> getPending(
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "10") int pageSize) {
         return Result.success(leaveService.getPendingRequests(page, pageSize));

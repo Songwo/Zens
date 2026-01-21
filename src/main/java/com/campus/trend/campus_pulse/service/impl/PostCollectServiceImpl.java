@@ -3,10 +3,10 @@ package com.campus.trend.campus_pulse.service.impl;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import com.campus.trend.campus_pulse.entity.SysPost;
-import com.campus.trend.campus_pulse.entity.SysPostCollect;
-import com.campus.trend.campus_pulse.mapper.SysPostCollectMapper;
-import com.campus.trend.campus_pulse.mapper.SysPostMapper;
+import com.campus.trend.campus_pulse.entity.Post;
+import com.campus.trend.campus_pulse.entity.PostCollect;
+import com.campus.trend.campus_pulse.mapper.PostCollectMapper;
+import com.campus.trend.campus_pulse.mapper.PostMapper;
 import com.campus.trend.campus_pulse.service.PostCollectService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -18,12 +18,12 @@ import java.util.stream.Collectors;
 
 @Service
 @Slf4j
-public class PostCollectServiceImpl extends ServiceImpl<SysPostCollectMapper, SysPostCollect>
+public class PostCollectServiceImpl extends ServiceImpl<PostCollectMapper, PostCollect>
         implements PostCollectService {
 
-    private final SysPostMapper postMapper;
+    private final PostMapper postMapper;
 
-    public PostCollectServiceImpl(SysPostMapper postMapper) {
+    public PostCollectServiceImpl(PostMapper postMapper) {
         this.postMapper = postMapper;
     }
 
@@ -37,8 +37,8 @@ public class PostCollectServiceImpl extends ServiceImpl<SysPostCollectMapper, Sy
     @Override
     public boolean isCollect(String postId, String userId) {
         Long count = lambdaQuery()
-                .eq(SysPostCollect::getPostId, postId)
-                .eq(SysPostCollect::getUserId, userId)
+                .eq(PostCollect::getPostId, postId)
+                .eq(PostCollect::getUserId, userId)
                 .count();
         return count != null && count > 0;
     }
@@ -52,34 +52,34 @@ public class PostCollectServiceImpl extends ServiceImpl<SysPostCollectMapper, Sy
      * @return 分页的收藏帖子列表
      */
     @Override
-    public IPage<SysPost> getPostCollectWithPage(String userId, int page, int pageSize) {
+    public IPage<Post> getPostCollectWithPage(String userId, int page, int pageSize) {
         // 1. 查询该用户所有的收藏记录（分页）
-        Page<SysPostCollect> postCollectPage = new Page<>(page, pageSize);
-        IPage<SysPostCollect> postCollects = lambdaQuery()
-                .eq(SysPostCollect::getUserId, userId)
-                .orderByDesc(SysPostCollect::getCreateTime)
+        Page<PostCollect> postCollectPage = new Page<>(page, pageSize);
+        IPage<PostCollect> postCollects = lambdaQuery()
+                .eq(PostCollect::getUserId, userId)
+                .orderByDesc(PostCollect::getCreateTime)
                 .page(postCollectPage);
 
         // 2. 如果没有收藏记录，返回空分页
         if (postCollects.getRecords() == null || postCollects.getRecords().isEmpty()) {
             log.info("用户 [{}] 暂无收藏记录", userId);
-            Page<SysPost> emptyPage = new Page<>(page, pageSize);
+            Page<Post> emptyPage = new Page<>(page, pageSize);
             emptyPage.setTotal(0);
             return emptyPage;
         }
 
         // 3. 提取所有帖子ID
         List<String> postIds = postCollects.getRecords().stream()
-                .map(SysPostCollect::getPostId)
+                .map(PostCollect::getPostId)
                 .collect(Collectors.toList());
 
         // 4. 批量查询帖子信息（只查询状态正常的帖子）
-        List<SysPost> posts = postMapper.selectBatchIds(postIds).stream()
+        List<Post> posts = postMapper.selectBatchIds(postIds).stream()
                 .filter(post -> post.getStatus() != null && post.getStatus() == 1)
                 .collect(Collectors.toList());
 
         // 5. 封装为分页结果
-        Page<SysPost> resultPage = new Page<>(page, pageSize);
+        Page<Post> resultPage = new Page<>(page, pageSize);
         resultPage.setRecords(posts);
         resultPage.setTotal(postCollects.getTotal()); // 使用原始收藏总数
         resultPage.setCurrent(postCollects.getCurrent());
@@ -108,7 +108,7 @@ public class PostCollectServiceImpl extends ServiceImpl<SysPostCollectMapper, Sy
         }
 
         // 2. 创建收藏记录
-        SysPostCollect postCollect = new SysPostCollect()
+        PostCollect postCollect = new PostCollect()
                 .setPostId(postId)
                 .setUserId(userId)
                 .setCreateTime(LocalDateTime.now());
@@ -117,7 +117,7 @@ public class PostCollectServiceImpl extends ServiceImpl<SysPostCollectMapper, Sy
 
         // 3. 更新帖子的收藏数
         if (saved) {
-            SysPost post = postMapper.selectById(postId);
+            Post post = postMapper.selectById(postId);
             if (post != null) {
                 int currentCollectCount = post.getCollectCount() != null ? post.getCollectCount() : 0;
                 post.setCollectCount(currentCollectCount + 1);
@@ -147,13 +147,13 @@ public class PostCollectServiceImpl extends ServiceImpl<SysPostCollectMapper, Sy
 
         // 2. 删除收藏记录
         boolean removed = lambdaUpdate()
-                .eq(SysPostCollect::getPostId, postId)
-                .eq(SysPostCollect::getUserId, userId)
+                .eq(PostCollect::getPostId, postId)
+                .eq(PostCollect::getUserId, userId)
                 .remove();
 
         // 3. 更新帖子的收藏数
         if (removed) {
-            SysPost post = postMapper.selectById(postId);
+            Post post = postMapper.selectById(postId);
             if (post != null) {
                 int currentCollectCount = post.getCollectCount() != null ? post.getCollectCount() : 0;
                 post.setCollectCount(Math.max(0, currentCollectCount - 1));

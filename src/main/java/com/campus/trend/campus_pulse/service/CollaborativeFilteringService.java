@@ -1,6 +1,6 @@
 package com.campus.trend.campus_pulse.service;
 
-import com.campus.trend.campus_pulse.entity.SysPost;
+import com.campus.trend.campus_pulse.entity.Post;
 
 import java.util.List;
 
@@ -17,7 +17,7 @@ public interface CollaborativeFilteringService {
      * @param limit  返回数量
      * @return 推荐的帖子列表
      */
-    List<SysPost> recommendByItemBased(String postId, int limit);
+    List<Post> recommendByItemBased(String postId, int limit);
 
     /**
      * 基于用户的协同过滤 (User-Based CF)
@@ -27,6 +27,6 @@ public interface CollaborativeFilteringService {
      * @param limit  返回数量
      * @return 推荐的帖子列表
      */
-    List<SysPost> recommendByUserBased(String userId, int limit);
+    List<Post> recommendByUserBased(String userId, int limit);
 
 }

@@ -1,9 +1,9 @@
 package com.campus.trend.campus_pulse.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.campus.trend.campus_pulse.common.Result;
-import com.campus.trend.campus_pulse.entity.SysPost;
-import com.campus.trend.campus_pulse.mapper.SysPostMapper;
+import com.campus.trend.campus_pulse.common.api.Result;
+import com.campus.trend.campus_pulse.entity.Post;
+import com.campus.trend.campus_pulse.mapper.PostMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -22,7 +22,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class HeatRankController {
 
-    private final SysPostMapper postMapper;
+    private final PostMapper postMapper;
 
     /**
      * 获取实时热度排行 TOP 10
@@ -31,13 +31,13 @@ public class HeatRankController {
     public Result<?> getTopHeatRank() {
         try {
             // 查询热度最高的10个帖子
-            LambdaQueryWrapper<SysPost> wrapper = new LambdaQueryWrapper<>();
-            wrapper.eq(SysPost::getStatus, 1)
-                    .orderByDesc(SysPost::getHeatScore)
-                    .orderByDesc(SysPost::getViewCount)
+            LambdaQueryWrapper<Post> wrapper = new LambdaQueryWrapper<>();
+            wrapper.eq(Post::getStatus, 1)
+                    .orderByDesc(Post::getHeatScore)
+                    .orderByDesc(Post::getViewCount)
                     .last("LIMIT 10");
 
-            List<SysPost> hotPosts = postMapper.selectList(wrapper);
+            List<Post> hotPosts = postMapper.selectList(wrapper);
 
             // 转换为前端需要的格式
             List<Map<String, Object>> result = hotPosts.stream()

@@ -1,7 +1,7 @@
 package com.campus.trend.campus_pulse.controller;
 
-import com.campus.trend.campus_pulse.common.Result;
-import com.campus.trend.campus_pulse.entity.SysAnnouncement;
+import com.campus.trend.campus_pulse.common.api.Result;
+import com.campus.trend.campus_pulse.entity.Announcement;
 import com.campus.trend.campus_pulse.service.AnnouncementService;
 import com.campus.trend.campus_pulse.utils.SecurityUtils;
 import io.swagger.v3.oas.annotations.Operation;
@@ -19,7 +19,7 @@ public class AnnouncementController {
 
     @Operation(summary = "获取待显示的欢迎弹窗")
     @GetMapping("/pending-popup")
-    public Result<SysAnnouncement> getPopup() {
+    public Result<Announcement> getPopup() {
         String userId = SecurityUtils.getCurrentUserId();
         if (userId == null) return Result.success(null);
         return Result.success(announcementService.getPendingPopup(userId));
@@ -35,7 +35,7 @@ public class AnnouncementController {
 
     @Operation(summary = "发布公告 (管理员)")
     @PostMapping("/save")
-    public Result<Void> save(@RequestBody SysAnnouncement announcement) {
+    public Result<Void> save(@RequestBody Announcement announcement) {
         announcementService.saveAnnouncement(announcement);
         return Result.success();
     }

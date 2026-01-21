@@ -1,8 +1,8 @@
 package com.campus.trend.campus_pulse.controller;
 
-import com.campus.trend.campus_pulse.common.Result;
-import com.campus.trend.campus_pulse.dto.request.UpdatePasswordRequest;
-import com.campus.trend.campus_pulse.dto.request.UpdateUserDetailRequest;
+import com.campus.trend.campus_pulse.common.api.Result;
+import com.campus.trend.campus_pulse.dto.request.UserPasswordUpdateReq;
+import com.campus.trend.campus_pulse.dto.request.UserDetailUpdateReq;
 import com.campus.trend.campus_pulse.service.AuthService;
 import com.campus.trend.campus_pulse.service.UserService;
 import jakarta.validation.Valid;
@@ -10,7 +10,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 @RestController
-@RequestMapping("/sys-user")
+@RequestMapping("/user")
 public class UserController {
 
     public UserController(UserService userService, AuthService authService) {
@@ -24,12 +24,12 @@ public class UserController {
 
     @GetMapping("/profile")
     public Result<?> getProfile() {
-        return Result.success(userService.GetProFile());
+        return Result.success(userService.getProfile());
     }
 
     @GetMapping("/simple-profile")
     public Result<?> getSimpleProfile() {
-        return Result.success(userService.GetSimpleProfile());
+        return Result.success(userService.getSimpleProfile());
     }
 
     @GetMapping("/test")
@@ -39,25 +39,25 @@ public class UserController {
 
     @GetMapping("/all")
     public Result<?> getAll() {
-        return Result.success(userService.GetUsers());
+        return Result.success(userService.getUsers());
     }
 
     @PutMapping("/avatar")
     public Result<?> updateAvatar(@RequestPart("avatar") MultipartFile file) {
-        String url = userService.UploadAvatar(file);
+        String url = userService.uploadAvatar(file);
         return Result.success(url);
     }
 
     @PostMapping("/update-pwd")
-    public Result<?> updatePwd(@Valid @RequestBody UpdatePasswordRequest updatePasswordRequest) {
-        userService.UpdateUserPassword(updatePasswordRequest);
-        authService.Logout();
+    public Result<?> updatePwd(@Valid @RequestBody UserPasswordUpdateReq updatePasswordRequest) {
+        userService.updateUserPassword(updatePasswordRequest);
+        authService.logout();
         return Result.success();
     }
 
     @PostMapping("/update-udetail")
-    public Result<?> updateDetail(@Valid @RequestBody UpdateUserDetailRequest updateUserDetailRequest) {
-        userService.UpdateUserDetails(updateUserDetailRequest);
+    public Result<?> updateDetail(@Valid @RequestBody UserDetailUpdateReq updateUserDetailRequest) {
+        userService.updateUserDetails(updateUserDetailRequest);
         return Result.success();
     }
 

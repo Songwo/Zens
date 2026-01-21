@@ -1,6 +1,6 @@
 package com.campus.trend.campus_pulse.scheduled;
 
-import com.campus.trend.campus_pulse.entity.SysTag;
+import com.campus.trend.campus_pulse.entity.Tag;
 import com.campus.trend.campus_pulse.service.TagService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -40,10 +40,10 @@ public class TagHeatDecayTask {
         log.info("开始执行标签热度衰减任务");
 
         try {
-            List<SysTag> allTags = tagService.list();
+            List<Tag> allTags = tagService.list();
             int updatedCount = 0;
 
-            for (SysTag tag : allTags) {
+            for (Tag tag : allTags) {
                 if (tag.getHeat() != null && tag.getHeat() > 0) {
                     // 计算衰减后的热度
                     double decayedHeat = calculateDecayedHeat(tag);
@@ -70,7 +70,7 @@ public class TagHeatDecayTask {
      * @param tag 标签
      * @return 衰减后的热度值
      */
-    private double calculateDecayedHeat(SysTag tag) {
+    private double calculateDecayedHeat(Tag tag) {
         if (tag.getCreateTime() == null) {
             return tag.getHeat();
         }

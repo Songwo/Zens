@@ -9,16 +9,14 @@ export const recommendApi = {
         })
     },
 
-    // Get recommended posts (legacy/tag-based)
+    // Get recommended posts (legacy - redirect to hybrid list)
     getPosts(page = 1, pageSize = 20) {
-        return api.get<any, Result<{ records: any[]; total: number }>>('/recommend/posts', {
-            params: { page, pageSize }
-        })
+        return this.getHybridList(page, pageSize)
     },
 
-    // Get recommended tags
+    // Get recommended tags (redirect to tag hot)
     getTags(limit = 10) {
-        return api.get<any, Result<any[]>>('/recommend/tags', { params: { limit } })
+        return api.get<any, Result<any[]>>('/tag/hot', { params: { limit } })
     },
 
     // Get similar posts (collaborative filtering)
