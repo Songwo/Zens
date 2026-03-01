@@ -14,8 +14,8 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * 帖子点赞控制器
- * 处理帖子点赞、取消点赞、查询点赞状态等功能
+ * Song：帖子点赞控制器
+ * Song：处理帖子点赞、取消点赞、查询点赞状态等功能
  */
 @Slf4j
 @RestController
@@ -30,10 +30,10 @@ public class PostLikeController {
     }
 
     /**
-     * 切换点赞状态（如果未点赞则点赞，如果已点赞则取消）
+     * Song：切换点赞状态（如果未点赞则点赞，如果已点赞则取消）
      *
-     * @param postId 帖子ID
-     * @return 点赞状态结果
+     * Song：说明
+     * Song：说明
      */
     @PostMapping("/{postId}/toggle")
     public Result<?> toggleLike(@PathVariable String postId) {
@@ -50,10 +50,10 @@ public class PostLikeController {
     }
 
     /**
-     * 点赞状态
+     * Song：点赞状态
      *
-     * @param postId 帖子ID
-     * @return 点赞状态
+     * Song：说明
+     * Song：说明
      */
     @GetMapping("/{postId}/status")
     public Result<?> checkLikeStatus(@PathVariable String postId) {
@@ -69,11 +69,11 @@ public class PostLikeController {
     }
 
     /**
-     * 根据用户ID获取该用户点赞的所有帖子（支持分页）
+     * Song：说明
      *
-     * @param page     页码（可选，默认1）
-     * @param pageSize 每页大小（可选，默认20）
-     * @return 用户点赞的帖子列表
+     * Song：说明
+     * Song：说明
+     * Song：说明
      */
     @GetMapping("/user")
     public Result<?> getUserLikedPosts(

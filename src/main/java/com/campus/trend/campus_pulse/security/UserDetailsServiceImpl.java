@@ -12,9 +12,6 @@ import org.springframework.stereotype.Service;
 @Slf4j
 public class UserDetailsServiceImpl implements UserDetailsService {
 
-    /**
-     * 构造方法注入用户方法
-     */
     private final UserService userService;
 
     public UserDetailsServiceImpl(UserService userService) {
@@ -23,7 +20,6 @@ public class UserDetailsServiceImpl implements UserDetailsService {
 
     @Override
     public UserDetails loadUserByUsername(String username) throws LoginException {
-
         User user = userService.lambdaQuery()
                 .eq(User::getUsername, username)
                 .one();
@@ -33,10 +29,7 @@ public class UserDetailsServiceImpl implements UserDetailsService {
             throw new LoginException("账号或密码错误");
         }
 
-        log.info("用户 [{}] 信息加载成功，角色：{}",
-                user.getUsername(),
-                user.getRole() == 0 ? "Admin" : "User");
-
+        log.info("用户 [{}] 信息加载成功，角色：{}", user.getUsername(), user.getRole());
         return new AuthUser(user);
     }
 }

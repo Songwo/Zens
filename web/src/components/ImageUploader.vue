@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { uploadApi } from '@/api/upload'
-import { ImagePlus, X, Loader2 } from 'lucide-vue-next'
-import { toast } from 'vue-sonner'
+import { Plus, Delete, Loading } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
 
 const props = defineProps<{
   modelValue?: string
@@ -13,88 +13,179 @@ const emit = defineEmits<{
 }>()
 
 const uploading = ref(false)
-const fileInput = ref<HTMLInputElement | null>(null)
 
-const triggerUpload = () => {
-  fileInput.value?.click()
-}
-
-const handleFileChange = async (e: Event) => {
-  const files = (e.target as HTMLInputElement).files
-  if (!files || files.length === 0) return
-
-  const file = files[0]
+const uploadFile = async (file: File) => {
   if (!file.type.startsWith('image/')) {
-    toast.error('请选择图片文件')
-    return
+    ElMessage.error('请选择图片文件')
+    return false
   }
-  
+
   if (file.size > 5 * 1024 * 1024) {
-    toast.error('图片大小不能超过 5MB')
-    return
+    ElMessage.error('图片大小不能超过 5MB')
+    return false
   }
 
   uploading.value = true
   try {
-    const res = await uploadApi.uploadImage(file)
+    const res = await uploadApi.uploadImage(file, 'post-cover')
     emit('update:modelValue', res.data)
-    toast.success('上传成功')
+    ElMessage.success('上传成功')
   } catch (error) {
-    toast.error('上传失败')
+    ElMessage.error('上传失败')
   } finally {
     uploading.value = false
-    // Clear input so same file can be selected again if needed
-    if (fileInput.value) fileInput.value.value = ''
   }
 }
 
-const removeImage = (e: Event) => {
-  e.stopPropagation()
+const handleUpload = async (options: any) => {
+  const { file } = options
+  return uploadFile(file as File)
+}
+
+const handlePaste = async (event: ClipboardEvent) => {
+  const clipboard = event.clipboardData
+  if (!clipboard?.items?.length || uploading.value) return
+
+  const imageItem = Array.from(clipboard.items).find(item =>
+    item.kind === 'file' && item.type.startsWith('image/')
+  )
+
+  if (!imageItem) return
+
+  const file = imageItem.getAsFile()
+  if (!file) return
+
+  event.preventDefault()
+  await uploadFile(file)
+}
+
+const removeImage = () => {
   emit('update:modelValue', '')
 }
 </script>
 
 <template>
-  <div class="w-full">
-    <input 
-      ref="fileInput"
-      type="file" 
-      accept="image/*" 
-      class="hidden" 
-      @change="handleFileChange"
-    />
-
-    <!-- Image Preview -->
-    <div 
-      v-if="modelValue" 
-      class="relative w-full aspect-[21/9] rounded-2xl overflow-hidden group border border-slate-200"
-    >
-      <img :src="modelValue" class="w-full h-full object-cover" />
-      <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-        <button 
-          @click="removeImage"
-          class="p-2 bg-white/20 hover:bg-white/40 backdrop-blur-md rounded-full text-white transition-all transform hover:scale-110"
-        >
-          <X class="w-5 h-5" />
-        </button>
-      </div>
-    </div>
-
-    <!-- Upload Placeholder -->
-    <button 
-      v-else
-      @click="triggerUpload"
+  <div class="image-uploader" tabindex="0" @paste="handlePaste">
+    <el-upload
+      class="uploader-box"
+      :show-file-list="false"
+      :http-request="handleUpload"
+      accept="image/*"
       :disabled="uploading"
-      class="w-full aspect-[21/9] rounded-2xl border-2 border-dashed border-slate-200 hover:border-slate-400 hover:bg-slate-50 transition-all flex flex-col items-center justify-center gap-3 group disabled:opacity-50 disabled:cursor-not-allowed"
     >
-      <div class="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
-        <Loader2 v-if="uploading" class="w-6 h-6 text-slate-400 animate-spin" />
-        <ImagePlus v-else class="w-6 h-6 text-slate-400 group-hover:text-slate-600 transition-colors" />
+      <div v-if="modelValue" class="preview-container">
+        <el-image 
+          :src="modelValue" 
+          fit="cover" 
+          class="preview-image"
+        />
+        <div class="preview-overlay">
+          <el-icon class="remove-icon" @click.stop="removeImage"><Delete /></el-icon>
+        </div>
       </div>
-      <div class="text-center">
-        <p class="text-sm font-bold text-slate-600">点击上传封面图</p>
-        <p class="text-[10px] font-medium text-slate-400 mt-1 uppercase tracking-widest">支持 JPG, PNG · 最大 5MB</p>
+      <div v-else class="upload-placeholder">
+        <el-icon v-if="uploading" class="is-loading"><Loading /></el-icon>
+        <el-icon v-else class="plus-icon"><Plus /></el-icon>
+        <div class="upload-text">
+          <span>点击上传封面图</span>
+          <span class="upload-tip">支持 JPG/PNG, 最大 5MB，可粘贴图片</span>
+        </div>
       </div>
-    </button>
+    </el-upload>
   </div>
 </template>
+
+<style scoped>
+.image-uploader {
+  width: 100%;
+  outline: none;
+}
+
+.uploader-box {
+  width: 100%;
+}
+
+.uploader-box :deep(.el-upload) {
+  width: 100%;
+  display: block;
+}
+
+.preview-container {
+  position: relative;
+  width: 100%;
+  height: 140px;
+  border-radius: var(--el-border-radius-base);
+  overflow: hidden;
+  border: 1px solid var(--el-border-color);
+}
+
+.preview-image {
+  width: 100%;
+  height: 100%;
+}
+
+.preview-overlay {
+  position: absolute;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.preview-container:hover .preview-overlay {
+  opacity: 1;
+}
+
+.remove-icon {
+  font-size: 24px;
+  color: #fff;
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.remove-icon:hover {
+  transform: scale(1.2);
+  color: var(--el-color-danger);
+}
+
+.upload-placeholder {
+  width: 100%;
+  height: 140px;
+  border: 2px dashed var(--el-border-color);
+  border-radius: var(--el-border-radius-base);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background-color: var(--el-fill-color-blank);
+  transition: all 0.2s;
+}
+
+.upload-placeholder:hover {
+  border-color: var(--el-color-primary);
+  background-color: var(--el-color-primary-light-9);
+}
+
+.plus-icon, .is-loading {
+  font-size: 28px;
+  color: var(--el-text-color-placeholder);
+}
+
+.upload-text {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-size: 14px;
+  color: var(--el-text-color-regular);
+}
+
+.upload-tip {
+  font-size: 12px;
+  color: var(--el-text-color-placeholder);
+  margin-top: 4px;
+}
+</style>

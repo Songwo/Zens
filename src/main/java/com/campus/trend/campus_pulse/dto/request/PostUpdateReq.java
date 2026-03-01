@@ -10,8 +10,9 @@ public class PostUpdateReq {
     private String title;
     private String content;
     private String coverImage;
-    private String images; // JSON String or comma separated
-    private String tags; // "#Tag1 #Tag2"
+    private String images; // Song：说明
+    private String tags; // Song：说明
+    private Long sectionId;
     private Integer isAnonymous;
     private String locationName;
 }

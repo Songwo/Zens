@@ -1,5 +1,7 @@
 package com.campus.trend.campus_pulse.service;
 
+import java.util.Map;
+
 /**
  * Redis缓存管理服务
  * 提供缓存清理等管理功能
@@ -23,4 +25,14 @@ public interface CacheManagementService {
      * @return 清除的数量
      */
     long clearCacheByPattern(String keyPattern);
+
+    /**
+     * Song：获取缓存概览统计
+     */
+    Map<String, Long> getCacheOverview();
+
+    /**
+     * Song：按模式统计缓存数量
+     */
+    long countCacheByPattern(String keyPattern);
 }

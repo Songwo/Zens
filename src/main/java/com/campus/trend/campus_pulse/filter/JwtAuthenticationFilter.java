@@ -1,7 +1,6 @@
 package com.campus.trend.campus_pulse.filter;
 
 import com.campus.trend.campus_pulse.utils.JwtUtil;
-import io.jsonwebtoken.Claims;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -14,6 +13,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.web.filter.OncePerRequestFilter;
+import org.springframework.util.StringUtils;
 
 import java.io.IOException;
 
@@ -49,41 +49,70 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             return;
         }
 
-        // 从 Redis
-        String redisAccess = stringRedisTemplate.opsForValue().get("access_token" + userId);
-        String redisRefresh = stringRedisTemplate.opsForValue().get("refresh_token" + userId);
-
-        // accessToken 过期 → 刷新
         if (!jwtUtil.validate(accessToken)) {
-            if (redisRefresh != null && jwtUtil.validate(redisRefresh)) {
+            filterChain.doFilter(request, response);
+            return;
+        }
 
-                Claims c = jwtUtil.parse(redisRefresh);
+        String tokenType = jwtUtil.getClaimString(accessToken, "typ");
+        if (StringUtils.hasText(tokenType) && !"access".equalsIgnoreCase(tokenType)) {
+            filterChain.doFilter(request, response);
+            return;
+        }
 
-                String newAccess = jwtUtil.generateAccessToken(userId, c);
+        String sessionId = jwtUtil.getClaimString(accessToken, "sid");
+        String tokenDeviceId = jwtUtil.getClaimString(accessToken, "did");
+        String requestDeviceId = request.getHeader("X-Device-Id");
+        if (StringUtils.hasText(tokenDeviceId)
+                && StringUtils.hasText(requestDeviceId)
+                && !tokenDeviceId.equals(requestDeviceId)) {
+            log.warn("设备ID校验失败: userId={}, sid={}, tokenDid={}, reqDid={}",
+                    userId, sessionId, tokenDeviceId, requestDeviceId);
+            filterChain.doFilter(request, response);
+            return;
+        }
 
-                stringRedisTemplate.opsForValue().set("access_token" + userId, newAccess);
-
-                response.setHeader("New-Access-Token", newAccess);
-
-                accessToken = newAccess;
-
-            } else {
-                // Token expired/invalid and cannot refresh -> Continue as anonymous
-                // Let Spring Security handle access control (Public endpoints will work,
-                // private will 403)
-                log.warn("Token expired for userId: {}, proceeding as anonymous", userId);
+        if (StringUtils.hasText(sessionId)) {
+            String redisDeviceId = stringRedisTemplate.opsForValue().get("auth:device:" + userId + ":" + sessionId);
+            if (StringUtils.hasText(redisDeviceId) && !StringUtils.hasText(requestDeviceId)) {
+                log.warn("设备头缺失: userId={}, sid={}", userId, sessionId);
+                filterChain.doFilter(request, response);
+                return;
+            }
+            if (StringUtils.hasText(redisDeviceId)
+                    && StringUtils.hasText(requestDeviceId)
+                    && !redisDeviceId.equals(requestDeviceId)) {
+                log.warn("会话设备校验失败: userId={}, sid={}, redisDid={}, reqDid={}",
+                        userId, sessionId, redisDeviceId, requestDeviceId);
+                filterChain.doFilter(request, response);
+                return;
+            }
+            if (StringUtils.hasText(redisDeviceId)
+                    && StringUtils.hasText(tokenDeviceId)
+                    && !redisDeviceId.equals(tokenDeviceId)) {
+                log.warn("令牌设备与会话不一致: userId={}, sid={}, tokenDid={}, redisDid={}",
+                        userId, sessionId, tokenDeviceId, redisDeviceId);
                 filterChain.doFilter(request, response);
                 return;
             }
         }
 
-        // accessToken 必须匹配 redisAccessToken
+        String redisAccess;
+        if (StringUtils.hasText(sessionId)) {
+            redisAccess = stringRedisTemplate.opsForValue().get("auth:access:" + userId + ":" + sessionId);
+            if (!StringUtils.hasText(redisAccess)) {
+                // 兼容旧key
+                redisAccess = stringRedisTemplate.opsForValue().get("access_token" + userId);
+            }
+        } else {
+            redisAccess = stringRedisTemplate.opsForValue().get("access_token" + userId);
+        }
+
         if (!accessToken.equals(redisAccess)) {
             filterChain.doFilter(request, response);
             return;
         }
 
-        // Security 未认证，执行认证
         String username = jwtUtil.getUsername(accessToken);
         if (username != null
                 && SecurityContextHolder.getContext().getAuthentication() == null) {
@@ -99,7 +128,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
                 auth.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                 SecurityContextHolder.getContext().setAuthentication(auth);
-                log.info("认证通过");
+                log.debug("JWT认证通过: userId={}", userId);
             }
         }
 

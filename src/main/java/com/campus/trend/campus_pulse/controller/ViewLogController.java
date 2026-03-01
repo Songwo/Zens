@@ -1,9 +1,12 @@
 package com.campus.trend.campus_pulse.controller;
 
 import com.campus.trend.campus_pulse.common.api.Result;
-import com.campus.trend.campus_pulse.entity.ViewLog;
+import com.campus.trend.campus_pulse.dto.response.ViewHistoryDto;
 import com.campus.trend.campus_pulse.service.ViewLogService;
+import com.campus.trend.campus_pulse.utils.PermissionUtils;
+import com.campus.trend.campus_pulse.utils.SecurityUtils;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.*;
 
@@ -12,11 +15,12 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 浏览日志控制器 - 用于数据分析和统计
+ * Song：浏览日志控制器，用于数据分析和统计
  */
 @RestController
 @RequestMapping("/view-log")
 @RequiredArgsConstructor
+@Slf4j
 public class ViewLogController {
 
     private final ViewLogService viewLogService;
@@ -29,7 +33,11 @@ public class ViewLogController {
             @RequestParam(required = false) String userId,
             @RequestParam(required = false) String ip,
             @RequestParam(required = false) String device) {
-        viewLogService.recordView(postId, userId, ip, device != null ? device : "Unknown");
+        String currentUserId = SecurityUtils.getCurrentUserId();
+        if (userId != null && currentUserId != null && !userId.equals(currentUserId)) {
+            log.warn("忽略可疑浏览埋点 userId 参数: requestUserId={}, currentUserId={}", userId, currentUserId);
+        }
+        viewLogService.recordView(postId, currentUserId, ip, sanitizeDevice(device));
         return Result.success();
     }
 
@@ -70,8 +78,21 @@ public class ViewLogController {
     @GetMapping("/user-history/{userId}")
     public Result<?> getUserHistory(@PathVariable String userId,
             @RequestParam(defaultValue = "20") int limit) {
-        List<ViewLog> history = viewLogService.getUserViewHistory(userId, limit);
+        validateHistoryAccess(userId);
+        int safeLimit = Math.min(Math.max(limit, 1), 100);
+        List<ViewHistoryDto> history = viewLogService.getUserViewHistory(userId, safeLimit);
         return Result.success(history);
+    }
+
+    /**
+     * 分页获取用户浏览历史
+     */
+    @GetMapping("/user-history/{userId}/page")
+    public Result<?> getUserHistoryPage(@PathVariable String userId,
+                                        @RequestParam(defaultValue = "1") int page,
+                                        @RequestParam(defaultValue = "20") int pageSize) {
+        validateHistoryAccess(userId);
+        return Result.success(viewLogService.getUserViewHistoryPaged(userId, page, pageSize));
     }
 
     /**
@@ -99,8 +120,32 @@ public class ViewLogController {
      */
     @DeleteMapping("/clean")
     public Result<?> cleanOldLogs(@RequestParam(defaultValue = "90") int daysToKeep) {
-        long deletedCount = viewLogService.cleanOldLogs(daysToKeep);
+        String currentUserId = SecurityUtils.getCurrentUserId();
+        if (currentUserId == null || !PermissionUtils.isUserAdmin(currentUserId)) {
+            throw new RuntimeException("仅管理员可以清理浏览日志");
+        }
+        int safeDays = Math.min(Math.max(daysToKeep, 7), 3650);
+        long deletedCount = viewLogService.cleanOldLogs(safeDays);
         return Result.success(deletedCount);
+    }
+
+    private void validateHistoryAccess(String targetUserId) {
+        String currentUserId = SecurityUtils.getCurrentUserId();
+        if (currentUserId == null) {
+            throw new RuntimeException("未登录，无法访问浏览历史");
+        }
+
+        if (!currentUserId.equals(targetUserId) && !PermissionUtils.isUserAdmin(currentUserId)) {
+            throw new RuntimeException("无权查看其他用户浏览历史");
+        }
+    }
+
+    private String sanitizeDevice(String device) {
+        if (device == null || device.isBlank()) {
+            return "Unknown";
+        }
+        String trimmed = device.trim();
+        return trimmed.length() > 50 ? trimmed.substring(0, 50) : trimmed;
     }
 
 }

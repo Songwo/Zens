@@ -35,3 +35,18 @@ build/
 
 ### VS Code ###
 .vscode/
+
+# Production
+*.log
+uploads/
+web/dist/
+web/node_modules/
+*.jar
+*.war
+docs/
+
+# Environment files
+.env
+.env.local
+.env.prod
+.env.production

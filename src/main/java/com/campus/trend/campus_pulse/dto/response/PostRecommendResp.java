@@ -4,14 +4,14 @@ import lombok.Data;
 import java.util.List;
 
 /**
- * 推荐帖子响应 DTO
+ * Song：说明
  */
 @Data
 public class PostRecommendResp {
     private String id;
     private String title;
     private String summary;
-    private String categoryName;
+    private String sectionName;
     private List<String> tags;
     private Integer viewCount;
     private Integer likeCount;
@@ -22,7 +22,7 @@ public class PostRecommendResp {
     private String createTime;
     
     /**
-     * 推荐理由 (e.g. "热门推荐", "基于你的兴趣", "看过此帖的人也看了")
+     * Song：说明
      */
     private String recommendReason;
     

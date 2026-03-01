@@ -1,5 +1,18 @@
 server:
   port: 7800
+  compression:
+    enabled: true
+    min-response-size: 2KB
+    mime-types:
+      - application/json
+      - application/xml
+      - text/html
+      - text/xml
+      - text/plain
+      - text/css
+      - text/javascript
+      - application/javascript
+      - image/svg+xml
 spring:
   # 设置自定义 Banner 文件位置
   banner:
@@ -11,17 +24,17 @@ spring:
   # 2. 数据库配置 (MySQL)
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://localhost:3306/campus_pulse?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
-    username: root
-    password: 123456
+    url: ${DB_URL:jdbc:mysql://localhost:3306/campus_pulse?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai}
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:123456}
 
   # 2.1 Redis 配置
   data:
     redis:
-      host: localhost
-      port: 6379
-      password:
-      database: 0
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      database: ${REDIS_DB:0}
       lettuce:
         pool:
           max-active: 20
@@ -34,10 +47,10 @@ spring:
   # 163邮箱: smtp.163.com:465 或 smtp.163.com:25
   # Gmail: smtp.gmail.com:587
   mail:
-    host: smtp.163.com          # SMTP 服务器地址
-    port: 465                  # 端口 (587=TLS, 465=SSL)
-    username: zhaoqsnyah@163.com   # 发件人邮箱
-    password: WCazQwuYpggCrm3y      # 授权码
+    host: ${MAIL_HOST:smtp.163.com}         # SMTP 服务器地址
+    port: ${MAIL_PORT:465}                  # 端口 (587=TLS, 465=SSL)
+    username: ${MAIL_USERNAME:zhaoqsnyah@163.com}   # 发件人邮箱
+    password: ${MAIL_PASSWORD:TMSwqvRFGeSvSNGD}      # 授权码
     protocol: smtp
     default-encoding: UTF-8
     properties:
@@ -91,10 +104,71 @@ logging:
 
 # 5.JWT 配置
 jwt:
-  secret: "RwE7qC8ce3rE5eVTPVm1ZJNmD5JyAuDN1Xupe16p6gueoN9Ye5BYMReMm8ZMcv0u"
+  secret: ${JWT_SECRET:RwE7qC8ce3rE5eVTPVm1ZJNmD5JyAuDN1Xupe16p6gueoN9Ye5BYMReMm8ZMcv0u}
   access-expire: 3600000        # 1 小时
   refresh-expire: 604800000     # 7 天
+  remember-access-multiplier: 7
+  remember-refresh-multiplier: 4
 
 # 6.Web Url 配置
 Web:
   AvatarUrl: "http://localhost:7800/static/avatar/"
+
+# 7. AI 深度思考模型配置
+ai:
+  deepseek:
+    api-url: ${DEEPSEEK_API_URL:https://api.deepseek.com}
+    api-key: ${DEEPSEEK_API_KEY:sk-0023d54a9f204920bd02602ca879e94b}
+    model: ${DEEPSEEK_MODEL:deepseek-chat}
+
+# 8. 推荐权重参数（可配置化）
+recommendation:
+  weights:
+    tag-score-weight: 1.0
+    time-factor-weight: 1.0
+    engagement-factor-weight: 1.0
+    time-decay-days: 7.0
+    time-decay-exponent: 1.2
+    like-weight: 1.0
+    comment-weight: 2.0
+    collect-weight: 1.5
+    engagement-divisor: 100.0
+    max-engagement-boost: 1.0
+    candidate-limit: 200
+    anonymous-hot-limit: 50
+    interest-limit: 20
+    cf-limit: 10
+    hot-limit: 20
+
+# 9. 定时任务配置
+trend:
+  schedule:
+    view-log-retention-days: 90
+
+# 10. 上传安全控制配置
+campus:
+  upload:
+    url-prefix: "/uploads/"
+    max-image-size-mb: 5
+    allowed-image-extensions: ".jpg,.jpeg,.png,.gif,.webp"
+  security:
+    # 生产环境请替换为你的前端域名，例如: https://app.example.com
+    allowed-origin-patterns: ${ALLOWED_ORIGIN_PATTERNS:http://localhost:5173,http://127.0.0.1:5173,http://localhost:4173,http://127.0.0.1:4173}
+    # 开发期可关闭强制签名，生产建议开启 true
+    request-signature-required: ${REQUEST_SIGNATURE_REQUIRED:false}
+  support:
+    admin-username: ${SUPPORT_ADMIN_USERNAME:admin}
+    admin-display-name: ${SUPPORT_ADMIN_DISPLAY_NAME:社区管理员}
+
+# 11. 第三方登录与二步验证配置
+oauth:
+  github:
+    client-id: ${GITHUB_CLIENT_ID:}
+    client-secret: ${GITHUB_CLIENT_SECRET:}
+    redirect-uri: ${GITHUB_REDIRECT_URI:http://localhost:4173/auth?type=login&provider=github}
+
+security:
+  two-factor:
+    issuer: ${TWO_FACTOR_ISSUER:Zens社区}
+    login-ticket-expire-seconds: ${TWO_FACTOR_LOGIN_TICKET_EXPIRE_SECONDS:300}
+    setup-expire-seconds: ${TWO_FACTOR_SETUP_EXPIRE_SECONDS:600}

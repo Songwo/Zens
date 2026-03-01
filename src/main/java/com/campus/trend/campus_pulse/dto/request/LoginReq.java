@@ -1,22 +1,42 @@
 package com.campus.trend.campus_pulse.dto.request;
 
-import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 
 @Data
 public class LoginReq {
 
-    @NotBlank(message = "用户名不能为空")
-    private String username;
+    /**
+     * Song：登录账号（用户名或邮箱，密码登录时使用）
+     */
+    private String account;
 
-    @NotBlank(message = "密码不能为空")
+    /**
+     * Song：密码（密码登录模式）
+     */
     private String password;
 
-    @NotBlank(message = "图形验证码ID不能为空")
-    private String uuid;
+    /**
+     * Song：登录邮箱（验证码登录模式）
+     */
+    private String email;
 
-    @NotBlank(message = "图形验证码不能为空")
+    /**
+     * Song：邮箱验证码（验证码登录模式）
+     */
     private String code;
-    
+
+    /**
+     * Song：说明
+     */
+    private String loginType;
+
+    /**
+     * Song：记住我
+     */
     private boolean rememberMe = false;
+
+    /**
+     * Song：谷歌验证器二步验证码（用户开启后可传）
+     */
+    private String twoFactorCode;
 }

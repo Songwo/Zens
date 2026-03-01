@@ -3,6 +3,7 @@ package com.campus.trend.campus_pulse.dto.response;
 import lombok.Data;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Data
 public class UserDetailResp {
@@ -12,14 +13,22 @@ public class UserDetailResp {
     private String nickname;
     private String email;
     private String avatar;
+    private String bio;
     private String major;
-    private int grade;
+    private int enrollmentYear;
     private String school;
     private Integer gender;
-    private Integer role;
     private Integer status;
     private String interestTags;
+    private Integer twoFactorEnabled;
+    private Integer emailNotifyEnabled;
+    private Boolean githubBound;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;
+
+    /**
+     * Song：用户角色列表（角色代码）
+     */
+    private List<String> roles;
 
 }

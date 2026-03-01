@@ -14,8 +14,8 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * 帖子收藏控制器
- * 处理帖子收藏、取消收藏、查询收藏状态等功能
+ * Song：帖子收藏控制器
+ * Song：处理帖子收藏、取消收藏、查询收藏状态等功能
  */
 @Slf4j
 @RestController
@@ -30,10 +30,10 @@ public class PostCollectController {
     }
 
     /**
-     * 切换收藏状态（如果未收藏则收藏，如果已收藏则取消）
+     * Song：切换收藏状态（如果未收藏则收藏，如果已收藏则取消）
      *
-     * @param postId 帖子ID
-     * @return 收藏状态结果
+     * Song：说明
+     * Song：说明
      */
     @PostMapping("/{postId}/toggle")
     public Result<?> toggleCollect(@PathVariable String postId) {
@@ -50,10 +50,10 @@ public class PostCollectController {
     }
 
     /**
-     * 检查当前用户是否收藏了指定帖子
+     * Song：检查当前用户是否收藏了指定帖子
      *
-     * @param postId 帖子ID
-     * @return 收藏状态
+     * Song：说明
+     * Song：说明
      */
     @GetMapping("/{postId}/status")
     public Result<?> checkCollectStatus(@PathVariable String postId) {
@@ -69,11 +69,11 @@ public class PostCollectController {
     }
 
     /**
-     * 根据用户ID获取该用户收藏的所有帖子（支持分页）
+     * Song：说明
      *
-     * @param page     页码（可选，默认1）
-     * @param pageSize 每页大小（可选，默认20）
-     * @return 用户收藏的帖子列表
+     * Song：说明
+     * Song：说明
+     * Song：说明
      */
     @GetMapping("/user")
     public Result<?> getUserCollectedPosts(

@@ -34,9 +34,21 @@ public class VerificationCodeService {
         String code = generateCode();
         String key = REGISTER_CODE_PREFIX + email;
         stringRedisTemplate.opsForValue().set(key, code, Duration.ofMinutes(EXPIRE_MINUTES));
-        // 使用接口定义的方法发送验证码，而不是直接调用 impl 的私有方法构建 HTML
+        log.info("验证码已生成并存储到Redis: {}", email);
+
+        // 异步发送邮件，不阻塞主线程
         mailService.sendVerificationCode(email, code);
-        log.info("注册验证码已发送至 {}", email);
+        log.info("验证码邮件发送任务已提交: {}", email);
+    }
+
+    /**
+     * 静默生成验证码（不发邮件），用于 verify-code 后恢复码给后续 login/register 使用
+     */
+    public void sendCodeSilent(String email) {
+        String code = generateCode();
+        String key = REGISTER_CODE_PREFIX + email;
+        stringRedisTemplate.opsForValue().set(key, code, Duration.ofMinutes(EXPIRE_MINUTES));
+        log.info("已为 {} 静默生成新验证码（供后续登录/注册使用）", email);
     }
 
     /**
@@ -65,6 +77,18 @@ public class VerificationCodeService {
             return true;
         }
         return false;
+    }
+
+    /**
+     * 仅校验验证码，不删除（供 /auth/verify-code 使用，保留码给后续 login/register 消费）
+     */
+    public boolean checkCodeWithoutConsuming(String email, String code) {
+        if (email == null || code == null) {
+            return false;
+        }
+        String key = REGISTER_CODE_PREFIX + email;
+        String storedCode = stringRedisTemplate.opsForValue().get(key);
+        return code.equals(storedCode);
     }
 
     /**

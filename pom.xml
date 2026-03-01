@@ -77,6 +77,12 @@
             <artifactId>spring-boot-starter-data-redis</artifactId>
         </dependency>
 
+        <!-- WebSocket 支持 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-websocket</artifactId>
+        </dependency>
+
         <!-- 趋势分析：中文分词库 HanLP (用于词云和热点话题识别) -->
         <dependency>
             <groupId>com.hankcs</groupId>

@@ -10,6 +10,9 @@ public class UserDetailUpdateReq {
     @Size(max = 20, message = "昵称长度不能超过 20 个字符")
     private String nickname;
 
+    @Size(max = 200, message = "个人简介长度不能超过 200 个字符")
+    private String bio;
+
     @NotBlank
     @Pattern(regexp = "^(http|https)://.*$", message = "头像必须是合法的 URL", groups = RegisterReq.UrlCheck.class)
     private String avatar;
@@ -18,12 +21,12 @@ public class UserDetailUpdateReq {
     @Size(max = 30, message = "专业名称长度不能超过 30 个字符")
     private String major;
 
-    @Min(value = 2000, message = "年级不能小于 2000")
-    @Max(value = 2030, message = "年级不能大于 2030")
-    private int grade;
+    @Min(value = 2000, message = "入学年份不能小于 2000")
+    @Max(value = 2030, message = "入学年份不能大于 2030")
+    private int enrollmentYear;
 
     /**
-     * 性别 0:未知 1:男 2:女
+     * Song：性别 0:未知 1:男 2:女
      */
     private Integer gender;
 

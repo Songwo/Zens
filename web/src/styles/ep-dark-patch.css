@@ -1,0 +1,189 @@
+/* Song：说明 */
+
+/* Song：说明 */
+:root {
+    --el-color-primary: var(--cp-primary);
+    --el-color-primary-light-3: var(--cp-primary-light);
+    --el-color-primary-dark-2: var(--cp-primary-dark);
+
+    --el-bg-color: var(--cp-bg-surface);
+    --el-bg-color-page: var(--cp-bg-page);
+    --el-bg-color-overlay: var(--cp-bg-elevated);
+    --el-fill-color-blank: var(--cp-bg-card);
+
+    --el-border-color: var(--cp-border);
+    --el-border-color-lighter: var(--cp-divider);
+
+    --el-text-color-primary: var(--cp-text);
+    --el-text-color-regular: var(--cp-text);
+    --el-text-color-secondary: var(--cp-text-muted);
+    --el-text-color-placeholder: var(--cp-text-muted);
+}
+
+/* =========================================
+   DEEP EP VARIABLE MAPPING FOR DARK MODE
+   Ensure components relying on native EP vars don't show white blocks
+   ========================================= */
+:root[data-mode="dark"] {
+    --el-fill-color: var(--cp-bg-surface);
+    --el-fill-color-light: var(--cp-bg-surface);
+    --el-fill-color-lighter: var(--cp-bg-elevated);
+
+    --el-color-primary-light-9: var(--cp-hover);
+    --el-color-primary-light-8: var(--cp-hover-strong);
+    --el-color-primary-light-7: var(--cp-hover-strong);
+    --el-color-primary-light-5: var(--cp-border);
+    --el-color-primary-light-3: var(--cp-primary-dark);
+
+    --el-box-shadow: 0px 12px 32px 4px rgba(0, 0, 0, 0.24);
+    --el-box-shadow-light: 0px 0px 12px rgba(0, 0, 0, 0.4);
+    --el-box-shadow-lighter: 0px 0px 6px rgba(0, 0, 0, 0.4);
+}
+
+/* Song：说明 */
+.el-card {
+    background-color: var(--cp-bg-card) !important;
+    border-color: var(--cp-border) !important;
+    color: var(--cp-text) !important;
+    transition: var(--cp-transition);
+}
+
+.el-menu {
+    background-color: transparent !important;
+    border-right: none !important;
+}
+
+.el-menu-item,
+.el-sub-menu__title {
+    color: var(--cp-text) !important;
+}
+
+.el-input__inner {
+    color: var(--cp-text) !important;
+}
+
+/* =========================================
+   STRICT DARK MODE HOVER OVERRIDES
+   ========================================= */
+:root[data-mode="dark"] .el-menu-item:hover,
+:root[data-mode="dark"] .el-sub-menu__title:hover {
+    background-color: var(--cp-hover) !important;
+}
+
+:root[data-mode="dark"] .el-menu-item.is-active {
+    background-color: var(--cp-hover) !important;
+    color: var(--cp-primary) !important;
+    border-right: 3px solid var(--cp-primary) !important;
+}
+
+:root[data-mode="dark"] .el-input__wrapper,
+:root[data-mode="dark"] .el-textarea__inner {
+    background-color: var(--cp-bg-surface) !important;
+    box-shadow: 0 0 0 1px var(--cp-border) inset !important;
+    color: var(--cp-text) !important;
+}
+
+:root[data-mode="dark"] .el-input__wrapper:hover,
+:root[data-mode="dark"] .el-textarea__inner:hover {
+    box-shadow: 0 0 0 1px var(--cp-primary) inset !important;
+}
+
+:root[data-mode="dark"] .el-popover,
+:root[data-mode="dark"] .el-dropdown-menu,
+:root[data-mode="dark"] .el-dialog,
+:root[data-mode="dark"] .el-message-box,
+:root[data-mode="dark"] .el-drawer {
+    background-color: var(--cp-bg-elevated) !important;
+    border-color: var(--cp-border) !important;
+    color: var(--cp-text) !important;
+}
+
+:root[data-mode="dark"] .el-dropdown-menu__item {
+    color: var(--cp-text) !important;
+}
+
+:root[data-mode="dark"] .el-dropdown-menu__item:not(.is-disabled):hover {
+    background-color: var(--cp-hover) !important;
+    color: var(--cp-primary) !important;
+}
+
+:root[data-mode="dark"] .el-select-dropdown {
+    background-color: var(--cp-bg-elevated) !important;
+    border-color: var(--cp-border) !important;
+}
+
+:root[data-mode="dark"] .el-select-dropdown__item {
+    color: var(--cp-text) !important;
+}
+
+:root[data-mode="dark"] .el-select-dropdown__item.hover,
+:root[data-mode="dark"] .el-select-dropdown__item:hover {
+    background-color: var(--cp-hover) !important;
+}
+
+:root[data-mode="dark"] .el-select-dropdown__item.selected {
+    color: var(--cp-primary) !important;
+    font-weight: bold;
+}
+
+/* Song：说明 */
+:root[data-mode="dark"] .el-table {
+    background-color: var(--cp-bg-card) !important;
+    color: var(--cp-text) !important;
+    --el-table-border-color: var(--cp-divider) !important;
+    --el-table-header-bg-color: var(--cp-bg-surface) !important;
+    --el-table-row-hover-bg-color: var(--cp-hover) !important;
+}
+
+:root[data-mode="dark"] .el-table th.el-table__cell {
+    background-color: var(--cp-bg-surface) !important;
+}
+
+:root[data-mode="dark"] .el-table tr {
+    background-color: var(--cp-bg-card) !important;
+}
+
+:root[data-mode="dark"] .el-table td.el-table__cell {
+    border-bottom: 1px solid var(--cp-divider) !important;
+}
+
+:root[data-mode="dark"] .el-table--enable-row-hover .el-table__body tr:hover>td.el-table__cell {
+    background-color: var(--cp-hover) !important;
+}
+
+/* Song：说明 */
+:root[data-mode="dark"] .el-tabs__item {
+    color: var(--cp-text-muted) !important;
+}
+
+:root[data-mode="dark"] .el-tabs__item.is-active,
+:root[data-mode="dark"] .el-tabs__item:hover {
+    color: var(--cp-primary) !important;
+}
+
+/* Song：说明 */
+:root[data-mode="dark"] .el-pagination button,
+:root[data-mode="dark"] .el-pagination .el-pager li {
+    background-color: var(--cp-bg-surface) !important;
+    color: var(--cp-text) !important;
+}
+
+:root[data-mode="dark"] .el-pagination .el-pager li.is-active {
+    background-color: var(--cp-primary) !important;
+    color: #fff !important;
+}
+
+:root[data-mode="dark"] .el-pagination .el-pager li:hover {
+    color: var(--cp-primary) !important;
+}
+
+/* Song：说明 */
+:root[data-mode="dark"] .el-popper.is-light {
+    background: var(--cp-bg-elevated) !important;
+    border: 1px solid var(--cp-border) !important;
+}
+
+:root[data-mode="dark"] .el-popper.is-light .el-popper__arrow::before {
+    background: var(--cp-bg-elevated) !important;
+    border: 1px solid var(--cp-border) !important;
+}

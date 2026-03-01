@@ -29,29 +29,29 @@ public class UserTagRelationServiceImpl extends ServiceImpl<UserTagRelationMappe
     }
 
     /**
-     * 关注标签
+     * Song：关注标签
      *
-     * @param userId 用户ID
-     * @param tagId  标签ID
-     * @param score  兴趣权重（1.0-5.0）
-     * @return true-关注成功, false-已经关注过
+     * Song：说明
+     * Song：说明
+     * Song：说明
+     * Song：说明
      */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public boolean followTag(String userId, Long tagId, BigDecimal score) {
-        // 1. 检查是否已关注
+        // Song：1. 检查是否已关注
         if (isFollowing(userId, tagId)) {
             log.warn("用户 [{}] 已经关注过标签 [{}]", userId, tagId);
             return false;
         }
 
-        // 2. 验证分数范围
+        // Song：2. 验证分数范围
         BigDecimal validScore = score;
         if (score == null || score.compareTo(BigDecimal.ONE) < 0 || score.compareTo(new BigDecimal("5.0")) > 0) {
-            validScore = new BigDecimal("3.0"); // 默认3.0
+            validScore = new BigDecimal("3.0"); // Song：默认3.0
         }
 
-        // 3. 创建关注关系
+        // Song：3. 创建关注关系
         UserTagRelation relation = new UserTagRelation()
                 .setUserId(userId)
                 .setTagId(tagId)
@@ -68,22 +68,22 @@ public class UserTagRelationServiceImpl extends ServiceImpl<UserTagRelationMappe
     }
 
     /**
-     * 取消关注标签
+     * Song：取消关注标签
      *
-     * @param userId 用户ID
-     * @param tagId  标签ID
-     * @return true-取消成功, false-未关注过
+     * Song：说明
+     * Song：说明
+     * Song：说明
      */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public boolean unfollowTag(String userId, Long tagId) {
-        // 1. 检查是否已关注
+        // Song：1. 检查是否已关注
         if (!isFollowing(userId, tagId)) {
             log.warn("用户 [{}] 未关注过标签 [{}]", userId, tagId);
             return false;
         }
 
-        // 2. 删除关注关系
+        // Song：2. 删除关注关系
         boolean removed = lambdaUpdate()
                 .eq(UserTagRelation::getUserId, userId)
                 .eq(UserTagRelation::getTagId, tagId)
@@ -97,11 +97,11 @@ public class UserTagRelationServiceImpl extends ServiceImpl<UserTagRelationMappe
     }
 
     /**
-     * 判断是否关注
+     * Song：判断是否关注
      *
-     * @param userId 用户ID
-     * @param tagId  标签ID
-     * @return true-已关注, false-未关注
+     * Song：说明
+     * Song：说明
+     * Song：说明
      */
     @Override
     public boolean isFollowing(String userId, Long tagId) {
@@ -113,17 +113,17 @@ public class UserTagRelationServiceImpl extends ServiceImpl<UserTagRelationMappe
     }
 
     /**
-     * 获取用户关注的标签
+     * Song：获取用户关注的标签
      *
-     * @param userId 用户ID
-     * @return 标签列表
+     * Song：说明
+     * Song：说明
      */
     @Override
     public List<Tag> getUserFollowingTags(String userId) {
-        // 1. 查询用户关注的标签关系
+        // Song：1. 查询用户关注的标签关系
         List<UserTagRelation> relations = lambdaQuery()
                 .eq(UserTagRelation::getUserId, userId)
-                .orderByDesc(UserTagRelation::getScore) // 按权重排序
+                .orderByDesc(UserTagRelation::getScore) // Song：按权重排序
                 .orderByDesc(UserTagRelation::getCreateTime)
                 .list();
 
@@ -132,12 +132,12 @@ public class UserTagRelationServiceImpl extends ServiceImpl<UserTagRelationMappe
             return List.of();
         }
 
-        // 2. 提取标签ID
+        // Song：说明
         List<Long> tagIds = relations.stream()
                 .map(UserTagRelation::getTagId)
                 .collect(Collectors.toList());
 
-        // 3. 批量查询标签信息
+        // Song：3. 批量查询标签信息
         List<Tag> tags = tagMapper.selectBatchIds(tagIds);
 
         log.info("用户 [{}] 关注了 {} 个标签", userId, tags.size());
@@ -146,29 +146,29 @@ public class UserTagRelationServiceImpl extends ServiceImpl<UserTagRelationMappe
     }
 
     /**
-     * 更新兴趣权重
+     * Song：更新兴趣权重
      *
-     * @param userId 用户ID
-     * @param tagId  标签ID
-     * @param score  新的权重分数
-     * @return true-更新成功, false-未关注该标签
+     * Song：说明
+     * Song：说明
+     * Song：说明
+     * Song：说明
      */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public boolean updateScore(String userId, Long tagId, BigDecimal score) {
-        // 1. 检查是否已关注
+        // Song：1. 检查是否已关注
         if (!isFollowing(userId, tagId)) {
             log.warn("用户 [{}] 未关注标签 [{}]，无法更新权重", userId, tagId);
             return false;
         }
 
-        // 2. 验证分数范围
+        // Song：2. 验证分数范围
         if (score == null || score.compareTo(BigDecimal.ONE) < 0 || score.compareTo(new BigDecimal("5.0")) > 0) {
             log.warn("权重分数 [{}] 超出范围 [1.0-5.0]", score);
             return false;
         }
 
-        // 3. 更新权重
+        // Song：3. 更新权重
         boolean updated = lambdaUpdate()
                 .eq(UserTagRelation::getUserId, userId)
                 .eq(UserTagRelation::getTagId, tagId)
@@ -183,12 +183,12 @@ public class UserTagRelationServiceImpl extends ServiceImpl<UserTagRelationMappe
     }
 
     /**
-     * 切换关注状态
+     * Song：切换关注状态
      *
-     * @param userId 用户ID
-     * @param tagId  标签ID
-     * @param score  兴趣权重（默认3.0）
-     * @return true-已关注, false-已取消关注
+     * Song：说明
+     * Song：说明
+     * Song：说明
+     * Song：说明
      */
     @Override
     @Transactional(rollbackFor = Exception.class)

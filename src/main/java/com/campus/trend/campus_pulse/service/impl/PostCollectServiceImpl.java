@@ -8,6 +8,7 @@ import com.campus.trend.campus_pulse.entity.PostCollect;
 import com.campus.trend.campus_pulse.mapper.PostCollectMapper;
 import com.campus.trend.campus_pulse.mapper.PostMapper;
 import com.campus.trend.campus_pulse.service.PostCollectService;
+import com.campus.trend.campus_pulse.service.LevelService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,17 +23,22 @@ public class PostCollectServiceImpl extends ServiceImpl<PostCollectMapper, PostC
         implements PostCollectService {
 
     private final PostMapper postMapper;
+    private final LevelService levelService;
+    private final com.campus.trend.campus_pulse.service.NotificationService notificationService;
 
-    public PostCollectServiceImpl(PostMapper postMapper) {
+    public PostCollectServiceImpl(PostMapper postMapper, LevelService levelService,
+            com.campus.trend.campus_pulse.service.NotificationService notificationService) {
         this.postMapper = postMapper;
+        this.levelService = levelService;
+        this.notificationService = notificationService;
     }
 
     /**
-     * 判断用户是否已收藏该帖子
+     * Song：判断用户是否已收藏该帖子
      *
-     * @param postId 帖子ID
-     * @param userId 用户ID
-     * @return true-已收藏, false-未收藏
+     * Song：说明
+     * Song：说明
+     * Song：说明
      */
     @Override
     public boolean isCollect(String postId, String userId) {
@@ -44,23 +50,23 @@ public class PostCollectServiceImpl extends ServiceImpl<PostCollectMapper, PostC
     }
 
     /**
-     * 根据用户ID分页获取用户收藏的帖子
+     * Song：说明
      *
-     * @param userId   用户ID
-     * @param page     页码（从1开始）
-     * @param pageSize 每页大小
-     * @return 分页的收藏帖子列表
+     * Song：说明
+     * Song：说明
+     * Song：说明
+     * Song：说明
      */
     @Override
     public IPage<Post> getPostCollectWithPage(String userId, int page, int pageSize) {
-        // 1. 查询该用户所有的收藏记录（分页）
+        // Song：1. 查询该用户所有的收藏记录（分页）
         Page<PostCollect> postCollectPage = new Page<>(page, pageSize);
         IPage<PostCollect> postCollects = lambdaQuery()
                 .eq(PostCollect::getUserId, userId)
                 .orderByDesc(PostCollect::getCreateTime)
                 .page(postCollectPage);
 
-        // 2. 如果没有收藏记录，返回空分页
+        // Song：2. 如果没有收藏记录，返回空分页
         if (postCollects.getRecords() == null || postCollects.getRecords().isEmpty()) {
             log.info("用户 [{}] 暂无收藏记录", userId);
             Page<Post> emptyPage = new Page<>(page, pageSize);
@@ -68,20 +74,20 @@ public class PostCollectServiceImpl extends ServiceImpl<PostCollectMapper, PostC
             return emptyPage;
         }
 
-        // 3. 提取所有帖子ID
+        // Song：说明
         List<String> postIds = postCollects.getRecords().stream()
                 .map(PostCollect::getPostId)
                 .collect(Collectors.toList());
 
-        // 4. 批量查询帖子信息（只查询状态正常的帖子）
+        // Song：4. 批量查询帖子信息（只查询状态正常的帖子）
         List<Post> posts = postMapper.selectBatchIds(postIds).stream()
                 .filter(post -> post.getStatus() != null && post.getStatus() == 1)
                 .collect(Collectors.toList());
 
-        // 5. 封装为分页结果
+        // Song：5. 封装为分页结果
         Page<Post> resultPage = new Page<>(page, pageSize);
         resultPage.setRecords(posts);
-        resultPage.setTotal(postCollects.getTotal()); // 使用原始收藏总数
+        resultPage.setTotal(postCollects.getTotal()); // Song：使用原始收藏总数
         resultPage.setCurrent(postCollects.getCurrent());
         resultPage.setSize(postCollects.getSize());
 
@@ -92,22 +98,22 @@ public class PostCollectServiceImpl extends ServiceImpl<PostCollectMapper, PostC
     }
 
     /**
-     * 用户收藏帖子
+     * Song：用户收藏帖子
      *
-     * @param postId 帖子ID
-     * @param userId 用户ID
-     * @return true-收藏成功, false-已经收藏过
+     * Song：说明
+     * Song：说明
+     * Song：说明
      */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public boolean collectPost(String postId, String userId) {
-        // 1. 检查是否已收藏
+        // Song：1. 检查是否已收藏
         if (isCollect(postId, userId)) {
             log.warn("用户 [{}] 已经收藏过帖子 [{}]", userId, postId);
             return false;
         }
 
-        // 2. 创建收藏记录
+        // Song：2. 创建收藏记录
         PostCollect postCollect = new PostCollect()
                 .setPostId(postId)
                 .setUserId(userId)
@@ -115,7 +121,7 @@ public class PostCollectServiceImpl extends ServiceImpl<PostCollectMapper, PostC
 
         boolean saved = save(postCollect);
 
-        // 3. 更新帖子的收藏数
+        // Song：3. 更新帖子的收藏数
         if (saved) {
             Post post = postMapper.selectById(postId);
             if (post != null) {
@@ -123,6 +129,14 @@ public class PostCollectServiceImpl extends ServiceImpl<PostCollectMapper, PostC
                 post.setCollectCount(currentCollectCount + 1);
                 postMapper.updateById(post);
                 log.info("用户 [{}] 收藏帖子 [{}] 成功，当前收藏数: {}", userId, postId, currentCollectCount + 1);
+
+                // Song：被收藏经验 +3（给帖子作者）
+                levelService.addExperience(post.getUserId(), 3, "被收藏");
+
+                // Song：发送收藏通知（不给自己发通知）
+                if (!post.getUserId().equals(userId)) {
+                    notificationService.sendFavoriteNotification(post.getUserId(), userId, postId);
+                }
             }
         }
 
@@ -130,28 +144,28 @@ public class PostCollectServiceImpl extends ServiceImpl<PostCollectMapper, PostC
     }
 
     /**
-     * 用户取消收藏帖子
+     * Song：用户取消收藏帖子
      *
-     * @param postId 帖子ID
-     * @param userId 用户ID
-     * @return true-取消成功, false-未收藏过
+     * Song：说明
+     * Song：说明
+     * Song：说明
      */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public boolean uncollectPost(String postId, String userId) {
-        // 1. 检查是否已收藏
+        // Song：1. 检查是否已收藏
         if (!isCollect(postId, userId)) {
             log.warn("用户 [{}] 未收藏过帖子 [{}]", userId, postId);
             return false;
         }
 
-        // 2. 删除收藏记录
+        // Song：2. 删除收藏记录
         boolean removed = lambdaUpdate()
                 .eq(PostCollect::getPostId, postId)
                 .eq(PostCollect::getUserId, userId)
                 .remove();
 
-        // 3. 更新帖子的收藏数
+        // Song：3. 更新帖子的收藏数
         if (removed) {
             Post post = postMapper.selectById(postId);
             if (post != null) {
@@ -166,11 +180,11 @@ public class PostCollectServiceImpl extends ServiceImpl<PostCollectMapper, PostC
     }
 
     /**
-     * 切换收藏状态（收藏/取消收藏）
+     * Song：切换收藏状态（收藏/取消收藏）
      *
-     * @param postId 帖子ID
-     * @param userId 用户ID
-     * @return true-已收藏, false-已取消收藏
+     * Song：说明
+     * Song：说明
+     * Song：说明
      */
     @Override
     @Transactional(rollbackFor = Exception.class)

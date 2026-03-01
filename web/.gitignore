@@ -22,3 +22,17 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Production
+*.log
+uploads/
+web/dist/
+web/node_modules/
+*.jar
+*.war
+docs/

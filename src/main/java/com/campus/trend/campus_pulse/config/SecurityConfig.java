@@ -3,9 +3,12 @@ package com.campus.trend.campus_pulse.config;
 import com.campus.trend.campus_pulse.common.api.Result;
 import com.campus.trend.campus_pulse.common.api.ResultCode;
 import com.campus.trend.campus_pulse.filter.JwtAuthenticationFilter;
+import com.campus.trend.campus_pulse.filter.RequestSecurityFilter;
 import com.campus.trend.campus_pulse.utils.JwtUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletResponse;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -28,15 +31,21 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
- * Spring Security 配置类
+ * Song：说明
  */
 @Configuration
 @EnableWebSecurity
+@Slf4j
 public class SecurityConfig {
 
     private final ObjectMapper objectMapper;
+    @Value("${campus.security.allowed-origin-patterns:http://localhost:5173,http://127.0.0.1:5173,http://localhost:4173,http://127.0.0.1:4173}")
+    private String allowedOriginPatterns;
+    @Value("${campus.security.request-signature-required:false}")
+    private boolean requestSignatureRequired;
 
     public SecurityConfig(ObjectMapper objectMapper) {
         this.objectMapper = objectMapper;
@@ -49,8 +58,13 @@ public class SecurityConfig {
         return new JwtAuthenticationFilter(uds, jwtUtil, redisTemplate);
     }
 
+    @Bean
+    public RequestSecurityFilter requestSecurityFilter(StringRedisTemplate redisTemplate, JwtUtil jwtUtil) {
+        return new RequestSecurityFilter(redisTemplate, jwtUtil, objectMapper, requestSignatureRequired);
+    }
+
     /**
-     * 密码编码器：使用 BCryptPasswordEncoder
+     * Song：说明
      */
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -58,30 +72,46 @@ public class SecurityConfig {
     }
 
     /**
-     * 配置安全过滤链
+     * Song：配置安全过滤链
      */
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http,
-            JwtAuthenticationFilter jwtAuthenticationFilter) throws Exception {
+            JwtAuthenticationFilter jwtAuthenticationFilter,
+            RequestSecurityFilter requestSecurityFilter) throws Exception {
         http
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .headers(headers -> headers
+                        .frameOptions(frame -> frame.deny())
+                        .contentTypeOptions(contentType -> {})
+                        .httpStrictTransportSecurity(hsts -> hsts
+                                .includeSubDomains(true)
+                                .maxAgeInSeconds(31536000))
+                        .referrerPolicy(referrer -> referrer
+                                .policy(org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter.ReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN))
+                        .contentSecurityPolicy(csp -> csp
+                                .policyDirectives("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https: ws: wss:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'")))
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers(SecurityWhitelist.AUTH_WHITELIST).permitAll()
+                        .requestMatchers("/api/auth/**").permitAll()
+                        .requestMatchers("/api/static/**", "/api/uploads/**", "/api/ws/**").permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.GET, SecurityWhitelist.PUBLIC_GET_URLS).permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.POST, SecurityWhitelist.PUBLIC_POST_URLS).permitAll()
+                        .requestMatchers("/admin/**").hasAnyAuthority("ROLE_ADMIN", "ROLE_SUPER_ADMIN")
+                        .requestMatchers("/api/admin/**").hasAnyAuthority("ROLE_ADMIN", "ROLE_SUPER_ADMIN")
                         .anyRequest().authenticated())
                 .exceptionHandling(exceptions -> exceptions
                         .authenticationEntryPoint(authenticationEntryPoint())
                         .accessDeniedHandler(accessDeniedHandler()))
-                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterAfter(requestSecurityFilter, JwtAuthenticationFilter.class);
 
         return http.build();
     }
 
     /**
-     * 自定义 401 处理器：未认证
+     * Song：自定义 401 处理器：未认证
      */
     @Bean
     public AuthenticationEntryPoint authenticationEntryPoint() {
@@ -95,7 +125,7 @@ public class SecurityConfig {
     }
 
     /**
-     * 自定义 403 处理器：无权限
+     * Song：自定义 403 处理器：无权限
      */
     @Bean
     public AccessDeniedHandler accessDeniedHandler() {
@@ -109,17 +139,24 @@ public class SecurityConfig {
     }
 
     /**
-     * 配置 CORS 策略
+     * Song：说明
      */
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        // 生产环境下建议配置具体的域名，例如 "https://campus-pulse.edu"
-        configuration.setAllowedOriginPatterns(List.of("*"));
+        List<String> origins = Arrays.stream(allowedOriginPatterns.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .collect(Collectors.toList());
+        List<String> finalOrigins = origins.isEmpty()
+                ? List.of("http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:4173", "http://127.0.0.1:4173")
+                : origins;
+        configuration.setAllowedOriginPatterns(finalOrigins);
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("*"));
         configuration.setAllowCredentials(true);
         configuration.setExposedHeaders(List.of("Authorization"));
+        log.info("CORS allowed origins: {}", finalOrigins);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);

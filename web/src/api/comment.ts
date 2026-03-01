@@ -2,25 +2,25 @@ import api from '@/lib/api'
 import type { Comment, CreateCommentRequest, Result } from '@/types'
 
 export const commentApi = {
-    // Get Comments by Post ID
+    // Song：说明
     getByPostId(postId: string, page = 1, size = 10) {
         return api.get<any, Result<{ records: Comment[]; total: number }>>(`/comment/post/${postId}`, {
             params: { page, size }
         })
     },
 
-    // Add Comment (Authenticated or Anonymous)
+    // Song：说明
     add(data: CreateCommentRequest) {
-        // Determine endpoint based on auth status or just use 'create' which handles both
+        // Song：说明
         return api.post<any, Result<void>>('/comment/create', data)
     },
 
-    // Delete Comment
+    // Song：说明
     delete(id: string) {
         return api.delete<any, Result<void>>(`/comment/${id}`)
     },
 
-    // Like Comment
+    // Song：说明
     like(id: string) {
         return api.post<any, Result<void>>(`/comment/${id}/like`)
     }

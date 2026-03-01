@@ -1,0 +1,68 @@
+/* Song：主题色 */
+:root {
+  /* Song：说明 */
+  --color-primary: #2563eb;
+  --color-primary-hover: #1d4ed8;
+  --color-primary-light: #dbeafe;
+
+  /* Song：说明 */
+  --color-slate-50: #f8fafc;
+  --color-slate-100: #f1f5f9;
+  --color-slate-200: #e2e8f0;
+  --color-slate-300: #cbd5e1;
+  --color-slate-400: #94a3b8;
+  --color-slate-500: #64748b;
+  --color-slate-600: #475569;
+  --color-slate-700: #334155;
+  --color-slate-800: #1e293b;
+  --color-slate-900: #0f172a;
+
+  /* Song：说明 */
+  --color-success: #10b981;
+  --color-warning: #f59e0b;
+  --color-error: #ef4444;
+  --color-info: #3b82f6;
+
+  /* Song：说明 */
+  --font-title: 18px;
+  --font-title-lg: 20px;
+  --font-body: 14px;
+  --font-body-lg: 15px;
+  --font-meta: 12px;
+  --font-meta-sm: 11px;
+  --font-meta-xs: 10px;
+
+  /* Song：说明 */
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 12px;
+  --spacing-lg: 16px;
+  --spacing-xl: 24px;
+  --spacing-2xl: 32px;
+
+  /* Song：说明 */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-2xl: 20px;
+  --radius-full: 9999px;
+
+  /* Song：说明 */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 1px 3px rgba(0, 0, 0, 0.05);
+  --shadow-lg: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --shadow-xl: 0 10px 25px rgba(0, 0, 0, 0.1);
+
+  /* Song：说明 */
+  --topbar-height: 64px;
+  --sidebar-width: 280px;
+  --sidebar-collapsed-width: 64px;
+  --rightrail-width: 320px;
+  --max-content-width: 1320px;
+
+  /* Song：说明 */
+  --transition-fast: 150ms ease;
+  --transition-base: 200ms ease;
+  --transition-slow: 300ms ease;
+}

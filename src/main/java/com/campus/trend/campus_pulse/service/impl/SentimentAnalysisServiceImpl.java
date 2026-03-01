@@ -16,8 +16,8 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * 情感分析服务实现类
- * 使用基于 HanLP 分词 + 情感词典的分析算法
+ * Song：情感分析服务实现类
+ * Song：说明
  */
 @Service
 @Slf4j
@@ -31,7 +31,7 @@ public class SentimentAnalysisServiceImpl implements SentimentAnalysisService {
         positiveWords = loadWords("analysis/positive_words.txt");
         negativeWords = loadWords("analysis/negative_words.txt");
 
-        // 如果文件不存在，加载默认测试词典
+        // Song：如果文件不存在，加载默认测试词典
         if (positiveWords.isEmpty()) {
             positiveWords.add("开心");
             positiveWords.add("快乐");
@@ -60,13 +60,13 @@ public class SentimentAnalysisServiceImpl implements SentimentAnalysisService {
     @Override
     public double analyzeSentiment(String text) {
         if (text == null || text.trim().isEmpty()) {
-            return 0.5; // 中性
+            return 0.5; // Song：中性
         }
 
         int positiveCount = 0;
         int negativeCount = 0;
 
-        // 使用 HanLP 进行分词
+        // Song：说明
         List<Term> terms = HanLP.segment(text);
 
         for (Term term : terms) {
@@ -82,11 +82,11 @@ public class SentimentAnalysisServiceImpl implements SentimentAnalysisService {
             return 0.5;
         }
 
-        // 简单计算公式
+        // Song：简单计算公式
         double total = positiveCount + negativeCount;
         double score = 0.5 + (0.5 * (positiveCount - negativeCount) / total);
 
-        // 归一化到 0.0 - 1.0
+        // Song：归一化到 0.0 - 1.0
         return Math.max(0.0, Math.min(1.0, score));
     }
 

@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import { X, Image as ImageIcon, Loader2, Sparkles, Send } from 'lucide-vue-next'
+import { ref, computed, reactive } from 'vue'
+import { MagicStick, Promotion } from '@element-plus/icons-vue'
 import { postApi } from '@/api/post'
-import { toast } from 'vue-sonner'
+import { ElMessage } from 'element-plus'
 import ImageUploader from './ImageUploader.vue'
 import { ResultCode } from '@/types'
 
@@ -14,17 +14,21 @@ const emit = defineEmits(['update:modelValue', 'success'])
 
 const loading = ref(false)
 const extracting = ref(false)
-const title = ref('')
-const content = ref('')
-const categoryId = ref('')
-const coverImage = ref('')
-const tags = ref('')
-const errorMessage = ref('')
+
+const form = reactive({
+  title: '',
+  content: '',
+  sectionId: 0,
+  coverImage: '',
+  tags: [] as string[]
+})
+
+const tagInput = ref('')
 
 const isValid = computed(() => {
-  return title.value.trim().length > 0 && 
-         content.value.trim().length > 0 && 
-         categoryId.value
+  return form.title.trim().length > 0 &&
+         form.content.trim().length > 0 &&
+         form.sectionId
 })
 
 const categories = [
@@ -38,29 +42,37 @@ const categories = [
 
 const close = () => {
   emit('update:modelValue', false)
-  // Reset form
-  setTimeout(() => {
-    title.value = ''
-    content.value = ''
-    categoryId.value = ''
-    coverImage.value = ''
-    tags.value = ''
-  }, 300)
+  // Song：说明
+  Object.assign(form, {
+    title: '',
+    content: '',
+    sectionId: 0,
+    coverImage: '',
+    tags: []
+  })
 }
 
 const handleAIAnalysis = async () => {
-  if (!content.value || extracting.value) return
+  if (!form.content || extracting.value) return
   
   extracting.value = true
   try {
     const res = await postApi.extractTags({
-      title: title.value,
-      content: content.value
+      title: form.title,
+      content: form.content
     })
-    tags.value = res.data.tags
-    toast.success('AI 分析完成')
+    if (res.data && res.data.tags && res.data.tags.length > 0) {
+      if (Array.isArray(res.data.tags)) {
+        form.tags = res.data.tags
+      } else if (typeof res.data.tags === 'string') {
+        form.tags = (res.data.tags as string).split(',').filter(Boolean)
+      }
+      ElMessage.success('AI 分析完成')
+    } else {
+      ElMessage.warning('未能提取出有效标签')
+    }
   } catch (error) {
-    // Silent fail
+    // Song：说明
   } finally {
     extracting.value = false
   }
@@ -70,180 +82,191 @@ const handleSubmit = async () => {
   if (!isValid.value || loading.value) return
 
   loading.value = true
-  errorMessage.value = ''
   
   try {
     const res = await postApi.create({
-      title: title.value,
-      content: content.value,
-      categoryID: categoryId.value,
-      coverImage: coverImage.value,
-      tags: tags.value,
+      title: form.title,
+      content: form.content,
+      sectionId: form.sectionId,
+      coverImage: form.coverImage,
+      tags: form.tags.join(','),
       status: 1
     })
     
     if (res.code === ResultCode.SUCCESS) {
-      toast.success('发布成功')
+      ElMessage.success('发布成功')
       emit('success')
       close()
     } else {
-      errorMessage.value = res.message || '发布失败'
-      toast.error(res.message || '发布失败')
+      ElMessage.error(res.message || '发布失败')
     }
   } catch (error) {
-    errorMessage.value = '网络请求失败，请稍后重试'
-    toast.error('发布失败')
+    ElMessage.error('发布失败')
   } finally {
     loading.value = false
   }
 }
 
-const addTag = (e: KeyboardEvent) => {
-  const val = (e.target as HTMLInputElement).value.trim()
-  if (!val) return
-  
-  const currentTags = tags.value ? tags.value.split(',') : []
-  if (!currentTags.includes(val)) {
-    currentTags.push(val)
-    tags.value = currentTags.join(',')
+const addTag = () => {
+  const val = tagInput.value.trim()
+  if (val && !form.tags.includes(val)) {
+    form.tags.push(val)
   }
-  
-  (e.target as HTMLInputElement).value = ''
+  tagInput.value = ''
 }
 
-const removeTag = (tagToRemove: string) => {
-  const currentTags = tags.value.split(',')
-  tags.value = currentTags.filter(t => t !== tagToRemove).join(',')
+const removeTag = (tag: string) => {
+  form.tags = form.tags.filter(t => t !== tag)
 }
 </script>
 
 <template>
-  <Teleport to="body">
-    <div v-if="modelValue" class="fixed inset-0 z-[1000] flex items-center justify-center p-4">
-      <!-- Backdrop -->
-      <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" @click="close"></div>
+  <el-dialog
+    :model-value="modelValue"
+    @update:model-value="$emit('update:modelValue', $event)"
+    title="发布新动态"
+    width="680px"
+    destroy-on-close
+    class="create-post-dialog"
+    @close="close"
+  >
+    <el-form :model="form" label-position="top" class="post-form">
+      <el-form-item label="标题" required>
+        <el-input 
+          v-model="form.title" 
+          placeholder="起一个吸引人的标题" 
+          maxlength="100"
+          show-word-limit
+        />
+      </el-form-item>
 
-      <!-- Modal -->
-      <div class="relative w-full max-w-2xl bg-white rounded-[2rem] shadow-2xl shadow-slate-900/20 overflow-hidden flex flex-col h-[80vh] my-auto animate-in zoom-in-95 duration-200">
-        <!-- Header -->
-      <div class="px-8 py-6 border-b border-slate-100 flex items-center justify-between bg-white sticky top-0 z-10">
-        <h2 class="text-xl font-black text-slate-900 tracking-tight">发布新动态</h2>
-        <button 
-          @click="close"
-          class="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center text-slate-400 hover:bg-slate-100 hover:text-slate-900 transition-colors"
-        >
-          <X class="w-4 h-4" />
-        </button>
-      </div>
-
-      <!-- Body -->
-      <div class="p-8 overflow-y-auto custom-scrollbar space-y-8">
-        <!-- Title -->
-        <div class="space-y-3">
-          <label class="text-xs font-black text-slate-400 uppercase tracking-widest">标题</label>
-          <input 
-            v-model="title"
-            type="text" 
-            placeholder="写一个吸引人的标题..."
-            class="w-full text-2xl font-bold text-slate-900 placeholder:text-slate-300 border-none outline-none bg-transparent p-0"
+      <el-form-item label="分区" required>
+        <el-radio-group v-model="form.sectionId" class="category-group">
+          <el-radio-button 
+            v-for="cat in categories" 
+            :key="cat.id" 
+            :label="cat.id"
           >
-        </div>
+            {{ cat.name }}
+          </el-radio-button>
+        </el-radio-group>
+      </el-form-item>
 
-        <!-- Category -->
-        <div class="space-y-3">
-          <label class="text-xs font-black text-slate-400 uppercase tracking-widest">选择分区</label>
-          <div class="flex flex-wrap gap-3">
-            <button 
-              v-for="cat in categories" 
-              :key="cat.id"
-              @click="categoryId = cat.id"
-              :class="[
-                'px-4 py-2 rounded-xl text-xs font-bold transition-all border',
-                categoryId === cat.id 
-                  ? 'bg-slate-900 text-white border-slate-900 shadow-lg shadow-slate-200' 
-                  : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'
-              ]"
-            >
-              {{ cat.name }}
-            </button>
-          </div>
-        </div>
-
-        <!-- Content -->
-        <div class="space-y-3">
-          <div class="flex items-center justify-between">
-            <label class="text-xs font-black text-slate-400 uppercase tracking-widest">正文内容</label>
-            <button 
-              v-if="content.length > 10"
+      <el-form-item required>
+        <template #label>
+          <div class="content-header">
+            <span>正文内容</span>
+            <el-button 
+              v-if="form.content.length > 10"
+              link 
+              type="primary" 
+              :icon="MagicStick"
+              :loading="extracting"
               @click="handleAIAnalysis"
-              :disabled="extracting"
-              class="flex items-center gap-1.5 text-[10px] font-bold text-indigo-500 hover:text-indigo-600 transition-colors disabled:opacity-50"
             >
-              <Sparkles class="w-3 h-3" /> {{ extracting ? 'AI 分析中...' : 'AI 辅助标签' }}
-            </button>
+              AI 辅助标签
+            </el-button>
           </div>
-          <textarea 
-            v-model="content"
-            placeholder="分享你的校园生活、见闻或疑问..."
-            class="w-full h-40 resize-none bg-slate-50 border border-slate-200 rounded-2xl p-5 text-sm font-medium focus:ring-4 focus:ring-slate-900/5 focus:border-slate-400 focus:bg-white transition-all outline-none"
-          ></textarea>
-        </div>
+        </template>
+        <el-input
+          v-model="form.content"
+          type="textarea"
+          :rows="8"
+          placeholder="分享你的校园见闻、求助或感悟..."
+        />
+      </el-form-item>
 
-        <!-- Image Upload -->
-        <div class="space-y-3">
-          <label class="text-xs font-black text-slate-400 uppercase tracking-widest">封面图 (可选)</label>
-          <ImageUploader v-model="coverImage" />
-        </div>
+      <el-form-item label="封面图 (可选)">
+        <ImageUploader v-model="form.coverImage" />
+      </el-form-item>
 
-        <!-- Tags -->
-        <div class="space-y-3">
-          <label class="text-xs font-black text-slate-400 uppercase tracking-widest">标签</label>
-          <input 
-            type="text" 
-            placeholder="输入标签后按回车添加..."
-            class="w-full text-sm font-bold text-slate-900 border-0 border-b-2 border-slate-200 focus:border-indigo-600 focus:ring-0 px-0 py-2 bg-transparent placeholder-slate-300 transition-colors"
-            @keydown.enter.prevent="addTag"
-          >
-          <div class="flex flex-wrap gap-2 min-h-[28px]">
-            <span 
-              v-for="tag in (tags ? tags.split(',') : [])" 
+      <el-form-item label="标签">
+        <div class="tags-container">
+          <div class="tags-list">
+            <el-tag
+              v-for="tag in form.tags"
               :key="tag"
-              class="inline-flex items-center gap-1 px-2.5 py-1.5 bg-slate-100 text-slate-600 text-[11px] font-bold rounded-lg group hover:bg-rose-50 hover:text-rose-500 transition-colors cursor-pointer"
-              @click="removeTag(tag)"
+              closable
+              class="tag-item"
+              @close="removeTag(tag)"
             >
-              #{{ tag }}
-              <X class="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
-            </span>
+              {{ tag }}
+            </el-tag>
           </div>
+          <el-input
+            v-model="tagInput"
+            placeholder="按回车添加标签"
+            size="small"
+            class="tag-input"
+            @keyup.enter="addTag"
+            @blur="addTag"
+          />
         </div>
-      </div>
+      </el-form-item>
+    </el-form>
 
-      <!-- Footer -->
-      <div class="p-6 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between gap-4">
-        <div class="flex-1">
-          <p v-if="errorMessage" class="text-xs font-bold text-rose-500 animate-pulse">
-            {{ errorMessage }}
-          </p>
-        </div>
-        <div class="flex items-center gap-4">
-          <button 
-            @click="close"
-            class="px-6 py-3 text-sm font-bold text-slate-500 hover:text-slate-900 transition-colors"
-          >
-            取消
-          </button>
-          <button 
-            @click="handleSubmit"
-            :disabled="!isValid || loading"
-            class="flex items-center gap-2 px-8 py-3 bg-slate-900 text-white text-sm font-bold rounded-xl hover:bg-slate-800 transition-all shadow-lg shadow-slate-200 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
-          >
-            <Loader2 v-if="loading" class="w-4 h-4 animate-spin" />
-            <Send v-else class="w-4 h-4" />
-            发布动态
-          </button>
-        </div>
+    <template #footer>
+      <div class="dialog-footer">
+        <el-button @click="close">取消</el-button>
+        <el-button 
+          type="primary" 
+          :loading="loading" 
+          :disabled="!isValid"
+          :icon="Promotion"
+          @click="handleSubmit"
+        >
+          立即发布
+        </el-button>
       </div>
-    </div>
-  </div>
-  </Teleport>
+    </template>
+  </el-dialog>
 </template>
+
+<style scoped>
+.create-post-dialog :deep(.el-dialog__body) {
+  padding-top: 10px;
+}
+
+.category-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.category-group :deep(.el-radio-button__inner) {
+  border: 1px solid var(--el-border-color);
+  border-radius: var(--el-border-radius-base) !important;
+  margin-right: 8px;
+  margin-bottom: 8px;
+  box-shadow: none !important;
+}
+
+.content-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+
+.tags-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.tags-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tag-input {
+  max-width: 200px;
+}
+
+.dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+</style>

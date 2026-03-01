@@ -1,0 +1,129 @@
+/* Song：说明 */
+
+/* Song：说明 */
+:root {
+  --header-height: 56px;
+  --max-content-width: 1280px;
+  --cp-shell-width: 1280px;
+  --cp-shell-padding: 16px;
+}
+
+/* Song：说明 */
+:root[data-layout="wide"] {
+  --cp-shell-width: 100%;
+  --cp-shell-padding: 24px;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--el-bg-color-page, #F5F7FA);
+  color: var(--el-text-color-primary, #1F2937);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Song：说明 */
+.el-icon,
+.el-icon svg {
+  width: 1em !important;
+  height: 1em !important;
+}
+
+svg {
+  max-width: 100%;
+  max-height: 100%;
+}
+
+/* Song：说明 */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  color: var(--el-text-color-primary);
+  margin-top: 0;
+}
+
+p {
+  color: var(--el-text-color-regular);
+}
+
+/* Song：说明 */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: var(--el-border-color);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--el-text-color-placeholder);
+}
+
+/* Song：说明 */
+.hidden-xs-only {
+  display: none !important;
+}
+
+@media (min-width: 768px) {
+  .hidden-xs-only {
+    display: inherit !important;
+  }
+}
+
+.hidden-sm-and-down {
+  display: none !important;
+}
+
+@media (min-width: 992px) {
+  .hidden-sm-and-down {
+    display: inherit !important;
+  }
+}
+
+.hidden-md-and-down {
+  display: none !important;
+}
+
+@media (min-width: 1200px) {
+  .hidden-md-and-down {
+    display: inherit !important;
+  }
+}
+
+/* Song：说明 */
+.el-menu {
+  border-right: none;
+  background-color: transparent;
+}
+
+.el-menu-item.is-active {
+  background-color: var(--el-color-primary-light-9);
+  border-radius: var(--el-border-radius-base);
+  font-weight: 600;
+}
+
+.el-menu-item {
+  border-radius: var(--el-border-radius-base);
+  margin-bottom: 4px;
+}
+
+.el-card {
+  transition: all 0.2s ease;
+}

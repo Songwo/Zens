@@ -8,7 +8,8 @@ import com.campus.trend.campus_pulse.entity.PostLike;
 import com.campus.trend.campus_pulse.mapper.PostLikeMapper;
 import com.campus.trend.campus_pulse.mapper.PostMapper;
 import com.campus.trend.campus_pulse.service.PostLikeService;
-import com.campus.trend.campus_pulse.service.UserProfileService;
+import com.campus.trend.campus_pulse.service.UserService;
+import com.campus.trend.campus_pulse.service.LevelService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,19 +23,24 @@ import java.util.stream.Collectors;
 public class PostLikeServiceImpl extends ServiceImpl<PostLikeMapper, PostLike> implements PostLikeService {
 
     private final PostMapper postMapper;
-    private final UserProfileService userProfileService;
+    private final UserService userService;
+    private final LevelService levelService;
+    private final com.campus.trend.campus_pulse.service.NotificationService notificationService;
 
-    public PostLikeServiceImpl(PostMapper postMapper, UserProfileService userProfileService) {
+    public PostLikeServiceImpl(PostMapper postMapper, UserService userService, LevelService levelService,
+            com.campus.trend.campus_pulse.service.NotificationService notificationService) {
         this.postMapper = postMapper;
-        this.userProfileService = userProfileService;
+        this.userService = userService;
+        this.levelService = levelService;
+        this.notificationService = notificationService;
     }
 
     /**
-     * 判断用户是否已点赞该帖子
+     * Song：判断用户是否已点赞该帖子
      *
-     * @param postId 帖子ID
-     * @param userId 用户ID
-     * @return true-已点赞, false-未点赞
+     * Song：说明
+     * Song：说明
+     * Song：说明
      */
     @Override
     public boolean isLike(String postId, String userId) {
@@ -46,23 +52,23 @@ public class PostLikeServiceImpl extends ServiceImpl<PostLikeMapper, PostLike> i
     }
 
     /**
-     * 根据用户ID分页获取用户喜欢的帖子
+     * Song：说明
      *
-     * @param userId   用户ID
-     * @param page     页码（从1开始）
-     * @param pageSize 每页大小
-     * @return 分页的点赞帖子列表
+     * Song：说明
+     * Song：说明
+     * Song：说明
+     * Song：说明
      */
     @Override
     public IPage<Post> getPostLikeWithPage(String userId, int page, int pageSize) {
-        // 1. 查询该用户所有的点赞记录（分页）
+        // Song：1. 查询该用户所有的点赞记录（分页）
         Page<PostLike> postLikePage = new Page<>(page, pageSize);
         IPage<PostLike> postLikes = lambdaQuery()
                 .eq(PostLike::getUserId, userId)
                 .orderByDesc(PostLike::getCreateTime)
                 .page(postLikePage);
 
-        // 2. 如果没有点赞记录，返回空分页
+        // Song：2. 如果没有点赞记录，返回空分页
         if (postLikes.getRecords() == null || postLikes.getRecords().isEmpty()) {
             log.info("用户 [{}] 暂无点赞记录", userId);
             Page<Post> emptyPage = new Page<>(page, pageSize);
@@ -70,20 +76,20 @@ public class PostLikeServiceImpl extends ServiceImpl<PostLikeMapper, PostLike> i
             return emptyPage;
         }
 
-        // 3. 提取所有帖子ID
+        // Song：说明
         List<String> postIds = postLikes.getRecords().stream()
                 .map(PostLike::getPostId)
                 .collect(Collectors.toList());
 
-        // 4. 批量查询帖子信息（只查询状态正常的帖子）
+        // Song：4. 批量查询帖子信息（只查询状态正常的帖子）
         List<Post> posts = postMapper.selectBatchIds(postIds).stream()
                 .filter(post -> post.getStatus() != null && post.getStatus() == 1)
                 .collect(Collectors.toList());
 
-        // 5. 封装为分页结果
+        // Song：5. 封装为分页结果
         Page<Post> resultPage = new Page<>(page, pageSize);
         resultPage.setRecords(posts);
-        resultPage.setTotal(postLikes.getTotal()); // 使用原始点赞总数
+        resultPage.setTotal(postLikes.getTotal()); // Song：使用原始点赞总数
         resultPage.setCurrent(postLikes.getCurrent());
         resultPage.setSize(postLikes.getSize());
 
@@ -94,22 +100,22 @@ public class PostLikeServiceImpl extends ServiceImpl<PostLikeMapper, PostLike> i
     }
 
     /**
-     * 用户点赞帖子
+     * Song：用户点赞帖子
      *
-     * @param postId 帖子ID
-     * @param userId 用户ID
-     * @return true-点赞成功, false-已经点赞过
+     * Song：说明
+     * Song：说明
+     * Song：说明
      */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public boolean likePost(String postId, String userId) {
-        // 1. 检查是否已点赞
+        // Song：1. 检查是否已点赞
         if (isLike(postId, userId)) {
             log.warn("用户 [{}] 已经点赞过帖子 [{}]", userId, postId);
             return false;
         }
 
-        // 2. 创建点赞记录
+        // Song：2. 创建点赞记录
         PostLike postLike = new PostLike()
                 .setPostId(postId)
                 .setUserId(userId)
@@ -117,7 +123,7 @@ public class PostLikeServiceImpl extends ServiceImpl<PostLikeMapper, PostLike> i
 
         boolean saved = save(postLike);
 
-        // 3. 更新帖子的点赞数
+        // Song：3. 更新帖子的点赞数
         if (saved) {
             Post post = postMapper.selectById(postId);
             if (post != null) {
@@ -126,8 +132,16 @@ public class PostLikeServiceImpl extends ServiceImpl<PostLikeMapper, PostLike> i
                 postMapper.updateById(post);
                 log.info("用户 [{}] 点赞帖子 [{}] 成功，当前点赞数: {}", userId, postId, currentLikeCount + 1);
 
-                // 增加帖子作者获赞数
-                userProfileService.incrementLikesReceived(post.getUserId());
+                // Song：增加帖子作者获赞数
+                userService.incrementLikesReceived(post.getUserId());
+
+                // Song：被点赞经验 +2（给帖子作者）
+                levelService.addExperience(post.getUserId(), 2, "被点赞");
+
+                // Song：发送点赞通知（不给自己发通知）
+                if (!post.getUserId().equals(userId)) {
+                    notificationService.sendLikeNotification(post.getUserId(), userId, postId);
+                }
             }
         }
 
@@ -135,28 +149,28 @@ public class PostLikeServiceImpl extends ServiceImpl<PostLikeMapper, PostLike> i
     }
 
     /**
-     * 用户取消点赞帖子
+     * Song：用户取消点赞帖子
      *
-     * @param postId 帖子ID
-     * @param userId 用户ID
-     * @return true-取消成功, false-未点赞过
+     * Song：说明
+     * Song：说明
+     * Song：说明
      */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public boolean unlikePost(String postId, String userId) {
-        // 1. 检查是否已点赞
+        // Song：1. 检查是否已点赞
         if (!isLike(postId, userId)) {
             log.warn("用户 [{}] 未点赞过帖子 [{}]", userId, postId);
             return false;
         }
 
-        // 2. 删除点赞记录
+        // Song：2. 删除点赞记录
         boolean removed = lambdaUpdate()
                 .eq(PostLike::getPostId, postId)
                 .eq(PostLike::getUserId, userId)
                 .remove();
 
-        // 3. 更新帖子的点赞数
+        // Song：3. 更新帖子的点赞数
         if (removed) {
             Post post = postMapper.selectById(postId);
             if (post != null) {
@@ -165,8 +179,8 @@ public class PostLikeServiceImpl extends ServiceImpl<PostLikeMapper, PostLike> i
                 postMapper.updateById(post);
                 log.info("用户 [{}] 取消点赞帖子 [{}] 成功，当前点赞数: {}", userId, postId, Math.max(0, currentLikeCount - 1));
 
-                // 减少帖子作者获赞数
-                userProfileService.decrementLikesReceived(post.getUserId());
+                // Song：减少帖子作者获赞数
+                userService.decrementLikesReceived(post.getUserId());
             }
         }
 
@@ -174,11 +188,11 @@ public class PostLikeServiceImpl extends ServiceImpl<PostLikeMapper, PostLike> i
     }
 
     /**
-     * 切换点赞状态（点赞/取消点赞）
+     * Song：切换点赞状态（点赞/取消点赞）
      *
-     * @param postId 帖子ID
-     * @param userId 用户ID
-     * @return true-已点赞, false-已取消点赞
+     * Song：说明
+     * Song：说明
+     * Song：说明
      */
     @Override
     @Transactional(rollbackFor = Exception.class)

@@ -29,25 +29,25 @@ public class TagServiceImpl extends ServiceImpl<TagMapper, Tag> implements TagSe
     @Autowired
     public TagServiceImpl(StringRedisTemplate redisTemplate) {
         this.redisTemplate = redisTemplate;
-        // 配置ObjectMapper支持Java 8日期时间类型
+        // Song：说明
         this.objectMapper = new ObjectMapper();
         this.objectMapper.registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
         this.objectMapper.disable(com.fasterxml.jackson.databind.SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
     }
 
     /**
-     * 获取或创建标签（不存在时自动创建）
+     * Song：获取或创建标签（不存在时自动创建）
      *
-     * @param tagName 标签名称
-     * @return 标签对象
+     * Song：说明
+     * Song：说明
      */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Tag getOrCreateTag(String tagName) {
-        // 去除空格并转小写进行查询（不区分大小写）
+        // Song：去除空格并转小写进行查询（不区分大小写）
         String normalizedName = tagName.trim();
 
-        // 查询是否已存在
+        // Song：查询是否已存在
         Tag existingTag = lambdaQuery()
                 .eq(Tag::getName, normalizedName)
                 .one();
@@ -56,10 +56,10 @@ public class TagServiceImpl extends ServiceImpl<TagMapper, Tag> implements TagSe
             return existingTag;
         }
 
-        // 不存在则创建新标签（用户生成标签）
+        // Song：不存在则创建新标签（用户生成标签）
         Tag newTag = new Tag()
                 .setName(normalizedName)
-                .setType(2) // 2:用户生成
+                .setType(2) // Song：2:用户生成
                 .setHeat(0)
                 .setCreateTime(LocalDateTime.now());
 
@@ -70,9 +70,9 @@ public class TagServiceImpl extends ServiceImpl<TagMapper, Tag> implements TagSe
     }
 
     /**
-     * 增加标签热度（同时清除缓存）
+     * Song：增加标签热度（同时清除缓存）
      *
-     * @param tagId 标签ID
+     * Song：说明
      */
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -83,7 +83,7 @@ public class TagServiceImpl extends ServiceImpl<TagMapper, Tag> implements TagSe
             tag.setHeat(newHeat);
             updateById(tag);
 
-            // 清除热门标签缓存
+            // Song：清除热门标签缓存
             clearHotTagsCache();
 
             log.debug("标签 [{}] 热度增加，当前热度: {}", tag.getName(), newHeat);
@@ -91,9 +91,9 @@ public class TagServiceImpl extends ServiceImpl<TagMapper, Tag> implements TagSe
     }
 
     /**
-     * 减少标签热度（同时清除缓存）
+     * Song：减少标签热度（同时清除缓存）
      *
-     * @param tagId 标签ID
+     * Song：说明
      */
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -105,7 +105,7 @@ public class TagServiceImpl extends ServiceImpl<TagMapper, Tag> implements TagSe
             tag.setHeat(newHeat);
             updateById(tag);
 
-            // 清除热门标签缓存
+            // Song：清除热门标签缓存
             clearHotTagsCache();
 
             log.debug("标签 [{}] 热度减少，当前热度: {}", tag.getName(), newHeat);
@@ -113,7 +113,7 @@ public class TagServiceImpl extends ServiceImpl<TagMapper, Tag> implements TagSe
     }
 
     /**
-     * 清除热门标签缓存
+     * Song：清除热门标签缓存
      */
     private void clearHotTagsCache() {
         try {
@@ -128,17 +128,17 @@ public class TagServiceImpl extends ServiceImpl<TagMapper, Tag> implements TagSe
     }
 
     /**
-     * 获取热门标签（带Redis缓存）
+     * Song：说明
      *
-     * @param limit 返回数量
-     * @return 热门标签列表
+     * Song：说明
+     * Song：说明
      */
     @Override
     public List<Tag> getHotTags(int limit) {
         String cacheKey = "tag:hot:" + limit;
 
         try {
-            // 1. 尝试从缓存获取
+            // Song：1. 尝试从缓存获取
             String cached = redisTemplate.opsForValue().get(cacheKey);
             if (cached != null && !cached.isEmpty()) {
                 List<Tag> cachedTags = objectMapper.readValue(cached, new TypeReference<List<Tag>>() {
@@ -147,23 +147,23 @@ public class TagServiceImpl extends ServiceImpl<TagMapper, Tag> implements TagSe
                 return cachedTags;
             }
         } catch (Exception e) {
-            // 缓存解析失败（可能是旧格式），清除该缓存
+            // Song：缓存解析失败（可能是旧格式），清除该缓存
             log.warn("读取缓存失败，清除缓存: {}", e.getMessage());
             try {
                 redisTemplate.delete(cacheKey);
             } catch (Exception ex) {
-                // 忽略删除失败
+                // Song：忽略删除失败
             }
         }
 
-        // 2. 查询数据库
+        // Song：2. 查询数据库
         List<Tag> hotTags = lambdaQuery()
                 .orderByDesc(Tag::getHeat)
                 .orderByDesc(Tag::getCreateTime)
                 .last("LIMIT " + limit)
                 .list();
 
-        // 3. 写入缓存（5分钟过期）
+        // Song：3. 写入缓存（5分钟过期）
         try {
             String jsonValue = objectMapper.writeValueAsString(hotTags);
             redisTemplate.opsForValue().set(cacheKey, jsonValue,5 ,TimeUnit.MINUTES);
@@ -179,10 +179,10 @@ public class TagServiceImpl extends ServiceImpl<TagMapper, Tag> implements TagSe
     }
 
     /**
-     * 搜索标签
+     * Song：搜索标签
      *
-     * @param keyword 关键词
-     * @return 匹配的标签列表
+     * Song：说明
+     * Song：说明
      */
     @Override
     public List<Tag> searchTags(String keyword) {
@@ -202,10 +202,10 @@ public class TagServiceImpl extends ServiceImpl<TagMapper, Tag> implements TagSe
     }
 
     /**
-     * 批量获取或创建标签
+     * Song：批量获取或创建标签
      *
-     * @param tagNames 标签名称列表
-     * @return 标签列表
+     * Song：说明
+     * Song：说明
      */
     @Override
     @Transactional(rollbackFor = Exception.class)

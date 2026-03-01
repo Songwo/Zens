@@ -1,7 +1,6 @@
 package com.campus.trend.campus_pulse.utils;
 
 import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import jakarta.servlet.http.HttpServletRequest;
@@ -14,43 +13,49 @@ import java.nio.charset.StandardCharsets;
 import java.security.Key;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 
 /**
- * 功能：Jwt工具包，包含生成和解析以及解析的附加方法
- * 作者：Song
- * 日期：2025/11/26
+ * Song：说明
+ * Song：说明
+ * Song：日期：2025/11/26
  */
 @Component
 @Slf4j
 public class JwtUtil {
 
     @Value("${jwt.secret}")
-    private String secretKey;   // 注入成功
+    private String secretKey; // Song：注入成功
 
     @Value("${jwt.access-expire}")
-    private long accessExpire;  // 毫秒
+    private long accessExpire; // Song：毫秒
 
     @Value("${jwt.refresh-expire}")
-    private long refreshExpire; // 毫秒
+    private long refreshExpire; // Song：毫秒
+
+    @Value("${jwt.remember-access-multiplier:7}")
+    private long rememberAccessMultiplier;
+
+    @Value("${jwt.remember-refresh-multiplier:4}")
+    private long rememberRefreshMultiplier;
 
     private Key getKey() {
         return Keys.hmacShaKeyFor(secretKey.getBytes(StandardCharsets.UTF_8));
     }
 
-    /** 生成通用 Claims */
-    public Map<String, Object> buildClaims(String username, int role, String avatar) {
+    /* Song：说明 */
+    public Map<String, Object> buildClaims(String username, List<String> roles, String avatar) {
         Map<String, Object> claims = new HashMap<>();
         claims.put("username", username);
-        claims.put("role", role);
+        claims.put("roles", roles);
         claims.put("avatar", avatar);
         return claims;
     }
 
-    /** 生成 AccessToken */
+    /* Song：说明 */
     public String generateAccessToken(String userId, Map<String, Object> claims, boolean rememberMe) {
-        long expire = rememberMe ? accessExpire * 7 : accessExpire; // 记住我：延长7倍时间 (示例策略)
+        long expire = resolveAccessExpireMs(rememberMe);
         return Jwts.builder()
                 .setClaims(claims)
                 .setSubject(userId)
@@ -59,24 +64,30 @@ public class JwtUtil {
                 .signWith(getKey())
                 .compact();
     }
-    
-    /** 兼容旧方法 */
+
+    /* Song：兼容旧方法 */
     public String generateAccessToken(String userId, Map<String, Object> claims) {
         return generateAccessToken(userId, claims, false);
     }
 
-    /** 生成 RefreshToken */
-    public String generateRefreshToken(String userId, Map<String, Object> claims) {
+    /* Song：说明 */
+    public String generateRefreshToken(String userId, Map<String, Object> claims, boolean rememberMe) {
+        long expire = resolveRefreshExpireMs(rememberMe);
         return Jwts.builder()
                 .setClaims(claims)
                 .setSubject(userId)
                 .setIssuedAt(new Date())
-                .setExpiration(new Date(System.currentTimeMillis() + refreshExpire))
+                .setExpiration(new Date(System.currentTimeMillis() + expire))
                 .signWith(getKey())
                 .compact();
     }
 
-    /** 解析 Token */
+    /* Song：兼容旧方法 */
+    public String generateRefreshToken(String userId, Map<String, Object> claims) {
+        return generateRefreshToken(userId, claims, false);
+    }
+
+    /* Song：说明 */
     public Claims parse(String token) {
         try {
             return Jwts.parserBuilder()
@@ -92,7 +103,7 @@ public class JwtUtil {
 
     public String getUserId(String token) {
         Claims c = parse(token);
-        return c.getSubject();
+        return c == null ? null : c.getSubject();
     }
 
     public String getUsername(String token) {
@@ -111,10 +122,31 @@ public class JwtUtil {
 
     public boolean validate(String token, UserDetails userDetails) {
         String username = getUsername(token);
-        return username.equals(userDetails.getUsername()) && !isExpired(token);
+        return username != null
+                && userDetails != null
+                && username.equals(userDetails.getUsername())
+                && !isExpired(token);
     }
 
-    /** 获取请求头中的 Token */
+    public long resolveAccessExpireMs(boolean rememberMe) {
+        return rememberMe ? accessExpire * Math.max(1, rememberAccessMultiplier) : accessExpire;
+    }
+
+    public long resolveRefreshExpireMs(boolean rememberMe) {
+        return rememberMe ? refreshExpire * Math.max(1, rememberRefreshMultiplier) : refreshExpire;
+    }
+
+    public String getClaimString(String token, String key) {
+        Claims c = parse(token);
+        return c == null ? null : c.get(key, String.class);
+    }
+
+    public Boolean getClaimBoolean(String token, String key) {
+        Claims c = parse(token);
+        return c == null ? null : c.get(key, Boolean.class);
+    }
+
+    /* Song：说明 */
     public String getToken(HttpServletRequest request) {
         String a = request.getHeader("Authorization");
         if (a != null && a.startsWith("Bearer ")) {
@@ -123,4 +155,3 @@ public class JwtUtil {
         return null;
     }
 }
-

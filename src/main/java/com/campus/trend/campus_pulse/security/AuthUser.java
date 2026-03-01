@@ -13,25 +13,18 @@ import java.util.Collections;
 public class AuthUser implements UserDetails, Serializable {
 
     private static final long serialVersionUID = 1L;
-    /**
-     * 实际存储的用户信息
-     * 通过Lombok的@Getter注解返回用户的Get方法，方便在业务层直接获取用户信息
-     */
+
     @Getter
     private final User user;
 
-    public AuthUser(User user) {
-        this.user = user;
-        String roleName = user.getRole() == 0 ? "ROLE_ADMIN" : "ROLE_STUDENT";
-        this.authorities = Collections.singletonList(new SimpleGrantedAuthority(roleName));
-    }
-
     private final Collection<? extends GrantedAuthority> authorities;
 
-    /**
-     * 用户权限列表
-     * 0 - 管理员 1 - 普通用户
-     */
+    public AuthUser(User user) {
+        this.user = user;
+        String role = user.getRole() != null ? user.getRole() : "ROLE_USER";
+        this.authorities = Collections.singletonList(new SimpleGrantedAuthority(role));
+    }
+
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
         return authorities;
@@ -47,36 +40,15 @@ public class AuthUser implements UserDetails, Serializable {
         return user.getUsername();
     }
 
-    /**
-     * 账户是否过期
-     */
     @Override
-    public boolean isAccountNonExpired() {
-        return true;
-    }
+    public boolean isAccountNonExpired() { return true; }
 
-    /**
-     * 账户是否被锁定
-     */
     @Override
-    public boolean isAccountNonLocked() {
-        return true;
-    }
+    public boolean isAccountNonLocked() { return true; }
 
-    /**
-     * 凭证是否过期
-     */
     @Override
-    public boolean isCredentialsNonExpired() {
-        return true;
-    }
+    public boolean isCredentialsNonExpired() { return true; }
 
-    /**
-     * 账户是否可用
-     */
     @Override
-    public boolean isEnabled() {
-        return true;
-    }
-
+    public boolean isEnabled() { return true; }
 }

@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>样式测试 - Campus Pulse</title>
+  <style>
+    /* 内联测试样式 */
+    body {
+      margin: 0;
+      padding: 20px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+      background-color: #f8fafc;
+      color: #0f172a;
+    }
+
+    .test-container {
+      max-width: 800px;
+      margin: 0 auto;
+      background: white;
+      padding: 30px;
+      border-radius: 12px;
+      border: 1px solid #e2e8f0;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    }
+
+    h1 {
+      font-size: 24px;
+      font-weight: 900;
+      color: #0f172a;
+      margin-bottom: 20px;
+    }
+
+    .test-item {
+      padding: 15px;
+      margin-bottom: 15px;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+    }
+
+    .test-item h3 {
+      font-size: 16px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      color: #0f172a;
+    }
+
+    .test-item p {
+      font-size: 14px;
+      color: #64748b;
+      line-height: 1.6;
+    }
+
+    .btn {
+      display: inline-block;
+      padding: 10px 20px;
+      background: #3b82f6;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+    }
+
+    .btn:hover {
+      background: #2563eb;
+    }
+
+    .status {
+      display: inline-block;
+      padding: 4px 12px;
+      background: #10b981;
+      color: white;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      margin-left: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="test-container">
+    <h1>🎨 样式系统测试页面 <span class="status">测试中</span></h1>
+
+    <div class="test-item">
+      <h3>✅ 测试 1: 基础样式</h3>
+      <p>如果你能看到这段文字有正确的字体、颜色和间距，说明基础 CSS 已加载。</p>
+      <p>背景应该是浅灰色 (#f8fafc)，文字应该是深色 (#0f172a)。</p>
+    </div>
+
+    <div class="test-item">
+      <h3>✅ 测试 2: 卡片样式</h3>
+      <p>这个卡片应该有白色背景、圆角、边框和轻微阴影。</p>
+      <p>如果看起来像一个漂亮的卡片，说明布局样式正常。</p>
+    </div>
+
+    <div class="test-item">
+      <h3>✅ 测试 3: 按钮样式</h3>
+      <p>下面的按钮应该是蓝色背景、白色文字、圆角：</p>
+      <a href="/" class="btn">返回首页</a>
+    </div>
+
+    <div class="test-item">
+      <h3>📋 诊断信息</h3>
+      <p><strong>当前时间:</strong> <span id="time"></span></p>
+      <p><strong>浏览器:</strong> <span id="browser"></span></p>
+      <p><strong>屏幕宽度:</strong> <span id="width"></span>px</p>
+    </div>
+
+    <div class="test-item">
+      <h3>🔍 下一步</h3>
+      <p>如果这个测试页面显示正常，但主页面仍然"裸奔"，问题可能是：</p>
+      <ul style="margin-left: 20px; color: #64748b; font-size: 14px; line-height: 1.8;">
+        <li>Tailwind CSS 未正确编译</li>
+        <li>Vue 组件样式未应用</li>
+        <li>CSS 加载顺序问题</li>
+        <li>浏览器缓存问题</li>
+      </ul>
+    </div>
+  </div>
+
+  <script>
+    document.getElementById('time').textContent = new Date().toLocaleString('zh-CN');
+    document.getElementById('browser').textContent = navigator.userAgent.split(' ').slice(-2).join(' ');
+    document.getElementById('width').textContent = window.innerWidth;
+  </script>
+</body>
+</html>

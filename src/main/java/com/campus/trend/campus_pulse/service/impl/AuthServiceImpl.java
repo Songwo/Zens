@@ -1,208 +1,610 @@
 package com.campus.trend.campus_pulse.service.impl;
 
+import com.campus.trend.campus_pulse.dto.request.GithubLoginReq;
 import com.campus.trend.campus_pulse.dto.request.LoginReq;
 import com.campus.trend.campus_pulse.dto.request.RegisterReq;
 import com.campus.trend.campus_pulse.dto.response.LoginResponse;
+import com.campus.trend.campus_pulse.dto.response.TwoFactorSetupResp;
 import com.campus.trend.campus_pulse.entity.User;
 import com.campus.trend.campus_pulse.exception.custom.LoginException;
-import com.campus.trend.campus_pulse.exception.custom.RedisOperationException;
 import com.campus.trend.campus_pulse.exception.custom.RegisterException;
 import com.campus.trend.campus_pulse.exception.custom.UserAlreadyExistsException;
 import com.campus.trend.campus_pulse.security.AuthUser;
 import com.campus.trend.campus_pulse.service.AuthService;
-import com.campus.trend.campus_pulse.service.UserProfileService;
+import com.campus.trend.campus_pulse.service.LevelService;
 import com.campus.trend.campus_pulse.service.UserService;
-import com.campus.trend.campus_pulse.utils.SecurityUtils;
+import com.campus.trend.campus_pulse.service.VerificationCodeService;
 import com.campus.trend.campus_pulse.utils.JwtUtil;
+import com.campus.trend.campus_pulse.utils.SecurityUtils;
+import com.campus.trend.campus_pulse.utils.TotpUtil;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.Authentication;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
+import org.springframework.util.StringUtils;
+import org.springframework.web.client.RestTemplate;
+import org.springframework.web.util.UriComponentsBuilder;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.time.LocalDate;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 @Service
 @Slf4j
 public class AuthServiceImpl implements AuthService {
 
-    private final AuthenticationManager authorizationManager;
+    private static final String ACCESS_PREFIX = "auth:access:";
+    private static final String REFRESH_PREFIX = "auth:refresh:";
+    private static final String DEVICE_PREFIX = "auth:device:";
+    private static final String MFA_TICKET_PREFIX = "auth:mfa:ticket:";
+    private static final String MFA_SETUP_PREFIX = "auth:mfa:setup:";
+    private static final String GITHUB_STATE_PREFIX = "auth:github:state:";
 
     private final PasswordEncoder passwordEncoder;
-
     private final StringRedisTemplate stringRedisTemplate;
-
     private final JwtUtil jwtUtil;
-
     private final UserService userService;
+    private final VerificationCodeService verificationCodeService;
+    private final LevelService levelService;
+    private final ObjectMapper objectMapper;
+    private final RestTemplate restTemplate;
 
-    private final UserProfileService userProfileService;
+    @Value("${oauth.github.client-id:}")
+    private String githubClientId;
+    @Value("${oauth.github.client-secret:}")
+    private String githubClientSecret;
+    @Value("${oauth.github.redirect-uri:}")
+    private String githubRedirectUri;
+    @Value("${security.two-factor.issuer:Zens社区}")
+    private String twoFactorIssuer;
+    @Value("${security.two-factor.login-ticket-expire-seconds:300}")
+    private long twoFactorTicketExpireSeconds;
+    @Value("${security.two-factor.setup-expire-seconds:600}")
+    private long twoFactorSetupExpireSeconds;
 
-    private final com.campus.trend.campus_pulse.service.VerificationCodeService verificationCodeService;
-
-    public AuthServiceImpl(AuthenticationManager authorizationManager,
-            PasswordEncoder passwordEncoder,
-            StringRedisTemplate stringRedisTemplate,
-            JwtUtil jwtUtil, UserService userService,
-            UserProfileService userProfileService,
-            com.campus.trend.campus_pulse.service.VerificationCodeService verificationCodeService) {
-        this.authorizationManager = authorizationManager;
+    public AuthServiceImpl(PasswordEncoder passwordEncoder, StringRedisTemplate stringRedisTemplate, JwtUtil jwtUtil,
+            UserService userService, VerificationCodeService verificationCodeService, LevelService levelService,
+            ObjectMapper objectMapper) {
         this.passwordEncoder = passwordEncoder;
         this.stringRedisTemplate = stringRedisTemplate;
         this.jwtUtil = jwtUtil;
         this.userService = userService;
-        this.userProfileService = userProfileService;
         this.verificationCodeService = verificationCodeService;
+        this.levelService = levelService;
+        this.objectMapper = objectMapper;
+        this.restTemplate = new RestTemplate();
     }
 
     @Override
-    public LoginResponse login(LoginReq req) {
-
-        // 0.1 检查账号是否被锁定
-        if (verificationCodeService.isLocked(req.getUsername())) {
-            long timeLeft = verificationCodeService.getLockTimeLeft(req.getUsername());
-            throw new LoginException("账号已被锁定，请 " + (timeLeft / 60 + 1) + " 分钟后再试");
+    public LoginResponse login(LoginReq req, String deviceId, String clientIp) {
+        String loginType = req.getLoginType();
+        if (!StringUtils.hasText(loginType)) {
+            loginType = StringUtils.hasText(req.getCode()) ? "otp" : "password";
         }
+        User user = "otp".equals(loginType) ? loginByOtp(req) : loginByPassword(req);
+        return finalizeLogin(user, req.isRememberMe(), normalizeDeviceId(deviceId), null, clientIp, req.getTwoFactorCode());
+    }
 
-        // 0.2 强制校验图形验证码
-        if (!verificationCodeService.verifyCaptcha(req.getUuid(), req.getCode())) {
-            throw new LoginException("图形验证码错误或已失效");
-        }
+    @Override
+    public LoginResponse refresh(String refreshToken, String deviceId, String clientIp) {
+        if (!StringUtils.hasText(refreshToken)) throw new LoginException("refreshToken不能为空");
+        if (!jwtUtil.validate(refreshToken)) throw new LoginException("登录已过期，请重新登录");
+        if (!"refresh".equalsIgnoreCase(jwtUtil.getClaimString(refreshToken, "typ"))) throw new LoginException("无效的刷新令牌");
+        String userId = jwtUtil.getUserId(refreshToken);
+        String sessionId = jwtUtil.getClaimString(refreshToken, "sid");
+        String tokenDid = normalizeDeviceId(jwtUtil.getClaimString(refreshToken, "did"));
+        boolean rememberMe = Boolean.TRUE.equals(jwtUtil.getClaimBoolean(refreshToken, "remember"));
+        if (!StringUtils.hasText(userId) || !StringUtils.hasText(sessionId)) throw new LoginException("令牌上下文缺失，请重新登录");
+        String reqDid = normalizeDeviceId(deviceId);
+        if (StringUtils.hasText(tokenDid) && !tokenDid.equals(reqDid)) throw new LoginException("检测到异常设备，请重新登录");
+        String refreshKey = buildRefreshKey(userId, sessionId);
+        String redisRefreshHash = stringRedisTemplate.opsForValue().get(refreshKey);
+        if (!StringUtils.hasText(redisRefreshHash) || !redisRefreshHash.equals(hashToken(refreshToken))) throw new LoginException("登录状态已失效，请重新登录");
+        String redisDid = stringRedisTemplate.opsForValue().get(buildDeviceKey(userId, sessionId));
+        if (StringUtils.hasText(redisDid) && !normalizeDeviceId(redisDid).equals(reqDid)) throw new LoginException("检测到异常设备，请重新登录");
+        User user = userService.getById(userId);
+        ensureUserCanLogin(user);
+        return generateTokenResponse(user, rememberMe, reqDid, sessionId, clientIp);
+    }
 
-        // 0. 检查是否需要验证码
-        if (verificationCodeService.needVerificationCode(req.getUsername())) {
-            if (req.getCode() == null || req.getCode().trim().isEmpty()) {
-                throw new LoginException("登录失败次数过多，请输入验证码");
+    @Override
+    public String buildGithubAuthorizeUrl() {
+        ensureGithubConfigReady();
+        String state = UUID.randomUUID().toString().replace("-", "");
+        stringRedisTemplate.opsForValue().set(GITHUB_STATE_PREFIX + state, "1", 10, TimeUnit.MINUTES);
+        return UriComponentsBuilder.fromHttpUrl("https://github.com/login/oauth/authorize")
+                .queryParam("client_id", githubClientId)
+                .queryParam("redirect_uri", githubRedirectUri)
+                .queryParam("scope", "read:user user:email")
+                .queryParam("state", state)
+                .build()
+                .encode()
+                .toUriString();
+    }
+
+    @Override
+    public LoginResponse githubLogin(GithubLoginReq req, String deviceId, String clientIp) {
+        ensureGithubConfigReady();
+        validateGithubState(req.getState());
+        String ghToken = fetchGithubAccessToken(req.getCode(), req.getState());
+        Map<String, Object> ghUser = fetchGithubUser(ghToken);
+        String githubId = toSafeString(ghUser.get("id"));
+        String githubLogin = toSafeString(ghUser.get("login"));
+        String avatar = toSafeString(ghUser.get("avatar_url"));
+        String email = toSafeString(ghUser.get("email"));
+        if (!StringUtils.hasText(githubId)) throw new LoginException("GitHub账号信息无效");
+        if (!StringUtils.hasText(email)) email = fetchGithubPrimaryEmail(ghToken);
+        User user = userService.lambdaQuery().eq(User::getGithubId, githubId).one();
+        if (user == null && StringUtils.hasText(email)) {
+            user = userService.lambdaQuery().eq(User::getEmail, email).one();
+            if (user != null) {
+                user.setGithubId(githubId);
+                user.setGithubLogin(githubLogin);
+                if (StringUtils.hasText(avatar) && !StringUtils.hasText(user.getAvatar())) user.setAvatar(avatar);
+                userService.updateById(user);
             }
-            // 校验验证码
-            if (!verificationCodeService.verifyLoginCode(req.getUsername(), req.getCode())) {
-                throw new LoginException("验证码错误或已失效");
+        }
+        if (user == null) user = createUserByGithub(githubId, githubLogin, avatar, email);
+        ensureUserCanLogin(user);
+        return finalizeLogin(user, req.isRememberMe(), normalizeDeviceId(deviceId), null, clientIp, req.getTwoFactorCode());
+    }
+
+    @Override
+    public LoginResponse verifyTwoFactorLogin(String ticket, String code, String deviceId, String clientIp) {
+        if (!StringUtils.hasText(ticket) || !StringUtils.hasText(code)) throw new LoginException("二步验证参数不能为空");
+        LoginContext ctx = readLoginContext(ticket);
+        if (ctx == null || !StringUtils.hasText(ctx.userId)) throw new LoginException("二步验证已过期，请重新登录");
+        User user = userService.getById(ctx.userId);
+        ensureUserCanLogin(user);
+        if (!(user.getTwoFactorEnabled() != null && user.getTwoFactorEnabled() == 1) || !StringUtils.hasText(user.getTwoFactorSecret())) {
+            throw new LoginException("用户未开启二步验证");
+        }
+        if (!TotpUtil.verifyCode(user.getTwoFactorSecret(), code)) throw new LoginException("二步验证码错误");
+        String reqDid = normalizeDeviceId(deviceId);
+        String ticketDid = normalizeDeviceId(ctx.deviceId);
+        if (StringUtils.hasText(ticketDid) && !ticketDid.equals(reqDid)) throw new LoginException("检测到设备切换，请重新登录");
+        stringRedisTemplate.delete(MFA_TICKET_PREFIX + ticket);
+        String finalIp = StringUtils.hasText(ctx.clientIp) ? ctx.clientIp : clientIp;
+        return generateTokenResponse(user, ctx.rememberMe, ticketDid, null, finalIp);
+    }
+
+    @Override
+    public TwoFactorSetupResp initTwoFactorSetup(String userId) {
+        User user = userService.getById(userId);
+        ensureUserCanLogin(user);
+        String secret = TotpUtil.generateSecret();
+        stringRedisTemplate.opsForValue().set(MFA_SETUP_PREFIX + userId, secret, twoFactorSetupExpireSeconds, TimeUnit.SECONDS);
+        String account = StringUtils.hasText(user.getEmail()) ? user.getEmail() : user.getUsername();
+        String otpauthUri = TotpUtil.buildOtpAuthUri(twoFactorIssuer, account, secret);
+        String qrCodeUrl = "https://api.qrserver.com/v1/create-qr-code/?size=220x220&data="
+                + UriComponentsBuilder.newInstance().queryParam("v", otpauthUri).build().getQueryParams().getFirst("v");
+
+        TwoFactorSetupResp resp = new TwoFactorSetupResp();
+        resp.setSecret(secret);
+        resp.setOtpauthUri(otpauthUri);
+        resp.setQrCodeUrl(qrCodeUrl);
+        resp.setExpireSeconds((int) twoFactorSetupExpireSeconds);
+        return resp;
+    }
+
+    @Override
+    public void enableTwoFactor(String userId, String code) {
+        User user = userService.getById(userId);
+        ensureUserCanLogin(user);
+        String secret = stringRedisTemplate.opsForValue().get(MFA_SETUP_PREFIX + userId);
+        if (!StringUtils.hasText(secret)) throw new LoginException("二步验证配置已过期，请重新生成二维码");
+        if (!TotpUtil.verifyCode(secret, code)) throw new LoginException("二步验证码错误，请检查后重试");
+        user.setTwoFactorEnabled(1);
+        user.setTwoFactorSecret(secret);
+        userService.updateById(user);
+        stringRedisTemplate.delete(MFA_SETUP_PREFIX + userId);
+    }
+
+    @Override
+    public void disableTwoFactor(String userId, String code) {
+        User user = userService.getById(userId);
+        ensureUserCanLogin(user);
+        if (!(user.getTwoFactorEnabled() != null && user.getTwoFactorEnabled() == 1) || !StringUtils.hasText(user.getTwoFactorSecret())) {
+            return;
+        }
+        if (!TotpUtil.verifyCode(user.getTwoFactorSecret(), code)) throw new LoginException("二步验证码错误，无法关闭");
+        user.setTwoFactorEnabled(0);
+        user.setTwoFactorSecret(null);
+        userService.updateById(user);
+        stringRedisTemplate.delete(MFA_SETUP_PREFIX + userId);
+    }
+
+    private User loginByOtp(LoginReq req) {
+        String email = req.getEmail();
+        String code = req.getCode();
+        if (!StringUtils.hasText(email)) throw new LoginException("登录邮箱不能为空");
+        if (!StringUtils.hasText(code)) throw new LoginException("请输入验证码");
+        User user = userService.lambdaQuery().eq(User::getEmail, email).one();
+        if (user == null) throw new LoginException("该邮箱尚未注册，请先注册");
+        if (!verificationCodeService.verifyCode(email, code)) throw new LoginException("验证码错误或已失效");
+        return user;
+    }
+
+    private User loginByPassword(LoginReq req) {
+        String account = req.getAccount();
+        String password = req.getPassword();
+        if (!StringUtils.hasText(account)) throw new LoginException("请输入用户名或邮箱");
+        if (!StringUtils.hasText(password)) throw new LoginException("请输入密码");
+        User user = account.contains("@")
+                ? userService.lambdaQuery().eq(User::getEmail, account).one()
+                : userService.lambdaQuery().eq(User::getUsername, account).one();
+        if (user == null) throw new LoginException("账号不存在，请检查后重试");
+        if (!passwordEncoder.matches(password, user.getPassword())) throw new LoginException("密码错误");
+        return user;
+    }
+
+    private LoginResponse finalizeLogin(User user, boolean rememberMe, String deviceId, String existsSessionId, String clientIp, String twoFactorCode) {
+        ensureUserCanLogin(user);
+        if (isTwoFactorEnabled(user)) {
+            if (StringUtils.hasText(twoFactorCode)) {
+                if (!TotpUtil.verifyCode(user.getTwoFactorSecret(), twoFactorCode)) throw new LoginException("二步验证码错误");
+            } else {
+                return buildTwoFactorChallenge(user, rememberMe, deviceId, clientIp);
             }
         }
+        return generateTokenResponse(user, rememberMe, deviceId, existsSessionId, clientIp);
+    }
 
-        // 1. 构?Token（账户密码封装）
-        UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(req.getUsername(),
-                req.getPassword());
-
-        // 2. SecurityManager 进行实际认证
-        Authentication authentication;
+    private LoginResponse generateTokenResponse(User user, boolean rememberMe, String deviceId, String existsSessionId, String clientIp) {
+        String role = user.getRole() != null ? user.getRole() : "ROLE_USER";
+        List<String> roleCodes = List.of(role);
+        String sessionId = StringUtils.hasText(existsSessionId) ? existsSessionId : UUID.randomUUID().toString();
+        String safeDid = normalizeDeviceId(deviceId);
+        Map<String, Object> baseClaims = jwtUtil.buildClaims(user.getUsername(), roleCodes, user.getAvatar());
+        baseClaims.put("sid", sessionId);
+        baseClaims.put("did", safeDid);
+        baseClaims.put("remember", rememberMe);
+        Map<String, Object> accessClaims = new HashMap<>(baseClaims);
+        accessClaims.put("typ", "access");
+        Map<String, Object> refreshClaims = new HashMap<>(baseClaims);
+        refreshClaims.put("typ", "refresh");
+        String accessToken = jwtUtil.generateAccessToken(user.getId(), accessClaims, rememberMe);
+        String refreshToken = jwtUtil.generateRefreshToken(user.getId(), refreshClaims, rememberMe);
+        long accessTtlMs = jwtUtil.resolveAccessExpireMs(rememberMe);
+        long refreshTtlMs = jwtUtil.resolveRefreshExpireMs(rememberMe);
+        stringRedisTemplate.opsForValue().set(buildAccessKey(user.getId(), sessionId), accessToken, accessTtlMs, TimeUnit.MILLISECONDS);
+        stringRedisTemplate.opsForValue().set(buildRefreshKey(user.getId(), sessionId), hashToken(refreshToken), refreshTtlMs, TimeUnit.MILLISECONDS);
+        stringRedisTemplate.opsForValue().set(buildDeviceKey(user.getId(), sessionId), safeDid, refreshTtlMs, TimeUnit.MILLISECONDS);
+        stringRedisTemplate.opsForValue().set("access_token" + user.getId(), accessToken, accessTtlMs, TimeUnit.MILLISECONDS);
+        stringRedisTemplate.opsForValue().set("refresh_token" + user.getId(), refreshToken, refreshTtlMs, TimeUnit.MILLISECONDS);
+        userService.updateLastActiveTime(user.getId());
+        String activeRegion = resolveActiveRegion(clientIp);
+        if (StringUtils.hasText(activeRegion)) userService.updateActiveRegion(user.getId(), activeRegion);
         try {
-            authentication = authorizationManager.authenticate(authToken);
+            String loginExpKey = "exp:login:" + user.getId() + ":" + LocalDate.now();
+            Boolean alreadyGranted = stringRedisTemplate.hasKey(loginExpKey);
+            if (!Boolean.TRUE.equals(alreadyGranted)) {
+                levelService.addExperience(user.getId(), 1, "每日登录");
+                stringRedisTemplate.opsForValue().set(loginExpKey, "1", 1, TimeUnit.DAYS);
+            }
         } catch (Exception e) {
-            // 登录失败，记录失败次数
-            int failCount = verificationCodeService.recordLoginFailure(req.getUsername());
-            if (failCount >= 3) {
-                long timeLeft = verificationCodeService.getLockTimeLeft(req.getUsername());
-                throw new LoginException("登录失败次数过多，账号已锁定，请 " + (timeLeft / 60 + 1) + " 分钟后再试");
-            }
-            throw new LoginException("登录失败，账号或密码错误（剩余尝试次数：" + (3 - failCount) + "）");
+            log.warn("每日登录经验发放失败: {}", e.getMessage());
         }
-
-        if (authentication == null || !authentication.isAuthenticated()) {
-            int failCount = verificationCodeService.recordLoginFailure(req.getUsername());
-            if (failCount >= 3) {
-                long timeLeft = verificationCodeService.getLockTimeLeft(req.getUsername());
-                throw new LoginException("登录失败次数过多，账号已锁定，请 " + (timeLeft / 60 + 1) + " 分钟后再试");
-            }
-            throw new LoginException("登录失败，账号或密码错误（剩余尝试次数：" + (3 - failCount) + "）");
-        }
-
-        // 3. 获取登录用户信息
-        AuthUser authUser = (AuthUser) authentication.getPrincipal();
-        User user = authUser.getUser();
-
-        // 登录成功，清除失败记录
-        verificationCodeService.clearLoginFailure(req.getUsername());
-
-        // 4. JWT 内容,构造自定义 JWT
-        Map<String, Object> claims = jwtUtil.buildClaims(user.getUsername(), user.getRole(), user.getAvatar());
-
-        // 5. 生成 Token ,并存入Redis
-        String AccessToken = jwtUtil.generateAccessToken(user.getId(), claims, req.isRememberMe());
-        String RefreshToken = jwtUtil.generateRefreshToken(user.getId(), claims);
-
         LoginResponse response = new LoginResponse();
-        response.setAccessToken(AccessToken);
-        response.setRefreshToken(RefreshToken);
-
-        // 5.1 构建 Redis ，通过Key-用户ID，Value-token
-        stringRedisTemplate.opsForValue().set("access_token" + user.getId(), AccessToken);
-        stringRedisTemplate.opsForValue().set("refresh_token" + user.getId(), RefreshToken);
-
-        userService.checkAndUpgradeGrade(user);
-
+        response.setAccessToken(accessToken);
+        response.setRefreshToken(refreshToken);
+        response.setTwoFactorRequired(false);
         return response;
+    }
+
+    private LoginResponse buildTwoFactorChallenge(User user, boolean rememberMe, String deviceId, String clientIp) {
+        String ticket = UUID.randomUUID().toString().replace("-", "");
+        LoginContext ctx = new LoginContext();
+        ctx.userId = user.getId();
+        ctx.rememberMe = rememberMe;
+        ctx.deviceId = normalizeDeviceId(deviceId);
+        ctx.clientIp = clientIp;
+        try {
+            String json = objectMapper.writeValueAsString(ctx);
+            stringRedisTemplate.opsForValue().set(MFA_TICKET_PREFIX + ticket, json, twoFactorTicketExpireSeconds, TimeUnit.SECONDS);
+        } catch (Exception e) {
+            throw new LoginException("创建二步验证票据失败");
+        }
+        LoginResponse response = new LoginResponse();
+        response.setTwoFactorRequired(true);
+        response.setTwoFactorTicket(ticket);
+        return response;
+    }
+
+    private LoginContext readLoginContext(String ticket) {
+        try {
+            String json = stringRedisTemplate.opsForValue().get(MFA_TICKET_PREFIX + ticket);
+            if (!StringUtils.hasText(json)) return null;
+            return objectMapper.readValue(json, LoginContext.class);
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void register(RegisterReq req) {
+        if (!verificationCodeService.verifyCode(req.getEmail(), req.getCode())) throw new RegisterException("验证码错误或已失效");
+        User exist = userService.lambdaQuery().eq(User::getUsername, req.getUsername()).one();
+        if (exist != null) throw new UserAlreadyExistsException("该用户名已被注册");
+        User existEmail = userService.lambdaQuery().eq(User::getEmail, req.getEmail()).one();
+        if (existEmail != null) throw new RegisterException("该邮箱已被其它账号注册");
 
-        // 0. 校验验证码
-        if (!verificationCodeService.verifyCode(req.getEmail(), req.getCode())) {
-            throw new RegisterException("验证码错误或已失效");
-        }
-
-        // 1. 用户名（学号）是否已存在
-        User exist = userService.lambdaQuery()
-                .eq(User::getUsername, req.getUsername())
-                .one();
-
-        if (exist != null) {
-            throw new UserAlreadyExistsException("该学号已注册");
-        }
-
-        // 1.1 校验邮箱是否存在
-        User existEmail = userService.lambdaQuery()
-                .eq(User::getEmail, req.getEmail())
-                .one();
-        if (existEmail != null) {
-            throw new RegisterException("该邮箱已被其它账号注册");
-        }
-
-        // 2. 创建用户实体
         User user = new User();
-
         user.setUsername(req.getUsername());
         user.setPassword(passwordEncoder.encode(req.getPassword()));
         user.setNickname(req.getNickname());
         user.setAvatar(req.getAvatar());
         user.setEmail(req.getEmail());
         user.setMajor(req.getMajor());
-        user.setGrade(req.getGrade());
+        user.setEnrollmentYear(req.getGrade());
         user.setGender(req.getGender());
         user.setSchool(req.getSchool());
-        user.setRole(req.getRole());
-        user.setStatus(1); // 默认正常
-
-        // 3. 保存用户
+        user.setStatus(1);
+        user.setRole("ROLE_USER");
+        user.setReputation(100);
+        user.setContributionVal(0);
+        user.setTotalPosts(0);
+        user.setTotalLikesReceived(0);
+        user.setTwoFactorEnabled(0);
+        user.setEmailNotifyEnabled(1);
         boolean saved = userService.save(user);
-        if (!saved) {
-            throw new RegisterException("注册失败，请稍后重试");
-        }
-
-        // 4. 同步创建用户画像
-        userProfileService.createProfile(user.getId());
+        if (!saved) throw new RegisterException("注册失败，请稍后重试");
     }
 
     @Override
     public void logout() {
-        // 1. 获取当前登录用户
         AuthUser authUser = SecurityUtils.getAuthenticatedUser();
         String userId = authUser.getUser().getId();
-
-        // 2. 删除 Redis Token
-        if (!stringRedisTemplate.delete("access_token" + userId)
-                || !stringRedisTemplate.delete("refresh_token" + userId)) {
-            throw new RedisOperationException("Redis 登录信息删除失败");
-        }
-
-        // 3. 清除 SecurityContext
+        clearAllSessionsByUserId(userId);
         SecurityContextHolder.clearContext();
     }
 
+    @Override
+    public void logoutByAccessToken(String accessToken) {
+        String userId = jwtUtil.getUserId(accessToken);
+        String sessionId = jwtUtil.getClaimString(accessToken, "sid");
+        if (!StringUtils.hasText(userId)) {
+            SecurityContextHolder.clearContext();
+            return;
+        }
+        if (StringUtils.hasText(sessionId)) clearSession(userId, sessionId);
+        stringRedisTemplate.delete("access_token" + userId);
+        stringRedisTemplate.delete("refresh_token" + userId);
+        SecurityContextHolder.clearContext();
+    }
+
+    @Override
+    public void resetPassword(String email, String code, String newPassword) {
+        if (!StringUtils.hasText(email)) throw new LoginException("邮箱不能为空");
+        if (!StringUtils.hasText(code)) throw new LoginException("验证码不能为空");
+        if (newPassword == null || newPassword.length() < 6) throw new LoginException("新密码长度不能少于6位");
+        if (!verificationCodeService.verifyCode(email, code)) throw new LoginException("验证码错误或已失效");
+        User user = userService.lambdaQuery().eq(User::getEmail, email).one();
+        if (user == null) throw new LoginException("该邮箱未注册");
+        user.setPassword(passwordEncoder.encode(newPassword));
+        userService.updateById(user);
+        clearAllSessionsByUserId(user.getId());
+    }
+
+    private void ensureUserCanLogin(User user) {
+        if (user == null) throw new LoginException("账号不存在，请检查后重试");
+        if (user.getStatus() != null && user.getStatus() != 1) throw new LoginException("用户状态异常，请联系管理员");
+    }
+
+    private boolean isTwoFactorEnabled(User user) {
+        return user != null && user.getTwoFactorEnabled() != null && user.getTwoFactorEnabled() == 1
+                && StringUtils.hasText(user.getTwoFactorSecret());
+    }
+
+    private String normalizeDeviceId(String deviceId) {
+        if (!StringUtils.hasText(deviceId)) return "unknown-device";
+        String normalized = deviceId.trim();
+        return normalized.length() > 80 ? normalized.substring(0, 80) : normalized;
+    }
+
+    private String resolveActiveRegion(String clientIp) {
+        if (!StringUtils.hasText(clientIp)) return null;
+        String normalized = clientIp.trim();
+        if (!StringUtils.hasText(normalized) || "unknown".equalsIgnoreCase(normalized)) return null;
+        if ("127.0.0.1".equals(normalized) || "::1".equals(normalized) || "0:0:0:0:0:0:0:1".equals(normalized)) return "本地开发环境";
+        return normalized;
+    }
+
+    private String buildAccessKey(String userId, String sessionId) {
+        return ACCESS_PREFIX + userId + ":" + sessionId;
+    }
+
+    private String buildRefreshKey(String userId, String sessionId) {
+        return REFRESH_PREFIX + userId + ":" + sessionId;
+    }
+
+    private String buildDeviceKey(String userId, String sessionId) {
+        return DEVICE_PREFIX + userId + ":" + sessionId;
+    }
+
+    private void clearSession(String userId, String sessionId) {
+        stringRedisTemplate.delete(buildAccessKey(userId, sessionId));
+        stringRedisTemplate.delete(buildRefreshKey(userId, sessionId));
+        stringRedisTemplate.delete(buildDeviceKey(userId, sessionId));
+    }
+
+    private void clearAllSessionsByUserId(String userId) {
+        if (!StringUtils.hasText(userId)) return;
+        clearByPattern(ACCESS_PREFIX + userId + ":*");
+        clearByPattern(REFRESH_PREFIX + userId + ":*");
+        clearByPattern(DEVICE_PREFIX + userId + ":*");
+        stringRedisTemplate.delete("access_token" + userId);
+        stringRedisTemplate.delete("refresh_token" + userId);
+    }
+
+    private void clearByPattern(String keyPattern) {
+        try {
+            var keys = stringRedisTemplate.keys(keyPattern);
+            if (keys != null && !keys.isEmpty()) stringRedisTemplate.delete(keys);
+        } catch (Exception e) {
+            log.warn("清理会话缓存失败: pattern={}, err={}", keyPattern, e.getMessage());
+        }
+    }
+
+    private String hashToken(String token) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] bytes = digest.digest(token.getBytes(StandardCharsets.UTF_8));
+            StringBuilder sb = new StringBuilder(bytes.length * 2);
+            for (byte b : bytes) sb.append(String.format("%02x", b));
+            return sb.toString();
+        } catch (Exception e) {
+            throw new LoginException("令牌摘要失败");
+        }
+    }
+
+    private void ensureGithubConfigReady() {
+        if (!StringUtils.hasText(githubClientId) || !StringUtils.hasText(githubClientSecret) || !StringUtils.hasText(githubRedirectUri)) {
+            throw new LoginException("GitHub登录配置不完整，请联系管理员");
+        }
+    }
+
+    private void validateGithubState(String state) {
+        if (!StringUtils.hasText(state)) throw new LoginException("GitHub状态参数缺失");
+        String key = GITHUB_STATE_PREFIX + state;
+        String val = stringRedisTemplate.opsForValue().get(key);
+        if (!StringUtils.hasText(val)) throw new LoginException("GitHub登录状态已失效，请重试");
+        stringRedisTemplate.delete(key);
+    }
+
+    private String fetchGithubAccessToken(String code, String state) {
+        try {
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+            headers.setAccept(List.of(MediaType.APPLICATION_JSON));
+            MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
+            form.add("client_id", githubClientId);
+            form.add("client_secret", githubClientSecret);
+            form.add("code", code);
+            form.add("state", state);
+            form.add("redirect_uri", githubRedirectUri);
+            ResponseEntity<Map> response = restTemplate.exchange("https://github.com/login/oauth/access_token",
+                    HttpMethod.POST, new HttpEntity<>(form, headers), Map.class);
+            if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) throw new LoginException("GitHub令牌交换失败");
+            String token = toSafeString(response.getBody().get("access_token"));
+            if (!StringUtils.hasText(token)) throw new LoginException("GitHub令牌无效，请重试");
+            return token;
+        } catch (LoginException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("GitHub令牌交换异常", e);
+            throw new LoginException("GitHub登录失败，请稍后重试");
+        }
+    }
+
+    private Map<String, Object> fetchGithubUser(String githubAccessToken) {
+        try {
+            HttpHeaders headers = new HttpHeaders();
+            headers.setBearerAuth(githubAccessToken);
+            headers.setAccept(List.of(MediaType.APPLICATION_JSON));
+            headers.set("User-Agent", "CampusPulse");
+            ResponseEntity<Map> response = restTemplate.exchange("https://api.github.com/user", HttpMethod.GET,
+                    new HttpEntity<>(headers), Map.class);
+            if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) throw new LoginException("无法获取GitHub用户信息");
+            return response.getBody();
+        } catch (LoginException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("获取GitHub用户信息失败", e);
+            throw new LoginException("GitHub登录失败，请稍后重试");
+        }
+    }
+
+    private String fetchGithubPrimaryEmail(String githubAccessToken) {
+        try {
+            HttpHeaders headers = new HttpHeaders();
+            headers.setBearerAuth(githubAccessToken);
+            headers.setAccept(List.of(MediaType.APPLICATION_JSON));
+            headers.set("User-Agent", "CampusPulse");
+            ResponseEntity<String> response = restTemplate.exchange("https://api.github.com/user/emails",
+                    HttpMethod.GET, new HttpEntity<>(headers), String.class);
+            if (!response.getStatusCode().is2xxSuccessful() || !StringUtils.hasText(response.getBody())) return null;
+            List<Map<String, Object>> emails = objectMapper.readValue(response.getBody(), new TypeReference<>() {});
+            for (Map<String, Object> email : emails) {
+                if (Boolean.TRUE.equals(email.get("primary")) && Boolean.TRUE.equals(email.get("verified"))) {
+                    return toSafeString(email.get("email"));
+                }
+            }
+            for (Map<String, Object> email : emails) {
+                if (Boolean.TRUE.equals(email.get("verified"))) return toSafeString(email.get("email"));
+            }
+            return null;
+        } catch (Exception e) {
+            log.warn("获取GitHub邮箱失败: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    private User createUserByGithub(String githubId, String githubLogin, String avatar, String email) {
+        User user = new User();
+        user.setUsername(generateUniqueGithubUsername(githubLogin, githubId));
+        user.setPassword(passwordEncoder.encode(UUID.randomUUID().toString()));
+        user.setNickname(StringUtils.hasText(githubLogin) ? githubLogin : user.getUsername());
+        user.setAvatar(avatar);
+        user.setEmail(email);
+        user.setStatus(1);
+        user.setRole("ROLE_USER");
+        user.setReputation(100);
+        user.setContributionVal(0);
+        user.setTotalPosts(0);
+        user.setTotalLikesReceived(0);
+        user.setGithubId(githubId);
+        user.setGithubLogin(githubLogin);
+        user.setTwoFactorEnabled(0);
+        user.setEmailNotifyEnabled(1);
+        boolean saved = userService.save(user);
+        if (!saved) throw new LoginException("GitHub账号登录失败，请稍后重试");
+        return user;
+    }
+
+    private String generateUniqueGithubUsername(String githubLogin, String githubId) {
+        String base = StringUtils.hasText(githubLogin) ? githubLogin : "gh_" + githubId;
+        base = base.replaceAll("[^a-zA-Z0-9_]", "_");
+        if (!StringUtils.hasText(base)) base = "gh_user";
+        String candidate = base;
+        int idx = 1;
+        while (userService.lambdaQuery().eq(User::getUsername, candidate).count() > 0) {
+            candidate = base + "_" + idx;
+            idx++;
+            if (idx > 9999) {
+                candidate = "gh_" + UUID.randomUUID().toString().substring(0, 8);
+                break;
+            }
+        }
+        return candidate.length() > 50 ? candidate.substring(0, 50) : candidate;
+    }
+
+    private String toSafeString(Object value) {
+        return value == null ? null : String.valueOf(value);
+    }
+
+    private static class LoginContext {
+        public String userId;
+        public boolean rememberMe;
+        public String deviceId;
+        public String clientIp;
+    }
 }

@@ -18,7 +18,7 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * 协同过滤推荐服务实现类
+ * Song：协同过滤推荐服务实现类
  */
 @Service
 @Slf4j
@@ -31,23 +31,23 @@ public class CollaborativeFilteringServiceImpl implements CollaborativeFiltering
     private final PostCollectMapper postCollectMapper;
 
     /**
-     * 实现 Item-Based Collaborative Filtering
-     * 逻辑：
-     * 1. 找出看过当前帖子(targetPost)的所有用户
-     * 2. 找出这些用户看过的其他帖子
-     * 3. 统计这些帖子的加权分数 (浏览=1, 点赞=3, 收藏=5)
-     * 4. 排除当前帖子，返回分数最高的Top N
+     * Song：说明
+     * Song：逻辑：
+     * Song：说明
+     * Song：2. 找出这些用户看过的其他帖子
+     * Song：3. 统计这些帖子的加权分数 (浏览=1, 点赞=3, 收藏=5)
+     * Song：说明
      */
     @Override
     public List<Post> recommendByItemBased(String postId, int limit) {
-        // 1. 获取看过该帖子的所有用户ID (最近30天数据)
-        // SQL: SELECT DISTINCT user_id FROM sys_view_log WHERE post_id = ?
+        // Song：说明
+        // Song：说明
         List<ViewLog> whoViewedLogs = viewLogMapper.selectList(
                 new LambdaQueryWrapper<ViewLog>()
-                        .select(ViewLog::getUserId) // 只查userId字段优化性能
+                        .select(ViewLog::getUserId) // Song：说明
                         .eq(ViewLog::getPostId, postId)
-                        .isNotNull(ViewLog::getUserId) // 排除游客
-                        .last("LIMIT 100") // 限制样本数量，防止全表扫描
+                        .isNotNull(ViewLog::getUserId) // Song：排除游客
+                        .last("LIMIT 100") // Song：限制样本数量，防止全表扫描
         );
 
         if (whoViewedLogs.isEmpty()) {
@@ -59,15 +59,15 @@ public class CollaborativeFilteringServiceImpl implements CollaborativeFiltering
                 .distinct()
                 .collect(Collectors.toList());
 
-        // 3. 统计加权分数
+        // Song：3. 统计加权分数
         Map<String, Double> postScore = new HashMap<>();
 
-        // 3.1 浏览行为 (权重 1.0)
+        // Song：3.1 浏览行为 (权重 1.0)
         List<ViewLog> otherViewLogs = viewLogMapper.selectList(
                 new LambdaQueryWrapper<ViewLog>()
                         .select(ViewLog::getPostId)
                         .in(ViewLog::getUserId, userIds)
-                        .ne(ViewLog::getPostId, postId) // 排除当前帖子
+                        .ne(ViewLog::getPostId, postId) // Song：排除当前帖子
                         .orderByDesc(ViewLog::getCreateTime)
                         .last("LIMIT 500")
         );
@@ -75,7 +75,7 @@ public class CollaborativeFilteringServiceImpl implements CollaborativeFiltering
             postScore.merge(log.getPostId(), 1.0, Double::sum);
         }
 
-        // 3.2 点赞行为 (权重 3.0)
+        // Song：3.2 点赞行为 (权重 3.0)
         List<PostLike> otherLikes = postLikeMapper.selectList(
                 new LambdaQueryWrapper<PostLike>()
                         .select(PostLike::getPostId)
@@ -87,7 +87,7 @@ public class CollaborativeFilteringServiceImpl implements CollaborativeFiltering
             postScore.merge(like.getPostId(), 3.0, Double::sum);
         }
 
-        // 3.3 收藏行为 (权重 5.0)
+        // Song：3.3 收藏行为 (权重 5.0)
         List<PostCollect> otherCollects = postCollectMapper.selectList(
                 new LambdaQueryWrapper<PostCollect>()
                         .select(PostCollect::getPostId)
@@ -99,7 +99,7 @@ public class CollaborativeFilteringServiceImpl implements CollaborativeFiltering
             postScore.merge(collect.getPostId(), 5.0, Double::sum);
         }
 
-        // 4. 排序取出 Top N ID
+        // Song：说明
         List<String> recommendationIds = postScore.entrySet().stream()
                 .sorted(Map.Entry.<String, Double>comparingByValue().reversed())
                 .limit(limit)
@@ -110,21 +110,21 @@ public class CollaborativeFilteringServiceImpl implements CollaborativeFiltering
             return Collections.emptyList();
         }
 
-        // 5. 查询完整的帖子信息
+        // Song：5. 查询完整的帖子信息
         return postMapper.selectBatchIds(recommendationIds);
     }
 
     /**
-     * 实现 User-Based Collaborative Filtering (简化版)
-     * 逻辑：
-     * 1. 找出与当前用户共同浏览行为最多的Top K个相似用户
-     * 2. 推荐这些相似用户看过、但当前用户没看过的帖子
-     * (由于计算量大，这里暂时略过完整矩阵计算，使用简易逻辑)
+     * Song：说明
+     * Song：逻辑：
+     * Song：说明
+     * Song：2. 推荐这些相似用户看过、但当前用户没看过的帖子
+     * Song：(由于计算量大，这里暂时略过完整矩阵计算，使用简易逻辑)
      */
     @Override
     public List<Post> recommendByUserBased(String userId, int limit) {
-        // 暂时返回空，留作扩展
-        // 生产环境通常需要离线计算 User-Item 矩阵
+        // Song：暂时返回空，留作扩展
+        // Song：说明
         return Collections.emptyList();
     }
 }

@@ -23,72 +23,122 @@ public class Post implements Serializable {
 
     private String userId;
 
-    private String categoryId;
+    /**
+     * Song：说明
+     */
+    private Long sectionId;
 
     private String title;
 
     private String content;
 
     /**
-     * 封面图
+     * Song：摘要
+     */
+    private String summary;
+
+    /**
+     * Song：封面图
      */
     private String coverImage;
 
     /**
-     * 图片列表
-     * 数据库存 ["url1", "url2"]
-     * Java 直接映射为 List<String>
+     * Song：图片列表
+     * Song：说明
+     * Song：说明
      */
     @TableField(typeHandler = JacksonTypeHandler.class)
     private List<String> images;
 
     /**
-     * 冗余存储的标签字符串，用于简单展示 (如 "#考研 #Java")
-     * 复杂的标签分析走 sys_tag 关联逻辑
+     * Song：说明
+     * Song：说明
      */
     private String tags;
 
     /**
-     * 是否匿名 1:是 0:否
+     * Song：是否匿名 1:是 0:否
      */
     private Integer isAnonymous;
 
     private String locationName;
 
     /**
-     * 情感分数
+     * Song：情感分数
      */
     private BigDecimal sentimentScore;
 
     /**
-     * 状态 1:正常 0:删除
+     * Song：状态 1:正常 0:删除
      */
     private Integer status;
 
     /**
-     * 审核状态: PENDING/APPROVED/REJECTED
+     * Song：说明
      */
     private String auditStatus;
 
-    // 统计数据
+    /**
+     * Song：说明
+     */
+    @Deprecated
+    private Integer isPinned;
+
+    /**
+     * Song：全局置顶 0:否 1:是
+     */
+    private Integer globalPin;
+
+    /**
+     * Song：板块置顶 0:否 1:是
+     */
+    private Integer categoryPin;
+
+    /**
+     * Song：置顶排序 (数字越小越靠前)
+     */
+    private Integer pinOrder;
+
+    /**
+     * Song：说明
+     */
+    private LocalDateTime pinExpireAt;
+
+    /**
+     * Song：是否加精 0:否 1:是
+     */
+    private Integer isFeatured;
+
+    // Song：统计数据
     private Integer viewCount;
     private Integer likeCount;
     private Integer collectCount;
     private Integer commentCount;
     private Double heatScore;
 
+    /**
+     * Song：最后回复时间
+     */
+    private LocalDateTime lastReplyAt;
+
+    /**
+     * Song：说明
+     * Song：用于列表排序
+     */
+    private LocalDateTime lastActivityAt;
+
     private LocalDateTime createTime;
     private LocalDateTime updateTime;
 
     /**
-     * 当前用户是否已点赞
+     * Song：当前用户是否已点赞
      */
     @TableField(exist = false)
     @com.fasterxml.jackson.annotation.JsonProperty("isLiked")
     private Boolean isLiked;
 
     /**
-     * 当前用户是否已收藏
+     * Song：当前用户是否已收藏
      */
     @TableField(exist = false)
     @com.fasterxml.jackson.annotation.JsonProperty("isCollected")

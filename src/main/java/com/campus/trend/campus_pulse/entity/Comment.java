@@ -26,23 +26,28 @@ public class Comment implements Serializable {
     private String content;
 
     /**
-     * 父评论ID (0为根评论)
+     * Song：说明
      */
     private String parentId;
 
     /**
-     * 子评论列表 (非数据库字段)
+     * Song：子评论列表 (非数据库字段)
      */
     @TableField(exist = false)
     private List<Comment> children;
 
     /**
-     * 被回复的人ID
+     * Song：说明
+     */
+    private String replyToUserId;
+
+    /**
+     * Song：说明
      */
     private String replyUserId;
 
     /**
-     * 是否匿名
+     * Song：是否匿名
      */
     private Integer isAnonymous;
 

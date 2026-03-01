@@ -9,42 +9,47 @@ export interface Tag {
 }
 
 export const tagApi = {
-    // Get hot tags
+    // Song：说明
     getHotTags(limit = 10) {
         return api.get<any, Result<Tag[]>>('/tag/hot', { params: { limit } })
     },
 
-    // Search tags
+    // Song：说明
+    getHotList(limit = 10) {
+        return api.get<any, Result<Tag[]>>('/tag/hot', { params: { limit } })
+    },
+
+    // Song：说明
     search(keyword: string) {
         return api.get<any, Result<Tag[]>>('/tag/search', { params: { keyword } })
     },
 
-    // Toggle follow tag
+    // Song：说明
     toggleFollow(tagId: number | string, score?: number) {
         return api.post<any, Result<{ isFollowing: boolean }>>(`/tag/${tagId}/toggle`, null, { params: { score } })
     },
 
-    // Follow tag
+    // Song：说明
     follow(tagId: number | string, score?: number) {
         return api.post<any, Result<{ success: boolean }>>(`/tag/${tagId}/follow`, null, { params: { score } })
     },
 
-    // Unfollow tag
+    // Song：说明
     unfollow(tagId: number | string) {
         return api.delete<any, Result<{ success: boolean }>>(`/tag/${tagId}/unfollow`)
     },
 
-    // Check follow status
+    // Song：说明
     getStatus(tagId: number | string) {
         return api.get<any, Result<{ isFollowing: boolean }>>(`/tag/${tagId}/status`)
     },
 
-    // Get my following tags
+    // Song：说明
     getMyFollowing() {
         return api.get<any, Result<Tag[]>>('/tag/my-following')
     },
 
-    // Update tag interest score
+    // Song：说明
     updateScore(tagId: number | string, score: number) {
         return api.put<any, Result<{ success: boolean }>>(`/tag/${tagId}/score`, null, { params: { score } })
     }

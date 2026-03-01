@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tailwind CSS v4 验证</title>
+  <link rel="stylesheet" href="/src/style.css">
+</head>
+<body>
+  <div class="p-8">
+    <h1 class="text-3xl font-bold mb-6">Tailwind CSS v4 验证测试</h1>
+
+    <!-- 核心验证块 -->
+    <div class="p-6 bg-black text-white rounded-xl mb-6">
+      TAILWIND OK - 黑底白字圆角
+    </div>
+
+    <!-- 其他测试 -->
+    <div class="grid grid-cols-3 gap-4">
+      <div class="p-4 bg-blue-500 text-white rounded-lg">蓝色</div>
+      <div class="p-4 bg-red-500 text-white rounded-lg">红色</div>
+      <div class="p-4 bg-green-500 text-white rounded-lg">绿色</div>
+    </div>
+
+    <div class="mt-6 p-4 border-2 border-gray-300 rounded-md">
+      <p class="text-sm text-gray-600">如果你能看到上面的黑底白字圆角块，说明 Tailwind CSS v4 已经正确工作！</p>
+    </div>
+  </div>
+</body>
+</html>

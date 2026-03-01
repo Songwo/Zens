@@ -6,8 +6,12 @@ import lombok.Data;
 @Data
 public class RegisterReq {
 
-    @NotBlank(message = "学号不能为空")
-    @Pattern(regexp = "^[0-9]{6,20}$", message = "学号必须为 6-20 位数字")
+    /**
+     * Song：用户名（唯一标识，字母、数字、下划线 4-20位）
+     */
+    @NotBlank(message = "用户名不能为空")
+    @Size(min = 4, max = 20, message = "用户名长度在 4-20 个字符之间")
+    @Pattern(regexp = "^[a-zA-Z0-9_]+$", message = "用户名只能包含字母、数字和下划线")
     private String username;
 
     @Size(max = 20, message = "昵称长度不能超过 20 个字符")
@@ -37,14 +41,14 @@ public class RegisterReq {
     private String code;
 
     /**
-     * 性别 0:未知 1:男 2:女
+     * Song：性别 0:未知 1:男 2:女
      */
     private Integer gender;
 
     @Size(max = 50, message = "学校名称长度不能超过 50 个字符")
     private String school;
 
-    // 用于可选的 URL 验证分组
+    // Song：说明
     public interface UrlCheck {
     }
 }

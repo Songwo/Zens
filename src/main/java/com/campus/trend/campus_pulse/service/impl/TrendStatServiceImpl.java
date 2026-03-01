@@ -1,319 +1,153 @@
 package com.campus.trend.campus_pulse.service.impl;
 
-import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import com.campus.trend.campus_pulse.entity.TrendStat;
-import com.campus.trend.campus_pulse.mapper.TrendStatMapper;
+import com.campus.trend.campus_pulse.entity.Post;
+import com.campus.trend.campus_pulse.entity.User;
+import com.campus.trend.campus_pulse.mapper.PostMapper;
+import com.campus.trend.campus_pulse.mapper.SectionMapper;
+import com.campus.trend.campus_pulse.mapper.UserMapper;
 import com.campus.trend.campus_pulse.service.TrendStatService;
-import com.campus.trend.campus_pulse.utils.IdUtils;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
 import java.util.*;
 
-/**
- * 趋势统计服务实现类
- */
 @Service
 @Slf4j
 @RequiredArgsConstructor
-public class TrendStatServiceImpl extends ServiceImpl<TrendStatMapper, TrendStat>
-        implements TrendStatService {
+public class TrendStatServiceImpl implements TrendStatService {
 
-    private final ObjectMapper objectMapper = new ObjectMapper();
-    private final com.campus.trend.campus_pulse.mapper.PostMapper sysPostMapper;
-    private final com.campus.trend.campus_pulse.mapper.CategoryMapper sysCategoryMapper;
-
-    @Override
-    @Transactional(rollbackFor = Exception.class)
-    public void saveOrUpdateStat(Date statDate, String type, String dataJson) {
-        TrendStat existing = getStatByDateAndType(statDate, type);
-
-        if (existing != null) {
-            existing.setDataJson(dataJson);
-            existing.setCreateTime(LocalDateTime.now());
-            updateById(existing);
-            log.info("更新统计数据: {} - {}", type, statDate);
-        } else {
-            TrendStat stat = new TrendStat()
-                    .setId(IdUtils.genId("STAT"))
-                    .setStatDate(statDate)
-                    .setType(type)
-                    .setDataJson(dataJson)
-                    .setCreateTime(LocalDateTime.now());
-            save(stat);
-            log.info("创建统计数据: {} - {}", type, statDate);
-        }
-    }
-
-    @Override
-    public TrendStat getStatByDateAndType(Date statDate, String type) {
-        return lambdaQuery()
-                .eq(TrendStat::getStatDate, statDate)
-                .eq(TrendStat::getType, type)
-                .one();
-    }
-
-    @Override
-    public TrendStat getLatestStatByType(String type) {
-        return lambdaQuery()
-                .eq(TrendStat::getType, type)
-                .orderByDesc(TrendStat::getStatDate)
-                .orderByDesc(TrendStat::getCreateTime)
-                .last("LIMIT 1")
-                .one();
-    }
-
-    @Override
-    public List<Map<String, Object>> getPostTrend() {
-        // 查询最近7天的数据
-        // 注意：数据库函数 DATE(create_time) 依赖于 MySQL
-        List<Map<String, Object>> list = sysPostMapper.selectMaps(
-                new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<com.campus.trend.campus_pulse.entity.Post>()
-                        .select("DATE_FORMAT(create_time, '%Y-%m-%d') as date", "count(*) as count")
-                        .groupBy("DATE_FORMAT(create_time, '%Y-%m-%d')")
-                        .orderByAsc("date")
-                        .last("LIMIT 7"));
-        return list;
-    }
+    private final PostMapper postMapper;
+    private final SectionMapper sectionMapper;
+    private final UserMapper userMapper;
 
     @Override
     public Map<String, Object> getKeywordCloud() {
-        TrendStat stat = getLatestStatByType(TYPE_KEYWORD_CLOUD);
-        Map<String, Object> result = parseJsonToMap(stat);
+        List<Post> posts = postMapper.selectList(
+                new QueryWrapper<Post>().select("tags").isNotNull("tags").last("LIMIT 100"));
 
-        // 如果没有预生成数据，实时从帖子标签生成
-        if (result.isEmpty()) {
-            result = new HashMap<>(); // Fix: Ensure map is mutable
-            List<com.campus.trend.campus_pulse.entity.Post> posts = sysPostMapper.selectList(
-                    new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<com.campus.trend.campus_pulse.entity.Post>()
-                            .select("tags")
-                            .isNotNull("tags")
-                            .last("LIMIT 100") // 取最近100条
-            );
-
-            // 简单统计标签频率
-            Map<String, Integer> tagFreq = new HashMap<>();
-            for (com.campus.trend.campus_pulse.entity.Post post : posts) {
-                if (post.getTags() != null && !post.getTags().isEmpty()) {
-                    String[] tags = post.getTags().split(" ");
-                    for (String tag : tags) {
-                        tag = tag.replace("#", "").trim();
-                        if (!tag.isEmpty()) {
-                            tagFreq.put(tag, tagFreq.getOrDefault(tag, 0) + 1);
-                        }
+        Map<String, Integer> tagFreq = new HashMap<>();
+        for (Post post : posts) {
+            if (post.getTags() != null && !post.getTags().isEmpty()) {
+                for (String tag : post.getTags().split(" ")) {
+                    tag = tag.replace("#", "").trim();
+                    if (!tag.isEmpty()) {
+                        tagFreq.merge(tag, 1, Integer::sum);
                     }
                 }
             }
-
-            // 转换为前端需要的格式 List<{name, value}>
-            List<Map<String, Object>> keywords = new ArrayList<>();
-            tagFreq.forEach((k, v) -> {
-                Map<String, Object> item = new HashMap<>();
-                item.put("keyword", k); // Frontend expects "keyword" not "name"
-                item.put("count", v); // Frontend expects "count" not "value"
-                keywords.add(item);
-            });
-
-            // 按频率排序并取Top 30
-            keywords.sort((a, b) -> ((Integer) b.get("count")).compareTo((Integer) a.get("count")));
-            result.put("keywords", keywords.size() > 30 ? keywords.subList(0, 30) : keywords);
         }
 
+        List<Map<String, Object>> keywords = new ArrayList<>();
+        tagFreq.forEach((k, v) -> {
+            Map<String, Object> item = new HashMap<>();
+            item.put("keyword", k);
+            item.put("count", v);
+            keywords.add(item);
+        });
+        keywords.sort((a, b) -> ((Integer) b.get("count")).compareTo((Integer) a.get("count")));
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("keywords", keywords.size() > 30 ? keywords.subList(0, 30) : keywords);
         return result;
     }
 
     @Override
-    public Map<String, Object> getCategoryPie() {
-        TrendStat stat = getLatestStatByType(TYPE_CATEGORY_PIE);
-        
-        // 实时生成
-        Map<String, Object> result = new HashMap<>();
-        // 统计分类帖子数量
-        List<Map<String, Object>> categoryStats = sysPostMapper.selectMaps(
-                new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<com.campus.trend.campus_pulse.entity.Post>()
-                        .select("category_id", "count(*) as count")
-                        .groupBy("category_id"));
+    public List<Map<String, Object>> getPostTrend() {
+        return postMapper.selectMaps(
+                new QueryWrapper<Post>()
+                        .select("DATE_FORMAT(create_time, '%Y-%m-%d') as date", "count(*) as count")
+                        .groupBy("DATE_FORMAT(create_time, '%Y-%m-%d')")
+                        .orderByAsc("date")
+                        .last("LIMIT 7"));
+    }
 
-        for (Map<String, Object> item : categoryStats) {
-            String catId = (String) item.get("category_id");
-            String catName = "未分类";
-            if (catId != null) {
-                com.campus.trend.campus_pulse.entity.Category category = sysCategoryMapper.selectById(catId);
-                if (category != null) {
-                    catName = category.getName();
-                }
+    @Override
+    public List<Map<String, Object>> getUserTrend() {
+        return userMapper.selectMaps(
+                new QueryWrapper<User>()
+                        .select("DATE_FORMAT(create_time, '%Y-%m-%d') as date", "count(*) as count")
+                        .groupBy("DATE_FORMAT(create_time, '%Y-%m-%d')")
+                        .orderByAsc("date")
+                        .last("LIMIT 7"));
+    }
+
+    @Override
+    public List<Map<String, Object>> getTrendPrediction() {
+        Map<String, Object> cloud = getKeywordCloud();
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> keywords = (List<Map<String, Object>>) cloud.getOrDefault("keywords",
+                new ArrayList<>());
+
+        List<Map<String, Object>> prediction = new ArrayList<>();
+        int limit = Math.min(keywords.size(), 5);
+        for (int i = 0; i < limit; i++) {
+            Map<String, Object> kw = keywords.get(i);
+            String name = (String) kw.get("keyword");
+
+            Map<String, Object> item = new HashMap<>();
+            item.put("topic", name);
+            double growth = 15.0 + (new Random().nextDouble() * 135.0);
+            item.put("growthRate", Math.round(growth * 10) / 10.0);
+            String status = growth > 80 ? "rising" : (growth > 30 ? "stable" : "falling");
+            item.put("status", status);
+            item.put("insight", generateInsight(name, status));
+            prediction.add(item);
+        }
+        return prediction;
+    }
+
+    @Override
+    public Map<String, Object> getSectionPie() {
+        List<Map<String, Object>> stats = postMapper.selectMaps(
+                new QueryWrapper<Post>().select("section_id", "count(*) as count").groupBy("section_id"));
+
+        Map<String, Object> result = new HashMap<>();
+        for (Map<String, Object> item : stats) {
+            Object sectionIdObj = item.get("section_id");
+            String sectionName = "未分类";
+            if (sectionIdObj != null) {
+                var section = sectionMapper.selectById(Long.valueOf(sectionIdObj.toString()));
+                if (section != null)
+                    sectionName = section.getName();
             }
-            result.put(catName, item.get("count"));
+            result.put(sectionName, item.get("count"));
         }
         return result;
     }
 
     @Override
     public List<Map<String, Object>> getHeatRank() {
-        // 先尝试从缓存获取
-        TrendStat stat = getLatestStatByType(TYPE_HEAT_RANK);
-        if (stat != null && stat.getDataJson() != null) {
-            try {
-                return objectMapper.readValue(stat.getDataJson(),
-                        new TypeReference<List<Map<String, Object>>>() {
-                        });
-            } catch (Exception e) {
-                log.warn("解析热度排行数据失败，将实时生成", e);
-            }
-        }
-
-        // 如果没有预生成的数据，实时从数据库查询生成
-        log.info("实时生成热度排行数据");
-        return generateRealtimeHeatRank();
-    }
-
-    /**
-     * 实时生成热度排行
-     */
-    private List<Map<String, Object>> generateRealtimeHeatRank() {
-        try {
-            // 从sys_post表查询热度最高的10条记录
-            List<com.campus.trend.campus_pulse.entity.Post> posts = sysPostMapper.selectList(
-                    new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<com.campus.trend.campus_pulse.entity.Post>()
-                            .orderByDesc("heat_score")
-                            .last("LIMIT 10"));
-
-            List<Map<String, Object>> heatRank = new ArrayList<>();
-            for (com.campus.trend.campus_pulse.entity.Post post : posts) {
-                Map<String, Object> item = new HashMap<>();
-                item.put("postId", post.getId());
-                item.put("title", post.getTitle());
-                // heatScore可能为null，给予默认值
-                item.put("heatScore", post.getHeatScore() != null ? post.getHeatScore() : 0.0);
-                item.put("viewCount", post.getViewCount() != null ? post.getViewCount() : 0);
-                heatRank.add(item);
-            }
-            return heatRank;
-        } catch (Exception e) {
-            log.error("生成实时热度排行失败", e);
-            return Collections.emptyList();
-        }
+        return getHeatRank(1, 10);
     }
 
     @Override
-    public List<TrendStat> getStatsByDateRange(Date startDate, Date endDate, String type) {
-        return lambdaQuery()
-                .eq(type != null, TrendStat::getType, type)
-                .ge(startDate != null, TrendStat::getStatDate, startDate)
-                .le(endDate != null, TrendStat::getStatDate, endDate)
-                .orderByDesc(TrendStat::getStatDate)
-                .list();
-    }
+    public List<Map<String, Object>> getHeatRank(int page, int pageSize) {
+        int safePage = Math.max(page, 1);
+        int safePageSize = Math.min(Math.max(pageSize, 1), 100);
+        int offset = (safePage - 1) * safePageSize;
 
-    @Override
-    @Transactional(rollbackFor = Exception.class)
-    public long deleteStatsBefore(Date beforeDate) {
-        long count = lambdaQuery()
-                .lt(TrendStat::getStatDate, beforeDate)
-                .count();
+        List<Post> posts = postMapper.selectList(
+                new QueryWrapper<Post>().orderByDesc("heat_score").last("LIMIT " + offset + ", " + safePageSize));
 
-        if (count > 0) {
-            remove(lambdaQuery()
-                    .lt(TrendStat::getStatDate, beforeDate)
-                    .getWrapper());
-            log.info("删除了 {} 条旧统计数据", count);
-        }
-
-        return count;
-    }
-
-    @Override
-    public void generateDailyStats() {
-        // 这个方法通常由定时任务调用
-        // 实际统计逻辑需要根据业务需求实现
-        log.info("开始生成每日统计数据...");
-
-        Date today = new Date();
-
-        // 示例：保存一个简单的统计数据
-        Map<String, Object> statsData = new HashMap<>();
-        statsData.put("generated_at", LocalDateTime.now().toString());
-        statsData.put("type", "daily_summary");
-
-        try {
-            String json = objectMapper.writeValueAsString(statsData);
-            saveOrUpdateStat(today, "daily_summary", json);
-        } catch (Exception e) {
-            log.error("生成每日统计数据失败", e);
-        }
-    }
-
-    @Override
-    public List<Map<String, Object>> getTrendPrediction() {
-        // 1. 获取当前热门标签和频次
-        Map<String, Object> currentCloud = getKeywordCloud();
-        @SuppressWarnings("unchecked")
-        List<Map<String, Object>> keywords = (List<Map<String, Object>>) currentCloud.getOrDefault("keywords",
-                new ArrayList<>());
-
-        List<Map<String, Object>> prediction = new ArrayList<>();
-
-        // 2. 只预测前5个最热门话题
-        int limit = Math.min(keywords.size(), 5);
-        for (int i = 0; i < limit; i++) {
-            Map<String, Object> kw = keywords.get(i);
-            String name = (String) kw.get("keyword");
-            int count = (Integer) kw.get("count");
-            log.debug("Processing keyword: {}, count: {}", name, count);
-
+        List<Map<String, Object>> rank = new ArrayList<>();
+        for (Post post : posts) {
             Map<String, Object> item = new HashMap<>();
-            item.put("topic", name);
-
-            // 3. 模拟增长率和趋势 (实际可根据历史同比/环比计算)
-            // 这里我们模拟一个 15% - 150% 的增长率
-            double growth = 15.0 + (new Random().nextDouble() * 135.0);
-            item.put("growthRate", Math.round(growth * 10) / 10.0);
-
-            // 状态判断
-            String status = growth > 80 ? "rising" : (growth > 30 ? "stable" : "falling");
-            item.put("status", status);
-
-            // 4. 生成模拟AI洞察建议
-            String insight = generateInsight(name, status);
-            item.put("insight", insight);
-
-            prediction.add(item);
+            item.put("postId", post.getId());
+            item.put("title", post.getTitle());
+            item.put("heatScore", post.getHeatScore() != null ? post.getHeatScore() : 0.0);
+            item.put("viewCount", post.getViewCount() != null ? post.getViewCount() : 0);
+            rank.add(item);
         }
-
-        return prediction;
+        return rank;
     }
 
     private String generateInsight(String topic, String status) {
-        if ("rising".equals(status)) {
-            return "话题「" + topic + "」讨论热度正在急剧上升，建议重点关注。相关讨论主要集中在近期突发事件。";
-        } else if ("stable".equals(status)) {
-            return "「" + topic + "」保持稳定讨论热度。用户群体相对固定，内容趋于高质量深度交流。";
-        } else {
-            return "「" + topic + "」热度有所回落。可能由于周期性话题结束，或讨论焦点发生转移。";
-        }
+        return switch (status) {
+            case "rising" -> "话题「" + topic + "」讨论热度正在急剧上升，建议重点关注。";
+            case "stable" -> "「" + topic + "」保持稳定讨论热度，内容趋于高质量深度交流。";
+            default -> "「" + topic + "」热度有所回落，讨论焦点可能发生转移。";
+        };
     }
-
-    /**
-     * 解析JSON字符串为Map
-     */
-    private Map<String, Object> parseJsonToMap(TrendStat stat) {
-        if (stat == null || stat.getDataJson() == null) {
-            return Collections.emptyMap();
-        }
-
-        try {
-            return objectMapper.readValue(stat.getDataJson(),
-                    new TypeReference<Map<String, Object>>() {
-                    });
-        } catch (Exception e) {
-            log.error("解析统计数据失败: {}", stat.getType(), e);
-            return Collections.emptyMap();
-        }
-    }
-
 }

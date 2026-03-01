@@ -14,10 +14,11 @@ public class CommentResp {
     private String content;
     private String parentId;
     private String replyUserId;
-    private String replyUserNickname; // New: nickname of the person being replied to
+    private String replyUserNickname; // Song：说明
     private Integer isAnonymous;
+    private List<String> roles; // Song：用户角色列表
     private Integer likeCount;
     private LocalDateTime createTime;
-    private Boolean isLiked; // New: current user liked status
+    private Boolean isLiked; // Song：说明
     private List<CommentResp> children;
 }

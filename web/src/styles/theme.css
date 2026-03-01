@@ -1,0 +1,418 @@
+/* ============================================
+   论坛主题系统 - 强制兜底样式
+   即使 Tailwind 失效也能保证基础可用性
+   ============================================ */
+
+:root {
+  /* Song：核心颜色变量 */
+  --bg: #f8fafc;
+  --panel: #ffffff;
+  --text: #0f172a;
+  --muted: #64748b;
+  --border: #e2e8f0;
+  --primary: #3b82f6;
+  --primary-hover: #2563eb;
+  --danger: #ef4444;
+  --success: #10b981;
+  --warning: #f59e0b;
+
+  /* Song：圆角 */
+  --radius: 12px;
+  --radius-sm: 8px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+
+  /* Song：阴影 */
+  --shadow-soft: 0 1px 3px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.1);
+
+  /* Song：字体大小 */
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-base: 14px;
+  --text-lg: 16px;
+  --text-xl: 18px;
+  --text-2xl: 20px;
+  --text-3xl: 24px;
+
+  /* Song：间距 */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  /* Song：布局尺寸 */
+  --topbar-height: 64px;
+  --sidebar-width: 280px;
+  --rightrail-width: 320px;
+  --max-width: 1320px;
+}
+
+/* ============================================
+   基础样式重置 - 使用 !important 强制应用
+   ============================================ */
+
+html, body {
+  margin: 0 !important;
+  padding: 0 !important;
+  box-sizing: border-box !important;
+}
+
+* Song：说明
+  box-sizing: border-box !important;
+}
+
+body {
+  background: var(--bg) !important;
+  color: var(--text) !important;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif !important;
+  font-size: var(--text-base) !important;
+  line-height: 1.6 !important;
+  min-height: 100vh !important;
+}
+
+#app {
+  min-height: 100vh !important;
+  background: var(--bg) !important;
+}
+
+/* ============================================
+   论坛核心组件样式
+   ============================================ */
+
+/* Song：面板/卡片 */
+.panel,
+.card,
+.post-card,
+.sidebar-card {
+  background: var(--panel) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius) !important;
+  padding: var(--space-4) !important;
+  box-shadow: var(--shadow-soft) !important;
+  transition: all 0.2s ease !important;
+}
+
+.panel:hover,
+.card:hover,
+.post-card:hover {
+  border-color: #cbd5e1 !important;
+  box-shadow: var(--shadow-md) !important;
+}
+
+/* Song：标题层级 */
+h1, .title-xl {
+  font-size: var(--text-3xl) !important;
+  font-weight: 900 !important;
+  color: var(--text) !important;
+  line-height: 1.2 !important;
+  margin: 0 0 var(--space-2) 0 !important;
+}
+
+h2, .title-lg {
+  font-size: var(--text-2xl) !important;
+  font-weight: 800 !important;
+  color: var(--text) !important;
+  line-height: 1.3 !important;
+  margin: 0 0 var(--space-2) 0 !important;
+}
+
+h3, .title-md {
+  font-size: var(--text-xl) !important;
+  font-weight: 700 !important;
+  color: var(--text) !important;
+  line-height: 1.4 !important;
+  margin: 0 0 var(--space-2) 0 !important;
+}
+
+h4, .title-sm {
+  font-size: var(--text-lg) !important;
+  font-weight: 600 !important;
+  color: var(--text) !important;
+  line-height: 1.4 !important;
+  margin: 0 0 var(--space-2) 0 !important;
+}
+
+/* Song：文本样式 */
+.text-muted {
+  color: var(--muted) !important;
+  font-size: var(--text-sm) !important;
+}
+
+.text-xs {
+  font-size: var(--text-xs) !important;
+}
+
+.text-sm {
+  font-size: var(--text-sm) !important;
+}
+
+/* Song：按钮 */
+.btn,
+button.primary {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: var(--space-2) !important;
+  padding: var(--space-2) var(--space-4) !important;
+  background: var(--primary) !important;
+  color: white !important;
+  border: none !important;
+  border-radius: var(--radius-sm) !important;
+  font-size: var(--text-sm) !important;
+  font-weight: 600 !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease !important;
+}
+
+.btn:hover,
+button.primary:hover {
+  background: var(--primary-hover) !important;
+  transform: translateY(-1px) !important;
+  box-shadow: var(--shadow-md) !important;
+}
+
+.btn-secondary {
+  background: var(--panel) !important;
+  color: var(--text) !important;
+  border: 1px solid var(--border) !important;
+}
+
+.btn-secondary:hover {
+  background: #f1f5f9 !important;
+  border-color: #cbd5e1 !important;
+}
+
+/* Song：链接 */
+a {
+  color: var(--primary) !important;
+  text-decoration: none !important;
+  transition: color 0.2s ease !important;
+}
+
+a:hover {
+  color: var(--primary-hover) !important;
+}
+
+/* ============================================
+   布局组件
+   ============================================ */
+
+/* Song：说明 */
+.topbar {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  height: var(--topbar-height) !important;
+  background: var(--panel) !important;
+  border-bottom: 1px solid var(--border) !important;
+  box-shadow: var(--shadow-soft) !important;
+  z-index: 50 !important;
+}
+
+/* Song：说明 */
+.sidebar {
+  width: var(--sidebar-width) !important;
+  height: calc(100vh - var(--topbar-height)) !important;
+  background: var(--bg) !important;
+  border-right: 1px solid var(--border) !important;
+  overflow-y: auto !important;
+  flex-shrink: 0 !important;
+}
+
+/* Song：说明 */
+.rightrail {
+  width: var(--rightrail-width) !important;
+  height: calc(100vh - var(--topbar-height)) !important;
+  background: var(--bg) !important;
+  border-left: 1px solid var(--border) !important;
+  overflow-y: auto !important;
+  flex-shrink: 0 !important;
+}
+
+/* Song：说明 */
+.main-content {
+  flex: 1 !important;
+  min-width: 0 !important;
+  max-width: var(--max-width) !important;
+  margin: 0 auto !important;
+  padding: var(--space-6) var(--space-4) !important;
+}
+
+/* ============================================
+   帖子卡片样式
+   ============================================ */
+
+.post-card {
+  margin-bottom: var(--space-4) !important;
+  padding: var(--space-6) !important;
+}
+
+.post-card .post-title {
+  font-size: var(--text-xl) !important;
+  font-weight: 700 !important;
+  color: var(--text) !important;
+  margin-bottom: var(--space-2) !important;
+  line-height: 1.4 !important;
+}
+
+.post-card .post-excerpt {
+  font-size: var(--text-base) !important;
+  color: var(--muted) !important;
+  line-height: 1.6 !important;
+  margin-bottom: var(--space-3) !important;
+}
+
+.post-card .post-meta {
+  display: flex !important;
+  align-items: center !important;
+  gap: var(--space-3) !important;
+  font-size: var(--text-xs) !important;
+  color: var(--muted) !important;
+  font-weight: 600 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.05em !important;
+}
+
+.post-card .post-stats {
+  display: flex !important;
+  align-items: center !important;
+  gap: var(--space-4) !important;
+  margin-top: var(--space-3) !important;
+  padding-top: var(--space-3) !important;
+  border-top: 1px solid var(--border) !important;
+}
+
+.post-card .stat-item {
+  display: flex !important;
+  align-items: center !important;
+  gap: var(--space-1) !important;
+  font-size: var(--text-sm) !important;
+  color: var(--muted) !important;
+}
+
+/* ============================================
+   侧边栏组件
+   ============================================ */
+
+.sidebar-section {
+  margin-bottom: var(--space-6) !important;
+}
+
+.sidebar-section .section-title {
+  font-size: var(--text-xs) !important;
+  font-weight: 700 !important;
+  color: var(--muted) !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.1em !important;
+  margin-bottom: var(--space-3) !important;
+  padding: 0 var(--space-4) !important;
+}
+
+.sidebar-item {
+  display: flex !important;
+  align-items: center !important;
+  gap: var(--space-3) !important;
+  padding: var(--space-3) var(--space-4) !important;
+  border-radius: var(--radius-sm) !important;
+  color: var(--text) !important;
+  font-size: var(--text-sm) !important;
+  font-weight: 500 !important;
+  transition: all 0.2s ease !important;
+  cursor: pointer !important;
+}
+
+.sidebar-item:hover {
+  background: var(--panel) !important;
+  color: var(--primary) !important;
+}
+
+.sidebar-item.active {
+  background: var(--panel) !important;
+  color: var(--primary) !important;
+  font-weight: 700 !important;
+  box-shadow: var(--shadow-soft) !important;
+}
+
+/* ============================================
+   标签样式
+   ============================================ */
+
+.tag {
+  display: inline-flex !important;
+  align-items: center !important;
+  padding: var(--space-1) var(--space-3) !important;
+  background: var(--panel) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-sm) !important;
+  font-size: var(--text-xs) !important;
+  font-weight: 700 !important;
+  color: var(--text) !important;
+  transition: all 0.2s ease !important;
+}
+
+.tag:hover {
+  background: var(--text) !important;
+  color: var(--panel) !important;
+  border-color: var(--text) !important;
+}
+
+/* ============================================
+   工具类
+   ============================================ */
+
+.truncate {
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+.line-clamp-2 {
+  display: -webkit-box !important;
+  -webkit-line-clamp: 2 !important;
+  -webkit-box-orient: vertical !important;
+  overflow: hidden !important;
+}
+
+.line-clamp-3 {
+  display: -webkit-box !important;
+  -webkit-line-clamp: 3 !important;
+  -webkit-box-orient: vertical !important;
+  overflow: hidden !important;
+}
+
+/* ============================================
+   响应式
+   ============================================ */
+
+@media (max-width: 1280px) {
+  .rightrail {
+    display: none !important;
+  }
+}
+
+@media (max-width: 1024px) {
+  .sidebar {
+    display: none !important;
+  }
+}
+
+@media (max-width: 768px) {
+  :root {
+    --space-4: 12px;
+    --space-6: 16px;
+  }
+
+  .main-content {
+    padding: var(--space-4) var(--space-2) !important;
+  }
+
+  .post-card {
+    padding: var(--space-4) !important;
+  }
+}

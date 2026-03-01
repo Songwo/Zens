@@ -4,7 +4,7 @@ import com.campus.trend.campus_pulse.common.api.ResultCode;
 import lombok.Getter;
 
 /**
- * 统一业务异常
+ * Song：统一业务异常
  */
 @Getter
 public class BusinessException extends RuntimeException {

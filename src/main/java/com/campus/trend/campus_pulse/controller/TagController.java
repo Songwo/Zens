@@ -16,8 +16,8 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 标签控制器
- * 处理标签管理、搜索、用户关注等功能
+ * Song：标签控制器
+ * Song：处理标签管理、搜索、用户关注等功能
  */
 @Slf4j
 @RestController
@@ -34,10 +34,10 @@ public class TagController {
     }
 
     /**
-     * 获取热门标签
+     * Song：获取热门标签
      *
-     * @param limit 返回数量（默认10）
-     * @return 热门标签列表
+     * Song：说明
+     * Song：说明
      */
     @GetMapping("/hot")
     public Result<?> getHotTags(@RequestParam(value = "limit", required = false, defaultValue = "10") int limit) {
@@ -46,10 +46,10 @@ public class TagController {
     }
 
     /**
-     * 搜索标签
+     * Song：搜索标签
      *
-     * @param keyword 关键词
-     * @return 匹配的标签列表
+     * Song：说明
+     * Song：说明
      */
     @GetMapping("/search")
     public Result<?> searchTags(@RequestParam("keyword") String keyword) {
@@ -58,11 +58,11 @@ public class TagController {
     }
 
     /**
-     * 切换关注标签状态
+     * Song：切换关注标签状态
      *
-     * @param tagId 标签ID
-     * @param score 兴趣权重（可选，默认3.0）
-     * @return 关注状态结果
+     * Song：说明
+     * Song：说明
+     * Song：说明
      */
     @PostMapping("/{tagId}/toggle")
     public Result<?> toggleFollow(
@@ -81,11 +81,11 @@ public class TagController {
     }
 
     /**
-     * 关注标签
+     * Song：关注标签
      *
-     * @param tagId 标签ID
-     * @param score 兴趣权重（可选，默认3.0）
-     * @return 操作结果
+     * Song：说明
+     * Song：说明
+     * Song：说明
      */
     @PostMapping("/{tagId}/follow")
     public Result<?> followTag(
@@ -104,10 +104,10 @@ public class TagController {
     }
 
     /**
-     * 取消关注标签
+     * Song：取消关注标签
      *
-     * @param tagId 标签ID
-     * @return 操作结果
+     * Song：说明
+     * Song：说明
      */
     @DeleteMapping("/{tagId}/unfollow")
     public Result<?> unfollowTag(@PathVariable Long tagId) {
@@ -124,10 +124,10 @@ public class TagController {
     }
 
     /**
-     * 检查当前用户是否关注了指定标签
+     * Song：检查当前用户是否关注了指定标签
      *
-     * @param tagId 标签ID
-     * @return 关注状态
+     * Song：说明
+     * Song：说明
      */
     @GetMapping("/{tagId}/status")
     public Result<?> checkFollowStatus(@PathVariable Long tagId) {
@@ -143,9 +143,9 @@ public class TagController {
     }
 
     /**
-     * 获取当前用户关注的标签
+     * Song：获取当前用户关注的标签
      *
-     * @return 用户关注的标签列表
+     * Song：说明
      */
     @GetMapping("/my-following")
     public Result<?> getMyFollowingTags() {
@@ -158,11 +158,11 @@ public class TagController {
     }
 
     /**
-     * 更新标签兴趣权重
+     * Song：更新标签兴趣权重
      *
-     * @param tagId 标签ID
-     * @param score 新的权重分数（1.0-5.0）
-     * @return 操作结果
+     * Song：说明
+     * Song：说明
+     * Song：说明
      */
     @PutMapping("/{tagId}/score")
     public Result<?> updateTagScore(

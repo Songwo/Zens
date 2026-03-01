@@ -6,8 +6,11 @@ import lombok.Data;
 public class UserSimpleResp {
 
     private String id;
+    private String username;
     private String nickname;
     private String avatar;
-    private String interest_tags;
+    private String interestTags;
+    private Integer level;
+    private Integer points;
 
 }

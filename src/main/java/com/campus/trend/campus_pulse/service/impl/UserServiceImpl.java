@@ -28,58 +28,64 @@ import java.util.UUID;
 public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements UserService {
 
     private final PasswordEncoder passwordEncoder;
+    private final com.campus.trend.campus_pulse.service.ContentSecurityService contentSecurityService;
 
     @Value("${Web.AvatarUrl}")
     private String url;
 
-    public UserServiceImpl(PasswordEncoder passwordEncoder) {
+    public UserServiceImpl(PasswordEncoder passwordEncoder,
+            com.campus.trend.campus_pulse.service.ContentSecurityService contentSecurityService) {
         this.passwordEncoder = passwordEncoder;
+        this.contentSecurityService = contentSecurityService;
     }
 
     @Override
     public UserDetailResp getProfile() {
-        // 1.从Security上下文中获取用户信息
+        // Song：说明
         AuthUser auUser = SecurityUtils.getAuthenticatedUser();
 
-        // 2.获取用户详细信息
+        // Song：2.获取用户详细信息
         User sysUser = searchByUsername(auUser.getUsername());
-        // 3.构造用户信息响应
+
+        String role = sysUser.getRole() != null ? sysUser.getRole() : "ROLE_USER";
+        List<String> roleCodes = List.of(role);
+
+        // Song：构造用户信息响应
         UserDetailResp proFileResponse = new UserDetailResp();
         proFileResponse.setId(sysUser.getId());
         proFileResponse.setUsername(sysUser.getUsername());
         proFileResponse.setEmail(sysUser.getEmail());
         proFileResponse.setAvatar(sysUser.getAvatar());
         proFileResponse.setNickname(sysUser.getNickname());
+        proFileResponse.setBio(sysUser.getBio());
         proFileResponse.setMajor(sysUser.getMajor());
-        proFileResponse.setGrade(sysUser.getGrade());
+        proFileResponse.setEnrollmentYear(sysUser.getEnrollmentYear() != null ? sysUser.getEnrollmentYear() : 0);
         proFileResponse.setGender(sysUser.getGender());
         proFileResponse.setSchool(sysUser.getSchool());
-        proFileResponse.setRole(sysUser.getRole());
         proFileResponse.setStatus(sysUser.getStatus());
         proFileResponse.setCreateTime(sysUser.getCreateTime());
         proFileResponse.setUpdateTime(sysUser.getUpdateTime());
         proFileResponse.setInterestTags(sysUser.getInterestTags());
-
-        // 尝试自动升级年级
-        checkAndUpgradeGrade(sysUser);
+        proFileResponse.setTwoFactorEnabled(sysUser.getTwoFactorEnabled() != null ? sysUser.getTwoFactorEnabled() : 0);
+        proFileResponse.setEmailNotifyEnabled(sysUser.getEmailNotifyEnabled() != null ? sysUser.getEmailNotifyEnabled() : 1);
+        proFileResponse.setGithubBound(sysUser.getGithubId() != null && !sysUser.getGithubId().isBlank());
+        proFileResponse.setRoles(roleCodes);
 
         return proFileResponse;
     }
 
     @Override
     public UserSimpleResp getSimpleProfile() {
-        // 1.从Security上下文中获取用户信息
+        // Song：说明
         AuthUser auUser = SecurityUtils.getAuthenticatedUser();
 
-        // 2.获取用户详细信息
+        // Song：2.获取用户详细信息
         User sysUser = searchByUsername(auUser.getUsername());
-        // 3.构造用户信息响应
+        // Song：3.构造用户信息响应
         UserSimpleResp simpleProfileResponse = new UserSimpleResp();
         simpleProfileResponse.setId(sysUser.getId());
         simpleProfileResponse.setAvatar(sysUser.getAvatar());
         simpleProfileResponse.setNickname(sysUser.getNickname());
-
-        checkAndUpgradeGrade(sysUser);
 
         return simpleProfileResponse;
     }
@@ -107,7 +113,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
 
         String avatarUrl = url + fileName;
 
-        // 获取当前登录用户并更新数据库
+        // Song：获取当前登录用户并更新数据库
         try {
             AuthUser authUser = SecurityUtils.getAuthenticatedUser();
             if (authUser != null) {
@@ -119,7 +125,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
             }
         } catch (Exception e) {
             log.warn("上传头像时更新用户信息失败: {}", e.getMessage());
-            // 不抛出异常，保证上传本身是成功的，但记录日志
+            // Song：不抛出异常，保证上传本身是成功的，但记录日志
         }
 
         return avatarUrl;
@@ -128,21 +134,21 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     @Override
     public void updateUserPassword(UserPasswordUpdateReq req) {
 
-        // 1.获取当前用户
+        // Song：1.获取当前用户
         AuthUser auUser = SecurityUtils.getAuthenticatedUser();
         User sysUser = searchByUsername(auUser.getUsername());
 
-        // 2.校验旧密码
+        // Song：2.校验旧密码
         if (!passwordEncoder.matches(req.getOldPassword(), sysUser.getPassword())) {
             throw new RuntimeException("旧密码错误");
         }
 
-        // 3.新旧密码不能一样
+        // Song：3.新旧密码不能一样
         if (passwordEncoder.matches(req.getNewPassword(), sysUser.getPassword())) {
             throw new RuntimeException("新密码不能与旧密码相同");
         }
 
-        // 4.设置新密码（加密）
+        // Song：4.设置新密码（加密）
         sysUser.setPassword(passwordEncoder.encode(req.getNewPassword()));
         sysUser.setUpdateTime(LocalDateTime.now());
         updateById(sysUser);
@@ -150,14 +156,26 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
 
     @Override
     public void updateUserDetails(UserDetailUpdateReq updateUserDetailRequest) {
-        // 1.获取当前用户
+        // Song：1.获取当前用户
         AuthUser auUser = SecurityUtils.getAuthenticatedUser();
         User sysUser = searchByUsername(auUser.getUsername());
 
-        // 2.修改信息
-        sysUser.setNickname(updateUserDetailRequest.getNickname());
+        // Song：安全检查与敏感词过滤
+        String nickname = updateUserDetailRequest.getNickname();
+        if (nickname != null && contentSecurityService.containsSensitiveWords(nickname)) {
+            nickname = contentSecurityService.filterSensitiveWords(nickname);
+        }
+
+        String bio = updateUserDetailRequest.getBio();
+        if (bio != null && contentSecurityService.containsSensitiveWords(bio)) {
+            bio = contentSecurityService.filterSensitiveWords(bio);
+        }
+
+        // Song：2.修改信息
+        sysUser.setNickname(nickname);
+        sysUser.setBio(bio);
         sysUser.setMajor(updateUserDetailRequest.getMajor());
-        sysUser.setGrade(updateUserDetailRequest.getGrade());
+        sysUser.setEnrollmentYear(updateUserDetailRequest.getEnrollmentYear());
         sysUser.setAvatar(updateUserDetailRequest.getAvatar());
         sysUser.setGender(updateUserDetailRequest.getGender());
         sysUser.setSchool(updateUserDetailRequest.getSchool());
@@ -165,7 +183,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
 
         sysUser.setUpdateTime(LocalDateTime.now());
 
-        // 3.执行修改
+        // Song：3.执行修改
         updateById(sysUser);
     }
 
@@ -175,40 +193,93 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     }
 
     @Override
-    public List<User> searchByGrade(int grade) {
-        return lambdaQuery().ge(User::getGrade, grade).list();
+    public List<User> searchByGrade(int enrollmentYear) {
+        return lambdaQuery().ge(User::getEnrollmentYear, enrollmentYear).list();
     }
 
     @Override
     public List<User> getUsers() {
-        return this.list();
+        List<User> users = this.list();
+        for (User user : users) {
+            String role = user.getRole() != null ? user.getRole() : "ROLE_USER";
+            user.setRoles(List.of(role));
+        }
+        return users;
     }
 
-    /** -----------------------内置方法------------------------- */
-    /**
-     * 检查并自动升级年级
-     * 若当前时间距离上次升级（或创建时间）超过1年，则自动+1
-     */
+    /* Song：-----------------------内置方法------------------------- */
+    // Song：=================== 角色管理 ===================
+
     @Override
-    public void checkAndUpgradeGrade(User user) {
+    public void assignRole(String userId, String roleCode) {
+        User user = getById(userId);
+        if (user == null)
+            throw new RuntimeException("用户不存在");
+        user.setRole(roleCode);
+        updateById(user);
+        log.info("为用户 {} 分配角色 {}", userId, roleCode);
+    }
 
-        LocalDateTime last = user.getLastGradeUpgrade();
-        if (last == null) {
-            last = user.getCreateTime(); // 没有升级记录则从注册时间算
-        }
-        
-        // 避免 null pointer
-        if (last == null) {
-             return;
-        }
+    // Song：=================== 资料 方法 ===================
 
-        // 判断是否满一年
-        if (last.plusYears(1).isBefore(LocalDateTime.now())) {
-            user.setGrade(user.getGrade() + 1);
-            user.setLastGradeUpgrade(LocalDateTime.now());
+    @Override
+    public void addContribution(String userId, int amount) {
+        User user = getById(userId);
+        if (user == null)
+            return;
+        user.setContributionVal((user.getContributionVal() != null ? user.getContributionVal() : 0) + amount);
+        updateById(user);
+    }
 
-            updateById(user);
-        }
+    @Override
+    public void updateLastActiveTime(String userId) {
+        User user = getById(userId);
+        if (user == null)
+            return;
+        user.setLastActiveTime(LocalDateTime.now());
+        updateById(user);
+    }
+
+    @Override
+    public void incrementLikesReceived(String userId) {
+        User user = getById(userId);
+        if (user == null)
+            return;
+        user.setTotalLikesReceived((user.getTotalLikesReceived() != null ? user.getTotalLikesReceived() : 0) + 1);
+        updateById(user);
+    }
+
+    @Override
+    public void decrementLikesReceived(String userId) {
+        User user = getById(userId);
+        if (user == null)
+            return;
+        user.setTotalLikesReceived(
+                Math.max(0, (user.getTotalLikesReceived() != null ? user.getTotalLikesReceived() : 0) - 1));
+        updateById(user);
+    }
+
+    @Override
+    public void incrementTotalPosts(String userId) {
+        User user = getById(userId);
+        if (user == null)
+            return;
+        user.setTotalPosts((user.getTotalPosts() != null ? user.getTotalPosts() : 0) + 1);
+        updateById(user);
+    }
+
+    @Override
+    public void updatePreferredSections(String userId, String sectionId) {
+        // Song：简化实现：毕设数据量小，暂不做复杂偏好计算
+    }
+
+    @Override
+    public void updateActiveRegion(String userId, String region) {
+        User user = getById(userId);
+        if (user == null)
+            return;
+        user.setActiveRegion(region);
+        updateById(user);
     }
 
 }

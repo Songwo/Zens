@@ -2,27 +2,27 @@ import api from '@/lib/api'
 import type { Result } from '@/types'
 
 export const trendsApi = {
-    // Keyword Cloud
+    // Song：说明
     getKeywordCloud() {
         return api.get<any, Result<any>>('/trend-stat/keyword-cloud')
     },
 
-    // Post Trend (Line Chart)
+    // Song：说明
     getPostTrend() {
         return api.get<any, Result<any>>('/trend-stat/post-trend')
     },
 
-    // Category Pie
-    getCategoryPie() {
-        return api.get<any, Result<any>>('/trend-stat/category-pie')
+    // Song：说明
+    getSectionPie() {
+        return api.get<any, Result<any>>('/trend-stat/section-pie')
     },
 
-    // Heat Rank
+    // Song：说明
     getHeatRank() {
         return api.get<any, Result<any[]>>('/trend-stat/heat-rank')
     },
 
-    // Prediction
+    // Song：说明
     getPrediction() {
         return api.get<any, Result<any[]>>('/trend-stat/prediction')
     }

@@ -1,15 +1,70 @@
 <!doctype html>
-<html lang="en">
+<html lang="zh-CN">
 
 <head>
   <meta charset="UTF-8" />
-  <link rel="icon" href="/favicon.ico" />
+  <link rel="icon" href="/logo.png" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Camplu</title>
+  <meta name="description" content="Zens 校园社区，聚合校园技术交流、学习资源、生活分享与社群互动。" />
+  <meta name="keywords" content="校园社区,大学生论坛,技术交流,学习资源,校园生活,Zens" />
+  <meta name="robots" content="index,follow,max-image-preview:large" />
+  <meta name="theme-color" content="#f4b400" />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="Zens - 校园社区" />
+  <meta property="og:description" content="探索知识，分享生活，结识同好。" />
+  <meta property="og:image" content="/logo.png" />
+  <meta property="og:locale" content="zh_CN" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Zens - 校园社区" />
+  <meta name="twitter:description" content="探索知识，分享生活，结识同好。" />
+  <meta name="twitter:image" content="/logo.png" />
+  <title>Zens - 校园社区</title>
+
+  <!-- 内联关键 CSS - 不使用 !important 避免覆盖 Tailwind -->
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      min-height: 100vh;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+        'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+      background-color: #f8fafc;
+      color: #0f172a;
+      font-size: 14px;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    #app {
+      min-height: 100vh;
+    }
+
+    /* 加载动画 */
+    .loading {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      font-size: 16px;
+      color: #64748b;
+    }
+  </style>
 </head>
 
 <body>
-  <div id="app"></div>
+  <div id="app">
+    <div class="loading">加载中...</div>
+  </div>
   <script type="module" src="/src/main.ts"></script>
 </body>
 

@@ -26,12 +26,16 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class CommentServiceImpl extends ServiceImpl<CommentMapper, Comment> implements CommentService {
 
+    private static final String POST_FEED_CACHE_GLOBAL_VERSION_KEY = "post:feed:version:global";
+    private static final String POST_FEED_CACHE_SECTION_VERSION_KEY_PREFIX = "post:feed:version:section:";
+
     private final PostMapper sysPostMapper;
-    private final UserProfileService userProfileService;
     private final ContentSecurityService contentSecurityService;
     private final org.springframework.data.redis.core.StringRedisTemplate stringRedisTemplate;
     private final UserService userService;
-    private final SysNotificationService notificationService;
+    private final NotificationService notificationService;
+    private final com.campus.trend.campus_pulse.service.PostEventService postEventService;
+    private final com.campus.trend.campus_pulse.service.LevelService levelService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -56,50 +60,51 @@ public class CommentServiceImpl extends ServiceImpl<CommentMapper, Comment> impl
         Post post = sysPostMapper.selectById(comment.getPostId());
         if (post != null) {
             post.setCommentCount(post.getCommentCount() + 1);
+            // Song：更新最后回复时间和最后活跃时间
+            LocalDateTime now = LocalDateTime.now();
+            post.setLastReplyAt(now);
+            post.setLastActivityAt(now);
             sysPostMapper.updateById(post);
-            
-            // Notification Logic
-            // 1. Notify Post Author
+            invalidatePostFeedCache(post.getSectionId());
+
+            // Song：推送新回复事件
+            try {
+                postEventService.pushPostReplied(post.getId(), post.getSectionId());
+            } catch (Exception e) {
+                // Song：静默失败，不影响主流程
+            }
+
+            // Song：说明
+            // Song：说明
             if (!post.getUserId().equals(userId)) {
-                 User sender = userService.getById(userId);
-                 String senderName = (request.getIsAnonymous() != null && request.getIsAnonymous() == 1) ? "匿名用户" : (sender != null ? sender.getNickname() : "有人");
-                 String senderAvatar = (request.getIsAnonymous() != null && request.getIsAnonymous() == 1) ? null : (sender != null ? sender.getAvatar() : null);
-                 
-                 notificationService.createNotification(
-                     post.getUserId(),
-                     userId,
-                     senderName,
-                     senderAvatar,
-                     "收到新评论",
-                     "评论了你的动态: " + post.getTitle(),
-                     2, // Reply
-                     post.getId()
-                 );
+                notificationService.sendCommentNotification(
+                    post.getUserId(),
+                    userId,
+                    post.getId(),
+                    content
+                );
+
+                // Song：被评论经验 +3（给帖子作者）
+                levelService.addExperience(post.getUserId(), 3, "被评论");
             }
         }
-        
-        // 2. Notify Reply Target
-        if (request.getReplyUserId() != null && !request.getReplyUserId().equals(userId) && (post == null || !request.getReplyUserId().equals(post.getUserId()))) {
-             // Only notify if not already notified as post author
-             User sender = userService.getById(userId);
-             String senderName = (request.getIsAnonymous() != null && request.getIsAnonymous() == 1) ? "匿名用户" : (sender != null ? sender.getNickname() : "有人");
-             String senderAvatar = (request.getIsAnonymous() != null && request.getIsAnonymous() == 1) ? null : (sender != null ? sender.getAvatar() : null);
 
-             notificationService.createNotification(
-                 request.getReplyUserId(),
-                 userId,
-                 senderName,
-                 senderAvatar,
-                 "收到新回复",
-                 "回复了你的评论: " + content,
-                 2, // Reply
-                 post != null ? post.getId() : null
-             );
+        // Song：说明
+        if (request.getParentId() != null && !"0".equals(request.getParentId())) {
+            Comment parentComment = this.getById(request.getParentId());
+            if (parentComment != null && !parentComment.getUserId().equals(userId)) {
+                notificationService.sendMentionNotification(
+                    parentComment.getUserId(),
+                    userId,
+                    post != null ? post.getId() : null,
+                    content
+                );
+            }
         }
 
         if (userId != null) {
-            userProfileService.addContribution(userId, 2);
-            userProfileService.updateLastActiveTime(userId);
+            userService.addContribution(userId, 2);
+            userService.updateLastActiveTime(userId);
         }
     }
 
@@ -121,6 +126,7 @@ public class CommentServiceImpl extends ServiceImpl<CommentMapper, Comment> impl
         if (post != null) {
             post.setCommentCount(Math.max(0, post.getCommentCount() - 1));
             sysPostMapper.updateById(post);
+            invalidatePostFeedCache(post.getSectionId());
         }
     }
 
@@ -158,7 +164,7 @@ public class CommentServiceImpl extends ServiceImpl<CommentMapper, Comment> impl
                 fillLikeStatus(responseList, currentUserId);
             }
         } catch (Exception ignored) {
-            // Unauthenticated user
+            // Song：说明
         }
 
         return resultPage;
@@ -178,11 +184,11 @@ public class CommentServiceImpl extends ServiceImpl<CommentMapper, Comment> impl
         if (Boolean.TRUE.equals(hasLiked)) {
             stringRedisTemplate.delete(key);
             comment.setLikeCount(Math.max(0, comment.getLikeCount() - 1));
-            userProfileService.decrementLikesReceived(comment.getUserId());
+            userService.decrementLikesReceived(comment.getUserId());
         } else {
             stringRedisTemplate.opsForValue().set(key, "1");
             comment.setLikeCount(comment.getLikeCount() + 1);
-            userProfileService.incrementLikesReceived(comment.getUserId());
+            userService.incrementLikesReceived(comment.getUserId());
         }
         updateById(comment);
     }
@@ -245,12 +251,15 @@ public class CommentServiceImpl extends ServiceImpl<CommentMapper, Comment> impl
     private void populateInfo(List<CommentResp> responses, Map<String, User> userMap) {
         for (CommentResp c : responses) {
             if (c.getIsAnonymous() != null && c.getIsAnonymous() == 1) {
-                // Keep anonymous
+                // Song：说明
             } else {
                 User user = userMap.get(c.getUserId());
                 if (user != null) {
                     c.setNickname(user.getNickname());
                     c.setUserAvatar(user.getAvatar());
+
+                    String role = user.getRole() != null ? user.getRole() : "ROLE_USER";
+                    c.setRoles(List.of(role));
                 }
             }
 
@@ -274,6 +283,17 @@ public class CommentServiceImpl extends ServiceImpl<CommentMapper, Comment> impl
             if (c.getChildren() != null) {
                 fillLikeStatus(c.getChildren(), currentUserId);
             }
+        }
+    }
+
+    private void invalidatePostFeedCache(Long sectionId) {
+        try {
+            stringRedisTemplate.opsForValue().increment(POST_FEED_CACHE_GLOBAL_VERSION_KEY);
+            if (sectionId != null) {
+                stringRedisTemplate.opsForValue().increment(POST_FEED_CACHE_SECTION_VERSION_KEY_PREFIX + sectionId);
+            }
+        } catch (Exception ignored) {
+            // Song：不影响评论主流程
         }
     }
 }

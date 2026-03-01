@@ -5,7 +5,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * 统一响应结果
+ * Song：统一响应结果
  */
 @Data
 @NoArgsConstructor
@@ -29,5 +29,13 @@ public class Result<T> {
 
     public static <T> Result<T> error(ResultCode code, String message) {
         return new Result<>(code.getCode(), message, null);
+    }
+
+    public static <T> Result<T> failed(String message) {
+        return new Result<>(ResultCode.FAILED.getCode(), message, null);
+    }
+
+    public static <T> Result<T> failed() {
+        return new Result<>(ResultCode.FAILED.getCode(), ResultCode.FAILED.getMessage(), null);
     }
 }

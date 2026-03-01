@@ -14,7 +14,7 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * 热度排行控制器 - 提供实时热度排行数据
+ * Song：热度排行控制器 - 提供实时热度排行数据
  */
 @Slf4j
 @RestController
@@ -25,12 +25,12 @@ public class HeatRankController {
     private final PostMapper postMapper;
 
     /**
-     * 获取实时热度排行 TOP 10
+     * Song：说明
      */
     @GetMapping("/top")
     public Result<?> getTopHeatRank() {
         try {
-            // 查询热度最高的10个帖子
+            // Song：查询热度最高的10个帖子
             LambdaQueryWrapper<Post> wrapper = new LambdaQueryWrapper<>();
             wrapper.eq(Post::getStatus, 1)
                     .orderByDesc(Post::getHeatScore)
@@ -39,7 +39,7 @@ public class HeatRankController {
 
             List<Post> hotPosts = postMapper.selectList(wrapper);
 
-            // 转换为前端需要的格式
+            // Song：转换为前端需要的格式
             List<Map<String, Object>> result = hotPosts.stream()
                     .map(post -> {
                         Map<String, Object> map = new HashMap<>();

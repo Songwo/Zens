@@ -2,24 +2,41 @@ package com.campus.trend.campus_pulse.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.campus.trend.campus_pulse.dto.response.ViewHistoryDto;
+import com.campus.trend.campus_pulse.entity.Post;
 import com.campus.trend.campus_pulse.entity.ViewLog;
+import com.campus.trend.campus_pulse.mapper.PostMapper;
 import com.campus.trend.campus_pulse.mapper.ViewLogMapper;
 import com.campus.trend.campus_pulse.service.ViewLogService;
+import com.campus.trend.campus_pulse.service.LevelService;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 /**
- * 浏览日志服务实现类
+ * Song：浏览日志服务实现类
  */
 @Service
 @Slf4j
 public class ViewLogServiceImpl extends ServiceImpl<ViewLogMapper, ViewLog>
         implements ViewLogService {
+
+    private final LevelService levelService;
+    private final StringRedisTemplate stringRedisTemplate;
+    private final PostMapper postMapper;
+
+    public ViewLogServiceImpl(LevelService levelService, StringRedisTemplate stringRedisTemplate, PostMapper postMapper) {
+        this.levelService = levelService;
+        this.stringRedisTemplate = stringRedisTemplate;
+        this.postMapper = postMapper;
+    }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -32,7 +49,26 @@ public class ViewLogServiceImpl extends ServiceImpl<ViewLogMapper, ViewLog>
                 .setCreateTime(LocalDateTime.now());
 
         save(viewLog);
+        // Song：浏览量累计放在埋点接口，避免阻塞帖子详情查询
+        postMapper.update(null, new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<Post>()
+                .eq(Post::getId, postId)
+                .setSql("view_count = view_count + 1"));
         log.debug("记录浏览: 帖子[{}], 用户[{}]", postId, userId != null ? userId : "游客");
+
+        // Song：每日浏览经验 +1（上限5次/天）
+        if (userId != null) {
+            try {
+                String viewExpKey = "exp:view:" + userId + ":" + LocalDate.now();
+                String countStr = stringRedisTemplate.opsForValue().get(viewExpKey);
+                int count = countStr != null ? Integer.parseInt(countStr) : 0;
+                if (count < 5) {
+                    levelService.addExperience(userId, 1, "每日浏览帖子");
+                    stringRedisTemplate.opsForValue().set(viewExpKey, String.valueOf(count + 1), 1, TimeUnit.DAYS);
+                }
+            } catch (Exception e) {
+                log.warn("每日浏览经验发放失败: {}", e.getMessage());
+            }
+        }
     }
 
     @Override
@@ -55,18 +91,18 @@ public class ViewLogServiceImpl extends ServiceImpl<ViewLogMapper, ViewLog>
 
     @Override
     public List<Map<String, Object>> getHotPostsByViews(LocalDateTime startTime, int limit) {
-        // 使用原生查询或者group by统计
+        // Song：说明
         List<ViewLog> logs = lambdaQuery()
                 .ge(startTime != null, ViewLog::getCreateTime, startTime)
                 .list();
 
-        // 按postId分组统计
+        // Song：说明
         Map<String, Long> postViewCounts = logs.stream()
                 .collect(Collectors.groupingBy(
                         ViewLog::getPostId,
                         Collectors.counting()));
 
-        // 排序并取top N
+        // Song：说明
         return postViewCounts.entrySet().stream()
                 .sorted(Map.Entry.<String, Long>comparingByValue().reversed())
                 .limit(limit)
@@ -80,12 +116,27 @@ public class ViewLogServiceImpl extends ServiceImpl<ViewLogMapper, ViewLog>
     }
 
     @Override
-    public List<ViewLog> getUserViewHistory(String userId, int limit) {
-        return lambdaQuery()
-                .eq(ViewLog::getUserId, userId)
-                .orderByDesc(ViewLog::getCreateTime)
-                .last("LIMIT " + limit)
-                .list();
+    public List<ViewHistoryDto> getUserViewHistory(String userId, int limit) {
+        return baseMapper.selectUserViewHistory(userId, limit);
+    }
+
+    @Override
+    public Map<String, Object> getUserViewHistoryPaged(String userId, int page, int pageSize) {
+        int safePage = Math.max(page, 1);
+        int safePageSize = Math.min(Math.max(pageSize, 1), 100);
+        int offset = (safePage - 1) * safePageSize;
+
+        List<ViewHistoryDto> records = baseMapper.selectUserViewHistoryPaged(userId, offset, safePageSize);
+        long total = baseMapper.countDistinctViewedPosts(userId);
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("records", records);
+        result.put("total", total);
+        result.put("current", safePage);
+        result.put("size", safePageSize);
+        result.put("pages", total == 0 ? 0 : (long) Math.ceil((double) total / safePageSize));
+
+        return result;
     }
 
     @Override
@@ -95,7 +146,7 @@ public class ViewLogServiceImpl extends ServiceImpl<ViewLogMapper, ViewLog>
                 .le(endDate != null, ViewLog::getCreateTime, endDate)
                 .list();
 
-        // 按日期分组统计
+        // Song：按日期分组统计
         Map<String, Long> dailyStats = logs.stream()
                 .collect(Collectors.groupingBy(
                         log -> log.getCreateTime().toLocalDate().toString(),

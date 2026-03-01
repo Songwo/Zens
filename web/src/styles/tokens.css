@@ -1,0 +1,77 @@
+/* Song：说明 */
+
+/* Song：说明 */
+:root {
+    --cp-bg-page: #F3F4F6;
+    --cp-bg-surface: #F9FAFB;
+    --cp-bg-card: #FFFFFF;
+    --cp-bg-elevated: #FFFFFF;
+    --cp-bg-dock: rgba(255, 255, 255, 0.85);
+
+    --cp-text: #1F2937;
+    --cp-text-muted: #6B7280;
+
+    --cp-border: #E5E7EB;
+    --cp-divider: #F3F4F6;
+
+    --cp-hover: rgba(31, 41, 55, 0.05);
+    --cp-hover-strong: rgba(244, 180, 0, 0.08);
+    /* Song：说明 */
+
+    --cp-primary: #F4B400;
+    /* Song：说明 */
+    --cp-primary-light: #f7ca4d;
+    --cp-primary-dark: #c39000;
+
+    --cp-transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+}
+
+/* Song：说明 */
+:root[data-theme="teal"] {
+    --cp-primary: #2CB1A6;
+    --cp-primary-light: #56c1b8;
+    --cp-primary-dark: #238e85;
+    --cp-hover: rgba(44, 177, 166, 0.08);
+}
+
+:root[data-theme="blue"] {
+    --cp-primary: #3B82F6;
+    --cp-primary-light: #60a5fa;
+    --cp-primary-dark: #2563eb;
+    --cp-hover: rgba(59, 130, 246, 0.08);
+}
+
+/* Song：说明 */
+:root[data-mode="dark"] {
+    --cp-bg-page: #0B0D10;
+    --cp-bg-surface: #101319;
+    --cp-bg-card: #151A22;
+    --cp-bg-elevated: #1A2130;
+    --cp-bg-dock: rgba(26, 33, 48, 0.85);
+
+    --cp-text: #E5E7EB;
+    --cp-text-muted: #9CA3AF;
+
+    --cp-border: #263041;
+    --cp-divider: #1F2937;
+
+    /* Song：说明 */
+    --cp-hover: #1C2432;
+    --cp-hover-strong: rgba(244, 180, 0, 0.15);
+}
+
+:root[data-mode="dark"][data-theme="teal"] {
+    --cp-hover: rgba(44, 177, 166, 0.15);
+}
+
+:root[data-mode="dark"][data-theme="blue"] {
+    --cp-hover: rgba(59, 130, 246, 0.15);
+}
+
+/* Song：说明 */
+html,
+body {
+    background-color: var(--cp-bg-page);
+    color: var(--cp-text);
+    transition: var(--cp-transition);
+}

@@ -12,19 +12,19 @@ import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 /**
- * 内容安全服务实现类
- * 使用 DFA (Deterministic Finite Automaton) 算法实现高性能敏感词匹配
+ * Song：内容安全服务实现类
+ * Song：说明
  */
 @Service
 @Slf4j
 public class ContentSecurityServiceImpl implements ContentSecurityService {
 
-    // 敏感词树根节点
+    // Song：敏感词树根节点
     private Map<Object, Object> sensitiveWordMap;
 
-    // 最小匹配规则 (匹配到词就认为是敏感词，如：中国、中国人，匹配到中国返回)
+    // Song：最小匹配规则 (匹配到词就认为是敏感词，如：中国、中国人，匹配到中国返回)
     public static final int minMatchTYpe = 1;
-    // 最大匹配规则 (如：中国、中国人，匹配到中国人返回)
+    // Song：最大匹配规则 (如：中国、中国人，匹配到中国人返回)
     public static final int maxMatchType = 2;
 
     @PostConstruct
@@ -80,8 +80,8 @@ public class ContentSecurityServiceImpl implements ContentSecurityService {
     @Override
     public void reloadSensitiveWords() {
         Set<String> words = loadSensitiveWordsFromFile();
-        // 也可以从数据库加载
-        // words.addAll(loadFromDatabase());
+        // Song：也可以从数据库加载
+        // Song：说明
 
         Map<Object, Object> newMap = new HashMap<>(words.size());
         for (String word : words) {
@@ -92,7 +92,7 @@ public class ContentSecurityServiceImpl implements ContentSecurityService {
     }
 
     /**
-     * 从文件加载默认敏感词
+     * Song：从文件加载默认敏感词
      */
     private Set<String> loadSensitiveWordsFromFile() {
         Set<String> words = new HashSet<>();
@@ -100,7 +100,7 @@ public class ContentSecurityServiceImpl implements ContentSecurityService {
             ClassPathResource resource = new ClassPathResource("analysis/sensitive_words.txt");
             if (!resource.exists()) {
                 log.warn("敏感词字典文件 analysis/sensitive_words.txt 不存在");
-                // 添加一些默认测试词
+                // Song：添加一些默认测试词
                 words.add("笨蛋");
                 words.add("傻瓜");
                 words.add("作弊");
@@ -123,7 +123,7 @@ public class ContentSecurityServiceImpl implements ContentSecurityService {
     }
 
     /**
-     * 将敏感词添加到指定Map中 (DFA构建)
+     * Song：说明
      */
     private void addWordToMap(String word, Map<Object, Object> map) {
         Map<Object, Object> nowMap = map;
@@ -132,10 +132,10 @@ public class ContentSecurityServiceImpl implements ContentSecurityService {
             Object wordMap = nowMap.get(keyChar);
 
             if (wordMap != null) {
-                // 如果存在，直接将nowMap指向该节点
+                // Song：说明
                 nowMap = (Map<Object, Object>) wordMap;
             } else {
-                // 不存在，则构建一个map，同时将isEnd设置为0，因为不是最后一个
+                // Song：说明
                 Map<Object, Object> newWorMap = new HashMap<>();
                 newWorMap.put("isEnd", "0");
                 nowMap.put(keyChar, newWorMap);
@@ -143,7 +143,7 @@ public class ContentSecurityServiceImpl implements ContentSecurityService {
             }
 
             if (i == word.length() - 1) {
-                // 最后一个
+                // Song：最后一个
                 nowMap.put("isEnd", "1");
             }
         }
@@ -157,7 +157,7 @@ public class ContentSecurityServiceImpl implements ContentSecurityService {
     }
 
     /**
-     * 获取文字中的敏感词
+     * Song：获取文字中的敏感词
      */
     private Set<String> getSensitiveWords(String text, int matchType) {
         Set<String> sensitiveWordList = new HashSet<>();
@@ -168,9 +168,9 @@ public class ContentSecurityServiceImpl implements ContentSecurityService {
         for (int i = 0; i < text.length(); i++) {
             int length = checkSensitiveWord(text, i, matchType);
             if (length > 0) {
-                // 存在,加入list中
+                // Song：说明
                 sensitiveWordList.add(text.substring(i, i + length));
-                // 减1的原因，因为for会自增
+                // Song：说明
                 i = i + length - 1;
             }
         }
@@ -178,7 +178,7 @@ public class ContentSecurityServiceImpl implements ContentSecurityService {
     }
 
     /**
-     * 检查文字中是否包含敏感字符
+     * Song：检查文字中是否包含敏感字符
      */
     private int checkSensitiveWord(String text, int beginIndex, int matchType) {
         boolean flag = false;
@@ -188,25 +188,25 @@ public class ContentSecurityServiceImpl implements ContentSecurityService {
 
         for (int i = beginIndex; i < text.length(); i++) {
             word = text.charAt(i);
-            // 获取指定key
+            // Song：说明
             nowMap = (Map<Object, Object>) nowMap.get(word);
             if (nowMap != null) {
-                // 存在，则判断是否为最后一个
+                // Song：存在，则判断是否为最后一个
                 matchFlag++;
                 if ("1".equals(nowMap.get("isEnd"))) {
-                    // 如果为最后一个匹配规则,结束循环，返回匹配标识数
+                    // Song：如果为最后一个匹配规则,结束循环，返回匹配标识数
                     flag = true;
                     if (minMatchTYpe == matchType) {
                         break;
                     }
                 }
             } else {
-                // 不存在，直接返回
+                // Song：不存在，直接返回
                 break;
             }
         }
         if (matchType == maxMatchType && matchFlag < 2 && !flag) {
-            // 长度必须大于等于1，为词
+            // Song：长度必须大于等于1，为词
             matchFlag = 0;
         }
         if (!flag) {

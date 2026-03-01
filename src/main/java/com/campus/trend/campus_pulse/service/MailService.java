@@ -2,36 +2,36 @@ package com.campus.trend.campus_pulse.service;
 
 public interface MailService {
     /**
-     * 发送简单文本邮件
+     * Song：发送简单文本邮件
      * 
-     * @param to      接收者邮箱
-     * @param subject 主题
-     * @param content 内容
+     * Song：说明
+     * Song：说明
+     * Song：说明
      */
     void sendSimpleMail(String to, String subject, String content);
 
     /**
-     * 发送HTML格式邮件
+     * Song：说明
      * 
-     * @param to          接收者邮箱
-     * @param subject     主题
-     * @param htmlContent HTML内容
+     * Song：说明
+     * Song：说明
+     * Song：说明
      */
     void sendHtmlMail(String to, String subject, String htmlContent);
 
     /**
-     * 发送验证码邮件（注册用）
+     * Song：发送验证码邮件（注册用）
      * 
-     * @param to   接收者邮箱
-     * @param code 验证码
+     * Song：说明
+     * Song：说明
      */
     void sendVerificationCode(String to, String code);
 
     /**
-     * 发送登录验证码邮件
+     * Song：发送登录验证码邮件
      * 
-     * @param to   接收者邮箱
-     * @param code 验证码
+     * Song：说明
+     * Song：说明
      */
     void sendLoginCode(String to, String code);
 }

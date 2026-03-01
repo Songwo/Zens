@@ -1,34 +1,50 @@
 package com.campus.trend.campus_pulse.dto.request;
 
 import lombok.Data;
+import java.time.LocalDateTime;
 
 @Data
 public class PostSearchReq {
 
-    // 分类ID
-    private String categoryID;
+    // Song：说明
+    private String userId;
 
-    // 用户ID
-    private String userID;
-
-    // 搜索关键词
+    // Song：搜索关键词
     private String keyword;
 
-    // 状态
+    // Song：状态
     private Integer status;
 
     private Integer page = 1;
     private Integer pageSize = 10;
 
-    // 排序方式: "new" (默认) 或 "hot"
+    // Song：说明
     private String orderBy;
 
-    // 标签筛选
+    // Song：说明
+    private String timeRange;
+
+    // Song：是否只看精华贴
+    private Boolean isFeatured;
+
+    // Song：说明
+    private Long sectionId;
+
+    // Song：标签筛选
     private String tag;
 
-    // 筛选我点赞的 (User ID)
+    // Song：说明
     private String likedBy;
 
-    // 筛选我收藏的 (User ID)
+    // Song：说明
     private String collectedBy;
+
+    // Song：是否只看置顶帖
+    private Boolean pinnedOnly;
+
+    // Song：说明
+    private LocalDateTime cursor;
+
+    // Song：说明
+    private String cursorId;
 }

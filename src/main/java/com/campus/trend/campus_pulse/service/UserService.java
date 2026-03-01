@@ -28,6 +28,15 @@ public interface UserService extends IService<User> {
 
     List<User> searchByGrade(int grade);
 
-    // Warning ：内置方法禁止本服务引入自己的方法 ！！！
-    void checkAndUpgradeGrade(User user);
+    // =================== 角色管理 ===================
+    void assignRole(String userId, String roleCode);
+
+    // =================== Profile 方法 (原 UserProfileService) ===================
+    void addContribution(String userId, int amount);
+    void updateLastActiveTime(String userId);
+    void incrementLikesReceived(String userId);
+    void decrementLikesReceived(String userId);
+    void incrementTotalPosts(String userId);
+    void updatePreferredSections(String userId, String sectionId);
+    void updateActiveRegion(String userId, String region);
 }

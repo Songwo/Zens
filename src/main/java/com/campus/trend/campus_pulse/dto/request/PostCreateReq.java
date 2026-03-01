@@ -1,6 +1,7 @@
 package com.campus.trend.campus_pulse.dto.request;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
 
@@ -8,43 +9,43 @@ import lombok.Getter;
 public class PostCreateReq {
 
     /**
-     * 分类 ID
+     * Song：说明
      */
-    @NotBlank(message = "文章分类ID不允许为空")
-    private String categoryID;
+    @NotNull(message = "板块ID不允许为空")
+    private Long sectionId;
 
     /**
-     * 文章题目
+     * Song：文章题目
      */
     @NotBlank(message = "文章题目不允许为空")
     @Size(min = 5, max = 100, message = "文章题目长度需在5-100字符之间")
     private String title;
 
     /**
-     * 文章内容
+     * Song：文章内容
      */
     @NotBlank(message = "文章内容不允许为空")
     @Size(min = 30, message = "文章内容最小为30字符")
     private String content;
 
     /**
-     * 文章引用图片
+     * Song：文章引用图片
      */
     private String images;
 
     /**
-     * 封面图
+     * Song：封面图
      */
     private String coverImage;
 
     /**
-     * 文章标签
+     * Song：文章标签
      */
     @NotBlank(message = "标签不允许为空")
     private String tags;
 
     /**
-     * 是否匿名 1:是 0:否
+     * Song：是否匿名 1:是 0:否
      */
     private Integer isAnonymous;
 

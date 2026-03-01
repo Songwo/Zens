@@ -5,33 +5,35 @@ export interface Result<T = any> {
 }
 
 export interface LoginRequest {
-    username: string
-    password: string
-    uuid: string
-    code: string
+    loginType: 'password' | 'otp'
+    account?: string
+    password?: string
+    email?: string
+    code?: string
     rememberMe?: boolean
+    twoFactorCode?: string
 }
 
 export interface RegisterRequest {
-    username: string // student ID
+    username: string // Song：学号
     password: string
     email: string
-    code: string // email verification code
+    code: string // Song：邮箱验证码
     nickname?: string
     avatar?: string
     major?: string
-    grade?: number
+    enrollmentYear?: number
     school?: string
-    gender?: number // 1: male, 2: female
+    gender?: number // Song：说明
 }
 
 export interface CreatePostRequest {
-  title: string
-  content: string
-  categoryID: string
-  coverImage?: string
-  tags: string
-  status: number
+    title: string
+    content: string
+    sectionId: number
+    coverImage?: string
+    tags: string
+    status: number
 }
 
 export interface UserInfo {
@@ -43,6 +45,8 @@ export interface UserInfo {
     role: number
     school?: string
     major?: string
+    enrollmentYear?: number
+    interestTags?: string
 }
 
 export const ResultCode = {
@@ -51,15 +55,35 @@ export const ResultCode = {
 } as const
 
 export interface LoginResponse {
-    accessToken: string
-    refreshToken: string
+    accessToken?: string
+    refreshToken?: string
+    twoFactorRequired?: boolean
+    twoFactorTicket?: string
 }
 
+
+export interface PostSearchRequest {
+    page?: number
+    pageSize?: number
+    keyword?: string
+    sectionId?: number
+    status?: number
+    orderBy?: 'new' | 'hot' | string
+    timeRange?: 'TODAY' | 'WEEK' | 'MONTH' | string
+    isFeatured?: boolean
+    tag?: string
+    userId?: string
+    likedBy?: string
+    collectedBy?: string
+    pinnedOnly?: boolean
+    cursor?: string
+    cursorId?: string
+}
 
 export interface Post {
     id: string
     userId: string
-    categoryId: string
+    sectionId: number
     title: string
     content: string
     coverImage?: string
@@ -76,16 +100,26 @@ export interface Post {
 
     createTime: string
     updateTime: string
+    lastReplyAt?: string
+    lastActivityAt?: string
 
     isLiked: boolean
     isCollected: boolean
+    isPinned?: number // Song：已废弃
+    globalPin?: number
+    categoryPin?: number
+    pinOrder?: number
+    pinExpireAt?: string
+    isFeatured?: number
+    heatScore?: number
 
     authorName: string
     authorAvatar?: string
+    authorRoles?: string[]
 
     sentimentScore?: number
     sentimentLabel?: string
-    categoryName?: string
+    sectionName?: string
     trendLevel?: string
     summary?: string
 }
@@ -96,6 +130,7 @@ export interface Comment {
     content: string
     userId: string
     nickname: string
+    roles?: string[]
     userAvatar?: string
     likeCount: number
     createTime: string
@@ -117,15 +152,3 @@ export interface RecommendPost extends Post {
     recommendReason: string
 }
 
-export interface PostSearchRequest {
-    categoryID?: string
-    userID?: string
-    keyword?: string
-    status?: number
-    page: number
-    pageSize: number
-    orderBy?: 'new' | 'hot'
-    tag?: string
-    likedBy?: string
-    collectedBy?: string
-}
