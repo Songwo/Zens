@@ -47,10 +47,10 @@ spring:
   # 163邮箱: smtp.163.com:465 或 smtp.163.com:25
   # Gmail: smtp.gmail.com:587
   mail:
-    host: ${MAIL_HOST:smtp.163.com}         # SMTP 服务器地址
+    host: ${MAIL_HOST:smtp.example.com}         # SMTP 服务器地址
     port: ${MAIL_PORT:465}                  # 端口 (587=TLS, 465=SSL)
-    username: ${MAIL_USERNAME:zhaoqsnyah@163.com}   # 发件人邮箱
-    password: ${MAIL_PASSWORD:TMSwqvRFGeSvSNGD}      # 授权码
+    username: ${MAIL_USERNAME:example@example.com}   # 发件人邮箱
+    password: ${MAIL_PASSWORD:example}      # 授权码
     protocol: smtp
     default-encoding: UTF-8
     properties:
@@ -104,7 +104,7 @@ logging:
 
 # 5.JWT 配置
 jwt:
-  secret: ${JWT_SECRET:RwE7qC8ce3rE5eVTPVm1ZJNmD5JyAuDN1Xupe16p6gueoN9Ye5BYMReMm8ZMcv0u}
+  secret: ${JWT_SECRET:example}
   access-expire: 3600000        # 1 小时
   refresh-expire: 604800000     # 7 天
   remember-access-multiplier: 7
@@ -118,7 +118,7 @@ Web:
 ai:
   deepseek:
     api-url: ${DEEPSEEK_API_URL:https://api.deepseek.com}
-    api-key: ${DEEPSEEK_API_KEY:sk-0023d54a9f204920bd02602ca879e94b}
+    api-key: ${DEEPSEEK_API_KEY:sk-example}
     model: ${DEEPSEEK_MODEL:deepseek-chat}
 
 # 8. 推荐权重参数（可配置化）
