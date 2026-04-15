@@ -1,6 +1,8 @@
 package com.campus.trend.campus_pulse.controller;
 
 import com.campus.trend.campus_pulse.common.api.Result;
+import com.campus.trend.campus_pulse.common.api.ResultCode;
+import com.campus.trend.campus_pulse.common.exception.BusinessException;
 import com.campus.trend.campus_pulse.dto.response.ViewHistoryDto;
 import com.campus.trend.campus_pulse.service.ViewLogService;
 import com.campus.trend.campus_pulse.utils.PermissionUtils;
@@ -122,7 +124,7 @@ public class ViewLogController {
     public Result<?> cleanOldLogs(@RequestParam(defaultValue = "90") int daysToKeep) {
         String currentUserId = SecurityUtils.getCurrentUserId();
         if (currentUserId == null || !PermissionUtils.isUserAdmin(currentUserId)) {
-            throw new RuntimeException("仅管理员可以清理浏览日志");
+            throw new BusinessException(ResultCode.NO_PERMISSION, "仅管理员可以清理浏览日志");
         }
         int safeDays = Math.min(Math.max(daysToKeep, 7), 3650);
         long deletedCount = viewLogService.cleanOldLogs(safeDays);
@@ -132,11 +134,11 @@ public class ViewLogController {
     private void validateHistoryAccess(String targetUserId) {
         String currentUserId = SecurityUtils.getCurrentUserId();
         if (currentUserId == null) {
-            throw new RuntimeException("未登录，无法访问浏览历史");
+            throw new BusinessException(ResultCode.NO_PERMISSION, "未登录，无法访问浏览历史");
         }
 
         if (!currentUserId.equals(targetUserId) && !PermissionUtils.isUserAdmin(currentUserId)) {
-            throw new RuntimeException("无权查看其他用户浏览历史");
+            throw new BusinessException(ResultCode.NO_PERMISSION, "无权查看其他用户浏览历史");
         }
     }
 

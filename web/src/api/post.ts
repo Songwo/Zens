@@ -1,10 +1,15 @@
+import type { AxiosRequestConfig } from 'axios'
 import api from '@/lib/api'
-import type { Post, PostSearchRequest, Result, CreatePostRequest } from '@/types'
+import type { Post, PostSearchRequest, Result, CreatePostRequest, SaveDraftRequest } from '@/types'
 
 export const postApi = {
     // Song：说明
-    searchList(data: PostSearchRequest) {
-        return api.post<any, Result<{ records: Post[]; total: number; pages: number }>>('/post/search-lists', data)
+    searchList(data: PostSearchRequest, config?: AxiosRequestConfig) {
+        return api.post<any, Result<{ records: Post[]; total: number; pages: number }>>('/post/search-lists', data, config)
+    },
+
+    getModerationList(data: PostSearchRequest, config?: AxiosRequestConfig) {
+        return api.post<any, Result<{ records: Post[]; total: number; pages: number }>>('/post/moderation-list', data, config)
     },
 
     // Song：说明
@@ -17,8 +22,12 @@ export const postApi = {
         return api.post<any, Result<void>>('/post/create-post', data)
     },
 
+    saveDraft(data: SaveDraftRequest) {
+        return api.post<any, Result<Post>>('/post/save-draft', data)
+    },
+
     // Song：说明
-    update(data: { postId: string; title?: string; content?: string; tags?: string; sectionId?: number; coverImage?: string }) {
+    update(data: { postId: string; title?: string; content?: string; tags?: string; sectionId?: number; coverImage?: string; status?: number; publish?: boolean }) {
         return api.post<any, Result<void>>('/post/update-post', data)
     },
 
@@ -55,6 +64,14 @@ export const postApi = {
     // Song：说明
     feature(id: string) {
         return api.post<any, Result<void>>(`/post/${id}/feature`)
+    },
+
+    reject(id: string, reason: string) {
+        return api.post<any, Result<void>>(`/post/${id}/reject`, { reason })
+    },
+
+    approve(id: string) {
+        return api.post<any, Result<void>>(`/post/${id}/approve`)
     },
 
     // Song：提取标签 (智能)

@@ -1,4 +1,5 @@
 import api from '@/lib/api'
+import { UPLOAD_REQUEST_TIMEOUT_MS } from '@/constants/upload'
 import type { Result } from '@/types'
 
 export interface UserProfile {
@@ -7,6 +8,7 @@ export interface UserProfile {
     nickname: string
     avatar: string
     email: string
+    level?: number
     bio?: string
     school: string
     major: string
@@ -19,6 +21,11 @@ export interface UserProfile {
     twoFactorEnabled?: number
     emailNotifyEnabled?: number
     githubBound?: boolean
+    profileCardTheme?: string
+    quickCardTheme?: string
+    profileCardBgUrl?: string
+    quickCardBgUrl?: string
+    moderatedSectionIds?: number[]
 }
 
 export interface SupportContact {
@@ -26,6 +33,25 @@ export interface SupportContact {
     username: string
     nickname: string
     avatar?: string
+}
+
+export interface UserPublicProfile {
+    id: string
+    username: string
+    nickname: string
+    avatar?: string
+    bio?: string
+    school?: string
+    major?: string
+    level?: number
+    roles?: string[]
+    profileCardTheme?: string
+    quickCardTheme?: string
+    profileCardBgUrl?: string
+    quickCardBgUrl?: string
+    postCount: number
+    followingCount: number
+    followerCount: number
 }
 
 export const userApi = {
@@ -37,7 +63,8 @@ export const userApi = {
         return api.put<any, Result<string>>('/user/avatar', formData, {
             headers: {
                 'Content-Type': 'multipart/form-data'
-            }
+            },
+            timeout: UPLOAD_REQUEST_TIMEOUT_MS
         })
     },
     updateUserDetails: (data: any) => api.post('/user/update-udetail', data),
@@ -58,6 +85,12 @@ export const userApi = {
      */
     getSupportContact: () => api.get<any, Result<SupportContact>>('/user/support-contact'),
 
+    getPublicProfile: (userId: string) => api.get<any, Result<UserPublicProfile>>(`/user/public/${userId}`),
+
+    // @mention 用户搜索
+    searchUsers: (keyword: string) =>
+        api.get<any, Result<Array<{ id: string; username: string; nickname: string; avatar: string }>>>('/user/search', { params: { keyword } }),
+
     // Song：=================== 管理员接口 ===================
 
     /* Song：说明 */
@@ -70,5 +103,9 @@ export const userApi = {
     unban: (id: string) => api.post<any, Result<void>>(`/user/unban/${id}`),
 
     /* Song：说明 */
-    delete: (id: string) => api.delete<any, Result<void>>(`/user/${id}`)
+    delete: (id: string) => api.delete<any, Result<void>>(`/user/${id}`),
+
+    /* 设置用户角色 (管理员) */
+    assignRole: (id: string, roleCode: string) =>
+        api.post<any, Result<void>>(`/user/${id}/role`, null, { params: { roleCode } })
 }

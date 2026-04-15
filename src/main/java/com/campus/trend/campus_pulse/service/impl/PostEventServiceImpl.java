@@ -50,14 +50,22 @@ public class PostEventServiceImpl implements PostEventService {
 
     @Override
     public void pushPostReplied(String postId, Long sectionId) {
+        pushPostReplied(postId, sectionId, null);
+    }
+
+    @Override
+    public void pushPostReplied(String postId, Long sectionId, Integer commentCount) {
         try {
+            PostEvent.UpdateData data = commentCount != null
+                ? PostEvent.UpdateData.builder().commentCount(commentCount).build()
+                : null;
             PostEvent event = PostEvent.builder()
                 .type(PostEvent.EventType.POST_REPLIED)
                 .postId(postId)
                 .sectionId(sectionId)
+                .data(data)
                 .timestamp(LocalDateTime.now())
                 .build();
-
             pushEvent(event);
         } catch (Exception e) {
             log.error("推送新回复事件失败: postId={}", postId, e);
@@ -65,10 +73,11 @@ public class PostEventServiceImpl implements PostEventService {
     }
 
     @Override
-    public void pushPostViewed(String postId, Long sectionId, Integer viewCount) {
+    public void pushPostViewed(String postId, Long sectionId, Integer viewCount, LocalDateTime lastActivityAt) {
         try {
             PostEvent.UpdateData data = PostEvent.UpdateData.builder()
                 .viewCount(viewCount)
+                .lastActivityAt(lastActivityAt)
                 .build();
 
             PostEvent event = PostEvent.builder()

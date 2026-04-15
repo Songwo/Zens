@@ -109,8 +109,8 @@ onMounted(() => {
 <template>
   <div class="dashboard-page" v-loading="loading">
     <div class="page-header">
-      <h1 class="title">数据看板</h1>
-      <p class="subtitle">站点运营数据概览</p>
+      <h1 class="title">社区智能分析看板</h1>
+      <p class="subtitle">基于用户活跃、内容发布与互动行为的数据决策总览</p>
     </div>
 
     <!-- Stats Matrix -->
@@ -123,7 +123,7 @@ onMounted(() => {
           </div>
           <div class="stat-bottom">
             <div class="stat-value">{{ stats.totalUsers }}</div>
-            <div class="stat-label">总用户数</div>
+            <div class="stat-label">用户规模</div>
           </div>
         </el-card>
       </el-col>
@@ -136,7 +136,7 @@ onMounted(() => {
           </div>
           <div class="stat-bottom">
             <div class="stat-value">{{ stats.totalPosts }}</div>
-            <div class="stat-label">总帖子数</div>
+            <div class="stat-label">内容规模</div>
           </div>
         </el-card>
       </el-col>
@@ -149,7 +149,7 @@ onMounted(() => {
           </div>
           <div class="stat-bottom">
             <div class="stat-value">{{ stats.totalComments }}</div>
-            <div class="stat-label">总评论数</div>
+            <div class="stat-label">互动总量</div>
           </div>
         </el-card>
       </el-col>
@@ -161,7 +161,7 @@ onMounted(() => {
           </div>
           <div class="stat-bottom">
             <div class="stat-value">{{ stats.todayPosts }}</div>
-            <div class="stat-label">今日发帖</div>
+            <div class="stat-label">今日新增内容</div>
           </div>
         </el-card>
       </el-col>
@@ -174,7 +174,7 @@ onMounted(() => {
           <template #header>
             <div class="chart-header">
               <el-icon><TrendCharts /></el-icon>
-              <span>用户增长趋势</span>
+              <span>用户增长趋势分析</span>
             </div>
           </template>
           <div class="chart-box">
@@ -189,7 +189,7 @@ onMounted(() => {
           <template #header>
             <div class="chart-header">
               <el-icon><Document /></el-icon>
-              <span>内容发布趋势</span>
+              <span>内容发布趋势分析</span>
             </div>
           </template>
           <div class="chart-box">

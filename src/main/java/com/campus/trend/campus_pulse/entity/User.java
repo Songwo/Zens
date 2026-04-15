@@ -96,6 +96,10 @@ public class User implements Serializable {
     private Integer twoFactorEnabled;
     private String twoFactorSecret;
     private Integer emailNotifyEnabled;
+    private String profileCardTheme;
+    private String quickCardTheme;
+    private String profileCardBgUrl;
+    private String quickCardBgUrl;
 
     private LocalDateTime createTime;
     private LocalDateTime updateTime;

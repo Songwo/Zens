@@ -1,34 +1,51 @@
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { 
-  PieChart, 
-  Document, 
-  User, 
-  Flag, 
+import {
+  PieChart,
+  Document,
+  User,
+  Flag,
   SwitchButton,
   Back,
   Menu as IconMenu,
   Timer,
   Medal,
-  SetUp
+  SetUp,
+  Ticket
 } from '@element-plus/icons-vue'
 import { useUserStore } from '@/store/user'
+import { hasAdminRole, hasModeratorCapability } from '@/utils/sessionProfile'
 
 const router = useRouter()
 const route = useRoute()
 const userStore = useUserStore()
 
-const menuItems = [
-  { id: 'dashboard', name: '数据看板', icon: PieChart, path: '/admin/dashboard' },
-  { id: 'posts', name: '内容管理', icon: Document, path: '/admin/posts' },
-  { id: 'sections', name: '板块管理', icon: IconMenu, path: '/admin/sections' },
-  { id: 'users', name: '用户管理', icon: User, path: '/admin/users' },
-  { id: 'reports', name: '举报管理', icon: Flag, path: '/admin/reports' },
-  { id: 'cache', name: '缓存管理', icon: SetUp, path: '/admin/cache' },
-  { id: 'changelog', name: '发展历程管理', icon: Timer, path: '/admin/changelog' },
-  { id: 'moderator-applications', name: '版主申请管理', icon: Medal, path: '/admin/moderator-applications' }
+const allMenuItems = [
+  { id: 'dashboard', name: '数据看板', icon: PieChart, path: '/admin/dashboard', access: 'admin' },
+  { id: 'my-sections', name: '我的板块', icon: Medal, path: '/admin/my-sections', access: 'moderator-only' },
+  { id: 'posts', name: '内容管理', icon: Document, path: '/admin/posts', access: 'backoffice' },
+  { id: 'sections', name: '板块管理', icon: IconMenu, path: '/admin/sections', access: 'admin' },
+  { id: 'users', name: '用户管理', icon: User, path: '/admin/users', access: 'admin' },
+  { id: 'reports', name: '举报管理', icon: Flag, path: '/admin/reports', access: 'backoffice' },
+  { id: 'cache', name: '缓存管理', icon: SetUp, path: '/admin/cache', access: 'admin' },
+  { id: 'changelog', name: '发展历程管理', icon: Timer, path: '/admin/changelog', access: 'admin' },
+  { id: 'moderator-applications', name: '版主申请管理', icon: Medal, path: '/admin/moderator-applications', access: 'admin' },
+  { id: 'invite-codes', name: '邀请码管理', icon: Ticket, path: '/admin/invite-codes', access: 'admin' }
 ]
+
+const isAdmin = computed(() => hasAdminRole(userStore.userInfo))
+const hasBackoffice = computed(() => isAdmin.value || hasModeratorCapability(userStore.userInfo))
+
+const isModerator = computed(() => !isAdmin.value && hasBackoffice.value)
+
+const menuItems = computed(() => {
+  return allMenuItems.filter(item => {
+    if (item.access === 'admin') return isAdmin.value
+    if (item.access === 'moderator-only') return isModerator.value
+    return hasBackoffice.value
+  })
+})
 
 const handleLogout = () => {
   userStore.logout()
@@ -49,8 +66,8 @@ onMounted(() => {
       <div class="header-left">
         <img src="/logo.png" alt="Zens" style="width:40px;height:40px;border-radius:8px;object-fit:contain;" />
         <div class="header-text">
-          <span class="title">管理后台</span>
-          <span class="subtitle">Zens Admin</span>
+          <span class="title">智能分析决策后台</span>
+          <span class="subtitle">Community Insight Console</span>
         </div>
       </div>
       

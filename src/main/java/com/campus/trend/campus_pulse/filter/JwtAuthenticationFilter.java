@@ -1,6 +1,7 @@
 package com.campus.trend.campus_pulse.filter;
 
 import com.campus.trend.campus_pulse.utils.JwtUtil;
+import io.jsonwebtoken.Claims;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -16,6 +17,10 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import org.springframework.util.StringUtils;
 
 import java.io.IOException;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 @Slf4j
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
@@ -129,9 +134,55 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 auth.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                 SecurityContextHolder.getContext().setAuthentication(auth);
                 log.debug("JWT认证通过: userId={}", userId);
+                maybeRenewAccessToken(response, accessToken, userId, sessionId);
             }
         }
 
         filterChain.doFilter(request, response);
+    }
+
+    private void maybeRenewAccessToken(HttpServletResponse response,
+                                       String accessToken,
+                                       String userId,
+                                       String sessionId) {
+        if (!StringUtils.hasText(userId) || !StringUtils.hasText(sessionId) || !jwtUtil.shouldRenewAccessToken(accessToken)) {
+            return;
+        }
+
+        String refreshKey = "auth:refresh:" + userId + ":" + sessionId;
+        String refreshState = stringRedisTemplate.opsForValue().get(refreshKey);
+        if (!StringUtils.hasText(refreshState)) {
+            return;
+        }
+
+        Claims claims = jwtUtil.parse(accessToken);
+        if (claims == null) {
+            return;
+        }
+
+        boolean rememberMe = Boolean.TRUE.equals(claims.get("remember", Boolean.class));
+        Map<String, Object> renewedClaims = new HashMap<>(jwtUtil.buildClaims(
+                claims.get("username", String.class),
+                claims.get("roles", List.class),
+                claims.get("avatar", String.class)));
+        renewedClaims.put("sid", claims.get("sid", String.class));
+        renewedClaims.put("did", claims.get("did", String.class));
+        renewedClaims.put("remember", rememberMe);
+        renewedClaims.put("typ", "access");
+
+        String renewedAccessToken = jwtUtil.generateAccessToken(userId, renewedClaims, rememberMe);
+        long accessTtlMs = jwtUtil.resolveAccessExpireMs(rememberMe);
+        stringRedisTemplate.opsForValue().set("auth:access:" + userId + ":" + sessionId,
+                renewedAccessToken,
+                accessTtlMs,
+                TimeUnit.MILLISECONDS);
+        stringRedisTemplate.opsForValue().set("access_token" + userId,
+                renewedAccessToken,
+                accessTtlMs,
+                TimeUnit.MILLISECONDS);
+
+        response.setHeader("Authorization", "Bearer " + renewedAccessToken);
+        response.setHeader("X-Access-Token", renewedAccessToken);
+        response.setHeader("X-Access-Token-Expires-In", String.valueOf(accessTtlMs));
     }
 }

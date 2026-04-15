@@ -11,9 +11,12 @@ import com.campus.trend.campus_pulse.exception.custom.RegisterException;
 import com.campus.trend.campus_pulse.exception.custom.UserAlreadyExistsException;
 import com.campus.trend.campus_pulse.security.AuthUser;
 import com.campus.trend.campus_pulse.service.AuthService;
+import com.campus.trend.campus_pulse.service.InviteCodeService;
 import com.campus.trend.campus_pulse.service.LevelService;
+import com.campus.trend.campus_pulse.service.NotificationService;
 import com.campus.trend.campus_pulse.service.UserService;
 import com.campus.trend.campus_pulse.service.VerificationCodeService;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import com.campus.trend.campus_pulse.utils.JwtUtil;
 import com.campus.trend.campus_pulse.utils.SecurityUtils;
 import com.campus.trend.campus_pulse.utils.TotpUtil;
@@ -21,6 +24,9 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.core.Cursor;
+import org.springframework.data.redis.core.RedisCallback;
+import org.springframework.data.redis.core.ScanOptions;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -40,6 +46,7 @@ import org.springframework.web.util.UriComponentsBuilder;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -63,8 +70,11 @@ public class AuthServiceImpl implements AuthService {
     private final UserService userService;
     private final VerificationCodeService verificationCodeService;
     private final LevelService levelService;
+    private final NotificationService notificationService;
     private final ObjectMapper objectMapper;
     private final RestTemplate restTemplate;
+    private final InviteCodeService inviteCodeService;
+    private final SimpMessagingTemplate messagingTemplate;
 
     @Value("${oauth.github.client-id:}")
     private String githubClientId;
@@ -78,18 +88,28 @@ public class AuthServiceImpl implements AuthService {
     private long twoFactorTicketExpireSeconds;
     @Value("${security.two-factor.setup-expire-seconds:600}")
     private long twoFactorSetupExpireSeconds;
+    @Value("${auth.session.single-device:false}")
+    private boolean singleDeviceSessionEnabled;
+    @Value("${auth.session.anomaly-notify-cooldown-seconds:3600}")
+    private long anomalyNotifyCooldownSeconds;
+    @Value("${campus.invite.required:false}")
+    private boolean inviteRequired;
 
     public AuthServiceImpl(PasswordEncoder passwordEncoder, StringRedisTemplate stringRedisTemplate, JwtUtil jwtUtil,
             UserService userService, VerificationCodeService verificationCodeService, LevelService levelService,
-            ObjectMapper objectMapper) {
+            NotificationService notificationService, ObjectMapper objectMapper, InviteCodeService inviteCodeService,
+            SimpMessagingTemplate messagingTemplate) {
         this.passwordEncoder = passwordEncoder;
         this.stringRedisTemplate = stringRedisTemplate;
         this.jwtUtil = jwtUtil;
         this.userService = userService;
         this.verificationCodeService = verificationCodeService;
         this.levelService = levelService;
+        this.notificationService = notificationService;
         this.objectMapper = objectMapper;
         this.restTemplate = new RestTemplate();
+        this.inviteCodeService = inviteCodeService;
+        this.messagingTemplate = messagingTemplate;
     }
 
     @Override
@@ -107,6 +127,7 @@ public class AuthServiceImpl implements AuthService {
         if (!StringUtils.hasText(refreshToken)) throw new LoginException("refreshToken不能为空");
         if (!jwtUtil.validate(refreshToken)) throw new LoginException("登录已过期，请重新登录");
         if (!"refresh".equalsIgnoreCase(jwtUtil.getClaimString(refreshToken, "typ"))) throw new LoginException("无效的刷新令牌");
+
         String userId = jwtUtil.getUserId(refreshToken);
         String sessionId = jwtUtil.getClaimString(refreshToken, "sid");
         String tokenDid = normalizeDeviceId(jwtUtil.getClaimString(refreshToken, "did"));
@@ -272,6 +293,7 @@ public class AuthServiceImpl implements AuthService {
         List<String> roleCodes = List.of(role);
         String sessionId = StringUtils.hasText(existsSessionId) ? existsSessionId : UUID.randomUUID().toString();
         String safeDid = normalizeDeviceId(deviceId);
+        applySessionPolicyBeforeIssueToken(user.getId(), safeDid, clientIp);
         Map<String, Object> baseClaims = jwtUtil.buildClaims(user.getUsername(), roleCodes, user.getAvatar());
         baseClaims.put("sid", sessionId);
         baseClaims.put("did", safeDid);
@@ -302,11 +324,134 @@ public class AuthServiceImpl implements AuthService {
         } catch (Exception e) {
             log.warn("每日登录经验发放失败: {}", e.getMessage());
         }
+        // 异步：登录成功通知（不阻塞登录响应）
+        try {
+            String deviceType = resolveDeviceType(safeDid).equals("mobile") ? "移动端" : "PC端";
+            String region = StringUtils.hasText(activeRegion) ? activeRegion : (StringUtils.hasText(clientIp) ? clientIp : "未知位置");
+            String loginTime = java.time.format.DateTimeFormatter.ofPattern("MM月dd日 HH:mm")
+                    .format(java.time.LocalDateTime.now());
+            String notifyKey = "auth:login:notify:" + user.getId() + ":" + LocalDate.now() + ":" + safeDid.hashCode();
+            Boolean first = stringRedisTemplate.opsForValue().setIfAbsent(notifyKey, "1", 24, TimeUnit.HOURS);
+            if (Boolean.TRUE.equals(first)) {
+                notificationService.createNotification(
+                        user.getId(),
+                        "system",
+                        "账号登录通知",
+                        "你的账号于 " + loginTime + " 在" + deviceType + "登录，登录地点：" + region + "。如非本人操作，请立即修改密码。",
+                        null,
+                        null);
+            }
+        } catch (Exception e) {
+            log.warn("登录通知发送失败: {}", e.getMessage());
+        }
         LoginResponse response = new LoginResponse();
         response.setAccessToken(accessToken);
         response.setRefreshToken(refreshToken);
         response.setTwoFactorRequired(false);
         return response;
+    }
+
+    /**
+     * 登录前执行会话策略：
+     * - singleDeviceSessionEnabled=true: 同一设备类型(PC/Mobile)只允许一个会话，踢旧会话
+     * - 否则: 仅检测异常登录并通知
+     */
+    private void applySessionPolicyBeforeIssueToken(String userId, String deviceId, String clientIp) {
+        if (!StringUtils.hasText(userId)) return;
+
+        if (singleDeviceSessionEnabled) {
+            String deviceType = resolveDeviceType(deviceId);
+            kickSessionsByDeviceType(userId, deviceType, deviceId);
+            return;
+        }
+
+        detectAndNotifyAnomalyLogin(userId, deviceId, clientIp);
+    }
+
+    /**
+     * 根据 deviceId 判断设备类型（简单按前缀区分，可扩展）
+     * 约定: deviceId 以 "mob-" 开头为移动端，其余为PC端
+     */
+    private String resolveDeviceType(String deviceId) {
+        if (!StringUtils.hasText(deviceId)) return "pc";
+        return deviceId.startsWith("mob-") ? "mobile" : "pc";
+    }
+
+    /**
+     * 踢掉同设备类型的旧会话（保留不同设备类型的会话）
+     */
+    private void kickSessionsByDeviceType(String userId, String deviceType, String currentDeviceId) {
+        try {
+            List<String> deviceKeys = scanKeys(DEVICE_PREFIX + userId + ":*");
+            if (deviceKeys == null || deviceKeys.isEmpty()) return;
+            boolean kicked = false;
+            for (String key : deviceKeys) {
+                String oldDevice = normalizeDeviceId(stringRedisTemplate.opsForValue().get(key));
+                if (!StringUtils.hasText(oldDevice) || oldDevice.equals(currentDeviceId)) continue;
+                // 同设备类型才踢
+                if (deviceType.equals(resolveDeviceType(oldDevice))) {
+                    String prefix = DEVICE_PREFIX + userId + ":";
+                    String sessionId = key.substring(prefix.length());
+                    clearSession(userId, sessionId);
+                    kicked = true;
+                    log.info("踢下线旧会话: userId={}, deviceType={}, sessionId={}", userId, deviceType, sessionId);
+                }
+            }
+            // 发送 WS 强制下线通知
+            if (kicked) {
+                try {
+                    messagingTemplate.convertAndSendToUser(userId, "/queue/force-logout",
+                            java.util.Map.of("reason", "another_device_login"));
+                } catch (Exception ex) {
+                    log.warn("WS 强制下线推送失败: userId={}, err={}", userId, ex.getMessage());
+                }
+            }
+        } catch (Exception e) {
+            log.warn("踢下线旧会话失败: userId={}, err={}", userId, e.getMessage());
+        }
+    }
+
+    private void detectAndNotifyAnomalyLogin(String userId, String deviceId, String clientIp) {
+        if (!StringUtils.hasText(deviceId) || "unknown-device".equals(deviceId)) {
+            return;
+        }
+        try {
+            List<String> keys = scanKeys(DEVICE_PREFIX + userId + ":*");
+            if (keys == null || keys.isEmpty()) {
+                return;
+            }
+
+            boolean detected = false;
+            for (String key : keys) {
+                String oldDevice = normalizeDeviceId(stringRedisTemplate.opsForValue().get(key));
+                if (StringUtils.hasText(oldDevice) && !oldDevice.equals(deviceId)) {
+                    detected = true;
+                    break;
+                }
+            }
+            if (!detected) {
+                return;
+            }
+
+            long cooldown = Math.max(60L, anomalyNotifyCooldownSeconds);
+            String throttleKey = "auth:anomaly:notice:" + userId;
+            Boolean first = stringRedisTemplate.opsForValue().setIfAbsent(throttleKey, "1", cooldown, TimeUnit.SECONDS);
+            if (!Boolean.TRUE.equals(first)) {
+                return;
+            }
+
+            String region = StringUtils.hasText(clientIp) ? clientIp : "未知IP";
+            notificationService.createNotification(
+                    userId,
+                    "system",
+                    "登录安全提醒",
+                    "检测到你的账号在不同设备登录，当前登录 IP: " + region + "。如非本人操作请尽快修改密码。",
+                    null,
+                    null);
+            log.warn("检测到异常登录行为: userId={}, deviceId={}, ip={}", userId, deviceId, region);
+        } catch (Exception e) {
+            log.warn("异常登录检测失败: userId={}, err={}", userId, e.getMessage());
+        }
     }
 
     private LoginResponse buildTwoFactorChallenge(User user, boolean rememberMe, String deviceId, String clientIp) {
@@ -341,6 +486,20 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void register(RegisterReq req) {
+        // 邀请码校验（配置开启时必填）
+        if (inviteRequired) {
+            if (!org.springframework.util.StringUtils.hasText(req.getInviteCode())) {
+                throw new RegisterException("注册需要邀请码");
+            }
+            if (!inviteCodeService.validate(req.getInviteCode())) {
+                throw new RegisterException("邀请码无效或已过期");
+            }
+        } else if (org.springframework.util.StringUtils.hasText(req.getInviteCode())) {
+            // 非必填但填了，也校验有效性
+            if (!inviteCodeService.validate(req.getInviteCode())) {
+                throw new RegisterException("邀请码无效或已过期");
+            }
+        }
         if (!verificationCodeService.verifyCode(req.getEmail(), req.getCode())) throw new RegisterException("验证码错误或已失效");
         User exist = userService.lambdaQuery().eq(User::getUsername, req.getUsername()).one();
         if (exist != null) throw new UserAlreadyExistsException("该用户名已被注册");
@@ -367,6 +526,12 @@ public class AuthServiceImpl implements AuthService {
         user.setEmailNotifyEnabled(1);
         boolean saved = userService.save(user);
         if (!saved) throw new RegisterException("注册失败，请稍后重试");
+        // 消耗邀请码
+        if (org.springframework.util.StringUtils.hasText(req.getInviteCode())) {
+            try { inviteCodeService.consume(req.getInviteCode(), user.getId()); } catch (Exception e) {
+                log.warn("邀请码消耗失败（不影响注册）: code={}, err={}", req.getInviteCode(), e.getMessage());
+            }
+        }
     }
 
     @Override
@@ -457,11 +622,31 @@ public class AuthServiceImpl implements AuthService {
 
     private void clearByPattern(String keyPattern) {
         try {
-            var keys = stringRedisTemplate.keys(keyPattern);
+            // 这里别直接 KEYS，用户会话多起来以后它会把 Redis 单线程卡住。
+            List<String> keys = scanKeys(keyPattern);
             if (keys != null && !keys.isEmpty()) stringRedisTemplate.delete(keys);
         } catch (Exception e) {
             log.warn("清理会话缓存失败: pattern={}, err={}", keyPattern, e.getMessage());
         }
+    }
+
+    private List<String> scanKeys(String keyPattern) {
+        return stringRedisTemplate.execute((RedisCallback<List<String>>) connection -> {
+            List<String> keys = new ArrayList<>();
+            ScanOptions options = ScanOptions.scanOptions()
+                    .match(keyPattern)
+                    .count(200)
+                    .build();
+            try (Cursor<byte[]> cursor = connection.scan(options)) {
+                while (cursor.hasNext()) {
+                    byte[] rawKey = cursor.next();
+                    if (rawKey != null && rawKey.length > 0) {
+                        keys.add(new String(rawKey, StandardCharsets.UTF_8));
+                    }
+                }
+            }
+            return keys;
+        });
     }
 
     private String hashToken(String token) {

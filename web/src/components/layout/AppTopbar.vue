@@ -9,9 +9,11 @@ import { usePostComposerStore } from '@/store/postComposer'
 import { useUserStore } from '@/store/user'
 import { notificationApi, type Notification } from '@/api/notification'
 import { dmApi } from '@/api/dm'
-import { cachedRequest } from '@/utils/requestCache'
+import { cachedRequest, clearRequestCache } from '@/utils/requestCache'
 import { timeAgo } from '@/utils/timeAgo'
 import { wsClient, type NotificationEvent } from '@/utils/websocket'
+import { emitNotificationUnreadSync, onNotificationUnreadSync } from '@/utils/notificationSync'
+import { resolveNotificationRoute } from '@/utils/notificationRoute'
 
 const router = useRouter()
 const route = useRoute()
@@ -26,8 +28,9 @@ const unreadCount = ref(0)
 const dmUnreadCount = ref(0)
 const notifications = ref<Notification[]>([])
 const notifLoading = ref(false)
-let pollTimer: any = null
+let pollTimer: ReturnType<typeof setInterval> | null = null
 let unsubscribeWs: (() => void) | null = null
+let unsubscribeUnreadSync: (() => void) | null = null
 
 const currentUserId = computed(() => String(userStore.userInfo?.id || userStore.userId || ''))
 
@@ -57,6 +60,19 @@ const toggleMobileSearch = () => {
   showMobileSearch.value = !showMobileSearch.value
 }
 
+const updateUnreadCount = (value: number) => {
+  unreadCount.value = Math.max(0, Number(value) || 0)
+}
+
+const updateUnreadCountByDelta = (delta: number) => {
+  updateUnreadCount(unreadCount.value + delta)
+}
+
+const invalidateNotificationUnreadCache = () => {
+  if (!currentUserId.value) return
+  clearRequestCache(`notif:unread:${currentUserId.value}`)
+}
+
 const fetchUnreadCount = async () => {
   if (!userStore.isLoggedIn) return
   try {
@@ -66,7 +82,8 @@ const fetchUnreadCount = async () => {
       () => notificationApi.getUnreadCount(),
       { persist: false }
     )
-    unreadCount.value = (res.data ?? res ?? 0) as number
+    updateUnreadCount((res.data ?? res ?? 0) as number)
+    emitNotificationUnreadSync({ unreadCount: unreadCount.value })
   } catch {
     // Song：说明
   }
@@ -105,23 +122,56 @@ const fetchNotifications = async () => {
   }
 }
 
+const refreshNotificationBadges = () => {
+  if (!userStore.isLoggedIn) return
+  void fetchUnreadCount()
+  void fetchDmUnreadCount()
+}
+
+const stopPolling = () => {
+  if (pollTimer) {
+    clearInterval(pollTimer)
+    pollTimer = null
+  }
+}
+
+const startPolling = () => {
+  stopPolling()
+
+  if (typeof document !== 'undefined' && document.hidden) {
+    return
+  }
+
+  pollTimer = setInterval(() => {
+    if (!userStore.isLoggedIn || document.hidden) {
+      return
+    }
+    refreshNotificationBadges()
+  }, 60000)
+}
+
 const handlePopoverShow = async () => {
+  invalidateNotificationUnreadCache()
+  await fetchUnreadCount()
   await fetchNotifications()
 }
 
 const handleNotifClick = async (notif: Notification) => {
   if (notif.isRead === 0) {
     try {
-      await notificationApi.markAsRead(notif.id)
+      await notificationApi.markAsRead(String(notif.id))
       notif.isRead = 1
-      unreadCount.value = Math.max(0, unreadCount.value - 1)
+      updateUnreadCountByDelta(-1)
+      invalidateNotificationUnreadCache()
+      emitNotificationUnreadSync({ unreadCount: unreadCount.value })
     } catch {
       // Song：说明
     }
   }
 
-  if (notif.relatedId) {
-    router.push(`/p/${notif.relatedId}`)
+  const targetRoute = resolveNotificationRoute(notif.relatedId, { type: notif.type, relatedUserId: notif.relatedUserId })
+  if (targetRoute) {
+    router.push(targetRoute)
   }
 }
 
@@ -131,7 +181,9 @@ const handleMarkAllRead = async () => {
     notifications.value.forEach((item) => {
       item.isRead = 1
     })
-    unreadCount.value = 0
+    updateUnreadCount(0)
+    invalidateNotificationUnreadCache()
+    emitNotificationUnreadSync({ unreadCount: 0 })
   } catch {
     // Song：说明
   }
@@ -142,7 +194,9 @@ const getNotifTime = (item: Notification) => {
 }
 
 const handleWebSocketNotification = (event: NotificationEvent) => {
-  unreadCount.value++
+  updateUnreadCountByDelta(1)
+  invalidateNotificationUnreadCache()
+  emitNotificationUnreadSync({ unreadCount: unreadCount.value })
 
   if (notifications.value.length > 0) {
     notifications.value.unshift({
@@ -157,14 +211,17 @@ const handleWebSocketNotification = (event: NotificationEvent) => {
     })
   }
 
+  const isLoginAlert = event.type === 'system' && event.title?.includes('登录')
   ElNotification({
     title: event.title,
     message: event.content,
-    type: 'info',
-    duration: 4000,
+    type: isLoginAlert ? 'warning' : 'info',
+    duration: isLoginAlert ? 8000 : 4000,
+    position: 'bottom-right',
     onClick: () => {
-      if (event.relatedId) {
-        router.push(`/p/${event.relatedId}`)
+      const targetRoute = resolveNotificationRoute(event.relatedId, { type: event.type, relatedUserId: event.relatedUserId })
+      if (targetRoute) {
+        router.push(targetRoute)
       }
     },
   })
@@ -182,21 +239,34 @@ const subscribeToNotifications = () => {
   unsubscribeWs = wsClient.subscribeNotifications(currentUserId.value, handleWebSocketNotification)
 }
 
+const handleVisibilityChange = () => {
+  if (document.hidden) {
+    stopPolling()
+    return
+  }
+
+  refreshNotificationBadges()
+  subscribeToNotifications()
+  startPolling()
+}
+
 watch(
   () => userStore.isLoggedIn,
   (isLoggedIn) => {
     if (isLoggedIn) {
-      fetchUnreadCount()
-      fetchDmUnreadCount()
+      refreshNotificationBadges()
       subscribeToNotifications()
+      startPolling()
     } else {
       if (unsubscribeWs) {
         unsubscribeWs()
         unsubscribeWs = null
       }
-      unreadCount.value = 0
+      stopPolling()
+      updateUnreadCount(0)
       dmUnreadCount.value = 0
       notifications.value = []
+      emitNotificationUnreadSync({ unreadCount: 0 })
     }
   },
   { immediate: true }
@@ -210,23 +280,38 @@ watch(
 )
 
 onMounted(() => {
-  if (userStore.isLoggedIn) {
-    fetchUnreadCount()
-    fetchDmUnreadCount()
-    subscribeToNotifications()
-  }
-  pollTimer = setInterval(() => {
-    if (userStore.isLoggedIn) {
-      fetchUnreadCount()
-      fetchDmUnreadCount()
+  document.addEventListener('visibilitychange', handleVisibilityChange)
+
+  unsubscribeUnreadSync = onNotificationUnreadSync((detail) => {
+    if (typeof detail.unreadCount === 'number') {
+      updateUnreadCount(detail.unreadCount)
+      return
     }
-  }, 60000)
+    if (typeof detail.delta === 'number') {
+      updateUnreadCountByDelta(detail.delta)
+      return
+    }
+    if (detail.forceRefresh) {
+      invalidateNotificationUnreadCache()
+      refreshNotificationBadges()
+    }
+  })
+
+  if (userStore.isLoggedIn) {
+    refreshNotificationBadges()
+    subscribeToNotifications()
+    startPolling()
+  }
 })
 
 onUnmounted(() => {
-  clearInterval(pollTimer)
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
+  stopPolling()
   if (unsubscribeWs) {
     unsubscribeWs()
+  }
+  if (unsubscribeUnreadSync) {
+    unsubscribeUnreadSync()
   }
 })
 </script>
@@ -311,7 +396,7 @@ onUnmounted(() => {
             </div>
 
             <div class="notif-footer">
-              <el-button link type="primary" size="small" @click="router.push('/me')">查看全部通知</el-button>
+              <el-button link type="primary" size="small" @click="router.push({ path: '/me', query: { tab: 'notifications' } })">查看全部通知</el-button>
             </div>
           </div>
         </el-popover>

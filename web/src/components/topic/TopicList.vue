@@ -38,6 +38,9 @@ let realtimeInitialized = false
 
 const loadTrigger = ref<HTMLElement | null>(null)
 let observer: IntersectionObserver | null = null
+const INITIAL_SKELETON_COUNT = 5
+
+const isFirstLoading = computed(() => loading.value && topics.value.length === 0)
 
 const getCurrentPageSize = () => (firstBatchLoaded.value ? pageSize : initialPageSize)
 
@@ -63,6 +66,7 @@ const buildSearchReq = (): PostSearchRequest => {
   const req: PostSearchRequest = {
     page: orderBy === 'new' ? 1 : page.value,
     pageSize: getCurrentPageSize(),
+    needTotal: false,
     status: 1,
     orderBy,
     ...props.defaultQuery,
@@ -86,6 +90,8 @@ const mapPost = (p: any) => ({
   },
   tags: p.tags ? p.tags.split(',').filter(Boolean) : [],
   author: {
+    id: p.userId,
+    username: p.authorUsername || '',
     name: p.authorName || '匿名',
     avatar: p.authorAvatar || '',
     roles: p.authorRoles || [],
@@ -196,19 +202,31 @@ const handlePostEvent = (event: PostEvent) => {
   }
 }
 
+const stopNewContentPolling = () => {
+  if (newContentTimer) {
+    clearInterval(newContentTimer)
+    newContentTimer = null
+  }
+}
+
 const startNewContentPolling = () => {
+  if (newContentTimer) return
+
   newContentTimer = setInterval(async () => {
-    if (window.scrollY > 300 && !hasNewContent.value) {
-      try {
-        const res = await postApi.searchList({ page: 1, pageSize: 1, status: 1, orderBy: 'new' })
-        const latestId = res.data?.records?.[0]?.id
-        if (latestId && topics.value.length > 0 && latestId !== topics.value[0]?.id) {
-          hasNewContent.value = true
-          newContentCount.value = 1
-        }
-      } catch {
-        // Song：说明
+    if (wsClient.isConnected()) return
+    if (window.scrollY <= 300 || hasNewContent.value) return
+    if (typeof document !== 'undefined' && document.hidden) return
+    if (typeof navigator !== 'undefined' && !navigator.onLine) return
+
+    try {
+      const res = await postApi.searchList({ page: 1, pageSize: 1, needTotal: false, status: 1, orderBy: 'new' })
+      const latestId = res.data?.records?.[0]?.id
+      if (latestId && topics.value.length > 0 && latestId !== topics.value[0]?.id) {
+        hasNewContent.value = true
+        newContentCount.value = 1
       }
+    } catch {
+      // Song：说明
     }
   }, 30000)
 }
@@ -251,6 +269,8 @@ onMounted(() => {
     scheduleRealtimeInit()
   }
 
+  startNewContentPolling()
+
   observer = new IntersectionObserver(
     (entries) => {
       if (entries[0]?.isIntersecting) {
@@ -267,7 +287,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   if (observer) observer.disconnect()
-  if (newContentTimer) clearInterval(newContentTimer)
+  stopNewContentPolling()
   if (wsUnsubscribe) wsUnsubscribe()
 })
 
@@ -293,7 +313,17 @@ defineExpose({
     </div>
 
     <div class="topic-list">
-      <TopicRow v-for="topic in topics" :key="topic.id" :topic="topic" />
+      <template v-if="isFirstLoading">
+        <div v-for="item in INITIAL_SKELETON_COUNT" :key="`skeleton-${item}`" class="topic-skeleton">
+          <div class="skeleton-title"></div>
+          <div class="skeleton-line"></div>
+          <div class="skeleton-line short"></div>
+          <div class="skeleton-meta"></div>
+        </div>
+      </template>
+      <transition-group v-else name="list-item" tag="div" style="display:contents">
+        <TopicRow v-for="topic in topics" :key="topic.id" :topic="topic" />
+      </transition-group>
 
       <div v-if="topics.length === 0 && !loading" class="empty-state">
         <el-empty description="这里还没有内容，发一篇试试吧" :image-size="120">
@@ -304,7 +334,7 @@ defineExpose({
       </div>
 
       <div ref="loadTrigger" class="list-footer">
-        <div v-if="loading" class="footer-state loading">
+        <div v-if="loading && !isFirstLoading" class="footer-state loading">
           <el-icon class="is-loading"><Loading /></el-icon>
           <span>加载中...</span>
         </div>
@@ -379,6 +409,54 @@ defineExpose({
   font-weight: 600;
 }
 
+.topic-skeleton {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--el-border-color-lighter);
+  display: grid;
+  gap: 10px;
+}
+
+.topic-skeleton:last-child {
+  border-bottom: none;
+}
+
+.skeleton-title,
+.skeleton-line,
+.skeleton-meta {
+  border-radius: 8px;
+  background: linear-gradient(90deg, #eef1f6 25%, #e3e8f0 37%, #eef1f6 63%);
+  background-size: 400% 100%;
+  animation: skeleton-loading 1.2s ease infinite;
+}
+
+.skeleton-title {
+  height: 20px;
+  width: 70%;
+}
+
+.skeleton-line {
+  height: 12px;
+}
+
+.skeleton-line.short {
+  width: 58%;
+}
+
+.skeleton-meta {
+  height: 12px;
+  width: 40%;
+}
+
+@keyframes skeleton-loading {
+  0% {
+    background-position: 100% 50%;
+  }
+
+  100% {
+    background-position: 0 50%;
+  }
+}
+
 .list-footer {
   padding: 20px 0;
   display: flex;
@@ -399,3 +477,4 @@ defineExpose({
   color: var(--el-text-color-placeholder);
 }
 </style>
+

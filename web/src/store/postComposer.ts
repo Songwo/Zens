@@ -9,10 +9,12 @@ export const usePostComposerStore = defineStore('postComposer', () => {
         content: '',
         sectionId: 0,
         tags: '',
-        coverImage: ''
+        coverImage: '',
+        status: 1,
+        auditStatus: ''
     })
 
-    const open = (ctx?: { editId?: string, title?: string, content?: string, sectionId?: number, tags?: string, coverImage?: string }) => {
+    const open = (ctx?: { editId?: string, title?: string, content?: string, sectionId?: number, tags?: string, coverImage?: string, status?: number, auditStatus?: string }) => {
         console.log('Pinia: Opening composer')
         if (ctx) {
             context.editId = ctx.editId || ''
@@ -21,6 +23,8 @@ export const usePostComposerStore = defineStore('postComposer', () => {
             context.sectionId = ctx.sectionId || 0
             context.tags = ctx.tags || ''
             context.coverImage = ctx.coverImage || ''
+            context.status = ctx.status ?? 1
+            context.auditStatus = ctx.auditStatus || ''
         } else {
             // Song：说明
             context.editId = ''
@@ -29,6 +33,8 @@ export const usePostComposerStore = defineStore('postComposer', () => {
             context.sectionId = 0
             context.tags = ''
             context.coverImage = ''
+            context.status = 1
+            context.auditStatus = ''
         }
         isOpen.value = true
         document.body.style.overflow = 'hidden'

@@ -1,5 +1,6 @@
 package com.campus.trend.campus_pulse.dto.request;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
 
 @Data
@@ -39,4 +40,10 @@ public class LoginReq {
      * Song：谷歌验证器二步验证码（用户开启后可传）
      */
     private String twoFactorCode;
+
+    /**
+     * Cloudflare Turnstile 返回的校验令牌。
+     */
+    @JsonProperty("cf-turnstile-response")
+    private String cfTurnstileResponse;
 }

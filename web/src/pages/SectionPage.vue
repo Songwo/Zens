@@ -1,14 +1,23 @@
 <script setup lang="ts">
-import { ref, watch, onMounted } from 'vue'
-import { useRoute } from 'vue-router'
+import { ref, watch, onMounted, computed } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import MainLayout from '@/layouts/MainLayout.vue'
 import TopicList from '@/components/topic/TopicList.vue'
 import { sectionApi } from '@/api/section'
+import { useUserStore } from '@/store/user'
 import type { PostSearchRequest } from '@/types'
 
 const route = useRoute()
+const router = useRouter()
+const userStore = useUserStore()
 const sectionInfo = ref<any>(null)
 const topicListRef = ref<any>(null)
+
+const currentSectionId = computed(() => parseInt(route.params.id as string))
+const isModerator = computed(() => {
+  const ids: number[] = (userStore.userInfo as any)?.moderatedSectionIds || []
+  return ids.includes(currentSectionId.value)
+})
 
 const query = ref<PostSearchRequest>({
   sectionId: parseInt(route.params.id as string)
@@ -47,10 +56,20 @@ onMounted(() => {
             <span class="section-icon">{{ sectionInfo.icon || '📁' }}</span>
           </div>
           <div class="info-content">
-            <h1 class="section-name">{{ sectionInfo.name }}</h1>
+            <div class="name-row">
+              <h1 class="section-name">{{ sectionInfo.name }}</h1>
+              <el-tag v-if="isModerator" type="success" size="small" effect="dark">版主</el-tag>
+            </div>
             <p class="section-desc">{{ sectionInfo.description || '暂无板块描述' }}</p>
           </div>
         </div>
+        <el-button
+          v-if="isModerator"
+          type="primary"
+          plain
+          size="small"
+          @click="router.push({ path: '/admin/posts', query: { sectionId: route.params.id } })"
+        >管理此板块</el-button>
         
         <div class="section-stats">
           <div class="stat-item">
@@ -59,7 +78,7 @@ onMounted(() => {
           </div>
           <div class="stat-divider"></div>
           <div class="stat-item">
-            <span class="stat-value">{{ sectionInfo.viewCount || 0 }}</span>
+            <span class="stat-value">{{ sectionInfo.heatScore || 0 }}</span>
             <span class="stat-label">热度</span>
           </div>
         </div>
@@ -106,8 +125,15 @@ onMounted(() => {
   font-size: 32px;
 }
 
+.name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
 .section-name {
-  margin: 0 0 8px 0;
+  margin: 0;
   font-size: 24px;
   font-weight: 700;
   color: var(--el-text-color-primary);

@@ -2,6 +2,7 @@ package com.campus.trend.campus_pulse.dto.request;
 
 import lombok.Data;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Data
 public class PostSearchReq {
@@ -30,6 +31,9 @@ public class PostSearchReq {
     // Song：说明
     private Long sectionId;
 
+    // Song：多板块范围过滤（用于版务场景）
+    private List<Long> sectionIds;
+
     // Song：标签筛选
     private String tag;
 
@@ -47,4 +51,10 @@ public class PostSearchReq {
 
     // Song：说明
     private String cursorId;
+
+    // 是否需要分页总数，首屏流式列表默认不需要 count(*)
+    private Boolean needTotal;
+
+    // Song：审核状态筛选（PENDING/APPROVED/REJECTED）
+    private String auditStatus;
 }

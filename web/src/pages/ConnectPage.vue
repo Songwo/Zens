@@ -38,9 +38,61 @@ const LV6_REQUIRED_EXP = 1500
 
 const isLoggedIn = computed(() => !!userStore.accessToken)
 const isLv6Unlocked = computed(() => (levelInfo.value?.level || 0) >= 6)
+const levelThresholdMap = computed(() =>
+  Object.fromEntries((thresholds.value || []).map(item => [item.level, item.experience]))
+)
 const lv6RemainingExp = computed(() => {
   if (!levelInfo.value) return LV6_REQUIRED_EXP
   return Math.max(0, LV6_REQUIRED_EXP - levelInfo.value.experience)
+})
+const extraBenefits = computed(() => {
+  const currentLevel = levelInfo.value?.level || 0
+  const currentExp = levelInfo.value?.experience || 0
+  const thresholdMap = levelThresholdMap.value
+  const definitions = [
+    {
+      level: 7,
+      title: '图床系统',
+      icon: '🖼️',
+      url: 'https://zensimagebed.pages.dev',
+      buttonText: '前往图床',
+      description: '支持更轻量的图片上传与外链分发，适合发帖配图、封面图和素材暂存。',
+    },
+    {
+      level: 8,
+      title: '文件快传',
+      icon: '⚡',
+      url: 'https://znes.indevs.in',
+      buttonText: '打开快传',
+      description: '提供更高效的文件临时传输入口，适合跨设备同步资料和活动素材分享。',
+    },
+    {
+      level: 9,
+      title: '临时邮箱',
+      icon: '📨',
+      url: 'https://mail.songboke.us.kg',
+      buttonText: '进入临时邮箱',
+      description: '适合短期注册验证与测试场景，作为社区扩展工具使用更方便。',
+    },
+    {
+      level: 10,
+      title: 'Zens AI 公益站',
+      icon: '🤖',
+      url: 'https://zensapi.cc.cd',
+      buttonText: '进入 AI 公益站',
+      description: '开放给高等级活跃用户的 AI 工具入口，可用于学习、检索和创作辅助。',
+    },
+  ]
+
+  return definitions.map(item => {
+    const requiredExp = thresholdMap[item.level] || 0
+    return {
+      ...item,
+      unlocked: currentLevel >= item.level,
+      requiredExp,
+      remainingExp: Math.max(0, requiredExp - currentExp),
+    }
+  })
 })
 
 const expNeeded = computed(() => {
@@ -262,6 +314,41 @@ watch(isLoggedIn, async (val) => {
         </div>
       </div>
 
+      <!-- Lv5 邀请码权益 -->
+      <el-card v-if="isLoggedIn && levelInfo" class="premium-card level5-invite-card" shadow="never">
+        <template #header>
+          <div class="card-title">
+            <el-icon><Star /></el-icon>
+            <span>Lv5 解锁：邀请好友特权</span>
+          </div>
+        </template>
+        <div class="invite-claim-content">
+          <p v-if="(levelInfo.level || 0) >= 5">
+            🎉 你已达到 Lv5，可以生成专属邀请链接，邀请好友加入社区！每成功邀请一位新用户注册，你将获得 <strong>+30 经验值</strong>奖励。
+          </p>
+          <p v-else>
+            达到 <strong>Lv5</strong> 后可生成专属邀请码并邀请好友加入。每成功邀请一人可获得 <strong>+30 经验值</strong>。
+            当前 <strong>Lv{{ levelInfo.level }}</strong>，还差
+            <strong>{{ Math.max(0, (thresholds.find(t => t.level === 5)?.experience || 500) - levelInfo.experience) }}</strong>
+            经验解锁。
+          </p>
+          <ul class="invite-perks">
+            <li>📨 每次可生成 1 个邀请链接（未使用上限 5 个）</li>
+            <li>🎁 被邀请人成功注册后自动发放经验</li>
+            <li>📋 可在「邀请中心」查看邀请记录和奖励状态</li>
+            <li>⏱️ 邀请链接有效期 30 天</li>
+          </ul>
+          <el-button
+            type="primary"
+            round
+            :disabled="(levelInfo.level || 0) < 5"
+            @click="$router.push('/invite')"
+          >
+            {{ (levelInfo.level || 0) >= 5 ? '前往邀请中心' : 'Lv5 后解锁' }}
+          </el-button>
+        </div>
+      </el-card>
+
       <el-card v-if="isLoggedIn && levelInfo" class="premium-card level6-mail-card" shadow="never">
         <template #header>
           <div class="card-title">
@@ -282,6 +369,18 @@ watch(isLoggedIn, async (val) => {
           <div class="mail-contact">
             <span v-if="supportContact">联系管理员：{{ supportContact.nickname || supportContact.username }}</span>
             <span v-else>联系管理员：社区管理员</span>
+            <el-tag
+              class="mail-entry-tag"
+              type="primary"
+              effect="plain"
+              round
+              tag="a"
+              href="https://zensmail.allinsong.top"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              邮箱直达
+            </el-tag>
           </div>
           <el-button
             type="primary"
@@ -296,6 +395,58 @@ watch(isLoggedIn, async (val) => {
           </div>
         </div>
       </el-card>
+
+      <div v-if="isLoggedIn && levelInfo" class="benefit-grid">
+        <el-card
+          v-for="benefit in extraBenefits"
+          :key="benefit.level"
+          class="premium-card benefit-card"
+          shadow="never"
+        >
+          <template #header>
+            <div class="card-title benefit-title">
+              <span class="benefit-emoji">{{ benefit.icon }}</span>
+              <span>Lv{{ benefit.level }} 解锁：{{ benefit.title }}</span>
+            </div>
+          </template>
+          <div class="benefit-content">
+            <p v-if="benefit.unlocked">
+              你已达到 <strong>Lv{{ benefit.level }}</strong>，当前可以直接使用「{{ benefit.title }}」。
+              {{ benefit.description }}
+            </p>
+            <p v-else>
+              该权益将在 <strong>Lv{{ benefit.level }}</strong> 解锁。
+              当前 <strong>Lv{{ levelInfo.level }}</strong>，还差
+              <strong>{{ benefit.remainingExp }}</strong> 经验即可开启。
+            </p>
+            <div class="benefit-link-row">
+              <el-tag
+                class="benefit-link-tag"
+                type="success"
+                effect="plain"
+                round
+                tag="a"
+                :href="benefit.url"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {{ benefit.url.replace('https://', '') }}
+              </el-tag>
+            </div>
+            <el-button
+              type="primary"
+              round
+              tag="a"
+              :href="benefit.unlocked ? benefit.url : undefined"
+              target="_blank"
+              rel="noopener noreferrer"
+              :disabled="!benefit.unlocked"
+            >
+              {{ benefit.unlocked ? benefit.buttonText : `Lv${benefit.level} 后解锁` }}
+            </el-button>
+          </div>
+        </el-card>
+      </div>
 
       <!-- Not logged in -->
       <el-card v-if="!isLoggedIn" class="login-guide-card" shadow="never">
@@ -427,7 +578,7 @@ watch(isLoggedIn, async (val) => {
 
 <style scoped>
 .page-container.connect-page {
-  max-width: 1000px;
+  max-width: min(100%, var(--cp-profile-page-width, 1080px));
   margin: 0 auto;
   padding: 32px 16px;
   animation: fadeIn 0.5s ease-out;
@@ -516,6 +667,31 @@ watch(isLoggedIn, async (val) => {
   margin-bottom: 32px;
 }
 
+.level5-invite-card {
+  border-left: 3px solid var(--el-color-primary);
+}
+
+.invite-claim-content p {
+  margin-bottom: 12px;
+  line-height: 1.7;
+  color: var(--el-text-color-regular);
+}
+
+.invite-perks {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 16px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.invite-perks li {
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
+  padding: 4px 0;
+}
+
 .level6-mail-card {
   margin-bottom: 24px;
 }
@@ -530,13 +706,69 @@ watch(isLoggedIn, async (val) => {
 }
 
 .mail-contact {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
   font-weight: 600;
   color: var(--el-text-color-primary);
+}
+
+.mail-entry-tag {
+  cursor: pointer;
 }
 
 .mail-locked-hint {
   font-size: 12px;
   color: var(--el-text-color-secondary);
+}
+
+.benefit-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+  margin-bottom: 24px;
+}
+
+.benefit-card {
+  margin-bottom: 0;
+}
+
+.benefit-title {
+  line-height: 1.4;
+}
+
+.benefit-emoji {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.benefit-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  font-size: 14px;
+  color: var(--el-text-color-regular);
+  line-height: 1.7;
+}
+
+.benefit-content p {
+  margin: 0;
+}
+
+.benefit-link-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.benefit-link-tag {
+  max-width: 100%;
+  cursor: pointer;
+}
+
+.benefit-link-tag :deep(*) {
+  word-break: break-all;
 }
 
 .vip-card {
@@ -936,6 +1168,10 @@ watch(isLoggedIn, async (val) => {
   
   .thresholds-grid {
     grid-template-columns: repeat(2, 1fr);
+  }
+
+  .benefit-grid {
+    grid-template-columns: 1fr;
   }
 }
 </style>

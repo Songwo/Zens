@@ -42,7 +42,12 @@ export const statsApi = {
     /**
      * Song：说明
      */
-    getHotRank() {
-        return api.get<any, Result<HotPost[]>>('/heat-rank/top')
+    getHotRank(timeRange?: 'TODAY' | 'WEEK' | 'MONTH' | string, limit = 10) {
+        return api.get<any, Result<HotPost[]>>('/heat-rank/top', {
+            params: {
+                timeRange,
+                limit,
+            }
+        })
     }
 }

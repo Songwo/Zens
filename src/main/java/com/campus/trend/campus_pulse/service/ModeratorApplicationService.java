@@ -1,5 +1,6 @@
 package com.campus.trend.campus_pulse.service;
 
+import com.campus.trend.campus_pulse.dto.response.ModeratorApplicationResp;
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.campus.trend.campus_pulse.entity.ModeratorApplication;
 
@@ -15,12 +16,17 @@ public interface ModeratorApplicationService extends IService<ModeratorApplicati
     /**
      * Song：获取当前用户的申请列表
      */
-    List<ModeratorApplication> getMyApplications(String userId);
+    List<ModeratorApplicationResp> getMyApplications(String userId);
 
     /**
      * Song：管理员获取所有待审核列表
      */
-    List<ModeratorApplication> getPendingApplications();
+    List<ModeratorApplicationResp> getPendingApplications();
+
+    /**
+     * Song：管理员获取全部申请列表
+     */
+    List<ModeratorApplicationResp> getAllApplications();
 
     /**
      * Song：管理员批准

@@ -2,16 +2,21 @@ package com.campus.trend.campus_pulse.service.impl;
 
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.campus.trend.campus_pulse.entity.Tag;
+import com.campus.trend.campus_pulse.mapper.PostMapper;
 import com.campus.trend.campus_pulse.mapper.TagMapper;
 import com.campus.trend.campus_pulse.service.TagService;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.Cursor;
+import org.springframework.data.redis.core.RedisCallback;
+import org.springframework.data.redis.core.ScanOptions;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -25,11 +30,12 @@ public class TagServiceImpl extends ServiceImpl<TagMapper, Tag> implements TagSe
 
     private final StringRedisTemplate redisTemplate;
     private final ObjectMapper objectMapper;
+    private final PostMapper postMapper;
 
     @Autowired
-    public TagServiceImpl(StringRedisTemplate redisTemplate) {
+    public TagServiceImpl(StringRedisTemplate redisTemplate, PostMapper postMapper) {
         this.redisTemplate = redisTemplate;
-        // Song：说明
+        this.postMapper = postMapper;
         this.objectMapper = new ObjectMapper();
         this.objectMapper.registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
         this.objectMapper.disable(com.fasterxml.jackson.databind.SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
@@ -117,7 +123,7 @@ public class TagServiceImpl extends ServiceImpl<TagMapper, Tag> implements TagSe
      */
     private void clearHotTagsCache() {
         try {
-            Set<String> keys = redisTemplate.keys("tag:hot:*");
+            Set<String> keys = scanKeys("tag:hot:*");
             if (keys != null && !keys.isEmpty()) {
                 redisTemplate.delete(keys);
                 log.debug("已清除 {} 个热门标签缓存", keys.size());
@@ -196,9 +202,31 @@ public class TagServiceImpl extends ServiceImpl<TagMapper, Tag> implements TagSe
                 .last("LIMIT 20")
                 .list();
 
+        // 填充每个标签的帖子数量
+        results.forEach(tag -> tag.setPostCount(postMapper.countByTagName(tag.getName(), " " + tag.getName())));
+
         log.info("搜索标签 [{}], 找到 {} 个结果", keyword, results.size());
 
         return results;
+    }
+
+    private Set<String> scanKeys(String pattern) {
+        return redisTemplate.execute((RedisCallback<Set<String>>) connection -> {
+            Set<String> keys = new java.util.LinkedHashSet<>();
+            ScanOptions options = ScanOptions.scanOptions()
+                    .match(pattern)
+                    .count(100)
+                    .build();
+            try (Cursor<byte[]> cursor = connection.scan(options)) {
+                while (cursor.hasNext()) {
+                    byte[] raw = cursor.next();
+                    if (raw != null && raw.length > 0) {
+                        keys.add(new String(raw, StandardCharsets.UTF_8));
+                    }
+                }
+            }
+            return keys;
+        });
     }
 
     /**

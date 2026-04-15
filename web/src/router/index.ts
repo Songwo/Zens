@@ -1,5 +1,7 @@
 import { createRouter, createWebHistory, type RouteLocationNormalized } from 'vue-router'
-import api from '@/lib/api'
+import { usePostComposerStore } from '@/store/postComposer'
+import { useUserStore } from '@/store/user'
+import { ensureCurrentUserProfile, hasAdminRole, hasBackofficeAccess } from '@/utils/sessionProfile'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -42,7 +44,7 @@ const router = createRouter({
       path: '/search',
       name: 'search',
       component: () => import('@/pages/SearchPage.vue'),
-      meta: { title: '搜索', description: '搜索帖子、标签与用户内容' }
+      meta: { keepAlive: true, title: '搜索', description: '搜索帖子、标签与用户内容' }
     },
     {
       path: '/compose',
@@ -76,13 +78,19 @@ const router = createRouter({
       path: '/hot',
       name: 'hot',
       component: () => import('@/pages/HotPage.vue'),
-      meta: { title: '热门排行', description: '查看社区热度最高的话题和帖子' }
+      meta: { keepAlive: true, title: '热门排行', description: '查看社区热度最高的话题和帖子' }
     },
     {
       path: '/connect',
       name: 'connect',
       component: () => import('@/pages/ConnectPage.vue'),
       meta: { requiresAuth: false, title: '等级中心', description: '查看等级成长、经验规则与权益' }
+    },
+    {
+      path: '/invite',
+      name: 'invite',
+      component: () => import('@/pages/InvitePage.vue'),
+      meta: { requiresAuth: true, title: '邀请好友', description: '邀请好友加入，获得经验奖励' }
     },
     {
       path: '/featured',
@@ -102,6 +110,24 @@ const router = createRouter({
       meta: { title: '关于我们', description: '了解 Zens 校园社区的理念与团队' }
     },
     {
+      path: '/terms',
+      name: 'terms',
+      component: () => import('@/pages/sidebar/TermsPage.vue'),
+      meta: { title: '用户协议', description: 'Zens 校园社区用户服务协议' }
+    },
+    {
+      path: '/privacy',
+      name: 'privacy',
+      component: () => import('@/pages/sidebar/PrivacyPage.vue'),
+      meta: { title: '隐私政策', description: 'Zens 校园社区隐私保护政策' }
+    },
+    {
+      path: '/contact',
+      name: 'contact',
+      component: () => import('@/pages/sidebar/ContactPage.vue'),
+      meta: { title: '联系管理', description: '联系 Zens 校园社区管理员' }
+    },
+    {
       path: '/auth',
       name: 'auth',
       component: () => import('@/pages/auth/AuthPage.vue'),
@@ -111,38 +137,44 @@ const router = createRouter({
       path: '/admin',
       name: 'admin',
       component: () => import('@/pages/admin/AdminPage.vue'),
-      meta: { requiresAuth: true, requiresAdmin: true },
-      redirect: '/admin/dashboard',
+      meta: { requiresAuth: true, requiresBackoffice: true },
+      redirect: '/admin/posts',
       children: [
         {
           path: 'dashboard',
           name: 'admin-dashboard',
           component: () => import('@/pages/admin/DashboardPage.vue'),
+          meta: { requiresAdmin: true },
         },
         {
           path: 'posts',
           name: 'admin-posts',
           component: () => import('@/pages/admin/PostsManagePage.vue'),
+          meta: { requiresBackoffice: true },
         },
         {
           path: 'sections',
           name: 'admin-sections',
           component: () => import('@/pages/admin/SectionsManagePage.vue'),
+          meta: { requiresAdmin: true },
         },
         {
           path: 'users',
           name: 'admin-users',
           component: () => import('@/pages/admin/UsersManagePage.vue'),
+          meta: { requiresAdmin: true },
         },
         {
           path: 'reports',
           name: 'admin-reports',
           component: () => import('@/pages/admin/ReportsManagePage.vue'),
+          meta: { requiresBackoffice: true },
         },
         {
           path: 'changelog',
           name: 'admin-changelog',
           component: () => import('@/pages/admin/ChangelogManagePage.vue'),
+          meta: { requiresAdmin: true },
         },
         {
           path: 'moderator-applications',
@@ -150,9 +182,22 @@ const router = createRouter({
           component: () => import('@/pages/admin/ModeratorApplicationsManagePage.vue'),
         },
         {
+          path: 'invite-codes',
+          name: 'admin-invite-codes',
+          component: () => import('@/pages/admin/InviteCodesPage.vue'),
+          meta: { requiresAdmin: true },
+        },
+        {
           path: 'cache',
           name: 'admin-cache',
           component: () => import('@/pages/admin/CacheManagePage.vue'),
+          meta: { requiresAdmin: true },
+        },
+        {
+          path: 'my-sections',
+          name: 'admin-my-sections',
+          component: () => import('@/pages/admin/MyModerationPage.vue'),
+          meta: { requiresBackoffice: true },
         },
         // Song：说明
         {
@@ -169,7 +214,19 @@ const router = createRouter({
     { path: '/category/:id', redirect: to => `/s/${to.params.id}` },
     { path: '/post/:id', redirect: to => `/t/${to.params.id}` },
     { path: '/p/:id', redirect: to => `/t/${to.params.id}` },
-    { path: '/profile', redirect: '/me' }
+    { path: '/profile', redirect: '/me' },
+    {
+      path: '/user/:id',
+      name: 'user-profile',
+      component: () => import('@/pages/UserProfilePage.vue'),
+      meta: { title: '用户主页', description: '查看该用户的主页与发帖' }
+    },
+    {
+      path: '/:pathMatch(.*)*',
+      name: 'not-found',
+      component: () => import('@/pages/NotFoundPage.vue'),
+      meta: { title: '页面不存在', description: '你访问的页面不存在或已被移除' }
+    }
   ],
 })
 
@@ -222,44 +279,38 @@ function hasOauthCallbackParams(to: RouteLocationNormalized) {
 
 // Song：说明
 router.beforeEach(async (to, _from, next) => {
+  const composerStore = usePostComposerStore()
+  const userStore = useUserStore()
   const accessToken = readToken('access_token')
   const refreshToken = readToken('refresh_token')
   const hasSessionToken = !!(accessToken || refreshToken)
   const requiresAuth = to.matched.some(record => record.meta.requiresAuth || record.path === '/me' || record.path === '/settings')
+  const requiresBackoffice = to.matched.some(record => record.meta.requiresBackoffice)
   const requiresAdmin = to.matched.some(record => record.meta.requiresAdmin)
 
   // Song：说明
   if (to.path === '/compose') {
-    // Song：说明
-    setTimeout(() => {
-      import('@/store/postComposer').then(({ usePostComposerStore }) => {
-        usePostComposerStore().open()
-      })
-    }, 100)
+    setTimeout(() => composerStore.open(), 100)
     return next({ path: '/' })
   }
 
   if (requiresAuth && !hasSessionToken) {
     next({ path: '/auth', query: { type: 'login', redirect: to.fullPath } })
-  } else if (requiresAdmin && hasSessionToken) {
-    // Song：检查用户是否是管理员
+  } else if ((requiresBackoffice || requiresAdmin) && hasSessionToken) {
     try {
-      const response = await api.get('/user/profile')
-      // Song：说明
-      // Song：说明
-      const userRoles = response.data?.roles || []
-      const isAdmin = userRoles.some((role: string) =>
-        role === 'ROLE_ADMIN' || role === 'ROLE_SUPER_ADMIN'
-      )
+      const profile = userStore.userInfo
+        ? userStore.userInfo
+        : await ensureCurrentUserProfile()
+      const isAdmin = hasAdminRole(profile)
+      const canEnterBackoffice = hasBackofficeAccess(profile)
 
-      if (!isAdmin) {
-        // Song：不是管理员，重定向到首页
+      if ((requiresAdmin && !isAdmin) || (requiresBackoffice && !canEnterBackoffice)) {
         next({ path: '/', replace: true })
       } else {
         next()
       }
     } catch (error) {
-      console.error('Failed to check admin permission:', error)
+      console.error('Failed to check backoffice permission:', error)
       next({ path: '/auth', query: { type: 'login', redirect: to.fullPath } })
     }
   } else if (to.path === '/auth' && hasSessionToken && !to.query.redirect && !hasOauthCallbackParams(to)) {
@@ -299,3 +350,4 @@ router.afterEach((to) => {
 })
 
 export default router
+

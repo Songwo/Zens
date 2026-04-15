@@ -5,7 +5,7 @@ import { useUiStore, type ThemeName } from '@/store/ui'
 import { storeToRefs } from 'pinia'
 
 const uiStore = useUiStore()
-const { themeName, isDark, isWide } = storeToRefs(uiStore)
+const { themeName, isDark, isWide, colorMode } = storeToRefs(uiStore)
 
 const isCollapsed = ref(false)
 
@@ -40,12 +40,13 @@ const handleThemeChange = (value: string) => {
 
       <div class="dock-splitter"></div>
 
-      <div class="dock-item action" @click="uiStore.toggleDark" :title="isDark ? '切换亮色模式' : '切换暗黑模式'">
+      <div class="dock-item action" @click="uiStore.toggleDark" :title="colorMode === 'system' ? '跟随系统' : isDark ? '切换亮色模式' : '切换暗黑模式'">
         <el-icon class="dock-icon" :size="18">
-          <Moon v-if="isDark" />
+          <Monitor v-if="colorMode === 'system'" />
+          <Moon v-else-if="isDark" />
           <Sunny v-else />
         </el-icon>
-        <span class="dock-label">{{ isDark ? '暗色' : '亮色' }}</span>
+        <span class="dock-label">{{ colorMode === 'system' ? '系统' : isDark ? '暗色' : '亮色' }}</span>
       </div>
 
       <div class="dock-splitter"></div>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import MainLayout from '@/layouts/MainLayout.vue'
 import { trendsApi } from '@/api/trends'
 import { use } from 'echarts/core'
@@ -22,6 +22,10 @@ use([CanvasRenderer, PieChart, LineChart, TitleComponent, TooltipComponent, Lege
 const loading = ref(true)
 const heatRank = ref<any[]>([])
 const predictions = ref<any[]>([])
+const trendDays = ref<'7' | '30'>('7')
+
+// Dashboard real metrics
+const dashboardMetrics = ref({ todayPosts: 0, totalUsers: 0, todayUsers: 0 })
 
 // Song：说明
 const pieOptions = ref<any>(null)
@@ -29,15 +33,24 @@ const lineOptions = ref<any>(null)
 
 const fetchData = async () => {
   try {
-    const [trendRes, pieRes, rankRes, predictRes] = await Promise.all([
-      trendsApi.getPostTrend(),
+    const days = Number(trendDays.value)
+    const [trendRes, pieRes, rankRes, predictRes, dashRes] = await Promise.all([
+      trendsApi.getPostTrend(days),
       trendsApi.getSectionPie(),
       trendsApi.getHeatRank(),
-      trendsApi.getPrediction()
+      trendsApi.getPrediction(),
+      trendsApi.getDashboard()
     ])
 
     heatRank.value = rankRes.data || []
     predictions.value = predictRes.data || []
+    if (dashRes.data) {
+      dashboardMetrics.value = {
+        todayPosts: dashRes.data.todayPosts ?? 0,
+        totalUsers: dashRes.data.totalUsers ?? 0,
+        todayUsers: dashRes.data.todayUsers ?? 0
+      }
+    }
 
     // Song：说明
     const pieData = Object.entries(pieRes.data).map(([name, value]) => ({ name, value }))
@@ -118,6 +131,8 @@ const fetchData = async () => {
   }
 }
 
+watch(trendDays, () => fetchData())
+
 onMounted(() => {
   fetchData()
 })
@@ -127,8 +142,8 @@ onMounted(() => {
   <MainLayout>
     <div class="trends-container">
       <div class="trends-header">
-        <h1 class="page-title">校园趋势分析</h1>
-        <p class="page-subtitle">REAL-TIME DATA INSIGHTS & ANALYTICS</p>
+        <h1 class="page-title">社区趋势分析与决策支持</h1>
+        <p class="page-subtitle">BEHAVIOR-DRIVEN INSIGHT · TREND ANALYSIS · DECISION SUPPORT</p>
       </div>
 
       <!-- Metrics Widgets -->
@@ -136,9 +151,9 @@ onMounted(() => {
         <el-card shadow="never" class="metric-card">
           <div class="metric-content">
             <div class="metric-label">今日发帖</div>
-            <div class="metric-value">1,248</div>
+            <div class="metric-value">{{ dashboardMetrics.todayPosts.toLocaleString() }}</div>
             <div class="metric-trend up">
-              <el-icon><CaretTop /></el-icon> <span>12.5%</span> <small>较昨日</small>
+              <el-icon><CaretTop /></el-icon> <small>内容供给实时</small>
             </div>
           </div>
           <el-icon class="metric-icon blue"><DataAnalysis /></el-icon>
@@ -146,10 +161,10 @@ onMounted(() => {
 
         <el-card shadow="never" class="metric-card">
           <div class="metric-content">
-            <div class="metric-label">活跃用户</div>
-            <div class="metric-value">8,932</div>
+            <div class="metric-label">总注册用户</div>
+            <div class="metric-value">{{ dashboardMetrics.totalUsers.toLocaleString() }}</div>
             <div class="metric-trend up">
-              <el-icon><CaretTop /></el-icon> <span>5.2%</span> <small>较上周</small>
+              <el-icon><CaretTop /></el-icon> <small>今日新增 {{ dashboardMetrics.todayUsers }}</small>
             </div>
           </div>
           <el-icon class="metric-icon indigo"><Lightning /></el-icon>
@@ -157,10 +172,10 @@ onMounted(() => {
 
         <el-card shadow="never" class="metric-card">
           <div class="metric-content">
-            <div class="metric-label">全站互动率</div>
-            <div class="metric-value">4.8%</div>
+            <div class="metric-label">今日新增用户</div>
+            <div class="metric-value">{{ dashboardMetrics.todayUsers.toLocaleString() }}</div>
             <div class="metric-trend flat">
-              <el-icon><Minus /></el-icon> <span>0.0%</span> <small>基本持平</small>
+              <el-icon><Minus /></el-icon> <small>用户增长实时</small>
             </div>
           </div>
           <el-icon class="metric-icon orange"><Sunny /></el-icon>
@@ -173,11 +188,11 @@ onMounted(() => {
           <div class="card-header">
             <div class="header-left">
               <el-icon><TrendCharts /></el-icon>
-              <span>发帖量变化趋势</span>
+              <span>内容供给趋势分析</span>
             </div>
-            <el-radio-group size="small" model-value="7d">
-              <el-radio-button label="7d">近 7 天</el-radio-button>
-              <el-radio-button label="30d">近 30 天</el-radio-button>
+            <el-radio-group size="small" v-model="trendDays">
+              <el-radio-button label="7" value="7">近 7 天</el-radio-button>
+              <el-radio-button label="30" value="30">近 30 天</el-radio-button>
             </el-radio-group>
           </div>
         </template>
@@ -196,7 +211,7 @@ onMounted(() => {
                  <el-icon><Lightning /></el-icon>
                  <span>智能话题预测</span>
                </div>
-               <el-tag size="small" effect="dark" type="success">AI Model V2</el-tag>
+               <el-tag size="small" effect="dark" type="success">决策辅助</el-tag>
              </div>
           </template>
           <el-table :data="predictions.slice(0, 5)" style="width: 100%" size="small">
@@ -218,7 +233,7 @@ onMounted(() => {
         <el-card shadow="never" class="grid-card">
           <template #header>
             <div class="card-header">
-              <span>分区内容占比</span>
+              <span>板块内容结构分布</span>
             </div>
           </template>
           <div class="chart-wrapper pie-chart">

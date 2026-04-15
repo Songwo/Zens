@@ -37,11 +37,20 @@ public class SecurityWhitelist {
                         "/recommend/**",
                         "/trend-stat/**",
                         "/heat-rank/**",
+                        "/public/**",
                         "/comment/post/**",
                         "/stats/**",
                         "/section/**",
+                        "/user/public/**",
+                        "/user/search",
+                        "/invite/validate",
+                        "/invite/required",
+                        "/follow/stats/**",
                         "/level/thresholds",
                         "/changelog/list",
+                        "/actuator/health",
+                        "/actuator/info",
+                        "/actuator/prometheus",
         };
 
         /**

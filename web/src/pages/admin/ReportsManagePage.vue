@@ -1,24 +1,29 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import api from '@/lib/api'
+import { reportApi, type ReportManageItem } from '@/api/report'
 
-const reports = ref<any[]>([])
+const reports = ref<ReportManageItem[]>([])
 const loading = ref(true)
 const current = ref(1)
 const total = ref(0)
 const pageSize = ref(10)
+const statusFilter = ref<number | undefined>(undefined)
+
+const rejectDialogVisible = ref(false)
+const rejectReason = ref('')
+const rejectingRow = ref<ReportManageItem | null>(null)
+const rejectLoading = ref(false)
 
 const fetchReports = async () => {
   loading.value = true
   try {
-    const res = await api.get<any, any>(`/report/list?current=${current.value}&size=${pageSize.value}`)
-    if (res.data.code === 200) {
-      reports.value = res.data.data.records || []
-      total.value = res.data.data.total || 0
-    }
-  } catch {
+    const res = await reportApi.getList(current.value, pageSize.value, statusFilter.value)
+    reports.value = res.data?.records || []
+    total.value = res.data?.total || 0
+  } catch (error: any) {
     reports.value = []
+    ElMessage.error(error?.response?.data?.message || '举报列表加载失败')
   } finally {
     loading.value = false
   }
@@ -26,17 +31,93 @@ const fetchReports = async () => {
 
 const handlePageChange = (val: number) => {
   current.value = val
-  fetchReports()
+  void fetchReports()
 }
 
-const handleResolve = async (row: any, status: number) => {
+const handleFilterChange = () => {
+  current.value = 1
+  void fetchReports()
+}
+
+const handleResolve = async (row: ReportManageItem, status: number) => {
   try {
-    await api.post(`/report/resolve/${row.id}?status=${status}`)
+    await reportApi.resolve(row.id, status)
     ElMessage.success(status === 1 ? '已处理' : '已忽略')
-    fetchReports()
-  } catch {
-    ElMessage.error('操作失败')
+    await fetchReports()
+  } catch (error: any) {
+    ElMessage.error(error?.response?.data?.message || '操作失败')
   }
+}
+
+const openRejectDialog = (row: ReportManageItem) => {
+  rejectingRow.value = row
+  rejectReason.value = ''
+  rejectDialogVisible.value = true
+}
+
+const handleReject = async () => {
+  if (!rejectingRow.value) return
+  if (!rejectReason.value.trim()) {
+    ElMessage.warning('请填写打回原因')
+    return
+  }
+  rejectLoading.value = true
+  try {
+    await reportApi.reject(rejectingRow.value.id, rejectReason.value.trim())
+    ElMessage.success('已打回帖子并通知作者修改')
+    rejectDialogVisible.value = false
+    await fetchReports()
+  } catch (error: any) {
+    ElMessage.error(error?.response?.data?.message || '操作失败')
+  } finally {
+    rejectLoading.value = false
+  }
+}
+
+const statusLabel = (status: number) => {
+  switch (status) {
+    case 0:
+      return '待处理'
+    case 1:
+      return '已处理'
+    case 2:
+      return '已忽略'
+    case 3:
+      return '已打回'
+    case 10:
+      return '排队中'
+    case 11:
+      return '处理中'
+    default:
+      return '未知'
+  }
+}
+
+const statusType = (status: number) => {
+  switch (status) {
+    case 0:
+      return 'warning'
+    case 1:
+      return 'success'
+    case 2:
+      return 'info'
+    case 3:
+      return 'danger'
+    case 10:
+      return 'info'
+    case 11:
+      return 'primary'
+    default:
+      return 'info'
+  }
+}
+
+const targetTypeLabel = (targetType: string) => {
+  return targetType === 'comment' ? '评论' : '帖子'
+}
+
+const canRejectPost = (row: ReportManageItem) => {
+  return row.status === 0 && row.targetType === 'post'
 }
 
 const formatDate = (dateStr: string) => {
@@ -45,7 +126,7 @@ const formatDate = (dateStr: string) => {
 }
 
 onMounted(() => {
-  fetchReports()
+  void fetchReports()
 })
 </script>
 
@@ -53,27 +134,47 @@ onMounted(() => {
   <div class="manage-page">
     <div class="page-header">
       <h1 class="title">举报管理</h1>
+      <el-select
+        v-model="statusFilter"
+        placeholder="全部状态"
+        clearable
+        class="status-filter"
+        @change="handleFilterChange"
+        @clear="handleFilterChange"
+      >
+        <el-option :value="0" label="待处理" />
+        <el-option :value="1" label="已处理" />
+        <el-option :value="2" label="已忽略" />
+        <el-option :value="3" label="已打回" />
+        <el-option :value="10" label="排队中" />
+        <el-option :value="11" label="处理中" />
+      </el-select>
     </div>
 
     <el-table :data="reports" v-loading="loading" stripe border class="data-table">
-      <el-table-column prop="id" label="ID" width="80" />
-      <el-table-column prop="reporterId" label="举报人" width="200" show-overflow-tooltip>
+      <el-table-column prop="id" label="ID" width="90" />
+      <el-table-column prop="reporterId" label="举报人" width="200" show-overflow-tooltip />
+      <el-table-column label="所属板块" width="140" align="center">
         <template #default="{ row }">
-          {{ row.reporterId }}
+          <el-tag size="small" effect="plain">{{ row.sectionName || '未知板块' }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="targetType" label="类型" width="100" align="center">
+      <el-table-column label="目标内容" min-width="280" show-overflow-tooltip>
         <template #default="{ row }">
-          <el-tag size="small">{{ row.targetType === 'post' ? '帖子' : row.targetType }}</el-tag>
+          <div class="target-cell">
+            <div class="target-header">
+              <el-tag size="small">{{ targetTypeLabel(row.targetType) }}</el-tag>
+              <span class="target-title">{{ row.targetTitle || '目标内容已不存在' }}</span>
+            </div>
+            <div v-if="row.targetPreview" class="target-preview">{{ row.targetPreview }}</div>
+          </div>
         </template>
       </el-table-column>
       <el-table-column prop="reason" label="举报原因" min-width="150" show-overflow-tooltip />
       <el-table-column prop="details" label="详细说明" min-width="200" show-overflow-tooltip />
       <el-table-column prop="status" label="状态" width="100" align="center">
         <template #default="{ row }">
-          <el-tag v-if="row.status === 0" type="warning" size="small">待处理</el-tag>
-          <el-tag v-else-if="row.status === 1" type="success" size="small">已处理</el-tag>
-          <el-tag v-else type="info" size="small">已忽略</el-tag>
+          <el-tag :type="statusType(row.status)" size="small">{{ statusLabel(row.status) }}</el-tag>
         </template>
       </el-table-column>
       <el-table-column prop="createTime" label="举报时间" width="180">
@@ -81,27 +182,20 @@ onMounted(() => {
           {{ formatDate(row.createTime) }}
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="160" fixed="right" align="center">
+      <el-table-column label="操作" width="220" fixed="right" align="center">
         <template #default="{ row }">
           <template v-if="row.status === 0">
-            <el-button
-              size="small"
-              type="primary"
-              link
-              @click="handleResolve(row, 1)"
-            >
+            <el-button size="small" type="primary" link @click="handleResolve(row, 1)">
               已处理
             </el-button>
-            <el-button
-              size="small"
-              type="info"
-              link
-              @click="handleResolve(row, 2)"
-            >
+            <el-button v-if="canRejectPost(row)" size="small" type="warning" link @click="openRejectDialog(row)">
+              打回修改
+            </el-button>
+            <el-button size="small" type="info" link @click="handleResolve(row, 2)">
               忽略
             </el-button>
           </template>
-          <span v-else class="text-placeholder">已完成</span>
+          <span v-else class="text-placeholder">{{ statusLabel(row.status) }}</span>
         </template>
       </el-table-column>
     </el-table>
@@ -117,6 +211,42 @@ onMounted(() => {
     </div>
 
     <el-empty v-if="!loading && reports.length === 0" description="暂无举报记录" />
+
+    <el-dialog
+      v-model="rejectDialogVisible"
+      title="打回帖子"
+      width="500px"
+      :close-on-click-modal="false"
+    >
+      <el-alert
+        type="warning"
+        :closable="false"
+        show-icon
+        style="margin-bottom: 16px"
+      >
+        <template #title>
+          帖子将被设为草稿状态并通知作者修改，若作者未在规定时间内修改，帖子将被直接删除。
+        </template>
+      </el-alert>
+      <el-form label-position="top">
+        <el-form-item label="打回原因（将发送给作者）" required>
+          <el-input
+            v-model="rejectReason"
+            type="textarea"
+            :rows="4"
+            placeholder="请输入打回原因，例如：帖子内容存在人身攻击，请修改后重新发布"
+            maxlength="500"
+            show-word-limit
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="rejectDialogVisible = false">取消</el-button>
+        <el-button type="warning" :loading="rejectLoading" @click="handleReject">
+          确认打回
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -124,25 +254,57 @@ onMounted(() => {
 .manage-page {
   padding: 0;
 }
+
 .page-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   margin-bottom: 24px;
 }
+
 .page-header .title {
   margin: 0;
   font-size: 24px;
   font-weight: 800;
   color: var(--el-text-color-primary);
 }
+
+.status-filter {
+  width: 160px;
+}
+
 .data-table {
   border-radius: 8px;
 }
+
+.target-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.target-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.target-title {
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+}
+
+.target-preview {
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 .text-placeholder {
   color: var(--el-text-color-placeholder);
   font-size: 13px;
 }
+
 .pagination-wrapper {
   margin-top: 16px;
   display: flex;

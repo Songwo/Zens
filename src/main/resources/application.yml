@@ -1,5 +1,6 @@
 server:
   port: 7800
+  forward-headers-strategy: framework
   compression:
     enabled: true
     min-response-size: 2KB
@@ -13,7 +14,21 @@ server:
       - text/javascript
       - application/javascript
       - image/svg+xml
+  tomcat:
+    threads:
+      max: ${SERVER_TOMCAT_THREADS_MAX:200}
+      min-spare: ${SERVER_TOMCAT_THREADS_MIN_SPARE:20}
+    accept-count: ${SERVER_TOMCAT_ACCEPT_COUNT:100}
+    connection-timeout: 120000
+    keep-alive-timeout: 120000
+    max-connections: ${SERVER_TOMCAT_MAX_CONNECTIONS:8192}
+    max-swallow-size: -1
 spring:
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+    time-zone: Asia/Shanghai
+    date-format: yyyy-MM-dd HH:mm:ss
   # 设置自定义 Banner 文件位置
   banner:
     location: classpath:banner.txt
@@ -24,9 +39,21 @@ spring:
   # 2. 数据库配置 (MySQL)
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: ${DB_URL:jdbc:mysql://localhost:3306/campus_pulse?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai}
+    url: ${DB_URL:jdbc:mysql://localhost:3306/campus_pulse?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true&rewriteBatchedStatements=true&cachePrepStmts=true&prepStmtCacheSize=250&prepStmtCacheSqlLimit=2048}
     username: ${DB_USERNAME:root}
     password: ${DB_PASSWORD:123456}
+    hikari:
+      minimum-idle: ${DB_MIN_IDLE:8}
+      maximum-pool-size: ${DB_MAX_POOL_SIZE:32}
+      idle-timeout: 300000
+      max-lifetime: 1200000
+      connection-timeout: 20000
+      validation-timeout: 5000
+      keepalive-time: 60000
+      leak-detection-threshold: 120000
+      connection-test-query: SELECT 1
+      pool-name: CampusPulseHikariCP
+      register-mbeans: true
 
   # 2.1 Redis 配置
   data:
@@ -35,11 +62,14 @@ spring:
       port: ${REDIS_PORT:6379}
       password: ${REDIS_PASSWORD:}
       database: ${REDIS_DB:0}
+      timeout: 3000ms
+      connect-timeout: 3000ms
       lettuce:
+        shutdown-timeout: 100ms
         pool:
-          max-active: 20
-          max-idle: 10
-          min-idle: 2
+          max-active: ${REDIS_POOL_MAX_ACTIVE:20}
+          max-idle: ${REDIS_POOL_MAX_IDLE:10}
+          min-idle: ${REDIS_POOL_MIN_IDLE:2}
           max-wait: 3000ms
 
   # 2.2 邮件服务配置
@@ -50,7 +80,7 @@ spring:
     host: ${MAIL_HOST:smtp.163.com}         # SMTP 服务器地址
     port: ${MAIL_PORT:465}                  # 端口 (587=TLS, 465=SSL)
     username: ${MAIL_USERNAME:zhaoqsnyah@163.com}   # 发件人邮箱
-    password: ${MAIL_PASSWORD:TMSwqvRFGeSvSNGD}      # 授权码
+    password: ${MAIL_PASSWORD:}      # 授权码（生产环境必须通过环境变量注入）
     protocol: smtp
     default-encoding: UTF-8
     properties:
@@ -63,17 +93,45 @@ spring:
           ssl:
             enable: true      # 如果使用465端口，改为true
           timeout: 5000
+  mvc:
+    async:
+      request-timeout: 10m
+
+  servlet:
+    multipart:
+      max-file-size: 512MB
+      max-request-size: 520MB
+      file-size-threshold: 2MB
 
 # 3.MyBatis-Plus 配置
 mybatis-plus:
   configuration:
-    # MyBatis 配置
     map-underscore-to-camel-case: true
+    cache-enabled: true
+    default-statement-timeout: 30
+    default-fetch-size: 100
+    lazy-loading-enabled: true
+    aggressive-lazy-loading: false
   global-config:
-    # 全局配置
     db-config:
-      # 数据库配置
       id-type: auto
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    tags:
+      application: campus-pulse
+    enable:
+      hikaricp: true
 
 # 4.Logging 配置
 logging:
@@ -96,7 +154,7 @@ logging:
     root: INFO
 
     # 业务代码日志：将业务包设置为 DEBUG，以便看到 @Slf4j 打印的 DEBUG 级别信息
-    com.campus.trend.campus_pulse: DEBUG
+    com.campus.trend.campus_pulse: ${APP_LOG_LEVEL:INFO}
 
     # 第三方库日志：减少第三方库（如 Hibernate, Mybatis-Plus, Spring Security）的日志输出，避免刷屏
     com.baomidou: WARN
@@ -104,21 +162,22 @@ logging:
 
 # 5.JWT 配置
 jwt:
-  secret: ${JWT_SECRET:RwE7qC8ce3rE5eVTPVm1ZJNmD5JyAuDN1Xupe16p6gueoN9Ye5BYMReMm8ZMcv0u}
+  secret: ${JWT_SECRET:zf3sg4ikVorzR1S/cel4+o/VkQH+4LZxU8RkX0c0Ne6BFPf9NnPL09AoHSK9Zg95}
   access-expire: 3600000        # 1 小时
   refresh-expire: 604800000     # 7 天
   remember-access-multiplier: 7
   remember-refresh-multiplier: 4
+  sliding-renew-threshold: 900000
 
 # 6.Web Url 配置
 Web:
-  AvatarUrl: "http://localhost:7800/static/avatar/"
+  AvatarUrl: "https://zenslt.allinsong.top/static/avatar/"
 
 # 7. AI 深度思考模型配置
 ai:
   deepseek:
     api-url: ${DEEPSEEK_API_URL:https://api.deepseek.com}
-    api-key: ${DEEPSEEK_API_KEY:sk-0023d54a9f204920bd02602ca879e94b}
+    api-key: ${DEEPSEEK_API_KEY:}
     model: ${DEEPSEEK_MODEL:deepseek-chat}
 
 # 8. 推荐权重参数（可配置化）
@@ -147,28 +206,75 @@ trend:
 
 # 10. 上传安全控制配置
 campus:
+  async:
+    core-pool-size: 4      # 4核CPU，核心线程=CPU核数
+    max-pool-size: 8       # 最大8个，避免上下文切换开销
+    queue-capacity: 500    # 队列适当加大，缓冲突发请求
+    keep-alive-seconds: 60
+    await-termination-seconds: 60
+    thread-name-prefix: "campus-async-"
+  cache:
+    null-value-ttl-seconds: 30
+    version-key-ttl-hours: 168
+    ttl-jitter-ratio: 0.2
   upload:
     url-prefix: "/uploads/"
-    max-image-size-mb: 5
+    avatar-module: "avatar"
+    max-image-size-mb: ${MAX_IMAGE_SIZE_MB:5}
+    max-image-width: ${MAX_IMAGE_WIDTH:1920}
+    max-image-height: ${MAX_IMAGE_HEIGHT:1080}
+    jpeg-quality: ${IMAGE_JPEG_QUALITY:0.85}
     allowed-image-extensions: ".jpg,.jpeg,.png,.gif,.webp"
+    max-video-size-mb: ${MAX_VIDEO_SIZE_MB:80}
+    allowed-video-extensions: ".mp4,.webm,.ogg,.mov"
+    video-transcode-enabled: ${VIDEO_TRANSCODE_ENABLED:false}
+    ffmpeg-bin: ${FFMPEG_BIN:ffmpeg}
+    video-transcode-crf: ${VIDEO_TRANSCODE_CRF:28}
+    enable-malware-placeholder-scan: ${UPLOAD_ENABLE_MALWARE_SCAN:true}
+    imagebed-url: ${IMAGEBED_URL:}
+    imagebed-api-key: ${IMAGEBED_API_KEY:}
+    imagebed-threshold-mb: ${IMAGEBED_THRESHOLD_MB:3}
   security:
-    # 生产环境请替换为你的前端域名，例如: https://app.example.com
-    allowed-origin-patterns: ${ALLOWED_ORIGIN_PATTERNS:http://localhost:5173,http://127.0.0.1:5173,http://localhost:4173,http://127.0.0.1:4173}
+    # 生产环境请替换为前端域名
+    allowed-origin-patterns: ${ALLOWED_ORIGIN_PATTERNS:http://localhost:5173,http://127.0.0.1:5173,http://localhost:4173,http://127.0.0.1:4173,https://zenslt.allinsong.top}
     # 开发期可关闭强制签名，生产建议开启 true
-    request-signature-required: ${REQUEST_SIGNATURE_REQUIRED:false}
+    request-signature-required: ${REQUEST_SIGNATURE_REQUIRED:true}
+  notification:
+    dedupe-window-seconds: ${NOTIFICATION_DEDUPE_WINDOW_SECONDS:120}
+  invite:
+    required: ${INVITE_REQUIRED:false}
+    user-min-level: ${INVITE_USER_MIN_LEVEL:5}
+  site:
+    url: ${SITE_URL:https://zenslt.allinsong.top}
   support:
     admin-username: ${SUPPORT_ADMIN_USERNAME:admin}
     admin-display-name: ${SUPPORT_ADMIN_DISPLAY_NAME:社区管理员}
+  observability:
+    request-log-enabled: ${REQUEST_LOG_ENABLED:true}
+    slow-request-ms: ${SLOW_REQUEST_MS:1000}
+    slow-sql-ms: ${SLOW_SQL_MS:300}
+    request-log-exclude-prefixes: ${REQUEST_LOG_EXCLUDE_PREFIXES:/actuator,/static,/uploads}
 
 # 11. 第三方登录与二步验证配置
 oauth:
   github:
     client-id: ${GITHUB_CLIENT_ID:}
     client-secret: ${GITHUB_CLIENT_SECRET:}
-    redirect-uri: ${GITHUB_REDIRECT_URI:http://localhost:4173/auth?type=login&provider=github}
+    redirect-uri: ${GITHUB_REDIRECT_URI:http://zenslt.allinsong.top/auth?type=login&provider=github}
+
+cloudflare:
+  turnstile:
+    site-key: ${TURNSTILE_SITE_KEY:0x4AAAAAAC9xtOXBNKG-KQE9}
+    secret-key: ${TURNSTILE_SECRET_KEY:0x4AAAAAAC9xtFFfXflEn-SwY6a7WDL4w3c}
+    verify-url: ${TURNSTILE_VERIFY_URL:https://challenges.cloudflare.com/turnstile/v0/siteverify}
 
 security:
   two-factor:
     issuer: ${TWO_FACTOR_ISSUER:Zens社区}
     login-ticket-expire-seconds: ${TWO_FACTOR_LOGIN_TICKET_EXPIRE_SECONDS:300}
     setup-expire-seconds: ${TWO_FACTOR_SETUP_EXPIRE_SECONDS:600}
+
+auth:
+  session:
+    single-device: ${AUTH_SESSION_SINGLE_DEVICE:true}
+    anomaly-notify-cooldown-seconds: ${AUTH_SESSION_ANOMALY_NOTIFY_COOLDOWN_SECONDS:3600}

@@ -5,7 +5,10 @@ import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.campus.trend.campus_pulse.common.api.ResultCode;
+import com.campus.trend.campus_pulse.common.exception.BusinessException;
 import com.campus.trend.campus_pulse.dto.request.PostCreateReq;
+import com.campus.trend.campus_pulse.dto.request.PostDraftReq;
 import com.campus.trend.campus_pulse.dto.request.TagsExtractReq;
 import com.campus.trend.campus_pulse.dto.request.PostSearchReq;
 import com.campus.trend.campus_pulse.entity.Post;
@@ -14,24 +17,22 @@ import com.campus.trend.campus_pulse.entity.PostLike;
 import com.campus.trend.campus_pulse.entity.Tag;
 import com.campus.trend.campus_pulse.mapper.PostMapper;
 import com.campus.trend.campus_pulse.mapper.SectionMapper;
-import com.campus.trend.campus_pulse.service.SectionService;
-import com.campus.trend.campus_pulse.service.ContentSecurityService;
-import com.campus.trend.campus_pulse.service.PostCollectService;
-import com.campus.trend.campus_pulse.service.SentimentAnalysisService;
+import com.campus.trend.campus_pulse.service.*;
+
 import java.math.BigDecimal;
-import com.campus.trend.campus_pulse.service.PostLikeService;
-import com.campus.trend.campus_pulse.service.PostService;
-import com.campus.trend.campus_pulse.service.PostEventService;
-import com.campus.trend.campus_pulse.service.TagService;
-import com.campus.trend.campus_pulse.service.UserService;
+
+import com.campus.trend.campus_pulse.entity.UserTagRelation;
+import com.campus.trend.campus_pulse.mapper.UserTagRelationMapper;
 import com.campus.trend.campus_pulse.dto.response.PostResp;
 import com.campus.trend.campus_pulse.entity.User;
 import com.campus.trend.campus_pulse.entity.Section;
 import com.campus.trend.campus_pulse.utils.IdUtils;
+import com.campus.trend.campus_pulse.utils.TimeRangeUtils;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -43,23 +44,60 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.TreeMap;
+import java.util.concurrent.ThreadLocalRandom;
+import java.util.regex.Pattern;
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements PostService {
 
+    private static final int POST_STATUS_DRAFT = 0;
+    private static final int POST_STATUS_PUBLISHED = 1;
+    private static final String AUDIT_STATUS_DRAFT = "DRAFT";
+    private static final String AUDIT_STATUS_PENDING = "PENDING";
+    private static final String AUDIT_STATUS_REJECTED = "REJECTED";
     private static final int DEFAULT_PAGE_SIZE = 10;
     private static final int MAX_PAGE_SIZE = 30;
     private static final int SUMMARY_MAX_LEN = 150;
-    private static final Duration POST_FEED_CACHE_TTL = Duration.ofSeconds(30);
+    private static final Duration POST_FEED_CACHE_TTL = Duration.ofSeconds(120);
+    private static final Duration POST_FEED_EMPTY_CACHE_TTL = Duration.ofSeconds(30);
+    private static final Duration POST_DETAIL_CACHE_TTL = Duration.ofSeconds(300);
+    private static final Duration POST_DETAIL_NULL_CACHE_TTL = Duration.ofSeconds(30);
+    private static final String CACHE_NULL_MARKER = "__NULL__";
+
+    // 预编译正则，避免 stripMarkdown 每次调用重复编译
+    private static final Pattern MD_HTML_TAG      = Pattern.compile("<[^>]*>");
+    private static final Pattern MD_CODE_BLOCK     = Pattern.compile("```[\\s\\S]*?```");
+    private static final Pattern MD_CODE_BLOCK2    = Pattern.compile("```.*");
+    private static final Pattern MD_INLINE_CODE    = Pattern.compile("`[^`]+`");
+    private static final Pattern MD_HEADING_START  = Pattern.compile("^#{1,6}\\s+", Pattern.MULTILINE);
+    private static final Pattern MD_BOLD_STAR      = Pattern.compile("\\*\\*([^*]+)\\*\\*");
+    private static final Pattern MD_BOLD_UNDER     = Pattern.compile("__([^_]+)__");
+    private static final Pattern MD_ITALIC_STAR    = Pattern.compile("\\*([^*]+)\\*");
+    private static final Pattern MD_ITALIC_UNDER   = Pattern.compile("_([^_]+)_");
+    private static final Pattern MD_STRIKE         = Pattern.compile("~~([^~]+)~~");
+    private static final Pattern MD_HR_LINE        = Pattern.compile("^[-*]{3,}$", Pattern.MULTILINE);
+    private static final Pattern MD_BLOCKQUOTE     = Pattern.compile("^>\\s+", Pattern.MULTILINE);
+    private static final Pattern MD_LINK           = Pattern.compile("\\[([^\\]]+)\\]\\([^)]+\\)");
+    private static final Pattern MD_IMAGE          = Pattern.compile("!\\[([^\\]]*)\\]\\([^)]+\\)");
+    private static final Pattern MD_LIST_UNORDER   = Pattern.compile("^[\\-*+]\\s+", Pattern.MULTILINE);
+    private static final Pattern MD_LIST_ORDER     = Pattern.compile("^\\d+\\.\\s+", Pattern.MULTILINE);
+    private static final Pattern MD_WHITESPACE     = Pattern.compile("\\s+");
     private static final String POST_FEED_CACHE_PREFIX = "post:feed:cache:";
+    private static final String POST_DETAIL_CACHE_PREFIX = "post:detail:cache:";
     private static final String POST_FEED_CACHE_GLOBAL_VERSION_KEY = "post:feed:version:global";
     private static final String POST_FEED_CACHE_SECTION_VERSION_KEY_PREFIX = "post:feed:version:section:";
+    private static final String POST_DETAIL_CACHE_VERSION_KEY_PREFIX = "post:detail:version:";
+    private static final String POST_HEAT_RANK_VERSION_KEY = "post:heat:version";
 
     private final PostLikeService postLikeService;
     private final PostCollectService postCollectService;
@@ -68,12 +106,25 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
     private final SentimentAnalysisService sentimentAnalysisService;
     private final UserService userService;
     private final SectionService sectionService;
+    private final SectionModeratorService sectionModeratorService;
     private final SectionMapper sectionMapper;
     private final PostEventService postEventService;
+    private final NotificationService notificationService;
+    private final UserTagRelationService userTagRelationService;
     private final com.campus.trend.campus_pulse.service.LevelService levelService;
     private final com.campus.trend.campus_pulse.service.AiPostAnalysisService aiPostAnalysisService;
     private final StringRedisTemplate stringRedisTemplate;
     private final ObjectMapper objectMapper;
+    private final AsyncTaskService asyncTaskService;
+
+    @Value("${campus.cache.null-value-ttl-seconds:30}")
+    private long nullValueTtlSeconds;
+
+    @Value("${campus.cache.version-key-ttl-hours:168}")
+    private long versionKeyTtlHours;
+
+    @Value("${campus.cache.ttl-jitter-ratio:0.2}")
+    private double ttlJitterRatio;
 
     @Override
     public Post searchByPostId(String postId) {
@@ -106,7 +157,7 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
         if (createPostRequest.getSectionId() != null) {
             Section section = sectionService.getSectionById(createPostRequest.getSectionId());
             if (section == null) {
-                throw new RuntimeException("板块不存在: " + createPostRequest.getSectionId());
+                throw new BusinessException(ResultCode.SECTION_NOT_FOUND);
             }
         }
 
@@ -138,7 +189,7 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
         sysPost.setContent(content);
         sysPost.setSummary(buildSummary(content));
         sysPost.setCoverImage(createPostRequest.getCoverImage());
-        sysPost.setTags(createPostRequest.getTags());
+        sysPost.setTags(normalizeTags(createPostRequest.getTags()));
 
         // Song：3.1 情感分析
         double sentimentScore = sentimentAnalysisService.analyzeSentiment(title + " " + content);
@@ -168,8 +219,8 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
         sysPost.setLikeCount(0);
         sysPost.setCollectCount(0);
         sysPost.setCommentCount(0);
-        sysPost.setStatus(1); // Song：正常
-        sysPost.setAuditStatus("PENDING"); // Song：待审核
+        sysPost.setStatus(POST_STATUS_PUBLISHED); // Song：正常
+        sysPost.setAuditStatus(AUDIT_STATUS_PENDING); // Song：待审核
         sysPost.setHeatScore(0.0); // Song：初始热度
 
         // Song：初始化置顶和活跃时间字段
@@ -181,32 +232,89 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
         // Song：3.保存帖子
         this.save(sysPost);
 
-        // Song：推送新帖创建事件
-        try {
-            postEventService.pushPostCreated(sysPost);
-        } catch (Exception e) {
-            log.warn("推送新帖创建事件失败", e);
-        }
+        // 异步：推送新帖创建事件
+        asyncTaskService.pushPostCreatedAsync(sysPost);
 
-        // Song：4.处理标签（自动创建标签并增加热度）
-        processPostTags(createPostRequest.getTags());
+        // 异步：处理标签 + 通知标签关注者
+        asyncTaskService.processPostTagsAsync(createPostRequest.getTags());
+        asyncTaskService.notifyTagFollowersAsync(userId, sysPost.getId(), sysPost.getTitle(), createPostRequest.getTags());
 
-        // Song：5.更新用户画像
+        // 同步：更新帖子计数（影响用户主页展示，需即时）
         userService.incrementTotalPosts(userId);
-        userService.updateLastActiveTime(userId);
-        // Song：说明
         userService.updatePreferredSections(userId, String.valueOf(createPostRequest.getSectionId()));
         userService.addContribution(userId, 5);
 
-        // Song：发帖经验 +5
-        levelService.addExperience(userId, 5, "发帖");
-
-        // Song：6.更新活跃地点
+        // 异步：经验值、活跃时间、地区（不阻塞主流程）
+        asyncTaskService.addExperienceAsync(userId, 5, "发帖");
+        asyncTaskService.updateLastActiveAsync(userId);
         if (createPostRequest.getLocationName() != null && !createPostRequest.getLocationName().isEmpty()) {
-            userService.updateActiveRegion(userId, createPostRequest.getLocationName());
+            asyncTaskService.updateActiveRegionAsync(userId, createPostRequest.getLocationName());
         }
 
         invalidatePostFeedCache(null, sysPost.getSectionId());
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public PostResp saveDraft(PostDraftReq draftRequest, String userId) {
+        if (draftRequest == null) {
+            throw new BusinessException(ResultCode.PARAM_ERROR, "草稿内容不能为空");
+        }
+
+        boolean hasAnyContent = StringUtils.hasText(draftRequest.getTitle())
+                || StringUtils.hasText(draftRequest.getContent())
+                || draftRequest.getSectionId() != null
+                || StringUtils.hasText(draftRequest.getTags())
+                || StringUtils.hasText(draftRequest.getCoverImage());
+        if (!hasAnyContent) {
+            throw new BusinessException(ResultCode.PARAM_ERROR, "草稿至少需要包含标题、正文、板块、标签或封面中的一项");
+        }
+
+        Post post;
+        Long oldSectionId = null;
+        if (StringUtils.hasText(draftRequest.getPostId())) {
+            post = getById(draftRequest.getPostId());
+            if (post == null) {
+                throw new BusinessException(ResultCode.DRAFT_NOT_FOUND);
+            }
+            if (!userId.equals(post.getUserId())) {
+                throw new BusinessException(ResultCode.NO_PERMISSION, "无权修改该草稿");
+            }
+            oldSectionId = post.getSectionId();
+        } else {
+            post = new Post();
+            post.setId(IdUtils.genId("POST"));
+            post.setUserId(userId);
+            post.setCreateTime(LocalDateTime.now());
+            post.setViewCount(0);
+            post.setLikeCount(0);
+            post.setCollectCount(0);
+            post.setCommentCount(0);
+            post.setHeatScore(0.0);
+            post.setGlobalPin(0);
+            post.setCategoryPin(0);
+            post.setPinOrder(0);
+            post.setLastReplyAt(null);
+        }
+
+        fillPostDraftFields(post, draftRequest);
+        validateDraftForSave(post);
+        post.setStatus(POST_STATUS_DRAFT);
+        if (!AUDIT_STATUS_REJECTED.equalsIgnoreCase(post.getAuditStatus())) {
+            post.setAuditStatus(AUDIT_STATUS_DRAFT);
+        }
+        post.setLastActivityAt(LocalDateTime.now());
+        post.setUpdateTime(LocalDateTime.now());
+
+        if (StringUtils.hasText(draftRequest.getPostId())) {
+            updateById(post);
+        } else {
+            save(post);
+        }
+
+        invalidatePostFeedCache(oldSectionId, post.getSectionId());
+        bumpPostDetailCacheVersion(post.getId());
+        return convertToPostResp(post);
     }
 
     /**
@@ -237,6 +345,48 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
         }
     }
 
+    private void notifyTagFollowers(String authorUserId, String postId, String postTitle, String tagsString) {
+        if (!StringUtils.hasText(tagsString)) return;
+        try {
+            User author = userService.getById(authorUserId);
+            String authorName = author != null && StringUtils.hasText(author.getNickname()) ? author.getNickname() : "匿名用户";
+            String authorAvatar = author != null ? author.getAvatar() : null;
+
+            String[] tagNames = tagsString.split("[,，\\s#]+");
+            for (String rawTag : tagNames) {
+                String tagName = rawTag.trim();
+                if (!StringUtils.hasText(tagName)) continue;
+                Tag tag = tagService.getOrCreateTag(tagName);
+                if (tag == null) continue;
+
+                List<UserTagRelation> followers = userTagRelationService.list(
+                    com.baomidou.mybatisplus.core.toolkit.Wrappers.<UserTagRelation>lambdaQuery()
+                        .eq(UserTagRelation::getTagId, tag.getId())
+                );
+
+                for (UserTagRelation rel : followers) {
+                    if (rel.getUserId().equals(authorUserId)) continue;
+                    try {
+                        notificationService.createNotification(
+                            rel.getUserId(),
+                            authorUserId,
+                            authorName,
+                            authorAvatar,
+                            "话题 #" + tagName + " 有新帖子",
+                            authorName + " 在你关注的话题 #" + tagName + " 中发布了「" + postTitle + "」",
+                            0,
+                            postId
+                        );
+                    } catch (Exception e) {
+                        log.warn("发送标签关注通知失败 userId={} tagName={}", rel.getUserId(), tagName, e);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.warn("notifyTagFollowers 异常", e);
+        }
+    }
+
     @Override
     public Map<String, Object> extractTagsAndSummary(TagsExtractReq extractTagsRequest) {
         return aiPostAnalysisService.extractTagsAndSummary(extractTagsRequest);
@@ -247,13 +397,13 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
     public String regenerateSummary(String postId, String userId) {
         Post post = getById(postId);
         if (post == null) {
-            throw new RuntimeException("帖子不存在");
+            throw new BusinessException(ResultCode.POST_NOT_FOUND);
         }
 
         boolean isOwner = post.getUserId() != null && post.getUserId().equals(userId);
-        boolean isAdminOrMod = com.campus.trend.campus_pulse.utils.PermissionUtils.isUserAdminOrModerator(userId);
-        if (!isOwner && !isAdminOrMod) {
-            throw new RuntimeException("无权重新生成该帖子摘要");
+        boolean canModerateSection = sectionModeratorService.canModerateSection(userId, post.getSectionId());
+        if (!isOwner && !canModerateSection) {
+            throw new BusinessException(ResultCode.NO_PERMISSION, "无权重新生成该帖子摘要");
         }
 
         TagsExtractReq req = new TagsExtractReq();
@@ -279,6 +429,7 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
         post.setUpdateTime(LocalDateTime.now());
         updateById(post);
         invalidatePostFeedCache(post.getSectionId(), post.getSectionId());
+        bumpPostDetailCacheVersion(postId);
 
         return summary;
     }
@@ -290,6 +441,7 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
         // Song：该方法会自动处理点赞状态切换并更新点赞数
         postLikeService.toggleLike(postId, userId);
         invalidatePostFeedCache(sectionId, sectionId);
+        bumpPostDetailCacheVersion(postId);
     }
 
     @Override
@@ -299,6 +451,7 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
         // Song：该方法会自动处理收藏状态切换并更新收藏数
         postCollectService.toggleCollect(postId, userId);
         invalidatePostFeedCache(sectionId, sectionId);
+        bumpPostDetailCacheVersion(postId);
     }
 
     @Override
@@ -306,17 +459,18 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
     public void updatePost(com.campus.trend.campus_pulse.dto.request.PostUpdateReq request, String userId) {
         Post post = getById(request.getPostId());
         if (post == null) {
-            throw new RuntimeException("帖子不存在");
+            throw new BusinessException(ResultCode.POST_NOT_FOUND);
         }
         Long oldSectionId = post.getSectionId();
 
         boolean isAdmin = com.campus.trend.campus_pulse.utils.PermissionUtils.isUserAdmin(userId);
 
         if (!post.getUserId().equals(userId) && !isAdmin) {
-            throw new RuntimeException("无权修改该帖子");
+            throw new BusinessException(ResultCode.NO_PERMISSION, "无权修改该帖子");
         }
 
         boolean contentChanged = false;
+        boolean publishAction = Boolean.TRUE.equals(request.getPublish()) || Integer.valueOf(POST_STATUS_PUBLISHED).equals(request.getStatus());
         String title = request.getTitle();
         String content = request.getContent();
 
@@ -345,7 +499,7 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
             post.setSummary(buildSummary(post.getContent()));
 
             // Song：重新审核状态
-            post.setAuditStatus("PENDING");
+            post.setAuditStatus(AUDIT_STATUS_PENDING);
         }
 
         // Song：3. 其他字段
@@ -359,7 +513,7 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
             // Song：验证板块是否存在
             Section section = sectionService.getSectionById(request.getSectionId());
             if (section == null) {
-                throw new RuntimeException("板块不存在: " + request.getSectionId());
+                throw new BusinessException(ResultCode.SECTION_NOT_FOUND);
             }
             post.setSectionId(request.getSectionId());
         }
@@ -367,8 +521,19 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
             post.setCoverImage(request.getCoverImage());
         }
         if (StringUtils.hasText(request.getTags())) {
-            post.setTags(request.getTags());
-            processPostTags(request.getTags());
+            post.setTags(normalizeTags(request.getTags()));
+        }
+
+        if (publishAction) {
+            validatePostForPublish(post);
+            post.setStatus(POST_STATUS_PUBLISHED);
+            post.setAuditStatus(AUDIT_STATUS_PENDING);
+            processPostTags(post.getTags());
+        } else if (Integer.valueOf(POST_STATUS_DRAFT).equals(request.getStatus())) {
+            post.setStatus(POST_STATUS_DRAFT);
+            if (!AUDIT_STATUS_REJECTED.equalsIgnoreCase(post.getAuditStatus())) {
+                post.setAuditStatus(AUDIT_STATUS_DRAFT);
+            }
         }
 
         post.setUpdateTime(LocalDateTime.now());
@@ -386,6 +551,7 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
 
         this.updateById(post);
         invalidatePostFeedCache(oldSectionId, post.getSectionId());
+        bumpPostDetailCacheVersion(post.getId());
     }
 
     @Override
@@ -393,20 +559,22 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
     public void deletePost(String postId, String userId) {
         Post post = getById(postId);
         if (post == null) {
-            throw new RuntimeException("帖子不存在");
+            throw new BusinessException(ResultCode.POST_NOT_FOUND);
         }
         Long oldSectionId = post.getSectionId();
 
         boolean isAdmin = com.campus.trend.campus_pulse.utils.PermissionUtils.isUserAdmin(userId);
+        boolean canModerateSection = sectionModeratorService.canModerateSection(userId, post.getSectionId());
 
-        // Song：校验权限 (作者或管理员)
-        if (!post.getUserId().equals(userId) && !isAdmin) {
-            throw new RuntimeException("无权删除该帖子");
+        // Song：校验权限 (作者、管理员或对应板块版主)
+        if (!post.getUserId().equals(userId) && !isAdmin && !canModerateSection) {
+            throw new BusinessException(ResultCode.NO_PERMISSION, "无权删除该帖子");
         }
 
         // Song：物理删除
         this.removeById(postId);
         invalidatePostFeedCache(oldSectionId, null);
+        bumpPostDetailCacheVersion(postId);
 
         // Song：同时可以考虑扣除用户贡献值等，或者清理浏览记录
         // Song：说明
@@ -416,32 +584,79 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
     public void featurePost(String postId, String userId) {
         Post post = getById(postId);
         if (post == null) {
-            throw new RuntimeException("帖子不存在");
+            throw new BusinessException(ResultCode.POST_NOT_FOUND);
         }
 
-        boolean isAdminOrMod = com.campus.trend.campus_pulse.utils.PermissionUtils.isUserAdminOrModerator(userId);
-
-        if (!isAdminOrMod) {
-            throw new RuntimeException("无权操作精华");
+        boolean canModerateSection = sectionModeratorService.canModerateSection(userId, post.getSectionId());
+        if (!canModerateSection) {
+            throw new BusinessException(ResultCode.NO_PERMISSION, "无权操作精华");
         }
 
         post.setIsFeatured(post.getIsFeatured() != null && post.getIsFeatured() == 1 ? 0 : 1);
         post.setUpdateTime(java.time.LocalDateTime.now());
         this.updateById(post);
         invalidatePostFeedCache(post.getSectionId(), post.getSectionId());
+        bumpPostDetailCacheVersion(post.getId());
+    }
+
+    @Override
+    public void rejectPost(String postId, String reason, String operatorId) {
+        Post post = getById(postId);
+        if (post == null) throw new BusinessException(ResultCode.POST_NOT_FOUND);
+        post.setAuditStatus(AUDIT_STATUS_REJECTED);
+        post.setStatus(0);
+        post.setRejectReason(reason);
+        post.setUpdateTime(java.time.LocalDateTime.now());
+        this.updateById(post);
+        invalidatePostFeedCache(post.getSectionId(), post.getSectionId());
+        bumpPostDetailCacheVersion(post.getId());
+        // 异步通知作者
+        if (post.getUserId() != null) {
+            String notifyTitle = "您的帖子被打回修改";
+            String notifyContent = String.format("您的帖子「%s」被审核人员打回，原因：%s。请修改后重新提交。",
+                    post.getTitle(), org.springframework.util.StringUtils.hasText(reason) ? reason : "违规内容");
+            asyncTaskService.sendSystemNotificationAsync(post.getUserId(), notifyTitle, notifyContent, post.getId());
+        }
+    }
+
+    @Override
+    public void approvePost(String postId, String operatorId) {
+        Post post = getById(postId);
+        if (post == null) throw new BusinessException(ResultCode.POST_NOT_FOUND);
+        post.setAuditStatus("APPROVED");
+        post.setStatus(1);
+        post.setUpdateTime(java.time.LocalDateTime.now());
+        this.updateById(post);
+        invalidatePostFeedCache(post.getSectionId(), post.getSectionId());
+        bumpPostDetailCacheVersion(post.getId());
     }
 
     @Override
     public IPage<Post> searchAllList(PostSearchReq postSearchRequest) {
-
         int page = postSearchRequest.getPage() != null ? postSearchRequest.getPage() : 1;
         int pageSize = clampPageSize(postSearchRequest.getPageSize());
         Page<Post> pagePram = new Page<>(page, pageSize);
+        pagePram.setSearchCount(Boolean.TRUE.equals(postSearchRequest.getNeedTotal()));
         if (postSearchRequest.getCursor() != null) {
-            // Song：说明
             pagePram.setCurrent(1);
         }
 
+        String normalizedKeyword = normalizeKeyword(postSearchRequest.getKeyword());
+        List<String> keywordTerms = splitKeywordTerms(normalizedKeyword);
+        try {
+            return this.page(pagePram, buildSearchWrapper(postSearchRequest, keywordTerms, KeywordSearchMode.FULLTEXT));
+        } catch (Exception e) {
+            if (keywordTerms.isEmpty() || !shouldFallbackToLikeSearch(e)) {
+                throw e;
+            }
+            log.warn("帖子全文检索不可用，回退到 LIKE 搜索: err={}", e.getMessage());
+            return this.page(pagePram, buildSearchWrapper(postSearchRequest, keywordTerms, KeywordSearchMode.LIKE));
+        }
+    }
+
+    private LambdaQueryWrapper<Post> buildSearchWrapper(PostSearchReq request,
+                                                        List<String> keywordTerms,
+                                                        KeywordSearchMode keywordSearchMode) {
         LambdaQueryWrapper<Post> wrapper = Wrappers.lambdaQuery();
         wrapper.select(
                 Post::getId,
@@ -471,113 +686,104 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
                 Post::getLastReplyAt,
                 Post::getLastActivityAt);
 
-        // Song：说明
-        wrapper.eq(postSearchRequest.getSectionId() != null, Post::getSectionId,
-                postSearchRequest.getSectionId());
+        if (request.getSectionIds() != null && !request.getSectionIds().isEmpty()) {
+            wrapper.in(Post::getSectionId, request.getSectionIds());
+        } else {
+            wrapper.eq(request.getSectionId() != null, Post::getSectionId, request.getSectionId());
+        }
 
-        // Song：如果需要筛选精华帖
-        if (postSearchRequest.getIsFeatured() != null && postSearchRequest.getIsFeatured()) {
+        if (Boolean.TRUE.equals(request.getIsFeatured())) {
             wrapper.eq(Post::getIsFeatured, 1);
         }
 
-        // Song：时间范围过滤
-        if (org.springframework.util.StringUtils.hasText(postSearchRequest.getTimeRange())) {
-            java.time.LocalDateTime now = java.time.LocalDateTime.now();
-            java.time.LocalDateTime start = null;
-            switch (postSearchRequest.getTimeRange().toUpperCase()) {
-                case "TODAY":
-                    start = now.toLocalDate().atStartOfDay();
-                    break;
-                case "WEEK":
-                    start = now.minusDays(7);
-                    break;
-                case "MONTH":
-                    start = now.minusDays(30);
-                    break;
-            }
+        if (StringUtils.hasText(request.getTimeRange())) {
+            LocalDateTime start = TimeRangeUtils.resolveRangeStart(request.getTimeRange());
             if (start != null) {
-                wrapper.ge(Post::getCreateTime, start);
+                if ("hot".equalsIgnoreCase(request.getOrderBy())) {
+                    wrapper.ge(Post::getLastActivityAt, start);
+                    wrapper.and(w -> w.gt(Post::getViewCount, 0).or().gt(Post::getCommentCount, 0));
+                } else {
+                    wrapper.ge(Post::getCreateTime, start);
+                }
             }
         }
 
-        // Song：说明
-        wrapper.eq(postSearchRequest.getUserId() != null, Post::getUserId, postSearchRequest.getUserId());
-        // Song：说明
-        wrapper.eq(postSearchRequest.getStatus() != null, Post::getStatus, postSearchRequest.getStatus());
-        if (Boolean.TRUE.equals(postSearchRequest.getPinnedOnly())) {
+        wrapper.eq(StringUtils.hasText(request.getUserId()), Post::getUserId, request.getUserId());
+
+        if (StringUtils.hasText(request.getAuditStatus())) {
+            wrapper.eq(Post::getAuditStatus, request.getAuditStatus());
+        }
+
+        if (request.getStatus() != null && request.getStatus() != -1) {
+            wrapper.eq(Post::getStatus, request.getStatus());
+        } else if (request.getStatus() == null) {
+            String currentUserId = com.campus.trend.campus_pulse.utils.SecurityUtils.getCurrentUserId();
+            boolean isQueryingSelf = StringUtils.hasText(request.getUserId())
+                    && request.getUserId().equals(currentUserId);
+            if (isQueryingSelf) {
+                wrapper.and(w -> w.eq(Post::getStatus, 1)
+                        .or(ow -> ow.eq(Post::getStatus, 0)
+                                .in(Post::getAuditStatus, AUDIT_STATUS_REJECTED, AUDIT_STATUS_DRAFT)));
+            } else {
+                wrapper.eq(Post::getStatus, 1);
+            }
+        }
+
+        if (Boolean.TRUE.equals(request.getPinnedOnly())) {
             wrapper.and(w -> w.eq(Post::getGlobalPin, 1).or().eq(Post::getCategoryPin, 1));
         }
 
-        // Song：说明
-        String normalizedKeyword = normalizeKeyword(postSearchRequest.getKeyword());
-        List<String> keywordTerms = splitKeywordTerms(normalizedKeyword);
-        if (!keywordTerms.isEmpty()) {
+        applyKeywordSearch(wrapper, keywordTerms, keywordSearchMode);
+
+        if (StringUtils.hasText(request.getTag())) {
+            String[] tagArr = request.getTag().trim().split("[,，]+");
             wrapper.and(w -> {
-                for (String term : keywordTerms) {
-                    w.and(inner -> inner.like(Post::getTitle, term)
-                            .or()
-                            .like(Post::getContent, term));
+                boolean first = true;
+                for (String raw : tagArr) {
+                    String t = raw.trim();
+                    if (t.isEmpty()) continue;
+                    // 同时匹配规范格式和历史带空格格式
+                    final String spaced = " " + t;
+                    if (first) {
+                        w.apply("FIND_IN_SET({0}, tags)", t)
+                         .or().apply("FIND_IN_SET({0}, tags)", spaced);
+                        first = false;
+                    } else {
+                        w.or().apply("FIND_IN_SET({0}, tags)", t)
+                         .or().apply("FIND_IN_SET({0}, tags)", spaced);
+                    }
                 }
             });
         }
 
-        // Song：说明
-        if (StringUtils.hasText(postSearchRequest.getTag())) {
-            wrapper.apply("FIND_IN_SET({0}, tags)", postSearchRequest.getTag());
-        }
-
-        // Song：说明
-        if (StringUtils.hasText(postSearchRequest.getLikedBy())) {
-            List<String> likedIds = postLikeService.lambdaQuery()
-                    .eq(PostLike::getUserId, postSearchRequest.getLikedBy())
-                    .list()
-                    .stream()
-                    .map(PostLike::getPostId)
-                    .distinct()
-                    .toList();
+        List<String> likedIds = resolvePostIdsByRelation(request.getLikedBy(), true);
+        if (StringUtils.hasText(request.getLikedBy())) {
             if (likedIds.isEmpty()) {
-                Page<Post> empty = new Page<>(page, pageSize);
-                empty.setTotal(0);
-                empty.setRecords(new ArrayList<>());
-                return empty;
+                wrapper.eq(Post::getId, "__EMPTY__");
+            } else {
+                wrapper.in(Post::getId, likedIds);
             }
-            wrapper.in(Post::getId, likedIds);
         }
 
-        // Song：说明
-        if (StringUtils.hasText(postSearchRequest.getCollectedBy())) {
-            List<String> collectedIds = postCollectService.lambdaQuery()
-                    .eq(PostCollect::getUserId, postSearchRequest.getCollectedBy())
-                    .list()
-                    .stream()
-                    .map(PostCollect::getPostId)
-                    .distinct()
-                    .toList();
+        List<String> collectedIds = resolvePostIdsByRelation(request.getCollectedBy(), false);
+        if (StringUtils.hasText(request.getCollectedBy())) {
             if (collectedIds.isEmpty()) {
-                Page<Post> empty = new Page<>(page, pageSize);
-                empty.setTotal(0);
-                empty.setRecords(new ArrayList<>());
-                return empty;
+                wrapper.eq(Post::getId, "__EMPTY__");
+            } else {
+                wrapper.in(Post::getId, collectedIds);
             }
-            wrapper.in(Post::getId, collectedIds);
         }
 
-        // Song：置顶帖子优先排序：全局置顶 > 板块置顶 > 普通帖子
-        // Song：如果是全局最新排序（首页的 "最新发布"），暂取消强制置顶；但在指定版块内仍然保留版块置顶
-        String orderBy = postSearchRequest.getOrderBy();
-        boolean shouldApplyPin = true;
-
-        if ("new".equalsIgnoreCase(orderBy) && postSearchRequest.getSectionId() == null) {
-            shouldApplyPin = false; // Song："在最新话题中不用刻意置顶... 但是指定的板块要置顶"
-        }
-
+        String orderBy = request.getOrderBy();
+        boolean shouldApplyPin = !"new".equalsIgnoreCase(orderBy)
+                || request.getSectionId() != null
+                || (request.getSectionIds() != null && !request.getSectionIds().isEmpty());
         if (shouldApplyPin) {
             wrapper.orderByDesc(Post::getGlobalPin);
             wrapper.orderByDesc(Post::getCategoryPin);
             wrapper.orderByAsc(Post::getPinOrder);
         }
 
-        // Song：根据排序方式排序
         if ("hot".equalsIgnoreCase(orderBy)) {
             wrapper.orderByDesc(Post::getHeatScore);
             wrapper.orderByDesc(Post::getId);
@@ -587,9 +793,9 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
             wrapper.orderByDesc(Post::getCommentCount);
             wrapper.orderByDesc(Post::getCreateTime);
         } else {
-            if (postSearchRequest.getCursor() != null) {
-                LocalDateTime cursor = postSearchRequest.getCursor();
-                String cursorId = postSearchRequest.getCursorId();
+            if (request.getCursor() != null) {
+                LocalDateTime cursor = request.getCursor();
+                String cursorId = request.getCursorId();
                 wrapper.and(w -> {
                     w.lt(Post::getLastActivityAt, cursor);
                     if (StringUtils.hasText(cursorId)) {
@@ -597,23 +803,111 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
                     }
                 });
             }
-            // Song：默认按最后活跃时间排序（新回复的帖子会浮到前面）
             wrapper.orderByDesc(Post::getLastActivityAt);
             wrapper.orderByDesc(Post::getId);
         }
+        return wrapper;
+    }
 
-        return this.page(pagePram, wrapper);
+    private void applyKeywordSearch(LambdaQueryWrapper<Post> wrapper,
+                                    List<String> keywordTerms,
+                                    KeywordSearchMode keywordSearchMode) {
+        if (keywordTerms == null || keywordTerms.isEmpty() || keywordSearchMode == KeywordSearchMode.NONE) {
+            return;
+        }
+
+        if (keywordSearchMode == KeywordSearchMode.FULLTEXT) {
+            String booleanQuery = buildBooleanModeKeyword(keywordTerms);
+            wrapper.and(w -> w.apply(
+                    "MATCH(title, content, summary, tags) AGAINST ({0} IN BOOLEAN MODE)",
+                    booleanQuery));
+            return;
+        }
+
+        wrapper.and(w -> {
+            for (String term : keywordTerms) {
+                w.and(inner -> inner.likeRight(Post::getTitle, term)
+                        .or()
+                        .likeRight(Post::getSummary, term)
+                        .or()
+                        .like(Post::getTags, term)
+                        .or()
+                        .like(Post::getContent, term));
+            }
+        });
+    }
+
+    private List<String> resolvePostIdsByRelation(String userId, boolean likedRelation) {
+        if (!StringUtils.hasText(userId)) {
+            return null;
+        }
+        if (likedRelation) {
+            return postLikeService.lambdaQuery()
+                    .select(PostLike::getPostId)
+                    .eq(PostLike::getUserId, userId)
+                    .list()
+                    .stream()
+                    .map(PostLike::getPostId)
+                    .filter(StringUtils::hasText)
+                    .distinct()
+                    .toList();
+        }
+        return postCollectService.lambdaQuery()
+                .select(PostCollect::getPostId)
+                .eq(PostCollect::getUserId, userId)
+                .list()
+                .stream()
+                .map(PostCollect::getPostId)
+                .filter(StringUtils::hasText)
+                .distinct()
+                .toList();
+    }
+
+    private String buildBooleanModeKeyword(List<String> keywordTerms) {
+        return keywordTerms.stream()
+                .map(term -> term.replaceAll("[^\\p{IsHan}A-Za-z0-9_]", ""))
+                .filter(StringUtils::hasText)
+                .map(term -> "+" + term + "*")
+                .reduce((left, right) -> left + " " + right)
+                .orElse("");
+    }
+
+    private boolean shouldFallbackToLikeSearch(Exception e) {
+        String message = e.getMessage();
+        if (!StringUtils.hasText(message)) {
+            return false;
+        }
+        String normalized = message.toLowerCase();
+        return normalized.contains("fulltext")
+                || normalized.contains("against")
+                || normalized.contains("syntax")
+                || normalized.contains("index");
     }
 
     // Song：=================== 新增：带作者信息的帖子查询 ===================
 
     @Override
     public PostResp getPostWithAuthor(String postId) {
+        String currentUserId = com.campus.trend.campus_pulse.utils.SecurityUtils.getCurrentUserId();
+        if (!StringUtils.hasText(currentUserId)) {
+            CachedDetailResult cachedDetail = readPostDetailCache(postId);
+            if (cachedDetail.hit) {
+                return cachedDetail.value;
+            }
+        }
+
         Post post = searchByPostId(postId);
         if (post == null) {
+            if (!StringUtils.hasText(currentUserId)) {
+                writePostDetailCache(postId, null);
+            }
             return null;
         }
-        return convertToPostResp(post);
+        PostResp result = convertToPostResp(post);
+        if (!StringUtils.hasText(currentUserId)) {
+            writePostDetailCache(postId, result);
+        }
+        return result;
     }
 
     @Override
@@ -636,6 +930,7 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
 
         // Song：说明
         List<String> userIds = posts.stream().map(Post::getUserId).distinct().toList();
+        List<String> postIds = posts.stream().map(Post::getId).filter(StringUtils::hasText).distinct().toList();
         List<Long> sectionIds = posts.stream()
                 .map(Post::getSectionId)
                 .filter(java.util.Objects::nonNull)
@@ -658,9 +953,34 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
             }
         }
 
-        // Song：说明
+        String currentUserId = com.campus.trend.campus_pulse.utils.SecurityUtils.getCurrentUserId();
+        Set<String> likedPostIds = Collections.emptySet();
+        Set<String> collectedPostIds = Collections.emptySet();
+        if (StringUtils.hasText(currentUserId) && !postIds.isEmpty()) {
+            likedPostIds = new HashSet<>(postLikeService.lambdaQuery()
+                    .select(PostLike::getPostId)
+                    .eq(PostLike::getUserId, currentUserId)
+                    .in(PostLike::getPostId, postIds)
+                    .list()
+                    .stream()
+                    .map(PostLike::getPostId)
+                    .filter(StringUtils::hasText)
+                    .toList());
+            collectedPostIds = new HashSet<>(postCollectService.lambdaQuery()
+                    .select(PostCollect::getPostId)
+                    .eq(PostCollect::getUserId, currentUserId)
+                    .in(PostCollect::getPostId, postIds)
+                    .list()
+                    .stream()
+                    .map(PostCollect::getPostId)
+                    .filter(StringUtils::hasText)
+                    .toList());
+        }
+
         List<PostResp> responseList = new ArrayList<>();
         for (Post post : posts) {
+            post.setIsLiked(likedPostIds.contains(post.getId()));
+            post.setIsCollected(collectedPostIds.contains(post.getId()));
             responseList.add(convertToPostResp(post, userMap, sectionMap));
         }
 
@@ -673,6 +993,46 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
 
         writePostFeedCache(postSearchRequest, responsePage);
         return responsePage;
+    }
+
+    @Override
+    public IPage<PostResp> searchModerationPosts(PostSearchReq postSearchRequest, String userId) {
+        PostSearchReq scopedRequest = postSearchRequest != null ? postSearchRequest : new PostSearchReq();
+
+        if (com.campus.trend.campus_pulse.utils.PermissionUtils.isUserAdmin(userId)) {
+            // Song：管理员可查所有状态帖子，不限制 status
+            if (scopedRequest.getStatus() == null) {
+                scopedRequest.setStatus(-1); // Song：-1 表示不过滤状态
+            }
+            return searchPostsWithAuthor(scopedRequest);
+        }
+
+        Set<Long> moderatedSectionIds = sectionModeratorService.getModeratedSectionIds(userId);
+        if (moderatedSectionIds.isEmpty()) {
+            throw new BusinessException(ResultCode.NO_PERMISSION, "无权访问内容管理");
+        }
+
+        List<Long> scopedSectionIds;
+        if (scopedRequest.getSectionId() != null) {
+            if (!moderatedSectionIds.contains(scopedRequest.getSectionId())) {
+                return buildEmptyPostRespPage(scopedRequest);
+            }
+            scopedSectionIds = List.of(scopedRequest.getSectionId());
+        } else if (scopedRequest.getSectionIds() != null && !scopedRequest.getSectionIds().isEmpty()) {
+            scopedSectionIds = scopedRequest.getSectionIds().stream()
+                    .filter(moderatedSectionIds::contains)
+                    .distinct()
+                    .toList();
+            if (scopedSectionIds.isEmpty()) {
+                return buildEmptyPostRespPage(scopedRequest);
+            }
+        } else {
+            scopedSectionIds = new ArrayList<>(moderatedSectionIds);
+        }
+
+        scopedRequest.setSectionId(null);
+        scopedRequest.setSectionIds(scopedSectionIds);
+        return searchPostsWithAuthor(scopedRequest);
     }
 
     /**
@@ -697,6 +1057,7 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
         response.setLocationName(post.getLocationName());
         response.setStatus(post.getStatus());
         response.setAuditStatus(post.getAuditStatus());
+        response.setRejectReason(post.getRejectReason());
         response.setViewCount(post.getViewCount());
         response.setLikeCount(post.getLikeCount());
         response.setCollectCount(post.getCollectCount());
@@ -716,6 +1077,7 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
         response.setPinOrder(post.getPinOrder());
         response.setPinExpireAt(post.getPinExpireAt());
         response.setIsPinned(post.getIsPinned()); // Song：兼容旧字段
+        response.setIsFeatured(post.getIsFeatured());
 
         // Song：===== 填充作者信息 =====
         if (post.getIsAnonymous() != null && post.getIsAnonymous() == 1) {
@@ -816,69 +1178,73 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
         if (content == null || content.isEmpty()) {
             return "";
         }
-
         String text = content;
+        text = MD_HTML_TAG.matcher(text).replaceAll("");
+        text = MD_CODE_BLOCK.matcher(text).replaceAll("");
+        text = MD_CODE_BLOCK2.matcher(text).replaceAll("");
+        text = MD_INLINE_CODE.matcher(text).replaceAll("");
+        text = text.replace("`", "");
+        text = MD_HEADING_START.matcher(text).replaceAll("");
+        text = MD_BOLD_STAR.matcher(text).replaceAll("$1");
+        text = MD_BOLD_UNDER.matcher(text).replaceAll("$1");
+        text = MD_ITALIC_STAR.matcher(text).replaceAll("$1");
+        text = MD_ITALIC_UNDER.matcher(text).replaceAll("$1");
+        text = MD_STRIKE.matcher(text).replaceAll("$1");
+        text = MD_HR_LINE.matcher(text).replaceAll("");
+        text = MD_BLOCKQUOTE.matcher(text).replaceAll("");
+        text = MD_IMAGE.matcher(text).replaceAll("");
+        text = MD_LINK.matcher(text).replaceAll("$1");
+        text = MD_LIST_UNORDER.matcher(text).replaceAll("");
+        text = MD_LIST_ORDER.matcher(text).replaceAll("");
+        text = text.replace("&nbsp;", " ").replace("&lt;", "<").replace("&gt;", ">").replace("&amp;", "&").replace("&quot;", "\"");
+        text = MD_WHITESPACE.matcher(text).replaceAll(" ");
+        return text.trim();
+    }
 
-        // Song：说明
-        text = text.replaceAll("<[^>]*>", "");
+    private CachedDetailResult readPostDetailCache(String postId) {
+        if (!StringUtils.hasText(postId)) {
+            return CachedDetailResult.miss();
+        }
+        String cacheKey = buildPostDetailCacheKey(postId);
+        if (!StringUtils.hasText(cacheKey)) {
+            return CachedDetailResult.miss();
+        }
+        try {
+            String cachedJson = stringRedisTemplate.opsForValue().get(cacheKey);
+            if (!StringUtils.hasText(cachedJson)) {
+                return CachedDetailResult.miss();
+            }
+            if (CACHE_NULL_MARKER.equals(cachedJson)) {
+                return CachedDetailResult.hit(null);
+            }
+            return CachedDetailResult.hit(objectMapper.readValue(cachedJson, PostResp.class));
+        } catch (Exception e) {
+            log.debug("读取帖子详情缓存失败: postId={}, err={}", postId, e.getMessage());
+            return CachedDetailResult.miss();
+        }
+    }
 
-        // Song：移除代码块标记 ```
-        text = text.replaceAll("```[\\s\\S]*?```", "");
-        text = text.replaceAll("```.*", "");
-
-        // Song：移除行内代码 `
-        text = text.replaceAll("`[^`]+`", "");
-        text = text.replaceAll("`", "");
-
-        // Song：移除标题符号 # ## ### 等
-        text = text.replaceAll("^#{1,6}\\s+", "");
-        text = text.replaceAll("\\n#{1,6}\\s+", "\n");
-
-        // Song：移除加粗 ** 和 __
-        text = text.replaceAll("\\*\\*([^*]+)\\*\\*", "$1");
-        text = text.replaceAll("__([^_]+)__", "$1");
-
-        // Song：移除斜体 * 和 _
-        text = text.replaceAll("\\*([^*]+)\\*", "$1");
-        text = text.replaceAll("_([^_]+)_", "$1");
-
-        // Song：移除删除线 ~~
-        text = text.replaceAll("~~([^~]+)~~", "$1");
-
-        // Song：移除分割线 --- 或 ***
-        text = text.replaceAll("^[-*]{3,}$", "");
-        text = text.replaceAll("\\n[-*]{3,}\\n", "\n");
-
-        // Song：移除引用符号 >
-        text = text.replaceAll("^>\\s+", "");
-        text = text.replaceAll("\\n>\\s+", "\n");
-
-        // Song：说明
-        text = text.replaceAll("\\[([^\\]]+)\\]\\([^)]+\\)", "$1");
-
-        // Song：说明
-        text = text.replaceAll("!\\[([^\\]]*)\\]\\([^)]+\\)", "");
-
-        // Song：移除列表符号 - * +
-        text = text.replaceAll("^[\\-*+]\\s+", "");
-        text = text.replaceAll("\\n[\\-*+]\\s+", "\n");
-
-        // Song：移除有序列表 1. 2. 等
-        text = text.replaceAll("^\\d+\\.\\s+", "");
-        text = text.replaceAll("\\n\\d+\\.\\s+", "\n");
-
-        // Song：说明
-        text = text.replaceAll("&nbsp;", " ");
-        text = text.replaceAll("&lt;", "<");
-        text = text.replaceAll("&gt;", ">");
-        text = text.replaceAll("&amp;", "&");
-        text = text.replaceAll("&quot;", "\"");
-
-        // Song：清理多余空白
-        text = text.replaceAll("\\s+", " ");
-        text = text.trim();
-
-        return text;
+    private void writePostDetailCache(String postId, PostResp detail) {
+        if (!StringUtils.hasText(postId)) {
+            return;
+        }
+        String cacheKey = buildPostDetailCacheKey(postId);
+        if (!StringUtils.hasText(cacheKey)) {
+            return;
+        }
+        try {
+            if (detail == null) {
+                stringRedisTemplate.opsForValue().set(
+                        cacheKey,
+                        CACHE_NULL_MARKER,
+                        withCacheTtlJitter(resolveNullValueTtl()));
+                return;
+            }
+            String json = objectMapper.writeValueAsString(detail);
+            stringRedisTemplate.opsForValue().set(cacheKey, json, withCacheTtlJitter(POST_DETAIL_CACHE_TTL));
+        } catch (Exception e) {
+            log.debug("写入帖子详情缓存失败: postId={}, err={}", postId, e.getMessage());
+        }
     }
 
     private IPage<PostResp> readPostFeedCache(PostSearchReq request) {
@@ -925,7 +1291,10 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
             payload.records = page.getRecords();
 
             String json = objectMapper.writeValueAsString(payload);
-            stringRedisTemplate.opsForValue().set(cacheKey, json, POST_FEED_CACHE_TTL);
+            Duration ttl = page.getRecords() == null || page.getRecords().isEmpty()
+                    ? POST_FEED_EMPTY_CACHE_TTL
+                    : POST_FEED_CACHE_TTL;
+            stringRedisTemplate.opsForValue().set(cacheKey, json, withCacheTtlJitter(ttl));
         } catch (Exception e) {
             log.debug("写入帖子流缓存失败: {}", e.getMessage());
         }
@@ -933,6 +1302,10 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
 
     private boolean shouldUsePostFeedCache(PostSearchReq request) {
         if (request == null) {
+            return false;
+        }
+
+        if (request.getSectionIds() != null && !request.getSectionIds().isEmpty()) {
             return false;
         }
 
@@ -969,6 +1342,7 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
             keyParts.put("pinnedOnly", Boolean.TRUE.equals(request.getPinnedOnly()) ? 1 : 0);
             keyParts.put("cursor", request.getCursor() != null ? request.getCursor().toString() : "");
             keyParts.put("cursorId", StringUtils.hasText(request.getCursorId()) ? request.getCursorId() : "");
+            keyParts.put("needTotal", Boolean.TRUE.equals(request.getNeedTotal()) ? 1 : 0);
             keyParts.put("globalVer", getCacheVersion(POST_FEED_CACHE_GLOBAL_VERSION_KEY));
             if (request.getSectionId() != null) {
                 keyParts.put("sectionVer", getCacheVersion(getSectionVersionKey(request.getSectionId())));
@@ -996,6 +1370,7 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
 
     private void invalidatePostFeedCache(Long oldSectionId, Long newSectionId) {
         bumpCacheVersion(POST_FEED_CACHE_GLOBAL_VERSION_KEY);
+        bumpCacheVersion(POST_HEAT_RANK_VERSION_KEY);
         if (oldSectionId != null) {
             bumpCacheVersion(getSectionVersionKey(oldSectionId));
         }
@@ -1007,6 +1382,7 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
     private void bumpCacheVersion(String versionKey) {
         try {
             stringRedisTemplate.opsForValue().increment(versionKey);
+            stringRedisTemplate.expire(versionKey, Duration.ofHours(Math.max(1L, versionKeyTtlHours)));
         } catch (Exception e) {
             log.debug("递增缓存版本失败: key={}, err={}", versionKey, e.getMessage());
         }
@@ -1014,6 +1390,30 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
 
     private String getSectionVersionKey(Long sectionId) {
         return POST_FEED_CACHE_SECTION_VERSION_KEY_PREFIX + sectionId;
+    }
+
+    private String getPostDetailVersionKey(String postId) {
+        return POST_DETAIL_CACHE_VERSION_KEY_PREFIX + postId;
+    }
+
+    private String buildPostDetailCacheKey(String postId) {
+        try {
+            Map<String, Object> keyParts = new TreeMap<>();
+            keyParts.put("postId", postId);
+            keyParts.put("ver", getCacheVersion(getPostDetailVersionKey(postId)));
+            String rawKey = objectMapper.writeValueAsString(keyParts);
+            String digest = DigestUtils.md5DigestAsHex(rawKey.getBytes(StandardCharsets.UTF_8));
+            return POST_DETAIL_CACHE_PREFIX + digest;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private void bumpPostDetailCacheVersion(String postId) {
+        if (!StringUtils.hasText(postId)) {
+            return;
+        }
+        bumpCacheVersion(getPostDetailVersionKey(postId));
     }
 
     private Long getSectionIdByPostId(String postId) {
@@ -1026,6 +1426,14 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
             return DEFAULT_PAGE_SIZE;
         }
         return Math.min(requested, MAX_PAGE_SIZE);
+    }
+
+    private Page<PostResp> buildEmptyPostRespPage(PostSearchReq request) {
+        long current = request != null && request.getPage() != null ? request.getPage() : 1L;
+        long size = clampPageSize(request != null ? request.getPageSize() : null);
+        Page<PostResp> emptyPage = new Page<>(current, size, 0);
+        emptyPage.setRecords(new ArrayList<>());
+        return emptyPage;
     }
 
     private String normalizeKeyword(String rawKeyword) {
@@ -1042,13 +1450,47 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
 
     private List<String> splitKeywordTerms(String normalizedKeyword) {
         if (!StringUtils.hasText(normalizedKeyword)) {
-            return java.util.Collections.emptyList();
+            return Collections.emptyList();
         }
         return Arrays.stream(normalizedKeyword.split("\\s+"))
                 .map(String::trim)
                 .filter(StringUtils::hasText)
                 .limit(5)
                 .toList();
+    }
+
+    private Duration withCacheTtlJitter(Duration baseTtl) {
+        if (baseTtl == null || baseTtl.isNegative() || baseTtl.isZero()) {
+            return baseTtl;
+        }
+        double safeRatio = Math.max(0.0d, Math.min(0.5d, ttlJitterRatio));
+        if (safeRatio <= 0.0d) {
+            return baseTtl;
+        }
+        long baseMillis = baseTtl.toMillis();
+        long jitterMillis = (long) (baseMillis * safeRatio * ThreadLocalRandom.current().nextDouble());
+        return Duration.ofMillis(baseMillis + jitterMillis);
+    }
+
+    private Duration resolveNullValueTtl() {
+        return withCacheTtlJitter(Duration.ofSeconds(Math.max(10L, nullValueTtlSeconds)));
+    }
+
+    /**
+     * 规范化标签字符串：统一用英文逗号分隔，去除多余空格，避免 FIND_IN_SET 匹配失败
+     */
+    private String normalizeTags(String tags) {
+        if (!org.springframework.util.StringUtils.hasText(tags)) return null;
+        String[] parts = tags.split("[,，\\s#]+");
+        StringBuilder sb = new StringBuilder();
+        for (String p : parts) {
+            String t = p.trim();
+            if (!t.isEmpty()) {
+                if (sb.length() > 0) sb.append(',');
+                sb.append(t);
+            }
+        }
+        return sb.length() > 0 ? sb.toString() : null;
     }
 
     private String buildSummary(String content) {
@@ -1069,6 +1511,85 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
         return cleaned.substring(0, maxLen) + "...";
     }
 
+    private void fillPostDraftFields(Post post, PostDraftReq draftRequest) {
+        if (draftRequest.getSectionId() != null) {
+            Section section = sectionService.getSectionById(draftRequest.getSectionId());
+            if (section == null) {
+                throw new BusinessException(ResultCode.SECTION_NOT_FOUND);
+            }
+            post.setSectionId(draftRequest.getSectionId());
+        }
+
+        post.setTitle(StringUtils.hasText(draftRequest.getTitle()) ? draftRequest.getTitle().trim() : null);
+        post.setContent(StringUtils.hasText(draftRequest.getContent()) ? draftRequest.getContent() : null);
+        post.setCoverImage(StringUtils.hasText(draftRequest.getCoverImage()) ? draftRequest.getCoverImage().trim() : null);
+        post.setTags(normalizeTags(draftRequest.getTags()));
+        post.setIsAnonymous(draftRequest.getIsAnonymous() != null ? draftRequest.getIsAnonymous() : 0);
+        post.setLocationName(StringUtils.hasText(draftRequest.getLocationName()) ? draftRequest.getLocationName().trim() : null);
+        post.setSummary(buildSummary(post.getContent()));
+
+        if (StringUtils.hasText(draftRequest.getImages())) {
+            try {
+                List<String> images = objectMapper.readValue(draftRequest.getImages(), new TypeReference<List<String>>() {
+                });
+                post.setImages(images);
+            } catch (Exception e) {
+                List<String> images = new ArrayList<>();
+                images.add(draftRequest.getImages());
+                post.setImages(images);
+            }
+        }
+    }
+
+    private void validatePostForPublish(Post post) {
+        if (!StringUtils.hasText(post.getTitle()) || post.getTitle().trim().length() < 4
+                || post.getTitle().trim().length() > 100) {
+            throw new BusinessException(ResultCode.VALIDATE_FAILED, "文章题目需超过3个字符且不超过100个字符");
+        }
+        if (!StringUtils.hasText(post.getContent()) || post.getContent().trim().length() < 31) {
+            throw new BusinessException(ResultCode.VALIDATE_FAILED, "文章内容需超过30个字符");
+        }
+        if (post.getSectionId() == null) {
+            throw new BusinessException(ResultCode.VALIDATE_FAILED, "板块ID不允许为空");
+        }
+        if (!StringUtils.hasText(post.getTags())) {
+            throw new BusinessException(ResultCode.VALIDATE_FAILED, "标签不允许为空");
+        }
+    }
+
+    private void validateDraftForSave(Post post) {
+        if (!StringUtils.hasText(post.getTitle())) {
+            throw new BusinessException(ResultCode.VALIDATE_FAILED, "草稿至少需要填写标题");
+        }
+        if (post.getSectionId() == null) {
+            throw new BusinessException(ResultCode.VALIDATE_FAILED, "草稿至少需要选择一个板块");
+        }
+    }
+
+    private enum KeywordSearchMode {
+        NONE,
+        FULLTEXT,
+        LIKE
+    }
+
+    private static class CachedDetailResult {
+        private final boolean hit;
+        private final PostResp value;
+
+        private CachedDetailResult(boolean hit, PostResp value) {
+            this.hit = hit;
+            this.value = value;
+        }
+
+        private static CachedDetailResult hit(PostResp value) {
+            return new CachedDetailResult(true, value);
+        }
+
+        private static CachedDetailResult miss() {
+            return new CachedDetailResult(false, null);
+        }
+    }
+
     private static class PostFeedCachePayload {
         public long current;
         public long size;
@@ -1081,12 +1602,12 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
     public void pinPost(String postId, String userId) {
         // Song：校验权限 (只有管理员能操作置顶)
         if (!com.campus.trend.campus_pulse.utils.PermissionUtils.isUserAdmin(userId)) {
-            throw new RuntimeException("无权进行此操作");
+            throw new BusinessException(ResultCode.NO_PERMISSION, "无权进行此操作");
         }
 
         Post post = getById(postId);
         if (post == null) {
-            throw new RuntimeException("帖子不存在");
+            throw new BusinessException(ResultCode.POST_NOT_FOUND);
         }
 
         Integer currentPinned = post.getIsPinned() != null ? post.getIsPinned() : 0;
@@ -1096,6 +1617,7 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
         post.setUpdateTime(LocalDateTime.now());
         this.updateById(post);
         invalidatePostFeedCache(post.getSectionId(), post.getSectionId());
+        bumpPostDetailCacheVersion(post.getId());
     }
 
     @Override
@@ -1103,12 +1625,12 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
     public void setGlobalPin(String postId, String userId, Integer pinOrder, String expireAt) {
         Post post = getById(postId);
         if (post == null) {
-            throw new RuntimeException("帖子不存在");
+            throw new BusinessException(ResultCode.POST_NOT_FOUND);
         }
 
         boolean isAdmin = com.campus.trend.campus_pulse.utils.PermissionUtils.isUserAdmin(userId);
         if (!isAdmin) {
-            throw new RuntimeException("无权操作全局置顶");
+            throw new BusinessException(ResultCode.NO_PERMISSION, "无权操作全局置顶");
         }
 
         // Song：切换全局置顶状态
@@ -1137,6 +1659,7 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
         post.setUpdateTime(java.time.LocalDateTime.now());
         this.updateById(post);
         invalidatePostFeedCache(post.getSectionId(), post.getSectionId());
+        bumpPostDetailCacheVersion(post.getId());
 
         // Song：推送置顶状态更新事件
         try {
@@ -1151,12 +1674,12 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
     public void setCategoryPin(String postId, String userId, Integer pinOrder, String expireAt) {
         Post post = getById(postId);
         if (post == null) {
-            throw new RuntimeException("帖子不存在");
+            throw new BusinessException(ResultCode.POST_NOT_FOUND);
         }
 
-        boolean isAdminOrMod = com.campus.trend.campus_pulse.utils.PermissionUtils.isUserAdminOrModerator(userId);
-        if (!isAdminOrMod) {
-            throw new RuntimeException("无权操作板块置顶");
+        boolean canModerateSection = sectionModeratorService.canModerateSection(userId, post.getSectionId());
+        if (!canModerateSection) {
+            throw new BusinessException(ResultCode.NO_PERMISSION, "无权操作板块置顶");
         }
 
         // Song：切换板块置顶状态
@@ -1186,6 +1709,7 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
         post.setUpdateTime(java.time.LocalDateTime.now());
         this.updateById(post);
         invalidatePostFeedCache(post.getSectionId(), post.getSectionId());
+        bumpPostDetailCacheVersion(post.getId());
 
         // Song：推送置顶状态更新事件
         try {

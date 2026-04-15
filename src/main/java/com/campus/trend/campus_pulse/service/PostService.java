@@ -3,6 +3,7 @@ package com.campus.trend.campus_pulse.service;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.campus.trend.campus_pulse.dto.request.PostCreateReq;
+import com.campus.trend.campus_pulse.dto.request.PostDraftReq;
 import com.campus.trend.campus_pulse.dto.request.TagsExtractReq;
 import com.campus.trend.campus_pulse.dto.request.PostSearchReq;
 import com.campus.trend.campus_pulse.dto.request.PostUpdateReq;
@@ -25,7 +26,11 @@ public interface PostService extends IService<Post> {
      */
     IPage<PostResp> searchPostsWithAuthor(PostSearchReq postSearchRequest);
 
+    IPage<PostResp> searchModerationPosts(PostSearchReq postSearchRequest, String userId);
+
     void createPost(PostCreateReq createPostRequest, String userID);
+
+    PostResp saveDraft(PostDraftReq draftRequest, String userId);
 
     Map<String, Object> extractTagsAndSummary(TagsExtractReq extractTagsRequest);
 
@@ -55,6 +60,10 @@ public interface PostService extends IService<Post> {
     java.util.List<com.campus.trend.campus_pulse.dto.response.PostResp> getPinnedPosts(Long sectionId);
 
     void featurePost(String postId, String userId);
+
+    void rejectPost(String postId, String reason, String operatorId);
+
+    void approvePost(String postId, String operatorId);
 
     // Song：待办 待实现列表
     // Song：1.帖子观看量 2.查询当前用户处于审核中的帖子 ✔

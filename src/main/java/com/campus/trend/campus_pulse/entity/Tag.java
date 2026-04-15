@@ -1,6 +1,7 @@
 package com.campus.trend.campus_pulse.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
@@ -30,4 +31,7 @@ public class Tag implements Serializable {
     private Integer heat;
 
     private LocalDateTime createTime;
+
+    @TableField(exist = false)
+    private Integer postCount;
 }

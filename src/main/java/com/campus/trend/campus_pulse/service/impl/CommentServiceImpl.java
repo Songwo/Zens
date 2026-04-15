@@ -11,15 +11,21 @@ import com.campus.trend.campus_pulse.entity.User;
 import com.campus.trend.campus_pulse.mapper.CommentMapper;
 import com.campus.trend.campus_pulse.mapper.PostMapper;
 import com.campus.trend.campus_pulse.security.AuthUser;
+import com.campus.trend.campus_pulse.common.api.ResultCode;
+import com.campus.trend.campus_pulse.common.exception.BusinessException;
 import com.campus.trend.campus_pulse.service.*;
 import com.campus.trend.campus_pulse.utils.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
+import org.springframework.web.util.HtmlUtils;
 
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 @Service
@@ -28,6 +34,9 @@ public class CommentServiceImpl extends ServiceImpl<CommentMapper, Comment> impl
 
     private static final String POST_FEED_CACHE_GLOBAL_VERSION_KEY = "post:feed:version:global";
     private static final String POST_FEED_CACHE_SECTION_VERSION_KEY_PREFIX = "post:feed:version:section:";
+    private static final String POST_DETAIL_CACHE_VERSION_KEY_PREFIX = "post:detail:version:";
+    private static final String POST_HEAT_RANK_VERSION_KEY = "post:heat:version";
+    private static final Pattern MENTION_PATTERN = Pattern.compile("@([\\p{IsHan}A-Za-z0-9_.-]{2,32})");
 
     private final PostMapper sysPostMapper;
     private final ContentSecurityService contentSecurityService;
@@ -36,18 +45,23 @@ public class CommentServiceImpl extends ServiceImpl<CommentMapper, Comment> impl
     private final NotificationService notificationService;
     private final com.campus.trend.campus_pulse.service.PostEventService postEventService;
     private final com.campus.trend.campus_pulse.service.LevelService levelService;
+    private final com.campus.trend.campus_pulse.service.AsyncTaskService asyncTaskService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void addComment(CommentCreateReq request, String userId) {
+        String actorUserId = userId == null ? "0" : userId;
         Comment comment = new Comment();
         comment.setPostId(request.getPostId());
-        comment.setUserId(userId == null ? "0" : userId);
+        comment.setUserId(actorUserId);
 
         String content = request.getContent();
         if (contentSecurityService.containsSensitiveWords(content)) {
             content = contentSecurityService.filterSensitiveWords(content);
         }
+        String mentionSource = content;
+        // Song：存储前进行HTML转义，避免评论内容被当作脚本执行
+        content = HtmlUtils.htmlEscape(content);
         comment.setContent(content);
 
         comment.setParentId(request.getParentId());
@@ -58,6 +72,7 @@ public class CommentServiceImpl extends ServiceImpl<CommentMapper, Comment> impl
         this.save(comment);
 
         Post post = sysPostMapper.selectById(comment.getPostId());
+        Set<String> alreadyMentionedUserIds = new HashSet<>();
         if (post != null) {
             post.setCommentCount(post.getCommentCount() + 1);
             // Song：更新最后回复时间和最后活跃时间
@@ -65,46 +80,53 @@ public class CommentServiceImpl extends ServiceImpl<CommentMapper, Comment> impl
             post.setLastReplyAt(now);
             post.setLastActivityAt(now);
             sysPostMapper.updateById(post);
-            invalidatePostFeedCache(post.getSectionId());
+            invalidatePostFeedCache(post.getSectionId(), post.getId());
 
-            // Song：推送新回复事件
-            try {
-                postEventService.pushPostReplied(post.getId(), post.getSectionId());
-            } catch (Exception e) {
-                // Song：静默失败，不影响主流程
-            }
+            // 异步：推送新回复事件
+            asyncTaskService.pushPostRepliedAsync(post.getId(), post.getSectionId(), post.getCommentCount());
 
-            // Song：说明
-            // Song：说明
-            if (!post.getUserId().equals(userId)) {
-                notificationService.sendCommentNotification(
-                    post.getUserId(),
-                    userId,
-                    post.getId(),
-                    content
-                );
-
-                // Song：被评论经验 +3（给帖子作者）
-                levelService.addExperience(post.getUserId(), 3, "被评论");
+            // 异步：评论通知 + 经验奖励
+            if (!post.getUserId().equals(actorUserId)) {
+                final String postAuthorId = post.getUserId();
+                final String postId = post.getId();
+                final String commentId = comment.getId();
+                final String mentionContent = mentionSource;
+                notificationService.sendCommentNotification(postAuthorId, actorUserId, postId, commentId, mentionContent);
+                alreadyMentionedUserIds.add(postAuthorId);
+                asyncTaskService.addExperienceAsync(postAuthorId, 3, "被评论");
             }
         }
 
         // Song：说明
         if (request.getParentId() != null && !"0".equals(request.getParentId())) {
             Comment parentComment = this.getById(request.getParentId());
-            if (parentComment != null && !parentComment.getUserId().equals(userId)) {
+            if (parentComment != null && !parentComment.getUserId().equals(actorUserId)) {
                 notificationService.sendMentionNotification(
                     parentComment.getUserId(),
-                    userId,
+                    actorUserId,
                     post != null ? post.getId() : null,
-                    content
+                    comment.getId(),
+                    mentionSource
                 );
+                alreadyMentionedUserIds.add(parentComment.getUserId());
             }
         }
 
+        Set<String> mentionedUserIds = resolveMentionUserIds(mentionSource, actorUserId);
+        mentionedUserIds.removeAll(alreadyMentionedUserIds);
+        for (String mentionedUserId : mentionedUserIds) {
+            notificationService.sendMentionNotification(
+                    mentionedUserId,
+                    actorUserId,
+                    post != null ? post.getId() : null,
+                    comment.getId(),
+                    mentionSource
+            );
+        }
+
         if (userId != null) {
-            userService.addContribution(userId, 2);
-            userService.updateLastActiveTime(userId);
+            userService.addContribution(actorUserId, 2);
+            asyncTaskService.updateLastActiveAsync(actorUserId);
         }
     }
 
@@ -113,11 +135,11 @@ public class CommentServiceImpl extends ServiceImpl<CommentMapper, Comment> impl
     public void deleteComment(String commentId, String userId) {
         Comment comment = getById(commentId);
         if (comment == null) {
-            throw new RuntimeException("评论不存在");
+            throw new BusinessException(ResultCode.FAILED, "评论不存在");
         }
 
         if (!comment.getUserId().equals(userId)) {
-            throw new RuntimeException("无权删除该评论");
+            throw new BusinessException(ResultCode.NO_PERMISSION, "无权删除该评论");
         }
 
         removeById(commentId);
@@ -126,7 +148,7 @@ public class CommentServiceImpl extends ServiceImpl<CommentMapper, Comment> impl
         if (post != null) {
             post.setCommentCount(Math.max(0, post.getCommentCount() - 1));
             sysPostMapper.updateById(post);
-            invalidatePostFeedCache(post.getSectionId());
+            invalidatePostFeedCache(post.getSectionId(), post.getId());
         }
     }
 
@@ -144,8 +166,22 @@ public class CommentServiceImpl extends ServiceImpl<CommentMapper, Comment> impl
             return new Page<CommentResp>(pageNo, pageSize).setRecords(Collections.emptyList());
         }
 
+        // Song：一次性拉取当前帖子的全部评论，避免递归查询导致 N+1
+        List<Comment> allComments = this.list(Wrappers.<Comment>lambdaQuery()
+                .eq(Comment::getPostId, postId)
+                .orderByAsc(Comment::getCreateTime));
+
+        Map<String, List<Comment>> childrenByParentId = new HashMap<>();
+        for (Comment item : allComments) {
+            String parentId = item.getParentId();
+            if (parentId == null || parentId.isBlank() || "0".equals(parentId)) {
+                continue;
+            }
+            childrenByParentId.computeIfAbsent(parentId, key -> new ArrayList<>()).add(item);
+        }
+
         List<CommentResp> responseList = roots.stream().map(root -> {
-            fillChildren(root);
+            attachChildrenTree(root, childrenByParentId, new HashSet<>());
             return mapToResponse(root);
         }).collect(Collectors.toList());
 
@@ -175,7 +211,7 @@ public class CommentServiceImpl extends ServiceImpl<CommentMapper, Comment> impl
     public void toggleLike(String commentId, String userId) {
         Comment comment = getById(commentId);
         if (comment == null) {
-            throw new RuntimeException("评论不存在");
+            throw new BusinessException(ResultCode.FAILED, "评论不存在");
         }
 
         String key = "comment:like:" + commentId + ":" + userId;
@@ -193,15 +229,24 @@ public class CommentServiceImpl extends ServiceImpl<CommentMapper, Comment> impl
         updateById(comment);
     }
 
-    private void fillChildren(Comment parent) {
-        List<Comment> children = this.list(Wrappers.<Comment>lambdaQuery()
-                .eq(Comment::getParentId, parent.getId())
-                .orderByAsc(Comment::getCreateTime));
-
-        if (children != null && !children.isEmpty()) {
-            parent.setChildren(children);
-            children.forEach(this::fillChildren);
+    private void attachChildrenTree(Comment parent,
+                                    Map<String, List<Comment>> childrenByParentId,
+                                    Set<String> pathVisited) {
+        if (parent == null || parent.getId() == null) {
+            return;
         }
+        if (!pathVisited.add(parent.getId())) {
+            return;
+        }
+
+        List<Comment> children = childrenByParentId.getOrDefault(parent.getId(), Collections.emptyList());
+        if (!children.isEmpty()) {
+            parent.setChildren(children);
+            for (Comment child : children) {
+                attachChildrenTree(child, childrenByParentId, pathVisited);
+            }
+        }
+        pathVisited.remove(parent.getId());
     }
 
     private CommentResp mapToResponse(Comment comment) {
@@ -286,14 +331,53 @@ public class CommentServiceImpl extends ServiceImpl<CommentMapper, Comment> impl
         }
     }
 
-    private void invalidatePostFeedCache(Long sectionId) {
+    private void invalidatePostFeedCache(Long sectionId, String postId) {
         try {
             stringRedisTemplate.opsForValue().increment(POST_FEED_CACHE_GLOBAL_VERSION_KEY);
+            stringRedisTemplate.opsForValue().increment(POST_HEAT_RANK_VERSION_KEY);
             if (sectionId != null) {
                 stringRedisTemplate.opsForValue().increment(POST_FEED_CACHE_SECTION_VERSION_KEY_PREFIX + sectionId);
+            }
+            if (postId != null && !postId.isBlank()) {
+                stringRedisTemplate.opsForValue().increment(POST_DETAIL_CACHE_VERSION_KEY_PREFIX + postId);
             }
         } catch (Exception ignored) {
             // Song：不影响评论主流程
         }
+    }
+
+    private Set<String> resolveMentionUserIds(String content, String currentUserId) {
+        if (!StringUtils.hasText(content)) {
+            return Collections.emptySet();
+        }
+        Matcher matcher = MENTION_PATTERN.matcher(content);
+        Set<String> mentionTokens = new HashSet<>();
+        while (matcher.find()) {
+            String token = matcher.group(1);
+            if (StringUtils.hasText(token)) {
+                mentionTokens.add(token.trim());
+            }
+        }
+        if (mentionTokens.isEmpty()) {
+            return Collections.emptySet();
+        }
+
+        List<User> matchedUsers = userService.lambdaQuery()
+                .and(wrapper -> wrapper.in(User::getUsername, mentionTokens)
+                        .or()
+                        .in(User::getNickname, mentionTokens))
+                .list();
+
+        Set<String> mentionUserIds = new HashSet<>();
+        for (User user : matchedUsers) {
+            if (user == null || !StringUtils.hasText(user.getId())) {
+                continue;
+            }
+            if (StringUtils.hasText(currentUserId) && currentUserId.equals(user.getId())) {
+                continue;
+            }
+            mentionUserIds.add(user.getId());
+        }
+        return mentionUserIds;
     }
 }

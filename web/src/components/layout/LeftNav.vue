@@ -1,14 +1,25 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Compass, DataLine, Medal, Menu as IconMenu } from '@element-plus/icons-vue'
+import { Compass, DataLine, Medal, Menu as IconMenu, Plus, Close, ArrowRight } from '@element-plus/icons-vue'
 import { publicDataApi } from '@/api/publicData'
+import { tagApi } from '@/api/tag'
+import { useUserStore } from '@/store/user'
+import { ElMessage } from 'element-plus'
 
 const router = useRouter()
 const route = useRoute()
+const userStore = useUserStore()
 
 const categories = ref<any[]>([])
 const topTags = ref<string[]>([])
+const myTags = ref<any[]>([])
+const myTagsLoading = ref(false)
+const addTagVisible = ref(false)
+const addTagKeyword = ref('')
+const searchResults = ref<any[]>([])
+const searching = ref(false)
+let searchTimer: ReturnType<typeof setTimeout> | null = null
 
 const activeMenu = computed(() => {
   if (route.path.startsWith('/hot')) return '/hot'
@@ -19,40 +30,88 @@ const activeMenu = computed(() => {
 const activeSectionId = computed(() => (route.name === 'section' ? String(route.params.id || '') : ''))
 const activeTag = computed(() => (route.name === 'tag' ? decodeURIComponent(String(route.params.name || '')) : ''))
 
-const go = (path: string) => {
-  router.push(path)
-}
-
+const go = (path: string) => router.push(path)
 const isSectionActive = (id: number | string) => activeSectionId.value === String(id)
 const isTagActive = (tag: string) => activeTag.value === tag
 
+const loadMyTags = async () => {
+  if (!userStore.isLoggedIn) return
+  myTagsLoading.value = true
+  try {
+    const res = await tagApi.getMyFollowing()
+    if (res.code === 2000 && Array.isArray(res.data)) {
+      myTags.value = res.data
+    }
+  } catch { /* ignore */ } finally {
+    myTagsLoading.value = false
+  }
+}
+
+const onSearchInput = () => {
+  if (searchTimer) clearTimeout(searchTimer)
+  const kw = addTagKeyword.value.trim()
+  if (!kw) { searchResults.value = []; return }
+  searchTimer = setTimeout(async () => {
+    searching.value = true
+    try {
+      const res = await tagApi.search(kw)
+      if (res.code === 2000 && Array.isArray(res.data)) {
+        // 过滤掉已关注的
+        const followedIds = new Set(myTags.value.map((t: any) => t.id))
+        searchResults.value = res.data.filter((t: any) => !followedIds.has(t.id))
+      }
+    } catch { /* ignore */ } finally {
+      searching.value = false
+    }
+  }, 300)
+}
+
+const followTag = async (tag: any) => {
+  try {
+    await tagApi.follow(tag.id)
+    myTags.value.push(tag)
+    searchResults.value = searchResults.value.filter(t => t.id !== tag.id)
+    addTagKeyword.value = ''
+    searchResults.value = []
+    addTagVisible.value = false
+    ElMessage.success(`已添加「${tag.name}」到我的标签`)
+  } catch (e: any) {
+    ElMessage.error(e?.message || '添加失败')
+  }
+}
+
+const unfollowTag = async (tag: any, e: Event) => {
+  e.stopPropagation()
+  try {
+    await tagApi.unfollow(tag.id)
+    myTags.value = myTags.value.filter((t: any) => t.id !== tag.id)
+  } catch (e: any) {
+    ElMessage.error(e?.message || '移除失败')
+  }
+}
+
+const closeAddTag = () => {
+  addTagVisible.value = false
+  addTagKeyword.value = ''
+  searchResults.value = []
+}
+
 onMounted(async () => {
   try {
-    const res = await publicDataApi.getActiveSectionsCached()
-    if ((res.code === 2000 || res.code === 200) && res.data) {
-      categories.value = res.data
-    }
-  } catch {
-    // Song：说明
-  }
-
-  try {
-    const res = await publicDataApi.getHotTagsCached(10)
+    const res = await publicDataApi.getHomeBootstrapCached(10, 5, 'WEEK')
     if (res.code === 2000 && res.data) {
-      const extractedTags = Array.isArray(res.data)
-        ? res.data.map((item: any) => (typeof item === 'string' ? item : item.name)).filter(Boolean)
+      categories.value = res.data.activeSections || []
+      const extractedTags = Array.isArray(res.data.hotTags)
+        ? res.data.hotTags.map((item: any) => (typeof item === 'string' ? item : item.name)).filter(Boolean)
         : []
       const splitTags = extractedTags.flatMap((item: string) =>
-        item
-          .split(',')
-          .map((piece) => piece.trim())
-          .filter(Boolean)
+        item.split(',').map((p) => p.trim()).filter(Boolean)
       )
       topTags.value = Array.from(new Set(splitTags)).slice(0, 10)
     }
-  } catch {
-    // Song：说明
-  }
+  } catch { /* ignore */ }
+
+  loadMyTags()
 })
 </script>
 
@@ -75,6 +134,7 @@ onMounted(async () => {
       </el-menu-item>
     </el-menu>
 
+    <!-- 板块分类 -->
     <div class="nav-group">
       <div class="menu-group-title flex-between">
         <span>板块分类</span>
@@ -97,13 +157,66 @@ onMounted(async () => {
           </div>
           <span v-if="isSectionActive(cat.id)" class="active-mark">当前</span>
         </li>
-
         <li v-if="categories.length === 0" class="category-item cat-empty">
           <span class="cat-name">加载中...</span>
         </li>
       </ul>
     </div>
 
+    <!-- 我的标签（已登录显示） -->
+    <div v-if="userStore.isLoggedIn" class="nav-group">
+      <div class="menu-group-title flex-between">
+        <span>我的标签</span>
+        <el-button link size="small" @click="addTagVisible = !addTagVisible" title="添加标签">
+          <el-icon><Plus /></el-icon>
+        </el-button>
+      </div>
+
+      <!-- 搜索添加框 -->
+      <div v-if="addTagVisible" class="add-tag-box">
+        <el-input
+          v-model="addTagKeyword"
+          placeholder="搜索标签名称..."
+          size="small"
+          clearable
+          @input="onSearchInput"
+          @keydown.esc="closeAddTag"
+        />
+        <div v-if="searching" class="tag-search-hint">搜索中...</div>
+        <div v-else-if="addTagKeyword && searchResults.length === 0" class="tag-search-hint">没有找到匹配的标签</div>
+        <ul v-else-if="searchResults.length > 0" class="tag-search-results">
+          <li
+            v-for="tag in searchResults"
+            :key="tag.id"
+            class="tag-search-item"
+            @click="followTag(tag)"
+          >
+            <span class="tag-search-name"># {{ tag.name }}</span>
+            <span class="tag-search-count">{{ tag.postCount || 0 }} 帖</span>
+          </li>
+        </ul>
+      </div>
+
+      <!-- 已关注标签列表 -->
+      <div v-if="myTagsLoading" class="tag-loading">加载中...</div>
+      <div v-else-if="myTags.length === 0 && !addTagVisible" class="tag-empty-hint">
+        点击 <el-icon style="vertical-align: middle"><Plus /></el-icon> 添加你常看的标签
+      </div>
+      <div v-else class="tags-container">
+        <div
+          v-for="tag in myTags"
+          :key="tag.id"
+          class="my-tag-item"
+          :class="{ active: isTagActive(tag.name) }"
+          @click="go(`/tag/${encodeURIComponent(tag.name)}`)"
+        >
+          <span class="my-tag-name"># {{ tag.name }}</span>
+          <el-icon class="my-tag-remove" @click="unfollowTag(tag, $event)"><Close /></el-icon>
+        </div>
+      </div>
+    </div>
+
+    <!-- 热门标签 -->
     <div class="nav-group" v-if="topTags.length > 0">
       <div class="menu-group-title">热门标签</div>
       <div class="tags-container">
@@ -117,6 +230,17 @@ onMounted(async () => {
         >
           # {{ tag }}
         </el-tag>
+      </div>
+    </div>
+  <!-- 邀请好友入口（已登录显示） -->
+    <div v-if="userStore.isLoggedIn" class="nav-group invite-entry" @click="go('/invite')">
+      <div class="invite-banner">
+        <el-icon class="invite-icon"><Plus /></el-icon>
+        <div class="invite-text">
+          <span class="invite-title">邀请好友</span>
+          <span class="invite-sub">Lv5+ 可生成邀请链接</span>
+        </div>
+        <el-icon class="invite-arrow"><ArrowRight /></el-icon>
       </div>
     </div>
   </div>
@@ -148,6 +272,55 @@ onMounted(async () => {
 .nav-menu .el-menu-item:hover {
   background-color: var(--cp-hover);
   transform: translateX(2px);
+}
+
+.invite-entry {
+  cursor: pointer;
+}
+
+.invite-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, var(--el-color-primary-light-8), var(--el-color-primary-light-9));
+  border: 1px solid var(--el-color-primary-light-5);
+  transition: all 0.2s ease;
+}
+
+.invite-banner:hover {
+  background: linear-gradient(135deg, var(--el-color-primary-light-7), var(--el-color-primary-light-8));
+  transform: translateY(-1px);
+}
+
+.invite-icon {
+  font-size: 18px;
+  color: var(--el-color-primary);
+  flex-shrink: 0;
+}
+
+.invite-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.invite-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+}
+
+.invite-sub {
+  font-size: 11px;
+  color: var(--el-text-color-secondary);
+}
+
+.invite-arrow {
+  font-size: 14px;
+  color: var(--el-text-color-placeholder);
 }
 
 .nav-menu .el-menu-item.is-active {
@@ -237,11 +410,108 @@ onMounted(async () => {
   cursor: default;
 }
 
+/* 我的标签 */
+.add-tag-box {
+  margin-bottom: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tag-search-hint {
+  font-size: 12px;
+  color: var(--cp-text-muted);
+  padding: 4px 4px;
+}
+
+.tag-search-results {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  background: var(--el-bg-color-overlay);
+  border: 1px solid var(--el-border-color-light);
+  border-radius: 8px;
+  overflow: hidden;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.tag-search-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 7px 10px;
+  cursor: pointer;
+  transition: background 0.15s;
+  font-size: 13px;
+}
+
+.tag-search-item:hover {
+  background: var(--cp-hover);
+}
+
+.tag-search-name {
+  color: var(--cp-text);
+  font-weight: 500;
+}
+
+.tag-search-count {
+  font-size: 11px;
+  color: var(--cp-text-muted);
+}
+
+.tag-loading, .tag-empty-hint {
+  font-size: 12px;
+  color: var(--cp-text-muted);
+  padding: 4px 8px;
+}
+
+.my-tag-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 8px 3px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--cp-border);
+  background: var(--cp-bg-surface);
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.18s;
+  margin: 0 4px 6px 0;
+}
+
+.my-tag-item:hover {
+  background: var(--cp-hover);
+  border-color: var(--cp-primary-light);
+}
+
+.my-tag-item.active {
+  background: #fff3d4;
+  border-color: #f4b400;
+  color: #7a5700;
+  font-weight: 700;
+}
+
+.my-tag-name {
+  color: inherit;
+}
+
+.my-tag-remove {
+  font-size: 10px;
+  color: var(--cp-text-muted);
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.my-tag-item:hover .my-tag-remove {
+  opacity: 1;
+}
+
 .tags-container {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  padding: 0 4px;
+  gap: 0;
+  padding: 0 2px;
 }
 
 .nav-tag {
@@ -251,6 +521,7 @@ onMounted(async () => {
   background-color: var(--cp-bg-surface);
   color: var(--cp-text);
   border-radius: 999px;
+  margin: 0 4px 6px 0;
 }
 
 .nav-tag:hover {

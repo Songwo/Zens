@@ -1,6 +1,7 @@
 package com.campus.trend.campus_pulse.utils;
 
 import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.JwtParser;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import jakarta.servlet.http.HttpServletRequest;
@@ -11,6 +12,8 @@ import org.springframework.stereotype.Component;
 
 import java.nio.charset.StandardCharsets;
 import java.security.Key;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
@@ -24,6 +27,10 @@ import java.util.Map;
 @Component
 @Slf4j
 public class JwtUtil {
+
+    // 这个工具在过滤器里走得很频繁，签名 key 和 parser 没必要每次都现算一遍。
+    private volatile Key signingKey;
+    private volatile JwtParser jwtParser;
 
     @Value("${jwt.secret}")
     private String secretKey; // Song：注入成功
@@ -40,8 +47,49 @@ public class JwtUtil {
     @Value("${jwt.remember-refresh-multiplier:4}")
     private long rememberRefreshMultiplier;
 
+    @Value("${jwt.sliding-renew-threshold:900000}")
+    private long slidingRenewThreshold;
+
     private Key getKey() {
-        return Keys.hmacShaKeyFor(secretKey.getBytes(StandardCharsets.UTF_8));
+        Key cached = signingKey;
+        if (cached != null) {
+            return cached;
+        }
+        synchronized (this) {
+            if (signingKey == null) {
+                signingKey = buildSigningKey();
+            }
+            return signingKey;
+        }
+    }
+
+    private Key buildSigningKey() {
+        byte[] keyBytes = (secretKey == null ? "" : secretKey).getBytes(StandardCharsets.UTF_8);
+        if (keyBytes.length < 32) {
+            log.warn("JWT 密钥长度过短({}字节)，已自动使用 SHA-256 派生密钥。请尽快将 JWT_SECRET 配置为至少 32 字节随机串。", keyBytes.length);
+            try {
+                MessageDigest digest = MessageDigest.getInstance("SHA-256");
+                keyBytes = digest.digest(keyBytes);
+            } catch (NoSuchAlgorithmException e) {
+                throw new IllegalStateException("JWT 密钥派生失败: SHA-256 不可用", e);
+            }
+        }
+        return Keys.hmacShaKeyFor(keyBytes);
+    }
+
+    private JwtParser getParser() {
+        JwtParser cached = jwtParser;
+        if (cached != null) {
+            return cached;
+        }
+        synchronized (this) {
+            if (jwtParser == null) {
+                jwtParser = Jwts.parserBuilder()
+                        .setSigningKey(getKey())
+                        .build();
+            }
+            return jwtParser;
+        }
     }
 
     /* Song：说明 */
@@ -90,13 +138,12 @@ public class JwtUtil {
     /* Song：说明 */
     public Claims parse(String token) {
         try {
-            return Jwts.parserBuilder()
-                    .setSigningKey(getKey())
-                    .build()
+            return getParser()
                     .parseClaimsJws(token)
                     .getBody();
         } catch (Exception e) {
-            log.info("JWT 解析失败: {}", e.getMessage());
+            // 非法 token 在日常请求里很常见，打到 debug 就够了，别把业务日志刷掉。
+            log.debug("JWT 解析失败: {}", e.getMessage());
             return null;
         }
     }
@@ -126,6 +173,19 @@ public class JwtUtil {
                 && userDetails != null
                 && username.equals(userDetails.getUsername())
                 && !isExpired(token);
+    }
+
+    public long getRemainingMillis(String token) {
+        Claims claims = parse(token);
+        if (claims == null || claims.getExpiration() == null) {
+            return -1L;
+        }
+        return claims.getExpiration().getTime() - System.currentTimeMillis();
+    }
+
+    public boolean shouldRenewAccessToken(String token) {
+        long remainingMillis = getRemainingMillis(token);
+        return remainingMillis > 0 && remainingMillis <= Math.max(60000L, slidingRenewThreshold);
     }
 
     public long resolveAccessExpireMs(boolean rememberMe) {

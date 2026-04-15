@@ -33,7 +33,19 @@ export interface CreatePostRequest {
     sectionId: number
     coverImage?: string
     tags: string
-    status: number
+    status?: number
+}
+
+export interface SaveDraftRequest {
+    postId?: string
+    title?: string
+    content?: string
+    sectionId?: number
+    coverImage?: string
+    tags?: string
+    images?: string
+    isAnonymous?: number
+    locationName?: string
 }
 
 export interface UserInfo {
@@ -47,6 +59,10 @@ export interface UserInfo {
     major?: string
     enrollmentYear?: number
     interestTags?: string
+    profileCardTheme?: string
+    quickCardTheme?: string
+    profileCardBgUrl?: string
+    quickCardBgUrl?: string
 }
 
 export const ResultCode = {
@@ -65,8 +81,10 @@ export interface LoginResponse {
 export interface PostSearchRequest {
     page?: number
     pageSize?: number
+    needTotal?: boolean
     keyword?: string
     sectionId?: number
+    sectionIds?: number[]
     status?: number
     orderBy?: 'new' | 'hot' | string
     timeRange?: 'TODAY' | 'WEEK' | 'MONTH' | string
@@ -78,6 +96,7 @@ export interface PostSearchRequest {
     pinnedOnly?: boolean
     cursor?: string
     cursorId?: string
+    auditStatus?: string
 }
 
 export interface Post {
@@ -92,6 +111,8 @@ export interface Post {
     isAnonymous: number
     locationName?: string
     status: number
+    auditStatus?: string
+    rejectReason?: string
 
     viewCount: number
     likeCount: number

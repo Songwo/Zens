@@ -1,3 +1,4 @@
+import type { AxiosRequestConfig } from 'axios'
 import api from '@/lib/api'
 import type { Result } from '@/types'
 
@@ -20,8 +21,11 @@ export const tagApi = {
     },
 
     // Song：说明
-    search(keyword: string) {
-        return api.get<any, Result<Tag[]>>('/tag/search', { params: { keyword } })
+    search(keyword: string, config?: AxiosRequestConfig) {
+        return api.get<any, Result<Tag[]>>('/tag/search', {
+            ...config,
+            params: { keyword }
+        })
     },
 
     // Song：说明

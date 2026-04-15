@@ -36,4 +36,24 @@ public class UserDetailUpdateReq {
     @NotBlank
     private String interestTags;
 
+    @Size(max = 32, message = "个人资料卡片主题长度不能超过 32 个字符")
+    @Pattern(regexp = "^[a-zA-Z0-9_-]{0,32}$", message = "个人资料卡片主题格式非法")
+    private String profileCardTheme;
+
+    @Size(max = 32, message = "预览卡片主题长度不能超过 32 个字符")
+    @Pattern(regexp = "^[a-zA-Z0-9_-]{0,32}$", message = "预览卡片主题格式非法")
+    private String quickCardTheme;
+
+    @Size(max = 500, message = "个人资料背景图链接长度不能超过 500 个字符")
+    @Pattern(
+            regexp = "^$|^(https?://[^\"'\\s]+|/uploads/[^\"'\\s]+)$",
+            message = "个人资料背景图链接格式非法")
+    private String profileCardBgUrl;
+
+    @Size(max = 500, message = "预览卡片背景图链接长度不能超过 500 个字符")
+    @Pattern(
+            regexp = "^$|^(https?://[^\"'\\s]+|/uploads/[^\"'\\s]+)$",
+            message = "预览卡片背景图链接格式非法")
+    private String quickCardBgUrl;
+
 }

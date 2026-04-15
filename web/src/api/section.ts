@@ -8,11 +8,16 @@ export interface Section {
     postCount?: number
     icon?: string
     order?: number
+    status?: number
 }
 
 export const sectionApi = {
     getList() {
         return api.get<any, Result<Section[]>>('/section/list')
+    },
+
+    getActiveList() {
+        return api.get<any, Result<Section[]>>('/section/active')
     },
 
     getById(id: string) {

@@ -1,16 +1,20 @@
 package com.campus.trend.campus_pulse.scheduled;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.campus.trend.campus_pulse.dto.request.PostHeatUpdateItem;
 import com.campus.trend.campus_pulse.entity.Post;
 import com.campus.trend.campus_pulse.mapper.PostMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * 帖子热度衰减定时任务
@@ -35,7 +39,13 @@ import java.util.List;
 @RequiredArgsConstructor
 public class PostHeatDecayTask {
 
+    private static final String POST_HEAT_RANK_VERSION_KEY = "post:heat:version";
+    private static final String HEAT_JOB_LOCK_KEY = "job:post-heat-decay:lock";
+    private static final Duration HEAT_JOB_LOCK_TTL = Duration.ofMinutes(9);
+    private static final Duration HEAT_VERSION_KEY_TTL = Duration.ofDays(7);
+
     private final PostMapper postMapper;
+    private final StringRedisTemplate stringRedisTemplate;
 
     /** 衰减重力常数 */
     private static final double GRAVITY = 1.5;
@@ -52,22 +62,41 @@ public class PostHeatDecayTask {
     /** 精华帖基础加分 */
     private static final double FEATURED_BONUS = 20.0;
 
+    /** 批量更新大小 */
+    private static final int BATCH_SIZE = 200;
+
     /**
      * 每 10 分钟全量刷新最近 14 天帖子的热度
      */
     @Scheduled(fixedRate = 10 * 60 * 1000)
     public void recalculateHeatScores() {
+        String lockToken = UUID.randomUUID().toString();
+        if (!tryAcquireLock(lockToken)) {
+            log.debug("[帖子热度衰减] 跳过执行，已有节点在处理");
+            return;
+        }
+
         log.debug("开始执行 [帖子热度衰减] 定时任务...");
         long start = System.currentTimeMillis();
 
         try {
             LocalDateTime cutoff = LocalDateTime.now().minusDays(ACTIVE_DAYS);
             LambdaQueryWrapper<Post> wrapper = new LambdaQueryWrapper<>();
+            wrapper.select(
+                    Post::getId,
+                    Post::getCreateTime,
+                    Post::getHeatScore,
+                    Post::getViewCount,
+                    Post::getLikeCount,
+                    Post::getCommentCount,
+                    Post::getCollectCount,
+                    Post::getIsFeatured,
+                    Post::getSentimentScore);
             wrapper.eq(Post::getStatus, 1)
                     .ge(Post::getCreateTime, cutoff);
 
             List<Post> posts = postMapper.selectList(wrapper);
-            int updated = 0;
+            List<PostHeatUpdateItem> updates = new ArrayList<>();
 
             for (Post post : posts) {
                 double newHeat = calculateHeat(post);
@@ -75,19 +104,29 @@ public class PostHeatDecayTask {
 
                 // 只在热度变化超过 0.5 时才更新，减少不必要的写操作
                 if (Math.abs(newHeat - oldHeat) >= 0.5) {
-                    post.setHeatScore(Math.round(newHeat * 100.0) / 100.0);
-                    postMapper.updateById(post);
-                    updated++;
+                    updates.add(new PostHeatUpdateItem(
+                            post.getId(),
+                            Math.round(newHeat * 100.0) / 100.0));
                 }
             }
 
+            int updated = batchUpdateHeatScores(updates);
+
             long elapsed = System.currentTimeMillis() - start;
             if (updated > 0) {
+                try {
+                    stringRedisTemplate.opsForValue().increment(POST_HEAT_RANK_VERSION_KEY);
+                    stringRedisTemplate.expire(POST_HEAT_RANK_VERSION_KEY, HEAT_VERSION_KEY_TTL);
+                } catch (Exception e) {
+                    log.warn("更新热榜缓存版本失败: {}", e.getMessage());
+                }
                 log.info("[帖子热度衰减] 完成, 扫描 {} 篇, 更新 {} 篇, 耗时 {} ms",
                         posts.size(), updated, elapsed);
             }
         } catch (Exception e) {
             log.error("[帖子热度衰减] 执行失败", e);
+        } finally {
+            releaseLock(lockToken);
         }
     }
 
@@ -137,5 +176,39 @@ public class PostHeatDecayTask {
     public void triggerManually() {
         log.info("手动触发帖子热度衰减");
         recalculateHeatScores();
+    }
+
+    private int batchUpdateHeatScores(List<PostHeatUpdateItem> updates) {
+        if (updates == null || updates.isEmpty()) {
+            return 0;
+        }
+        int affected = 0;
+        for (int i = 0; i < updates.size(); i += BATCH_SIZE) {
+            int end = Math.min(i + BATCH_SIZE, updates.size());
+            affected += postMapper.batchUpdateHeatScores(updates.subList(i, end));
+        }
+        return affected;
+    }
+
+    private boolean tryAcquireLock(String lockToken) {
+        try {
+            Boolean acquired = stringRedisTemplate.opsForValue()
+                    .setIfAbsent(HEAT_JOB_LOCK_KEY, lockToken, HEAT_JOB_LOCK_TTL);
+            return Boolean.TRUE.equals(acquired);
+        } catch (Exception e) {
+            log.warn("[帖子热度衰减] 获取分布式锁失败: {}", e.getMessage());
+            return false;
+        }
+    }
+
+    private void releaseLock(String lockToken) {
+        try {
+            String currentToken = stringRedisTemplate.opsForValue().get(HEAT_JOB_LOCK_KEY);
+            if (lockToken != null && lockToken.equals(currentToken)) {
+                stringRedisTemplate.delete(HEAT_JOB_LOCK_KEY);
+            }
+        } catch (Exception e) {
+            log.warn("[帖子热度衰减] 释放分布式锁失败: {}", e.getMessage());
+        }
     }
 }

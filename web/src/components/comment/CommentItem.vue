@@ -2,6 +2,7 @@
 import { Pointer } from '@element-plus/icons-vue'
 import type { Comment } from '@/types'
 import UserRoleBadge from '@/components/common/UserRoleBadge.vue'
+import UserQuickCard from '@/components/common/UserQuickCard.vue'
 
 const props = defineProps<{
   comment: Comment
@@ -29,16 +30,30 @@ const formatDate = (dateStr: string) => {
 <template>
   <div class="comment-item" :class="{ 'is-child': isChild }">
     <div class="comment-avatar">
-      <el-avatar :size="isChild ? 28 : 36" :src="comment.userAvatar">
-        {{ comment.nickname?.charAt(0) || 'U' }}
-      </el-avatar>
+      <UserQuickCard
+        :user-id="comment.userId"
+        :nickname="comment.nickname"
+        :avatar="comment.userAvatar"
+        :roles="comment.roles || []"
+      >
+        <el-avatar :size="isChild ? 28 : 36" :src="comment.userAvatar">
+          {{ comment.nickname?.charAt(0) || 'U' }}
+        </el-avatar>
+      </UserQuickCard>
     </div>
     
     <div class="comment-main">
       <div class="comment-bubble">
         <div class="comment-header">
           <span style="display: flex; align-items: center;">
-            <span class="user-name">{{ comment.nickname }}</span>
+            <UserQuickCard
+              :user-id="comment.userId"
+              :nickname="comment.nickname"
+              :avatar="comment.userAvatar"
+              :roles="comment.roles || []"
+            >
+              <span class="user-name">{{ comment.nickname }}</span>
+            </UserQuickCard>
             <UserRoleBadge :roles="comment.roles || []" />
           </span>
           <span class="comment-time">{{ formatDate(comment.createTime) }}</span>

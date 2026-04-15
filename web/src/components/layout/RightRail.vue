@@ -27,11 +27,10 @@ const popularItems = ref<any[]>([])
 const loadingHot = ref(true)
 
 onMounted(async () => {
-  // Song：说明
   try {
-    const res = await publicDataApi.getHotRankCached(5)
+    const res = await publicDataApi.getHomeBootstrapCached(10, 5, 'WEEK')
     if (res.code === 2000 && res.data) {
-      popularItems.value = res.data.slice(0, 5)
+      popularItems.value = (res.data.hotRank || []).slice(0, 5)
     }
   } catch {
     popularItems.value = []
@@ -75,7 +74,10 @@ onMounted(async () => {
     <el-card shadow="never" class="rail-card trending-card">
       <template #header>
         <div class="card-header">
-          <span>本周热门主题</span>
+          <div class="card-header-text">
+            <span>本周行为热榜</span>
+            <small>依据本周浏览与评论活跃度智能排序</small>
+          </div>
         </div>
       </template>
 
@@ -97,6 +99,7 @@ onMounted(async () => {
             <div class="item-title">{{ item.title }}</div>
             <div class="item-meta">
               <span>{{ item.viewCount }} 阅读</span>
+              <span>{{ item.commentCount || 0 }} 互动</span>
             </div>
           </div>
         </div>
@@ -111,10 +114,10 @@ onMounted(async () => {
     <!-- Footer Links -->
     <div class="rail-footer">
       <div class="footer-links">
-        <a href="#">关于我们</a>
-        <a href="#">用户协议</a>
-        <a href="#">隐私政策</a>
-        <a href="#">联系管理</a>
+        <router-link to="/about">关于我们</router-link>
+        <router-link to="/terms">用户协议</router-link>
+        <router-link to="/privacy">隐私政策</router-link>
+        <router-link to="/contact">联系管理</router-link>
       </div>
       <p class="copyright">© 2026 Zens</p>
     </div>
@@ -249,6 +252,18 @@ onMounted(async () => {
   gap: 6px;
 }
 
+.card-header-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.card-header-text small {
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+  font-weight: 400;
+}
+
 .trending-list {
   display: flex;
   flex-direction: column;
@@ -312,12 +327,23 @@ onMounted(async () => {
   color: var(--el-color-primary);
 }
 
+.trending-item {
+  transition: background-color 0.18s ease, transform 0.18s ease;
+  border-radius: 8px;
+}
+
+.trending-item:hover {
+  background-color: var(--el-fill-color-light);
+  transform: translateX(2px);
+}
+
 .item-meta {
   font-size: 12px;
   color: var(--el-text-color-secondary);
   display: flex;
   align-items: center;
-  gap: 4px;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .empty-hot {

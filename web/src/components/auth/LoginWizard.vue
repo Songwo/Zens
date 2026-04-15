@@ -1,16 +1,22 @@
 <script setup lang="ts">
-import { ref, reactive, onMounted, onUnmounted, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 import { Message, Lock, User } from '@element-plus/icons-vue'
+import { storeToRefs } from 'pinia'
 import { authApi } from '@/api/auth'
-import { userApi } from '@/api/user'
+import { useUiStore } from '@/store/ui'
 import { useUserStore } from '@/store/user'
+import { ensureCurrentUserProfile } from '@/utils/sessionProfile'
 
 const router = useRouter()
 const route = useRoute()
+const uiStore = useUiStore()
 const userStore = useUserStore()
+const { isDark } = storeToRefs(uiStore)
+
+const TURNSTILE_TEST_SITE_KEY = '1x00000000000000000000AA'
 
 const loading = ref(false)
 const githubLoading = ref(false)
@@ -19,6 +25,19 @@ const showTwoFactorDialog = ref(false)
 const twoFactorLoading = ref(false)
 const twoFactorTicket = ref('')
 const pendingRememberMe = ref(false)
+const GITHUB_REMEMBER_KEY = 'oauth_github_remember_me'
+const configuredTurnstileSiteKey = (import.meta.env.VITE_TURNSTILE_SITE_KEY || '').trim()
+const turnstileSiteKey = (configuredTurnstileSiteKey || (import.meta.env.DEV ? TURNSTILE_TEST_SITE_KEY : '')).trim()
+const turnstileContainerRef = ref<HTMLElement>()
+const turnstileWidgetId = ref<string | null>(null)
+const turnstileToken = ref('')
+const turnstileScriptReady = ref(false)
+const turnstilePollTimer = ref<number | null>(null)
+const canSubmitLogin = computed(() => !!turnstileToken.value && !loading.value)
+const turnstileTheme = computed<'light' | 'dark'>(() => (isDark.value ? 'dark' : 'light'))
+const showTurnstileUnavailable = computed(() => !turnstileSiteKey)
+const showTurnstileUsingTestKey = computed(() => !configuredTurnstileSiteKey && import.meta.env.DEV)
+const showTurnstileLoading = computed(() => !!turnstileSiteKey && !turnstileScriptReady.value)
 const twoFactorForm = reactive({
   code: ''
 })
@@ -196,8 +215,99 @@ const sendOtp = async () => {
   })
 }
 
+const clearTurnstileTokenState = () => {
+  turnstileToken.value = ''
+}
+
+const removeTurnstileWidget = () => {
+  if (turnstileWidgetId.value && window.turnstile) {
+    window.turnstile.remove(turnstileWidgetId.value)
+  }
+  turnstileWidgetId.value = null
+  clearTurnstileTokenState()
+}
+
+const renderTurnstileWidget = async () => {
+  if (!turnstileSiteKey || !turnstileContainerRef.value || !window.turnstile) {
+    return
+  }
+
+  removeTurnstileWidget()
+  await nextTick()
+
+  turnstileWidgetId.value = window.turnstile.render(turnstileContainerRef.value, {
+    sitekey: turnstileSiteKey,
+    theme: turnstileTheme.value,
+    callback: (token: string) => {
+      turnstileToken.value = token
+    },
+    'expired-callback': () => {
+      clearTurnstileTokenState()
+      ElMessage.warning('人机验证已过期，请重新完成验证')
+    },
+    'timeout-callback': () => {
+      clearTurnstileTokenState()
+      ElMessage.warning('人机验证超时，请重新完成验证')
+    },
+    'error-callback': () => {
+      clearTurnstileTokenState()
+      ElMessage.error('人机验证加载失败，请刷新页面重试')
+    }
+  })
+}
+
+const resetTurnstileWidget = (message?: string) => {
+  if (!turnstileWidgetId.value || !window.turnstile) {
+    clearTurnstileTokenState()
+    return
+  }
+  window.turnstile.reset(turnstileWidgetId.value)
+  clearTurnstileTokenState()
+  if (message) {
+    ElMessage.warning(message)
+  }
+}
+
+const ensureTurnstileReady = () => {
+  if (!turnstileSiteKey) {
+    return
+  }
+  if (window.turnstile?.render) {
+    turnstileScriptReady.value = true
+    void renderTurnstileWidget()
+    return
+  }
+  if (turnstilePollTimer.value !== null) {
+    return
+  }
+  turnstilePollTimer.value = window.setInterval(() => {
+    if (window.turnstile?.render) {
+      if (turnstilePollTimer.value !== null) {
+        window.clearInterval(turnstilePollTimer.value)
+        turnstilePollTimer.value = null
+      }
+      turnstileScriptReady.value = true
+      void renderTurnstileWidget()
+    }
+  }, 200)
+
+  window.setTimeout(() => {
+    if (!turnstileScriptReady.value && turnstilePollTimer.value !== null) {
+      ElMessage.warning('Turnstile 脚本加载较慢，请检查网络或稍后刷新页面')
+    }
+  }, 4000)
+}
+
 // Song：---- 密码登录 ----
 const handlePasswordLogin = async () => {
+  if (!turnstileSiteKey) {
+    ElMessage.error('未配置 Turnstile Site Key，当前无法登录')
+    return
+  }
+  if (!turnstileToken.value) {
+    ElMessage.warning('请先完成人机验证')
+    return
+  }
   if (!pwdFormRef.value) return
   await pwdFormRef.value.validate(async (valid) => {
     if (!valid) return
@@ -207,14 +317,17 @@ const handlePasswordLogin = async () => {
         loginType: 'password',
         account: pwdForm.account,
         password: pwdForm.password,
-        rememberMe: pwdForm.rememberMe
+        rememberMe: pwdForm.rememberMe,
+        'cf-turnstile-response': turnstileToken.value
       })
       if (res.code !== 2000 || !res.data) {
+        resetTurnstileWidget('人机验证已刷新，请重新完成验证后再试')
         ElMessage.error(res.message || '登录失败')
         return
       }
       await processLoginResponse(res.data, pwdForm.rememberMe)
     } catch (e: any) {
+      resetTurnstileWidget('人机验证已刷新，请重新完成验证后再试')
       ElMessage.error(e.message || '登录失败，请检查账号密码')
     } finally {
       loading.value = false
@@ -224,6 +337,14 @@ const handlePasswordLogin = async () => {
 
 // Song：---- 验证码登录 ----
 const handleOtpLogin = async () => {
+  if (!turnstileSiteKey) {
+    ElMessage.error('未配置 Turnstile Site Key，当前无法登录')
+    return
+  }
+  if (!turnstileToken.value) {
+    ElMessage.warning('请先完成人机验证')
+    return
+  }
   if (!otpFormRef.value) return
   await otpFormRef.value.validate(async (valid) => {
     if (!valid) return
@@ -233,14 +354,17 @@ const handleOtpLogin = async () => {
         loginType: 'otp',
         email: otpForm.email,
         code: otpForm.code,
-        rememberMe: otpForm.rememberMe
+        rememberMe: otpForm.rememberMe,
+        'cf-turnstile-response': turnstileToken.value
       })
       if (res.code !== 2000 || !res.data) {
+        resetTurnstileWidget('人机验证已刷新，请重新完成验证后再试')
         ElMessage.error(res.message || '登录失败')
         return
       }
       await processLoginResponse(res.data, otpForm.rememberMe)
     } catch (e: any) {
+      resetTurnstileWidget('人机验证已刷新，请重新完成验证后再试')
       ElMessage.error(e.message || '验证码错误或已失效')
     } finally {
       loading.value = false
@@ -250,16 +374,10 @@ const handleOtpLogin = async () => {
 
 // Song：---- 登录成功后的统一处理 ----
 const handleLoginSuccess = async (data: { accessToken: string; refreshToken: string }, rememberMe: boolean) => {
-  // Song：说明
   userStore.setAuth(data.accessToken, data.refreshToken, rememberMe)
 
-  // Song：获取用户信息
   try {
-    const profileRes = await userApi.getProfile()
-    if (profileRes.code === 2000 && profileRes.data) {
-      userStore.setUserId(profileRes.data.id)
-      userStore.setUserInfo(profileRes.data)
-    }
+    await ensureCurrentUserProfile({ force: true })
   } catch {
     // Song：即使获取资料失败也已登录
   }
@@ -327,9 +445,14 @@ const handleTwoFactorVerify = async () => {
   }
 }
 
+const resolveRememberPreference = () => {
+  return loginMode.value === 'otp' ? !!otpForm.rememberMe : !!pwdForm.rememberMe
+}
+
 const startGithubLogin = async () => {
   githubLoading.value = true
   try {
+    localStorage.setItem(GITHUB_REMEMBER_KEY, resolveRememberPreference() ? '1' : '0')
     const res = await authApi.getGithubAuthorizeUrl()
     if (res.code !== 2000 || !res.data?.url) {
       ElMessage.error(res.message || '获取GitHub登录地址失败')
@@ -348,31 +471,30 @@ const handleGithubCallbackIfNeeded = async () => {
   const code = String(route.query.code || '')
   const state = String(route.query.state || '')
   if (provider !== 'github' || !code || !state || handlingGithubCallback.value) return
+  const rememberMe = localStorage.getItem(GITHUB_REMEMBER_KEY) === '1'
   handlingGithubCallback.value = true
   loading.value = true
+  // 先清理 URL 参数，防止与后续 router.push 冲突
+  localStorage.removeItem(GITHUB_REMEMBER_KEY)
+  const query = { ...route.query }
+  delete query.code
+  delete query.state
+  delete query.provider
+  await router.replace({ path: route.path, query })
   try {
-    const res = await authApi.githubLogin({ code, state, rememberMe: false })
+    const res = await authApi.githubLogin({ code, state, rememberMe })
     if (res.code !== 2000 || !res.data) {
       ElMessage.error(res.message || 'GitHub登录失败')
       return
     }
-    await processLoginResponse(res.data, false)
+    await processLoginResponse(res.data, rememberMe)
   } catch (e: any) {
     ElMessage.error(e.message || 'GitHub登录失败')
   } finally {
     loading.value = false
     handlingGithubCallback.value = false
-    const query = { ...route.query }
-    delete query.code
-    delete query.state
-    delete query.provider
-    router.replace({ path: route.path, query })
   }
 }
-
-onUnmounted(() => {
-  if (timer) clearInterval(timer)
-})
 
 const applyRoutePrefill = () => {
   const account = String(route.query.account || '').trim()
@@ -389,6 +511,7 @@ const applyRoutePrefill = () => {
 onMounted(() => {
   applyRoutePrefill()
   handleGithubCallbackIfNeeded()
+  ensureTurnstileReady()
 })
 
 watch(
@@ -398,6 +521,29 @@ watch(
     handleGithubCallbackIfNeeded()
   }
 )
+
+watch(loginMode, async () => {
+  await nextTick()
+  if (turnstileScriptReady.value) {
+    void renderTurnstileWidget()
+  }
+})
+
+watch(isDark, () => {
+  if (turnstileScriptReady.value) {
+    void renderTurnstileWidget()
+  }
+})
+
+onUnmounted(() => {
+  if (timer) clearInterval(timer)
+  if (resetTimer) clearInterval(resetTimer)
+  if (turnstilePollTimer.value !== null) {
+    window.clearInterval(turnstilePollTimer.value)
+    turnstilePollTimer.value = null
+  }
+  removeTurnstileWidget()
+})
 </script>
 
 <template>
@@ -460,11 +606,29 @@ watch(
             <el-link type="primary" :underline="false" class="forgot-link" @click="openResetDialog">忘记密码？</el-link>
           </div>
 
+          <div class="turnstile-block">
+            <p class="turnstile-label">安全验证</p>
+            <p v-if="showTurnstileUsingTestKey" class="turnstile-dev-tip">
+              当前为开发环境，已自动启用 Cloudflare Turnstile 测试 Site Key。
+            </p>
+            <div v-if="showTurnstileUnavailable" class="turnstile-placeholder">
+              未配置 Turnstile Site Key，当前无法显示人机验证。
+            </div>
+            <div v-else ref="turnstileContainerRef" class="turnstile-widget"></div>
+            <p v-if="showTurnstileLoading" class="turnstile-loading">
+              正在加载 Cloudflare Turnstile...
+            </p>
+            <p class="turnstile-hint">
+              Turnstile token 约 5 分钟内有效，提交失败后需要重新完成验证。
+            </p>
+          </div>
+
           <el-button
             type="primary"
             size="large"
             class="login-btn"
             :loading="loading"
+            :disabled="!canSubmitLogin"
             @click="handlePasswordLogin"
           >
             登 录
@@ -519,11 +683,29 @@ watch(
             <el-checkbox v-model="otpForm.rememberMe">记住我</el-checkbox>
           </div>
 
+          <div class="turnstile-block">
+            <p class="turnstile-label">安全验证</p>
+            <p v-if="showTurnstileUsingTestKey" class="turnstile-dev-tip">
+              当前为开发环境，已自动启用 Cloudflare Turnstile 测试 Site Key。
+            </p>
+            <div v-if="showTurnstileUnavailable" class="turnstile-placeholder">
+              未配置 Turnstile Site Key，当前无法显示人机验证。
+            </div>
+            <div v-else ref="turnstileContainerRef" class="turnstile-widget"></div>
+            <p v-if="showTurnstileLoading" class="turnstile-loading">
+              正在加载 Cloudflare Turnstile...
+            </p>
+            <p class="turnstile-hint">
+              Turnstile token 约 5 分钟内有效，提交失败后需要重新完成验证。
+            </p>
+          </div>
+
           <el-button
             type="primary"
             size="large"
             class="login-btn"
             :loading="loading"
+            :disabled="!canSubmitLogin"
             @click="handleOtpLogin"
           >
             登 录
@@ -649,6 +831,56 @@ watch(
 
 .forgot-link {
   font-size: 13px;
+}
+
+.turnstile-block {
+  margin-top: 18px;
+}
+
+.turnstile-label {
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+}
+
+.turnstile-widget {
+  min-height: 66px;
+}
+
+.turnstile-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 66px;
+  padding: 12px 16px;
+  border: 1px dashed var(--el-border-color);
+  border-radius: 12px;
+  background: var(--el-fill-color-light);
+  color: var(--el-text-color-secondary);
+  text-align: center;
+}
+
+.turnstile-loading,
+.turnstile-dev-tip {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.turnstile-loading {
+  color: var(--el-text-color-secondary);
+}
+
+.turnstile-dev-tip {
+  color: var(--el-color-warning-dark-2);
+}
+
+.turnstile-hint {
+  margin: 10px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--el-text-color-secondary);
 }
 
 .wizard-footer {

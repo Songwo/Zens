@@ -2,6 +2,7 @@ package com.campus.trend.campus_pulse.controller;
 
 import com.campus.trend.campus_pulse.common.api.Result;
 import com.campus.trend.campus_pulse.dto.request.PostCreateReq;
+import com.campus.trend.campus_pulse.dto.request.PostDraftReq;
 import com.campus.trend.campus_pulse.dto.request.TagsExtractReq;
 import com.campus.trend.campus_pulse.dto.request.PostSearchReq;
 import com.campus.trend.campus_pulse.security.AuthUser;
@@ -42,6 +43,12 @@ public class PostController {
         return Result.success();
     }
 
+    @PostMapping("/save-draft")
+    public Result<?> saveDraft(@RequestBody PostDraftReq draftRequest) {
+        AuthUser authUser = SecurityUtils.getAuthenticatedUser();
+        return Result.success(postService.saveDraft(draftRequest, authUser.getUser().getId()));
+    }
+
     @PostMapping("/extract-tags")
     public Result<?> extractTags(@Valid @RequestBody TagsExtractReq extractTagsRequest) {
         String userId = SecurityUtils.getCurrentUserId();
@@ -67,6 +74,13 @@ public class PostController {
     @PostMapping("/search-lists")
     public Result<?> searchList(@RequestBody PostSearchReq postSearchRequest) {
         return Result.success(postService.searchPostsWithAuthor(postSearchRequest));
+    }
+
+    /* Song：版务内容列表（管理员/板块版主） */
+    @PostMapping("/moderation-list")
+    public Result<?> moderationList(@RequestBody PostSearchReq postSearchRequest) {
+        AuthUser authUser = SecurityUtils.getAuthenticatedUser();
+        return Result.success(postService.searchModerationPosts(postSearchRequest, authUser.getUser().getId()));
     }
 
     /* Song：点赞/取消点赞 */
@@ -138,7 +152,7 @@ public class PostController {
     /* Song：更新帖子内容（管理员或作者本人） */
     @PostMapping("/update-post")
     public Result<?> updatePost(
-            @RequestBody com.campus.trend.campus_pulse.dto.request.PostUpdateReq updatePostRequest) {
+            @Valid @RequestBody com.campus.trend.campus_pulse.dto.request.PostUpdateReq updatePostRequest) {
         AuthUser authUser = SecurityUtils.getAuthenticatedUser();
         postService.updatePost(updatePostRequest, authUser.getUser().getId());
         return Result.success();
@@ -149,6 +163,24 @@ public class PostController {
     public Result<?> deletePost(@PathVariable String id) {
         AuthUser authUser = SecurityUtils.getAuthenticatedUser();
         postService.deletePost(id, authUser.getUser().getId());
+        return Result.success();
+    }
+
+    /* 打回帖子（管理员/版主）*/
+    @PostMapping("/{id}/reject")
+    public Result<?> rejectPost(@PathVariable String id,
+                                @RequestBody(required = false) java.util.Map<String, String> body) {
+        AuthUser authUser = SecurityUtils.getAuthenticatedUser();
+        String reason = body != null ? body.getOrDefault("reason", "") : "";
+        postService.rejectPost(id, reason, authUser.getUser().getId());
+        return Result.success();
+    }
+
+    /* 通过审核（管理员/版主）*/
+    @PostMapping("/{id}/approve")
+    public Result<?> approvePost(@PathVariable String id) {
+        AuthUser authUser = SecurityUtils.getAuthenticatedUser();
+        postService.approvePost(id, authUser.getUser().getId());
         return Result.success();
     }
 }

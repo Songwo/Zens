@@ -3,6 +3,7 @@ package com.campus.trend.campus_pulse.service.impl;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.campus.trend.campus_pulse.entity.Tag;
 import com.campus.trend.campus_pulse.entity.UserTagRelation;
+import com.campus.trend.campus_pulse.mapper.PostMapper;
 import com.campus.trend.campus_pulse.mapper.TagMapper;
 import com.campus.trend.campus_pulse.mapper.UserTagRelationMapper;
 import com.campus.trend.campus_pulse.service.UserTagRelationService;
@@ -22,10 +23,12 @@ public class UserTagRelationServiceImpl extends ServiceImpl<UserTagRelationMappe
         implements UserTagRelationService {
 
     private final TagMapper tagMapper;
+    private final PostMapper postMapper;
 
     @Autowired
-    public UserTagRelationServiceImpl(TagMapper tagMapper) {
+    public UserTagRelationServiceImpl(TagMapper tagMapper, PostMapper postMapper) {
         this.tagMapper = tagMapper;
+        this.postMapper = postMapper;
     }
 
     /**
@@ -139,6 +142,9 @@ public class UserTagRelationServiceImpl extends ServiceImpl<UserTagRelationMappe
 
         // Song：3. 批量查询标签信息
         List<Tag> tags = tagMapper.selectBatchIds(tagIds);
+
+        // Song：4. 填充每个标签的帖子数量
+        tags.forEach(tag -> tag.setPostCount(postMapper.countByTagName(tag.getName(), " " + tag.getName())));
 
         log.info("用户 [{}] 关注了 {} 个标签", userId, tags.size());
 

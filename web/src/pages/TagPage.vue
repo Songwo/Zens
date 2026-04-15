@@ -4,16 +4,22 @@ import { useRoute } from 'vue-router'
 import MainLayout from '@/layouts/MainLayout.vue'
 import PostCard from '@/components/PostCard.vue'
 import { postApi } from '@/api/post'
+import { tagApi } from '@/api/tag'
 import type { Post } from '@/types'
 import { ElMessage } from 'element-plus'
-import { CollectionTag } from '@element-plus/icons-vue'
+import { CollectionTag, Star, StarFilled } from '@element-plus/icons-vue'
+import { useUserStore } from '@/store/user'
 
 const route = useRoute()
+const userStore = useUserStore()
 const posts = ref<Post[]>([])
 const loading = ref(false)
 const page = ref(1)
 const hasMore = ref(true)
 const sortMode = ref<'new' | 'hot'>('hot')
+const tagId = ref<number | null>(null)
+const isFollowing = ref(false)
+const followLoading = ref(false)
 
 const tagName = computed(() => route.params.name as string)
 
@@ -31,19 +37,22 @@ const fetchPosts = async (reset = false) => {
     const res = await postApi.searchList({
       page: page.value,
       pageSize: 10,
+      needTotal: false,
       orderBy: sortMode.value,
       tag: tagName.value,
       status: 1
     })
 
-    if (res.data.records.length > 0) {
-      posts.value.push(...res.data.records)
+    const records = res?.data?.records || []
+
+    if (records.length > 0) {
+      posts.value.push(...records)
       page.value++
     } else {
       hasMore.value = false
     }
 
-    if (posts.value.length >= res.data.total) {
+    if (records.length < 10) {
       hasMore.value = false
     }
   } catch (error) {
@@ -58,13 +67,54 @@ const changeSort = (mode: any) => {
   fetchPosts(true)
 }
 
+const loadTagInfo = async () => {
+  if (!userStore.isLoggedIn) return
+  try {
+    // 通过搜索找到tagId
+    const res = await tagApi.search(tagName.value)
+    const found = res.data?.find((t: any) => t.name === tagName.value)
+    if (found) {
+      tagId.value = found.id
+      const statusRes = await tagApi.getStatus(found.id)
+      isFollowing.value = statusRes.data?.isFollowing ?? false
+    }
+  } catch {
+    // ignore
+  }
+}
+
+const toggleFollow = async () => {
+  if (!userStore.isLoggedIn) {
+    ElMessage.warning('请先登录后再关注话题')
+    return
+  }
+  if (!tagId.value) {
+    ElMessage.warning('暂未找到该话题，无法关注')
+    return
+  }
+  followLoading.value = true
+  try {
+    const res = await tagApi.toggleFollow(tagId.value)
+    isFollowing.value = res.data?.isFollowing ?? !isFollowing.value
+    ElMessage.success(isFollowing.value ? '已关注该话题，有新帖子时将收到通知' : '已取消关注')
+  } catch {
+    ElMessage.error('操作失败，请稍后重试')
+  } finally {
+    followLoading.value = false
+  }
+}
+
 // Song：说明
 watch(() => route.params.name, () => {
+  tagId.value = null
+  isFollowing.value = false
   fetchPosts(true)
+  loadTagInfo()
 })
 
 onMounted(() => {
   fetchPosts(true)
+  loadTagInfo()
 })
 </script>
 
@@ -84,7 +134,14 @@ onMounted(() => {
                <el-tag size="small" effect="dark" round>{{ posts.length }} 份内容</el-tag>
             </div>
           </div>
-          <el-button type="primary" round class="action-btn">关注话题</el-button>
+          <el-button
+            :type="isFollowing ? 'default' : 'primary'"
+            :icon="isFollowing ? StarFilled : Star"
+            round
+            class="action-btn"
+            :loading="followLoading"
+            @click="toggleFollow"
+          >{{ isFollowing ? '已关注' : '关注话题' }}</el-button>
         </div>
       </div>
 

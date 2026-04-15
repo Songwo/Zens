@@ -5,10 +5,14 @@ import type { Result } from '@/types'
  * Song：举报接口
  * Song：说明
  */
-export interface SysReport {
+export interface ReportManageItem {
     id: string
     targetType: string
     targetId: string
+    targetTitle?: string
+    targetPreview?: string
+    sectionId?: number
+    sectionName?: string
     reason: string
     details?: string
     reporterId: string
@@ -25,7 +29,7 @@ export const reportApi = {
 
     /* Song：说明 */
     getList(current = 1, size = 10, status?: number) {
-        return api.get<any, Result<{ records: SysReport[]; total: number }>>('/report/list', {
+        return api.get<any, Result<{ records: ReportManageItem[]; total: number }>>('/report/list', {
             params: { current, size, status }
         })
     },
@@ -35,5 +39,10 @@ export const reportApi = {
         return api.post<any, Result<void>>(`/report/resolve/${id}`, null, {
             params: { status }
         })
+    },
+
+    /* Song：打回帖子为草稿 */
+    reject(id: string, reason: string) {
+        return api.post<any, Result<void>>(`/report/reject/${id}`, { reason })
     }
 }

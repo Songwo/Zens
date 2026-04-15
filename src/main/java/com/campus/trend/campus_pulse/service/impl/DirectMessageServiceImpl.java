@@ -10,6 +10,8 @@ import com.campus.trend.campus_pulse.entity.DirectMessage;
 import com.campus.trend.campus_pulse.entity.User;
 import com.campus.trend.campus_pulse.mapper.DirectMessageMapper;
 import com.campus.trend.campus_pulse.mapper.UserMapper;
+import com.campus.trend.campus_pulse.common.api.ResultCode;
+import com.campus.trend.campus_pulse.common.exception.BusinessException;
 import com.campus.trend.campus_pulse.service.DirectMessageService;
 import com.campus.trend.campus_pulse.service.MailService;
 import lombok.RequiredArgsConstructor;
@@ -43,18 +45,18 @@ public class DirectMessageServiceImpl implements DirectMessageService {
     @Transactional(rollbackFor = Exception.class)
     public void sendMessage(String senderId, DirectMessageSendReq req) {
         if (!StringUtils.hasText(senderId)) {
-            throw new RuntimeException("未登录，无法发送私信");
+            throw new BusinessException(ResultCode.NO_PERMISSION, "未登录，无法发送私信");
         }
         if (!StringUtils.hasText(req.getReceiverId()) || !StringUtils.hasText(req.getContent())) {
-            throw new RuntimeException("接收者与消息内容不能为空");
+            throw new BusinessException(ResultCode.PARAM_ERROR, "接收者与消息内容不能为空");
         }
         if (Objects.equals(senderId, req.getReceiverId())) {
-            throw new RuntimeException("不能给自己发送私信");
+            throw new BusinessException(ResultCode.PARAM_ERROR, "不能给自己发送私信");
         }
 
         User receiver = userMapper.selectById(req.getReceiverId());
         if (receiver == null || (receiver.getStatus() != null && receiver.getStatus() != 1)) {
-            throw new RuntimeException("接收者不存在或不可用");
+            throw new BusinessException(ResultCode.USER_NOT_FOUND, "接收者不存在或不可用");
         }
 
         String content = req.getContent().trim();
@@ -96,7 +98,7 @@ public class DirectMessageServiceImpl implements DirectMessageService {
     @Override
     public Map<String, Object> listConversations(String userId, int page, int pageSize) {
         if (!StringUtils.hasText(userId)) {
-            throw new RuntimeException("未登录，无法查看会话");
+            throw new BusinessException(ResultCode.NO_PERMISSION, "未登录，无法查看会话");
         }
         int safePage = Math.max(page, 1);
         int safePageSize = Math.min(Math.max(pageSize, 1), 50);
@@ -180,10 +182,10 @@ public class DirectMessageServiceImpl implements DirectMessageService {
     @Override
     public Map<String, Object> listMessages(String userId, String peerId, int page, int pageSize) {
         if (!StringUtils.hasText(userId)) {
-            throw new RuntimeException("未登录，无法查看私信");
+            throw new BusinessException(ResultCode.NO_PERMISSION, "未登录，无法查看私信");
         }
         if (!StringUtils.hasText(peerId)) {
-            throw new RuntimeException("对话对象不能为空");
+            throw new BusinessException(ResultCode.PARAM_ERROR, "对话对象不能为空");
         }
         int safePage = Math.max(page, 1);
         int safePageSize = Math.min(Math.max(pageSize, 1), 100);

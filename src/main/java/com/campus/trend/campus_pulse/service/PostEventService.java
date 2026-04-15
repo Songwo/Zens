@@ -19,9 +19,14 @@ public interface PostEventService {
     void pushPostReplied(String postId, Long sectionId);
 
     /**
+     * 推送新回复事件（携带最新评论数）
+     */
+    void pushPostReplied(String postId, Long sectionId, Integer commentCount);
+
+    /**
      * Song：推送浏览量更新事件
      */
-    void pushPostViewed(String postId, Long sectionId, Integer viewCount);
+    void pushPostViewed(String postId, Long sectionId, Integer viewCount, java.time.LocalDateTime lastActivityAt);
 
     /**
      * Song：推送点赞数更新事件

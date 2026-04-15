@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ChatDotRound, Pointer, View, MagicStick, Discount, More, EditPen } from '@element-plus/icons-vue'
+import { ChatDotRound, Pointer, View, MagicStick, Discount, More, EditPen, Star, StarFilled, Share } from '@element-plus/icons-vue'
 import { postApi } from '@/api/post'
 import { ElMessage } from 'element-plus'
 import { ref, computed } from 'vue'
@@ -14,6 +14,7 @@ const userStore = useUserStore()
 const composerStore = usePostComposerStore()
 const props = defineProps<{
   post: any
+  highlightKeyword?: string
 }>()
 
 const isAdmin = computed(() => {
@@ -39,10 +40,37 @@ const formatDate = (dateStr: string) => {
 
 const reportVisible = ref(false)
 const isReporting = ref(false)
+const isOpeningEditor = ref(false)
+const likeAnimating = ref(false)
+const collectAnimating = ref(false)
 const reportForm = ref({
   reason: '',
   details: ''
 })
+
+const openEditor = async () => {
+  if (isOpeningEditor.value) return
+
+  isOpeningEditor.value = true
+  try {
+    const res = await postApi.getDetail(props.post.id)
+    const detail = res.data || props.post
+    composerStore.open({
+      editId: detail.id || props.post.id,
+      title: detail.title || props.post.title,
+      content: detail.content || '',
+      sectionId: detail.sectionId || props.post.sectionId,
+      tags: detail.tags || props.post.tags,
+      coverImage: detail.coverImage || props.post.coverImage,
+      status: detail.status ?? props.post.status,
+      auditStatus: detail.auditStatus || props.post.auditStatus
+    })
+  } catch (error) {
+    ElMessage.error('获取帖子详情失败，暂时无法编辑')
+  } finally {
+    isOpeningEditor.value = false
+  }
+}
 
 const handleCommand = async (command: string) => {
   if (command === 'pin') {
@@ -63,14 +91,7 @@ const handleCommand = async (command: string) => {
     reportForm.value.details = ''
     reportVisible.value = true
   } else if (command === 'edit') {
-    composerStore.open({
-      editId: props.post.id,
-      title: props.post.title,
-      content: props.post.content,
-      sectionId: props.post.sectionId,
-      tags: props.post.tags,
-      coverImage: props.post.coverImage
-    })
+    await openEditor()
   }
 }
 
@@ -104,13 +125,43 @@ const goToPost = () => {
 
 const handleLike = async (e: Event) => {
   e.stopPropagation()
+  likeAnimating.value = true
+  setTimeout(() => { likeAnimating.value = false }, 400)
   try {
     await postApi.like(props.post.id)
     props.post.isLiked = !props.post.isLiked
     props.post.likeCount += props.post.isLiked ? 1 : -1
-    ElMessage.success(props.post.isLiked ? '已点赞' : '已取消点赞')
   } catch (error) {
     ElMessage.error('操作失败')
+  }
+}
+
+const handleCollect = async (e: Event) => {
+  e.stopPropagation()
+  collectAnimating.value = true
+  setTimeout(() => { collectAnimating.value = false }, 400)
+  try {
+    await postApi.collect(props.post.id)
+    props.post.isCollected = !props.post.isCollected
+    props.post.collectCount = (props.post.collectCount || 0) + (props.post.isCollected ? 1 : -1)
+  } catch (error) {
+    ElMessage.error('操作失败')
+  }
+}
+
+const handleShare = (e: Event) => {
+  e.stopPropagation()
+  const url = `${window.location.origin}/t/${props.post.id}`
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(url).then(() => ElMessage.success('链接已复制到剪贴板'))
+  } else {
+    const input = document.createElement('input')
+    input.value = url
+    document.body.appendChild(input)
+    input.select()
+    document.execCommand('copy')
+    document.body.removeChild(input)
+    ElMessage.success('链接已复制到剪贴板')
   }
 }
 const parsedTags = computed(() => {
@@ -135,10 +186,65 @@ const postSummary = computed(() => {
 
   return '该帖子暂无纯文本摘要内容...'
 })
+
+const keyword = computed(() => (props.highlightKeyword || '').trim())
+
+const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+const escapeHtml = (text: string) => text
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;')
+  .replace(/'/g, '&#39;')
+
+const highlightText = (text: string) => {
+  const raw = text || ''
+  const normalizedKeyword = keyword.value
+  if (!normalizedKeyword) {
+    return escapeHtml(raw)
+  }
+
+  const matcher = new RegExp(escapeRegExp(normalizedKeyword), 'gi')
+  let output = ''
+  let cursor = 0
+  let matched = false
+
+  raw.replace(matcher, (fragment, _group, offset) => {
+    matched = true
+    output += escapeHtml(raw.slice(cursor, offset))
+    output += `<mark class="search-hit">${escapeHtml(fragment)}</mark>`
+    cursor = offset + fragment.length
+    return fragment
+  })
+
+  if (!matched) {
+    return escapeHtml(raw)
+  }
+
+  output += escapeHtml(raw.slice(cursor))
+  return output
+}
+
+const highlightedTitle = computed(() => highlightText(props.post?.title || ''))
+const highlightedSummary = computed(() => highlightText(postSummary.value))
 </script>
 
 <template>
   <div class="post-card" @click="goToPost">
+    <!-- Song：被打回提示 -->
+    <div v-if="post.auditStatus === 'REJECTED'" class="rejected-banner">
+      <div class="rejected-banner-text">
+        <span>该帖子已被管理员打回，请修改后重新发布</span>
+        <span v-if="post.rejectReason" class="reject-reason">打回原因：{{ post.rejectReason }}</span>
+      </div>
+      <el-button size="small" type="warning" :loading="isOpeningEditor" @click.stop="handleCommand('edit')">去编辑</el-button>
+    </div>
+    <div v-else-if="post.status === 0 || post.auditStatus === 'DRAFT'" class="draft-banner">
+      <span>该内容当前为草稿，尚未提交发布</span>
+      <el-button size="small" type="primary" :loading="isOpeningEditor" @click.stop="handleCommand('edit')">继续编辑</el-button>
+    </div>
+
     <div v-if="post.recommendReason" class="recommend-badge">
       <el-icon><MagicStick /></el-icon> 推荐内容
     </div>
@@ -146,7 +252,7 @@ const postSummary = computed(() => {
     <div class="card-content">
       <!-- Author info and Section -->
       <div class="card-header-info">
-        <div class="author-block">
+        <div class="author-block" @click.stop="post.userId ? router.push(`/user/${post.userId}`) : null" :style="post.userId ? 'cursor:pointer' : ''">
           <div class="avatar-wrapper">
             <el-avatar :size="32" :src="post.authorAvatar" class="author-avatar">
               {{ post.authorName?.charAt(0) || 'U' }}
@@ -201,11 +307,9 @@ const postSummary = computed(() => {
             <el-tag v-if="post.trendLevel === 'hot'" type="danger" size="small" effect="dark" class="hot-tag">
               <el-icon><Discount /></el-icon> HOT
             </el-tag>
-            {{ post.title }}
+            <span class="title-text" v-html="highlightedTitle"></span>
           </h2>
-          <p class="post-excerpt">
-            {{ postSummary }}
-          </p>
+          <p class="post-excerpt" v-html="highlightedSummary"></p>
         </div>
 
         <!-- Optional Thumbnail -->
@@ -242,14 +346,20 @@ const postSummary = computed(() => {
         </div>
 
         <div class="interaction-area">
-          <span class="interaction-btn" :class="{ 'is-active': post.isLiked }" @click.stop="handleLike">
+          <span class="interaction-btn" :class="{ 'is-active': post.isLiked, 'btn-animate': likeAnimating }" @click.stop="handleLike">
             <el-icon><Pointer /></el-icon> {{ post.likeCount || 0 }}
+          </span>
+          <span class="interaction-btn" :class="{ 'is-active': post.isCollected, 'btn-animate': collectAnimating }" @click.stop="handleCollect">
+            <el-icon><component :is="post.isCollected ? StarFilled : Star" /></el-icon> {{ post.collectCount || 0 }}
           </span>
           <span class="interaction-btn">
             <el-icon><ChatDotRound /></el-icon> {{ post.commentCount || 0 }}
           </span>
           <span class="interaction-btn hidden-xs-only">
             <el-icon><View /></el-icon> {{ post.viewCount || 0 }}
+          </span>
+          <span class="interaction-btn hidden-xs-only" @click.stop="handleShare">
+            <el-icon><Share /></el-icon>
           </span>
         </div>
       </div>
@@ -295,17 +405,35 @@ const postSummary = computed(() => {
   cursor: pointer;
   border-radius: var(--el-border-radius-base);
   border: 1px solid var(--el-border-color-lighter);
-  transition: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
+  transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.28s ease, border-color 0.24s ease, background-color 0.24s ease;
   background-color: var(--cp-bg-card);
   position: relative;
   overflow: hidden;
+  transform: translateZ(0);
+  will-change: transform, box-shadow;
+}
+
+.post-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(420px 120px at 100% 0%, rgba(255, 191, 92, 0.12), transparent 60%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0));
+  opacity: 0;
+  transition: opacity 0.24s ease;
+  pointer-events: none;
 }
 
 .post-card:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--el-box-shadow-light);
+  transform: translate3d(0, -4px, 0);
+  box-shadow: 0 18px 38px rgba(15, 23, 42, 0.12);
   border-color: var(--cp-primary);
   background-color: var(--cp-hover);
+}
+
+.post-card:hover::before {
+  opacity: 1;
 }
 
 .recommend-badge {
@@ -328,6 +456,8 @@ const postSummary = computed(() => {
   flex-direction: column;
   gap: 12px;
   padding: 20px;
+  position: relative;
+  z-index: 1;
 }
 
 /* Song：说明 */
@@ -423,6 +553,18 @@ const postSummary = computed(() => {
   font-weight: bold;
 }
 
+.title-text {
+  min-width: 0;
+}
+
+.post-title :deep(mark.search-hit),
+.post-excerpt :deep(mark.search-hit) {
+  background: color-mix(in oklab, var(--el-color-warning-light-8) 76%, white 24%);
+  color: inherit;
+  border-radius: 4px;
+  padding: 0 2px;
+}
+
 .post-excerpt {
   font-size: 14px;
   color: var(--el-text-color-regular);
@@ -449,11 +591,12 @@ const postSummary = computed(() => {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  transition: transform 0.3s;
+  transition: transform 0.36s cubic-bezier(0.22, 1, 0.36, 1), filter 0.24s ease;
 }
 
 .post-card:hover .thumbnail-image {
-  transform: scale(1.05);
+  transform: scale(1.06);
+  filter: saturate(1.06);
 }
 
 /* Song：说明 */
@@ -495,11 +638,12 @@ const postSummary = computed(() => {
   gap: 4px;
   color: var(--el-text-color-secondary);
   font-size: 13px;
-  transition: color 0.2s;
+  transition: color 0.2s ease, transform 0.2s ease;
 }
 
 .interaction-btn:hover {
   color: var(--el-color-primary);
+  transform: translateY(-1px);
 }
 
 .interaction-btn.is-active {
@@ -507,9 +651,56 @@ const postSummary = computed(() => {
   font-weight: 600;
 }
 
+@keyframes btn-pop {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(1.35); }
+  70%  { transform: scale(0.9); }
+  100% { transform: scale(1); }
+}
+
+.interaction-btn.btn-animate {
+  animation: btn-pop 0.38s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
 @media (max-width: 600px) {
   .post-thumbnail {
     display: none;
   }
+}
+
+.rejected-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 20px;
+  background: var(--el-color-danger-light-9);
+  border-bottom: 1px solid var(--el-color-danger-light-5);
+  color: var(--el-color-danger);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.rejected-banner-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.reject-reason {
+  font-size: 12px;
+  font-weight: 400;
+  opacity: 0.85;
+}
+
+.draft-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 20px;
+  background: var(--el-color-info-light-9);
+  border-bottom: 1px solid var(--el-color-info-light-5);
+  color: var(--el-color-info-dark-2);
+  font-size: 13px;
+  font-weight: 600;
 }
 </style>

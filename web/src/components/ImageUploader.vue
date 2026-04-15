@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { uploadApi } from '@/api/upload'
+import { UPLOAD_IMAGE_MAX_SIZE_BYTES, UPLOAD_IMAGE_MAX_SIZE_MB } from '@/constants/upload'
 import { Plus, Delete, Loading } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 
@@ -20,15 +21,15 @@ const uploadFile = async (file: File) => {
     return false
   }
 
-  if (file.size > 5 * 1024 * 1024) {
-    ElMessage.error('图片大小不能超过 5MB')
+  if (file.size > UPLOAD_IMAGE_MAX_SIZE_BYTES) {
+    ElMessage.error(`图片大小不能超过 ${UPLOAD_IMAGE_MAX_SIZE_MB}MB`)
     return false
   }
 
   uploading.value = true
   try {
-    const res = await uploadApi.uploadImage(file, 'post-cover')
-    emit('update:modelValue', res.data)
+    const url = await uploadApi.uploadImage(file, 'post-cover')
+    emit('update:modelValue', url)
     ElMessage.success('上传成功')
   } catch (error) {
     ElMessage.error('上传失败')
@@ -88,7 +89,7 @@ const removeImage = () => {
         <el-icon v-else class="plus-icon"><Plus /></el-icon>
         <div class="upload-text">
           <span>点击上传封面图</span>
-          <span class="upload-tip">支持 JPG/PNG, 最大 5MB，可粘贴图片</span>
+          <span class="upload-tip">支持常见图片格式，最大 {{ UPLOAD_IMAGE_MAX_SIZE_MB }}MB，可粘贴图片</span>
         </div>
       </div>
     </el-upload>

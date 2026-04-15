@@ -4,7 +4,16 @@ import type { Result } from '@/types'
 export interface ModeratorApplicationItem {
     id: number
     userId: string
+    applicantUsername?: string
+    applicantNickname?: string
+    applicantAvatar?: string
+    applicantEmail?: string
+    applicantLevel?: number
+    applicantRole?: string
     sectionId: number
+    sectionName?: string
+    sectionDescription?: string
+    sectionStatus?: number
     reason: string
     status: number // Song：0=待处理, 1=已通过, 2=已拒绝
     reviewNote: string | null
@@ -38,13 +47,13 @@ export const moderatorApi = {
      * Song：批准申请 (管理员)
      */
     approve(id: number, reviewNote?: string) {
-        return api.post<any, Result<string>>(`/moderator/approve/${id}`, null, { params: { reviewNote } })
+        return api.post<any, Result<string>>(`/moderator/approve/${id}`, { reviewNote })
     },
 
     /**
      * Song：拒绝申请 (管理员)
      */
     reject(id: number, reviewNote: string) {
-        return api.post<any, Result<string>>(`/moderator/reject/${id}`, null, { params: { reviewNote } })
+        return api.post<any, Result<string>>(`/moderator/reject/${id}`, { reviewNote })
     }
 }

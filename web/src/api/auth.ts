@@ -47,6 +47,7 @@ export const authApi = {
         code?: string
         rememberMe?: boolean
         twoFactorCode?: string
+        'cf-turnstile-response': string
     }) {
         return api.post<any, Result<{
             accessToken?: string
@@ -123,10 +124,10 @@ export const authApi = {
     },
 
     /**
-     * Song：邀请码校验（暂时 透传）
+     * 邀请码校验
      */
-    validateInviteCode(_code: string) {
-        return Promise.resolve<Result<any>>({ code: 2000, message: 'OK', data: null })
+    validateInviteCode(code: string) {
+        return api.get<any, Result<string>>('/invite/validate', { params: { code } })
     },
 
     /**

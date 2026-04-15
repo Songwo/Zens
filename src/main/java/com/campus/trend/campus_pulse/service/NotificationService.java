@@ -44,14 +44,24 @@ public interface NotificationService {
     void markAllAsRead(String userId);
 
     /**
+     * 批量标记通知已读（仅处理当前用户自己的通知）
+     */
+    void markBatchAsRead(List<Long> notificationIds, String userId);
+
+    /**
      * Song：删除通知
      */
     void deleteNotification(Long notificationId, String userId);
 
     /**
+     * 批量删除通知（仅处理当前用户自己的通知）
+     */
+    void deleteBatch(List<Long> notificationIds, String userId);
+
+    /**
      * Song：发送评论通知
      */
-    void sendCommentNotification(String postAuthorId, String commenterId, String postId, String content);
+    void sendCommentNotification(String postAuthorId, String commenterId, String postId, String commentId, String content);
 
     /**
      * Song：发送点赞通知
@@ -71,5 +81,5 @@ public interface NotificationService {
     /**
      * Song：发送@提醒通知
      */
-    void sendMentionNotification(String mentionedUserId, String mentionerId, String postId, String content);
+    void sendMentionNotification(String mentionedUserId, String mentionerId, String postId, String commentId, String content);
 }

@@ -57,6 +57,7 @@ public class PostResp implements Serializable {
     private String locationName;
     private Integer status;
     private String auditStatus;
+    private String rejectReason;
 
     // Song：=================== 统计数据 ===================
     private Integer viewCount;
@@ -78,6 +79,11 @@ public class PostResp implements Serializable {
      * Song：最后活跃时间（用于排序）
      */
     private LocalDateTime lastActivityAt;
+
+    /**
+     * Song：是否加精 0:否 1:是
+     */
+    private Integer isFeatured;
 
     // Song：=================== 用户交互状态 ===================
     @JsonProperty("isLiked")

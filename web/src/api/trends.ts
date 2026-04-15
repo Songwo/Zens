@@ -8,8 +8,8 @@ export const trendsApi = {
     },
 
     // Song：说明
-    getPostTrend() {
-        return api.get<any, Result<any>>('/trend-stat/post-trend')
+    getPostTrend(days = 7) {
+        return api.get<any, Result<any>>('/trend-stat/post-trend', { params: { days } })
     },
 
     // Song：说明
@@ -25,5 +25,9 @@ export const trendsApi = {
     // Song：说明
     getPrediction() {
         return api.get<any, Result<any[]>>('/trend-stat/prediction')
+    },
+
+    getDashboard() {
+        return api.get<any, Result<{ todayPosts: number; totalPosts: number; totalUsers: number; todayUsers: number }>>('/trend-stat/dashboard')
     }
 }

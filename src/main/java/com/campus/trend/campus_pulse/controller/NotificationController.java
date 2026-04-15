@@ -1,6 +1,7 @@
 package com.campus.trend.campus_pulse.controller;
 
 import com.campus.trend.campus_pulse.common.api.Result;
+import com.campus.trend.campus_pulse.dto.request.NotificationBatchReq;
 import com.campus.trend.campus_pulse.dto.response.NotificationResp;
 import com.campus.trend.campus_pulse.service.NotificationService;
 import com.campus.trend.campus_pulse.utils.SecurityUtils;
@@ -9,6 +10,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
+import jakarta.validation.Valid;
 
 import java.util.HashMap;
 import java.util.List;
@@ -88,6 +90,19 @@ public class NotificationController {
         }
     }
 
+    @PutMapping("/read-batch")
+    @Operation(summary = "批量标记通知已读")
+    public Result<Void> markBatchAsRead(@Valid @RequestBody NotificationBatchReq req) {
+        try {
+            String userId = SecurityUtils.getCurrentUserId();
+            notificationService.markBatchAsRead(req.getIds(), userId);
+            return Result.success();
+        } catch (Exception e) {
+            log.error("批量标记已读失败", e);
+            return Result.failed("操作失败");
+        }
+    }
+
     @DeleteMapping("/{id}")
     @Operation(summary = "删除通知")
     public Result<Void> deleteNotification(@PathVariable Long id) {
@@ -99,6 +114,19 @@ public class NotificationController {
             return Result.failed(e.getMessage());
         } catch (Exception e) {
             log.error("删除通知失败", e);
+            return Result.failed("删除失败");
+        }
+    }
+
+    @DeleteMapping("/batch")
+    @Operation(summary = "批量删除通知")
+    public Result<Void> deleteBatch(@Valid @RequestBody NotificationBatchReq req) {
+        try {
+            String userId = SecurityUtils.getCurrentUserId();
+            notificationService.deleteBatch(req.getIds(), userId);
+            return Result.success();
+        } catch (Exception e) {
+            log.error("批量删除通知失败", e);
             return Result.failed("删除失败");
         }
     }

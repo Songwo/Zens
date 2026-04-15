@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { timeAgo } from '@/utils/timeAgo'
 import UserRoleBadge from '@/components/common/UserRoleBadge.vue'
+import UserQuickCard from '@/components/common/UserQuickCard.vue'
 
 type TopicItem = {
   id: number | string
@@ -10,7 +11,7 @@ type TopicItem = {
   excerpt: string
   category: { name: string; color: string }
   tags: string[]
-  author: { name: string; avatar: string; roles?: string[] }
+  author: { id?: string; username?: string; name: string; avatar: string; roles?: string[] }
   createdAt: string
   lastActive: string
   replies: number
@@ -99,8 +100,24 @@ const formatMetric = (value: number) => {
 
     <div class="foot-line">
       <div class="author-line">
-        <el-avatar :size="26" :src="topic.author.avatar">{{ topic.author.name.charAt(0) }}</el-avatar>
-        <span class="author-name">{{ topic.author.name }}</span>
+        <UserQuickCard
+          :user-id="topic.author.id"
+          :username="topic.author.username"
+          :nickname="topic.author.name"
+          :avatar="topic.author.avatar"
+          :roles="topic.author.roles"
+        >
+          <el-avatar :size="26" :src="topic.author.avatar">{{ topic.author.name.charAt(0) }}</el-avatar>
+        </UserQuickCard>
+        <UserQuickCard
+          :user-id="topic.author.id"
+          :username="topic.author.username"
+          :nickname="topic.author.name"
+          :avatar="topic.author.avatar"
+          :roles="topic.author.roles"
+        >
+          <span class="author-name">{{ topic.author.name }}</span>
+        </UserQuickCard>
         <UserRoleBadge :roles="topic.author.roles" />
       </div>
 
@@ -123,15 +140,37 @@ const formatMetric = (value: number) => {
   border-bottom: 1px solid var(--el-border-color-lighter);
   background: var(--el-bg-color-overlay);
   cursor: pointer;
-  transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+  transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.26s ease, background-color 0.22s ease, border-left-color 0.2s ease;
   border-left: 3px solid transparent;
+  will-change: transform;
+  position: relative;
+  overflow: hidden;
+}
+
+.topic-row::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(120deg, rgba(255, 255, 255, 0) 20%, rgba(255, 255, 255, 0.22) 50%, rgba(255, 255, 255, 0) 80%);
+  transform: translateX(-130%);
+  transition: transform 0.46s ease;
+  pointer-events: none;
 }
 
 .topic-row:hover {
   border-left-color: var(--cp-primary);
   background-color: var(--cp-hover);
-  transform: translateY(-1px);
-  box-shadow: var(--el-box-shadow-lighter);
+  transform: translate3d(0, -3px, 0);
+  box-shadow: 0 16px 30px rgba(15, 23, 42, 0.08);
+}
+
+.topic-row:hover::after {
+  transform: translateX(120%);
+}
+
+.topic-row:active {
+  transform: translateY(0);
+  transition-duration: 0.1s;
 }
 
 .topic-row:focus-visible {
@@ -299,6 +338,12 @@ const formatMetric = (value: number) => {
   border: 1px solid #d8e6ff;
   border-radius: 8px;
   padding: 6px 10px;
+  transition: transform 0.22s ease, box-shadow 0.22s ease;
+}
+
+.topic-row:hover .ai-hint {
+  transform: translate3d(0, -1px, 0);
+  box-shadow: 0 10px 18px rgba(11, 87, 208, 0.08);
 }
 
 @media (max-width: 768px) {

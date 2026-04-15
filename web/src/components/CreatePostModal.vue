@@ -26,8 +26,8 @@ const form = reactive({
 const tagInput = ref('')
 
 const isValid = computed(() => {
-  return form.title.trim().length > 0 &&
-         form.content.trim().length > 0 &&
+  return form.title.trim().length > 3 &&
+         form.content.trim().length > 30 &&
          form.sectionId
 })
 
@@ -80,6 +80,14 @@ const handleAIAnalysis = async () => {
 
 const handleSubmit = async () => {
   if (!isValid.value || loading.value) return
+  if (form.title.trim().length <= 3) {
+    ElMessage.warning('标题需超过3个字符')
+    return
+  }
+  if (form.content.trim().length <= 30) {
+    ElMessage.warning('正文需超过30个字符')
+    return
+  }
 
   loading.value = true
   
@@ -100,8 +108,12 @@ const handleSubmit = async () => {
     } else {
       ElMessage.error(res.message || '发布失败')
     }
-  } catch (error) {
-    ElMessage.error('发布失败')
+  } catch (error: any) {
+    if (error?.response) {
+      return
+    }
+    const message = typeof error?.message === 'string' ? error.message.trim() : ''
+    ElMessage.error(message && message !== 'Network Error' ? message : '发布失败')
   } finally {
     loading.value = false
   }

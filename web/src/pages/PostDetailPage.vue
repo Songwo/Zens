@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed, watch } from 'vue'
+import { ref, onMounted, computed, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import MainLayout from '@/layouts/MainLayout.vue'
 import { postApi } from '@/api/post'
@@ -13,6 +13,7 @@ import DOMPurify from 'dompurify'
 import { timeAgo } from '@/utils/timeAgo'
 import { renderMarkdownWithTocResult } from '@/utils/markdownToc'
 import { generateSummary } from '@/utils/markdown'
+import { renderGithubRichCards, mergeConsecutiveBlockquotes } from '@/utils/richLink'
 import { 
   View, 
   CaretTop, 
@@ -25,6 +26,7 @@ import {
   Medal
 } from '@element-plus/icons-vue'
 import UserRoleBadge from '@/components/common/UserRoleBadge.vue'
+import UserQuickCard from '@/components/common/UserQuickCard.vue'
 import CommentList from '@/components/comment/CommentList.vue'
 import CommentEditor from '@/components/comment/CommentEditor.vue'
 import { useUserStore } from '@/store/user'
@@ -49,6 +51,7 @@ const commentLoading = ref(false)
 const replyingTo = ref<string | null>(null)
 const replyingToName = ref<string | null>(null)
 const regeneratingSummary = ref(false)
+const activeCommentId = ref('')
 
 const postId = (route.params.id as string) || ''
 
@@ -57,9 +60,14 @@ const isAdmin = computed(() => {
   return roles.some((role: string) => role === 'ROLE_ADMIN' || role === 'ROLE_SUPER_ADMIN')
 })
 
-const isModerator = computed(() => {
-  const roles = userStore.userInfo?.roles || []
-  return roles.includes('ROLE_MODERATOR')
+const moderatedSectionIds = computed(() => {
+  const rawIds = userStore.userInfo?.moderatedSectionIds || []
+  return new Set(rawIds.map((id: number | string) => Number(id)).filter(id => Number.isFinite(id) && id > 0))
+})
+
+const canModerateCurrentSection = computed(() => {
+  if (!post.value?.sectionId) return isAdmin.value
+  return isAdmin.value || moderatedSectionIds.value.has(Number(post.value.sectionId))
 })
 
 const isFollowed = ref(false)
@@ -101,16 +109,25 @@ const handleFollow = async () => {
 const renderedContent = computed(() => {
   const rawHtml = tocRenderResult.value.html
   const lazyImageHtml = rawHtml.replace(/<img\b(?![^>]*\bloading=)/gi, '<img loading="lazy" decoding="async" ')
-  return DOMPurify.sanitize(lazyImageHtml, {
+  const mergedHtml = mergeConsecutiveBlockquotes(lazyImageHtml)
+  const richHtml = renderGithubRichCards(mergedHtml)
+  return DOMPurify.sanitize(richHtml, {
     ALLOWED_TAGS: [
       'h1','h2','h3','h4','h5','h6','p','br','hr',
       'ul','ol','li','blockquote','pre','code',
       'table','thead','tbody','tr','th','td',
       'a','img','strong','em','del','s','mark','kbd',
       'sup','sub','details','summary','input',
-      'div','span'
+      'div','span','video','source',
+      'svg','path'
     ],
-    ALLOWED_ATTR: ['href','src','alt','title','class','id','target','type','checked','disabled','loading','decoding'],
+    ALLOWED_ATTR: [
+      'href','src','alt','title','class','id','target','rel',
+      'type','checked','disabled','loading','decoding',
+      'controls','preload','poster','playsinline','muted','loop','autoplay',
+      'viewBox','width','height','aria-hidden','fill','d'
+    ],
+    FORCE_BODY: true,
     ALLOW_DATA_ATTR: false,
   })
 })
@@ -127,7 +144,7 @@ const aiSummaryText = computed(() => {
 
 const canRegenerateSummary = computed(() => {
   if (!post.value || !userStore.userId) return false
-  return post.value.userId === userStore.userId || isAdmin.value || isModerator.value
+  return post.value.userId === userStore.userId || canModerateCurrentSection.value
 })
 
 const showSidebarToc = computed(() => tocRenderResult.value.hasTocTag)
@@ -163,12 +180,13 @@ watch(
 
 const fetchSecondaryData = async (id: string) => {
   const [commentRes, relatedRes] = await Promise.allSettled([
-    commentApi.getByPostId(id),
+    commentApi.getByPostId(id, 1, 120),
     recommendApi.getSimilar(id)
   ])
 
   if (commentRes.status === 'fulfilled') {
     comments.value = commentRes.value.data.records || []
+    scrollToRouteComment()
   }
   if (relatedRes.status === 'fulfilled') {
     relatedPosts.value = (relatedRes.value.data?.slice(0, 5) || []) as RecommendPost[]
@@ -276,8 +294,9 @@ const submitComment = async (content: string) => {
     cancelReply()
 
     // Song：说明
-    const commentRes = await commentApi.getByPostId(postId)
+    const commentRes = await commentApi.getByPostId(postId, 1, 120)
     comments.value = commentRes.data.records || []
+    scrollToRouteComment()
   } catch (error) {
     ElMessage.error('评论失败')
   } finally {
@@ -362,6 +381,10 @@ const handleCommand = (command: string) => {
 
 const handleFeature = async () => {
   if (!post.value) return
+  if (!canModerateCurrentSection.value) {
+    ElMessage.warning('仅当前板块版主或管理员可操作精华设置')
+    return
+  }
   try {
     await postApi.feature(post.value.id)
     post.value.isFeatured = post.value.isFeatured === 1 ? 0 : 1
@@ -419,7 +442,7 @@ const handleShare = async () => {
 const handleRegenerateSummary = async () => {
   if (!post.value) return
   if (!canRegenerateSummary.value) {
-    ElMessage.warning('仅作者或管理员可重新生成摘要')
+    ElMessage.warning('仅作者、当前板块版主或管理员可重新生成摘要')
     return
   }
   regeneratingSummary.value = true
@@ -438,15 +461,69 @@ const formatDate = (dateStr: string) => {
   return timeAgo(dateStr)
 }
 
+const getRouteCommentId = () => {
+  const queryCommentId = route.query.commentId
+  if (typeof queryCommentId === 'string' && queryCommentId.trim()) {
+    return queryCommentId.trim()
+  }
+  if (route.hash?.startsWith('#comment-')) {
+    const hashCommentId = route.hash.replace('#comment-', '').trim()
+    if (hashCommentId) {
+      return hashCommentId
+    }
+  }
+  return ''
+}
+
+const scrollToRouteComment = async (retry = 0) => {
+  const commentId = getRouteCommentId()
+  activeCommentId.value = commentId
+  if (!commentId) {
+    return
+  }
+  await nextTick()
+  const anchor = document.getElementById(`comment-${commentId}`)
+  if (anchor) {
+    anchor.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    return
+  }
+  if (retry < 4) {
+    window.setTimeout(() => {
+      scrollToRouteComment(retry + 1)
+    }, 180)
+  }
+}
+
+watch(
+  () => [route.query.commentId, route.hash],
+  () => {
+    scrollToRouteComment()
+  }
+)
+
 onMounted(() => {
+  activeCommentId.value = getRouteCommentId()
   fetchPost()
 })
 </script>
 
 <template>
   <MainLayout>
-    <div class="post-detail-container" v-loading="loading">
-      <div v-if="post" class="post-main">
+    <div class="post-detail-container">
+      <!-- 骨架屏 -->
+      <div v-if="loading" class="post-skeleton">
+        <div class="skel-card">
+          <div class="skel-line w40"></div>
+          <div class="skel-line w80 tall"></div>
+          <div class="skel-line w60"></div>
+          <div class="skel-block"></div>
+          <div class="skel-line w90"></div>
+          <div class="skel-line w70"></div>
+          <div class="skel-line w80"></div>
+        </div>
+      </div>
+      <transition name="page" mode="out-in">
+        <div v-if="post && !loading" key="post-content" class="post-main">
         <!-- Post Content Card -->
         <el-card class="post-content-card" shadow="never">
           <!-- Article Header -->
@@ -461,14 +538,28 @@ onMounted(() => {
             <h1 class="post-title">{{ post.title }}</h1>
             
             <div class="author-info">
-              <div class="avatar-wrapper">
-                <el-avatar :size="40" :src="post.authorAvatar">
-                  {{ post.authorName?.charAt(0) || 'U' }}
-                </el-avatar>
-              </div>
+              <UserQuickCard
+                :user-id="post.userId"
+                :nickname="post.authorName"
+                :avatar="post.authorAvatar"
+                :roles="post.authorRoles"
+              >
+                <div class="avatar-wrapper">
+                  <el-avatar :size="40" :src="post.authorAvatar">
+                    {{ post.authorName?.charAt(0) || 'U' }}
+                  </el-avatar>
+                </div>
+              </UserQuickCard>
               <div class="author-details">
                 <span style="display:flex; align-items:center;">
-                  <span class="author-name">{{ post.authorName }}</span>
+                  <UserQuickCard
+                    :user-id="post.userId"
+                    :nickname="post.authorName"
+                    :avatar="post.authorAvatar"
+                    :roles="post.authorRoles"
+                  >
+                    <span class="author-name">{{ post.authorName }}</span>
+                  </UserQuickCard>
                   <UserRoleBadge :roles="post.authorRoles" />
                 </span>
                 <div class="post-stats">
@@ -508,7 +599,7 @@ onMounted(() => {
                       <el-icon><Warning /></el-icon> 举报违规内容
                     </el-dropdown-item>
                     <el-dropdown-item
-                      v-if="isAdmin || isModerator"
+                      v-if="canModerateCurrentSection"
                       command="feature"
                     >
                       <el-icon><Medal /></el-icon> {{ post.isFeatured === 1 ? '取消精华' : '设为精华' }}
@@ -521,7 +612,7 @@ onMounted(() => {
 
           <!-- Cover Image -->
           <div v-if="post.coverImage" class="post-cover">
-            <el-image :src="post.coverImage" fit="cover" lazy />
+            <el-image :src="post.coverImage" fit="contain" lazy />
           </div>
 
           <!-- AI Summary -->
@@ -600,13 +691,14 @@ onMounted(() => {
           
           <CommentList 
             :comments="(comments as any)"
+            :active-comment-id="activeCommentId"
             @like="handleCommentLike"
             @reply="handleReply"
           />
         </div>
-      </div>
-
-      <el-empty v-else-if="!loading" description="内容不存在或已被删除" />
+        </div>
+        <el-empty v-else-if="!loading" key="post-empty" description="内容不存在或已被删除" />
+      </transition>
     </div>
 
     <!-- 举报弹窗 -->
@@ -717,6 +809,43 @@ onMounted(() => {
 </template>
 
 <style scoped>
+.post-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.skel-card {
+  background: var(--el-bg-color-overlay);
+  border-radius: 12px;
+  border: 1px solid var(--el-border-color-lighter);
+  padding: 28px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.skel-line, .skel-block {
+  border-radius: 8px;
+  background: linear-gradient(90deg, var(--el-fill-color) 25%, var(--el-fill-color-light) 37%, var(--el-fill-color) 63%);
+  background-size: 400% 100%;
+  animation: skel-shimmer 1.4s ease infinite;
+}
+
+.skel-line { height: 14px; width: 100%; }
+.skel-line.tall { height: 28px; }
+.skel-line.w40 { width: 40%; }
+.skel-line.w60 { width: 60%; }
+.skel-line.w70 { width: 70%; }
+.skel-line.w80 { width: 80%; }
+.skel-line.w90 { width: 90%; }
+.skel-block { height: 200px; width: 100%; border-radius: 12px; }
+
+@keyframes skel-shimmer {
+  0% { background-position: 100% 50%; }
+  100% { background-position: 0 50%; }
+}
+
 .post-detail-container {
   max-width: 100%;
 }
@@ -805,11 +934,12 @@ onMounted(() => {
 
 .post-cover {
   margin: 0 -20px 24px -20px;
+  background: var(--el-fill-color-lighter);
 }
 
 .post-cover :deep(.el-image) {
   width: 100%;
-  max-height: 400px;
+  max-height: min(70vh, 640px);
   display: block;
 }
 
@@ -1053,5 +1183,146 @@ onMounted(() => {
 :deep(.markdown-body img) {
   max-width: 100%;
   border-radius: var(--el-border-radius-base);
+}
+
+:deep(.markdown-body video) {
+  width: 100%;
+  max-width: 100%;
+  border-radius: 12px;
+  background: #000;
+  margin: 14px 0;
+}
+
+/* ── Blockquote ── */
+:deep(.markdown-body blockquote) {
+  margin: 16px 0;
+  padding: 12px 16px 12px 20px;
+  border-left: 4px solid var(--el-color-primary-light-5);
+  border-radius: 0 8px 8px 0;
+  background: var(--el-fill-color-lighter);
+  color: var(--el-text-color-secondary);
+  font-style: italic;
+}
+:deep(.markdown-body blockquote p) {
+  margin-bottom: 6px;
+}
+:deep(.markdown-body blockquote p:last-child) {
+  margin-bottom: 0;
+}
+:deep(.markdown-body blockquote blockquote) {
+  margin: 8px 0 0;
+  border-left-color: var(--el-border-color);
+  background: var(--el-fill-color-light);
+}
+
+/* ── GitHub Link Card ── */
+:deep(.markdown-body .github-link-card) {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 16px 0;
+  padding: 14px 16px;
+  border: 1px solid var(--el-border-color);
+  border-radius: 12px;
+  background: var(--el-bg-color-overlay);
+  text-decoration: none;
+  transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+  cursor: pointer;
+}
+:deep(.markdown-body .github-link-card:hover) {
+  border-color: #333;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.10);
+  background: var(--el-fill-color-lighter);
+}
+:deep(.markdown-body .github-card-icon) {
+  font-size: 28px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+:deep(.markdown-body .github-card-info) {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1;
+  min-width: 0;
+}
+:deep(.markdown-body .github-card-title) {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--el-text-color-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+:deep(.markdown-body .github-card-subtitle) {
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
+}
+:deep(.markdown-body .github-card-url) {
+  font-size: 11px;
+  color: var(--el-text-color-placeholder);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+:deep(.markdown-body .github-card-badge) {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+  background: #24292f;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+/* ── External Link Card ── */
+:deep(.markdown-body .ext-link-card) {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 16px 0;
+  padding: 12px 16px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 10px;
+  background: var(--el-bg-color-overlay);
+  text-decoration: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  cursor: pointer;
+}
+:deep(.markdown-body .ext-link-card:hover) {
+  border-color: var(--el-color-primary-light-5);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+}
+:deep(.markdown-body .ext-link-icon) {
+  font-size: 20px;
+  flex-shrink: 0;
+}
+:deep(.markdown-body .ext-link-info) {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+:deep(.markdown-body .ext-link-title) {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+:deep(.markdown-body .ext-link-host) {
+  font-size: 12px;
+  color: var(--el-color-primary);
+}
+:deep(.markdown-body .ext-link-arrow) {
+  font-size: 16px;
+  color: var(--el-text-color-placeholder);
+  flex-shrink: 0;
 }
 </style>

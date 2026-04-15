@@ -1,20 +1,23 @@
 const DEVICE_ID_KEY = 'device_id'
 
-function fallbackUuid() {
-  return 'dev-' + Math.random().toString(36).slice(2) + Date.now().toString(36)
+function isMobileDevice(): boolean {
+  if (typeof navigator === 'undefined') return false
+  return /Android|iPhone|iPad|iPod|Mobile|Tablet/i.test(navigator.userAgent)
+}
+
+function generateDeviceId(): string {
+  const prefix = isMobileDevice() ? 'mob-' : 'pc-'
+  const uid = (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
+    ? crypto.randomUUID()
+    : 'fallback-' + Math.random().toString(36).slice(2) + Date.now().toString(36)
+  return prefix + uid
 }
 
 export function getOrCreateDeviceId(): string {
-  const local = localStorage.getItem(DEVICE_ID_KEY)
-  const session = sessionStorage.getItem(DEVICE_ID_KEY)
-  const exists = local || session
-  if (exists) return exists
+  const existing = localStorage.getItem(DEVICE_ID_KEY) || sessionStorage.getItem(DEVICE_ID_KEY)
+  if (existing) return existing
 
-  const id = (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
-    ? crypto.randomUUID()
-    : fallbackUuid()
-
-  // Song：说明
+  const id = generateDeviceId()
   localStorage.setItem(DEVICE_ID_KEY, id)
   sessionStorage.setItem(DEVICE_ID_KEY, id)
   return id

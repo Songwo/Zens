@@ -1,0 +1,2120 @@
+4`t[]`t本 科 毕 业 设 计
+8`t[]`t技术社区智能分析决策论坛系统的设计与实现
+13`t[]`t学生姓名：        赵青松         
+14`t[]`t学    号：      202250735        
+15`t[]`t专    业：       软件工程        
+16`t[]`t指导教师：    吴亚明   讲师      
+21`t[3]`tSuihua University Graduation Paper 
+26`t[]`tDesign and Implementation of the Intelligent Analysis and Decision-making Forum System for the Technical Community
+31`t[]`tName                 Zhao Qingsong           
+32`t[]`tStudent number            202250735           
+33`t[]`tMajor               Software Engineering        
+34`t[]`tSupervisor                Wu Yaming           
+37`t[2]`tSuihua University
+38`t[2]`t摘  要
+39`t[]`t随着开源生态、在线学习与技术分享平台的快速发展，技术社区已成为开发者获取知识、交流经验的重要基础设施。许多中小型社区缺乏统一的数据分析与决策支持机制，难以持续提升用户体验与社区健康度。在此背景下，研究面向技术社区的智能内容分析与辅助决策系统，能为社区运营与版主提供数据化辅助决策依据，减少主观判断偏差，提升内容治理质量与平台运行效率。
+40`t[]`t系统基于Spring Boot构建，采用Spring Security+JWT实现无状态认证与权限控制，引入Redis支持会话校验、请求防重放、推荐结果与帖子流缓存，提升系统在并发访问下的稳定性与响应效率。系统实现了用户注册登录、帖子发布检索、评论互动、点赞收藏、私信通知、个人资料查看修改等功能，实现了管理员后台对板块类别、帖子内容、举报内容、发展历程管理等核心功能，形成可持续运行的社区业务闭环。
+41`t[]`t关键词：技术分享平台；数据分析；权限控制；Redis
+49`t[2]`tAbstract
+50`t[]`tWith the rapid development of open-source ecosystems, online learning platforms and technology sharing platforms, technical communities have become an important infrastructure for developers to acquire knowledge and exchange experiences. Many small and medium-sized communities lack unified data analysis and decision support mechanisms, making it difficult for them to continuously improve user experience and community health. In this context, researching intelligent content analysis and decision support systems for technical communities can provide data-based assistance for community operations and moderators, reduce subjective judgment biases, and improve content governance quality and platform operation efficiency.
+51`t[]`tThe system is built based on Spring Boot, uses Spring Security + JWT to achieve stateless authentication and permission control, and introduces Redis to support session verification, request prevention of replay, recommendation results and post stream caching, improving the stability and response efficiency of the system under concurrent access. The system realizes functions such as user registration and login, post publication search, comment interaction, likes and favorites, private message notifications, and personal profile viewing and modification, and implements core functions such as managing board categories, post content, reporting content, and development history in the administrator backend, forming a sustainable running community business loop.
+52`t[]`tKey words:technology sharing platform; data analysis; permission control Redis
+56`t[2]`t目  录
+57`t[19]`t摘  要I
+58`t[19]`tAbstractII
+59`t[19]`t第1章 绪论1
+60`t[22]`t1.1 研究背景与意义1
+61`t[22]`t1.2 研究内容2
+62`t[22]`t1.3 开发工具简介3
+63`t[19]`t第2章 系统分析5
+64`t[22]`t2.1 可行性分析5
+65`t[22]`t2.2 需求分析6
+66`t[19]`t第3章 系统设计10
+67`t[22]`t3.1 功能模块设计10
+68`t[22]`t3.2 数据库设计11
+69`t[19]`t第4章 系统实现24
+70`t[22]`t4.1 统一身份认证与安全防护模块实现6
+71`t[22]`t（1）内容发布与智能处理实现
+72`t[22]`t（2）社区互动与实时通信实现
+73`t[22]`t（3）推荐分发与趋势浏览实现
+74`t[22]`t4.2 版主角色功能实现
+75`t[22]`t4.3 管理员角色功能实现
+76`t[19]`t第5章 系统测试8
+77`t[22]`t5.1 测试概述8
+78`t[22]`t5.2 测试工具8
+79`t[22]`t5.3 测试内容8
+80`t[19]`t结  论11
+81`t[19]`t参考文献12
+82`t[19]`t致  谢13
+83`t[19]`t附录 部分源代码14
+85`t[2]`t第1章 绪 论
+86`t[3]`t1.1 研究背景与意义
+87`t[]`t随着开源生态、在线学习与技术分享平台的快速发展，技术社区已成为开发者获取知识、交流经验和协作创新的重要基础设施。与传统论坛相比，当前社区内容呈现出更新频率高、主题跨度大、结构化程度低的特点，海量帖子、评论与互动数据在带来活跃度的同时，也引发了信息过载、优质内容被淹没、低质量信息扩散和管理成本上升等问题。许多中小型社区仍以人工经验进行内容筛选与运营判断，缺乏统一的数据分析与决策支持机制，导致热点识别滞后、推荐相关性不足、治理效率不高，难以持续提升用户体验与社区健康度。在此背景下，研究面向技术社区的智能内容分析与辅助决策系统，具有明确的现实需求与工程价值。
+88`t[]`t本课题的意义主要体现在三个层面。第一，在业务层面，通过构建“内容发布—行为采集—趋势分析—推荐分发—治理反馈”的闭环机制，可实现对社区动态的持续感知，提升管理者对热点演化、内容质量与用户兴趣变化的把握能力。第二，在技术层面，将身份认证与权限控制、缓存加速、敏感内容过滤、情感分析、热度衰减计算与混合推荐策略进行一体化落地，为中小规模技术社区提供可复用的轻量化实现路径，兼顾安全性、实时性与可维护性。第三，在应用层面，系统不仅服务普通用户的高效获取与互动，还能为运营与版主提供数据化辅助决策依据，减少主观判断偏差，提升内容治理质量与平台运行效率。因而，本研究对推动技术社区从“功能型论坛”向“数据驱动的智能协作平台”转型具有积极意义。
+89`t[3]`t1.2 研究内容
+90`t[]`t本课题围绕技术社区“内容管理、趋势洞察与辅助决策”三条主线展开研究与实现。首先，在系统架构层面，构建基于Spring Boot 3的前后端分离论坛平台，完成用户注册登录、帖子发布检索、评论互动、点赞收藏、私信通知、版块与后台管理等核心功能，形成可持续运行的社区业务闭环。
+91`t[]`t其次，在安全与性能层面，采用Spring Security + JWT实现无状态认证与权限控制，引入Redis支持会话校验、请求防重放、推荐结果与帖子流缓存，提升系统在并发访问下的稳定性与响应效率。
+92`t[]`t再次，在智能分析层面，针对社区文本与行为数据，设计并实现敏感词过滤、情感分析、AI标签/摘要提取、关键词词云统计与热度排行；构建“互动权重+时间衰减+情感惩罚”的热度计算机制，用于热点识别与趋势展示。最后，在个性化服务层面，结合用户兴趣标签与内容热度实现轻量化混合推荐，并为协同过滤扩展预留接口。通过上述研究，系统实现了从数据采集、内容分析到推荐分发与治理反馈的完整链路，为技术社区运营提供可落地的辅助决策支撑。
+93`t[3]`t1.3 开发技术及工具简介
+94`t[]`t1.Java语言
+95`t[]`tJava是一种面向对象的高级编程语言，具有良好的跨平台性、安全性和稳定性，广泛应用于企业级应用系统和后端服务开发。Java语言语法结构清晰，生态体系完善，拥有丰富的开发框架和第三方库，能够有效提升系统开发效率和维护性。因此，项目选用Java语言作为系统后端的主要开发语言。
+96`t[]`t2.MySQL数据库
+97`t[]`tMySQL是一款开源的关系型数据库管理系统，采用结构化查询语言（SQL）进行数据管理，具有性能稳定、易于使用和维护成本低等优点。MySQL在中小型应用系统中具有广泛应用，能够满足校园内容平台在数据存储、查询和管理方面的需求。因此，项目使用MySQL数据库存储用户信息、内容数据以及相关业务数据。
+98`t[]`t3.IDEA开发工具
+99`t[]`tIntelliJ IDEA是一款功能强大的Java集成开发环境，提供代码智能提示、调试、项目管理等多种开发辅助功能，能够显著提高开发效率。IDEA对主流Java开发框架具有良好的支持，便于进行系统开发与调试。在系统开发过程中使用IntelliJ IDEA作为主要开发工具。
+100`t[]`t4.VS Code开发工具
+101`t[]`tVisual Studio Code（简称 VS Code）是一款轻量级、开源的跨平台代码编辑器，支持多种编程语言和扩展插件。VS Code 提供智能代码提示、调试、版本控制集成以及丰富的插件生态，能够灵活适应前端、后端及全栈开发需求。系统在前端开发过程中使用VS Code进行代码编写、调试和项目管理，提高开发效率并优化开发体验。
+102`t[]`t5.Vue前端框架
+103`t[]`tVue.js是一款渐进式JavaScript前端框架，以其轻量、易学和高效的特性广受开发者欢迎。Vue提供数据绑定、组件化开发以及丰富的生态工具，能够快速构建响应式、动态的网页应用。系统使用Vue框架进行校园内容平台的前端开发，实现页面渲染、交互逻辑以及与后端接口的数据通信。
+104`t[]`t6.Redis缓存
+105`t[]`tRedis缓存是一种高性能的内存键值存储数据库，常用于解决关系型数据库的性能瓶颈。它以极低的延迟（通常亚毫秒级）提供数据读写，支持字符串、哈希、列表、集合、有序集合等多种数据结构。在实际应用中，Redis最常见的用法是作为缓存层：将频繁查询但改动不频繁的数据（如用户信息、商品详情、配置、排行榜等）从数据库提前加载到Redis中，极大降低后端数据库压力，提高系统响应速度和吞吐量。
+106`t[]`t7.Spring Boot后端框架
+107`t[]`tSpring Boot是由Pivotal团队推出的开源Java后端框架，基于Spring生态并提供“开箱即用”的开发体验。它通过自动配置、约定优于配置和内嵌服务器等机制，显著减少繁琐的XML配置和环境搭建工作，使开发者能够快速构建独立运行、易部署的Web服务与微服务应用。本文后端采用Spring Boot实现业务逻辑与接口服务，结合数据库与缓存组件，完成数据处理、权限控制以及与前端的接口交互。
+108`t[]`t8.B/S架构
+109`t[]`t项目采用典型的B/S（Browser/Server）架构，整体由浏览器端的前端应用与服务器端的后端服务协同完成业务。前端以Vue 3+TypeScript+Vite为核心，配合Element Plus组件库构建单页应用，负责页面展示、交互逻辑与状态管理；用户的操作通过HTTP请求提交给后端，后端统一处理认证、业务规则与数据持久化，并以JSON形式返回结果，实现跨平台、低部署成本的使用体验。B/S架构使得系统更新与维护集中在服务器端完成，客户端只需浏览器即可访问，便于快速迭代与统一管理。
+110`t[]`t后端采用Spring Boot 3构建服务端核心能力，按照Controller / Service / Mapper的分层组织代码，Controller负责接口收发与参数校验，Service承担业务编排与规则处理，Mapper基于MyBatis-Plus进行数据库访问与对象映射。系统的数据层使用MySQL存储业务数据，同时引入Redis作为高频读写与热点数据的缓存支撑，以提升接口响应速度与并发处理能力。安全方面通过JWT无状态认证与权限校验保证接口访问安全；实时交互通过WebSocket推送通知，增强社区类业务的消息时效性与互动体验。
+111`t[]`t结合本项目的业务特性，B/S架构还承载了内容安全与智能能力：后端集成DFA敏感词过滤机制，对帖子、评论与用户资料进行拦截与替换；同时接入DeepSeek大模型，提供帖子摘要与标签抽取等智能处理能力。整体架构在保证系统稳定性的前提下，兼顾可扩展性、可维护性与快速交付能力，适合校园社区与内容平台这类功能持续迭代、用户访问频繁的应用场景。
+113`t[2]`t第2章 系统分析
+114`t[3]`t2.1 可行性分析
+115`t[]`t本课题面向中小规模技术社区，采用成熟开源技术栈与分层架构构建，下面从经济、技术、操作三个方面展开，同时结合法律和道德等因素进行系统可行性综合评估。
+116`t[]`t1.经济可行性
+117`t[]`t系统以Spring Boot、Vue3、MySQL、Redis等开源框架为主，无需商业授权支出，显著降低软件成本。部署阶段可采用单机或轻量云服务器，按访问量逐步扩容，避免一次性硬件投入过高。项目开发以个人毕业设计与通用开发工具为基础，学习和迁移成本低。模块化设计也减少了后续维护与升级的人力投入，整体投入产出比良好。
+118`t[]`t2.技术可行性
+119`t[]`t本系统所用技术均为社区验证充分的主流方案：后端采用Spring Boot 3与MyBatis-Plus，前端采用Vue3，具备稳定生态与文档支持；安全层通过Spring Security+JWT实现认证鉴权，并结合Redis进行会话校验与缓存加速。内容分析部分采用敏感词过滤、情感分析、热度衰减与混合推荐等可工程化方法，复杂度可控、实现路径明确。整体技术链路完整，能够满足论坛业务与智能分析需求。
+120`t[]`t3.操作可行性
+121`t[]`t系统面向普通用户与管理员提供分角色操作界面，功能流程符合论坛使用习惯，用户学习成本较低。发帖、评论、检索、通知等核心功能直观，后台管理支持内容审核、数据查看与缓存管理，便于运维人员快速上手。系统接口规范统一、日志记录清晰，出现异常时便于定位与处理。通过简短培训即可完成日常运营，具备较高操作可行性。
+122`t[]`t4.法律与道德可行性
+123`t[]`t系统遵循最小必要原则采集数据，重点记录与技术社区运行相关的行为信息，并通过权限控制限制数据访问范围。对敏感内容进行过滤与治理，降低不良信息传播风险。用户认证、会话管理与请求校验机制有助于保障账号与数据安全。后续在正式上线中可进一步完善隐私政策、用户告知与数据留存规范，满足法律合规与平台伦理要求。
+124`t[3]`t2.2 需求分析
+125`t[]`t本系统面向技术社区的日常交流与运营治理场景，核心需求是实现“安全发布、有效互动、智能分析、辅助决策”的一体化支撑。系统需覆盖用户从注册登录到内容消费的完整流程，并为管理员提供可执行的治理工具。同时，平台应具备基本扩展能力，在中小规模并发下保持稳定响应与可维护性。
+126`t[]`t1.功能需求分析
+127`t[]`t（1）用户与权限管理需求。系统需提供完整账号体系，包括注册、密码登录、邮箱验证码登录、找回密码与退出登录，并支持GitHub第三方登录以降低使用门槛。身份认证采用JWT无状态机制，结合Redis维护会话与设备信息，确保多端访问安全可控。权限模型需区分普通用户、版主、管理员等角色，不同角色在发帖管理、置顶加精、用户管理和后台配置上拥有差异化权限。系统还需支持二步验证，提升高权限账号安全等级；对未授权访问、令牌失效和越权操作返回统一错误信息，保证权限链路清晰可追踪。
+128`t[]`t（2）内容发布与互动需求。系统应支持帖子创建、编辑、删除、分页检索与详情查看，支持标签、摘要、图片、匿名发布及板块归类。互动功能需覆盖评论与回复、点赞、收藏、关注、私信和站内通知，形成基本社交闭环。平台需记录浏览行为并实时更新帖子互动指标，为后续热度计算与推荐提供数据基础；同时支持置顶、分类置顶、精华等内容曝光能力，满足社区运营需要。
+129`t[]`t（3）智能分析与推荐需求。系统需对帖子文本与行为数据进行分析，提供标签提取、摘要生成、情感打分、热度排行、关键词词云与趋势统计等能力。推荐模块应结合用户兴趣标签与内容热度进行混合推荐，在冷启动或数据不足时可回退到热门内容，保证推荐结果稳定可用，并为后续协同过滤扩展预留接口。
+130`t[]`t（4）后台治理与运维需求。系统需提供面向管理端的治理功能，包括用户封禁/解封、角色分配、版块管理、举报处理与通知和内容管理、缓存管理，确保社区秩序可控。内容治理层需具备敏感词过滤与违规文本拦截能力，降低不良内容传播风险。运维侧需支持缓存统计与按模式清理、关键日志记录、定时任务调度（如热度刷新与历史日志清理），并具备基础可观测性。为提升接口安全，系统还应支持请求签名、时间戳与随机串校验、防重放机制及跨域白名单配置。通过治理与运维能力协同，保障平台长期稳定运行。
+131`t[]`t2.非功能需求分析
+132`t[]`t（1）性能需求。系统需在中小规模并发访问场景下保持稳定响应，登录、帖子列表、帖子详情与推荐等核心接口应具备较低延迟，保证用户交互流畅。平台应具备稳定的并发处理能力，能够支持缓存访问、数据库读写、消息推送及定时任务并行执行，并避免后台计算对主业务流程造成明显阻塞。同时，系统应通过分页加载、数据访问优化与资源压缩等方式提升整体访问效率，为后续功能扩展预留性能余量。
+133`t[]`t（2）安全需求。系统需具备完整安全防护链路，包括JWT认证、基于角色的权限控制、会话校验、设备绑定、请求签名与防重放机制。对敏感操作应进行身份核验与权限拦截，对未授权访问、令牌过期和越权请求返回统一错误。平台还需进行敏感词过滤与内容治理，降低违规信息传播风险，保障账号与数据安全。
+134`t[]`t（3）可用性与易用性需求。系统界面与交互流程应符合论坛使用习惯，保证用户可快速完成注册、发帖、评论、检索和消息查看。管理端功能布局应清晰，便于管理员进行用户管理、内容审核和运营维护。系统需具备良好的兼容性与错误提示机制，在异常场景下提供可理解反馈，提升整体使用体验与操作效率。 
+135`t[]`t（4）可维护性与可扩展性需求。系统应采用分层解耦设计，业务模块边界清晰，便于后续功能迭代和问题定位。代码需具备统一接口规范、日志规范与配置化能力，支持多环境部署与参数调整。推荐、趋势分析、AI 内容处理等模块应预留扩展接口，便于后续引入更复杂算法或第三方服务，保障系统长期演进能力。
+136`t[]`t3.性能保障机制分析
+137`t[]`tCampus Pulse 技术社区平台面向中小规模用户群体。为满足上述性能需求，系统结合当前技术架构，从接口监控、并发处理、缓存一致性、定时任务调度、响应压缩和前端构建优化等方面构建了性能保障机制。
+138`t[]`t  （1）接口响应时间
+139`t[]`t系统采用 Spring Boot 3.5.8 框架，内置 Tomcat 作为应用服务器，服务端口为 7800。为保障用户交互的流畅性，系统对 HTTP 请求链路与数据库访问链路进行分层监控。
+140`t[]`t系统通过 RequestTimingFilter 对每个 HTTP 请求进行耗时监控，当接口响应时间超过 1000ms 时自动记录为慢请求并输出 WARN 级别日志。同时，通过 SlowSqlInterceptor 对 MyBatis 执行的 SQL 语句进行监控，当单条 SQL 执行时间超过 300ms 时记录为慢 SQL。前端 Axios 客户端统一设置请求超时时间为 15 秒，刷新令牌请求超时时间为 12 秒，超时后自动中断并提示用户。
+141`t[]`t  （2）并发处理能力
+142`t[]`t系统基于 Spring Boot 内嵌 Tomcat 线程池、Redis 连接池与数据库连接池协同处理并发请求。其中，Tomcat 最大工作线程数配置为 200、最小空闲线程数为 20，并通过缓存与连接池配合提升请求承载能力：
+143`t[]`t  - Redis连接池配置：最大活跃连接数20个，最大空闲连接数10个，最小空闲连接数2个，连接获取最大等待时间3000ms。该配置采用Lettuce客户端驱动，支持帖子列表、帖子详情、热榜、推荐结果、用户令牌、验证码等多类缓存的并发读写。
+144`t[]`t- 数据库层面采用 HikariCP 连接池，最小空闲连接数配置为 8、最大连接数配置为 32，并通过 Actuator 暴露 HikariCP 监控指标，可实时观测连接池利用率。
+145`t[]`t  - WebSocket长连接基于STOMP协议和SockJS降级方案实现，支持全局帖子事件广播（/topic/posts）、板块级事件订阅（/topic/section/{id}）和用户个人通知推送（/user/{id}/queue/notifications）。WebSocket客户端采用指数退避重连策略，基础延迟1500ms，最大延迟30000ms，最多递增6次指数。
+146`t[]`t  （3）缓存策略与数据一致性
+147`t[]`t系统采用 Redis 作为分布式缓存层，对帖子列表、帖子详情与热榜分别维护版本号键，并在缓存 Key 中拼接版本号实现失效控制。当帖子、评论、浏览或审核结果发生变化时，业务层递增对应版本号，使旧缓存自动失效，在减少主动删除成本的同时兼顾读性能与数据一致性。
+148`t[]`t（4）定时任务与后台处理
+149`t[]`t  系统包含以下定时任务，用于维护数据的时效性和准确性：
+150`t[]`t  - 帖子热度衰减任务：每10分钟执行一次，采用改良版Hacker News算法（heatScore = interactionScore / (1 +ageInHours/24)^1.5），对最近14天内创建的帖子进行热度重新计算。互动得分权重为：浏览×0.5、点赞×3、评论×5、收藏×2。精华帖
+151`t[]`t额外加20分基础分，情感得分低于0.3的帖子施加0.7倍惩罚。仅当热度变化超过0.5时才执行数据库更新操作，减少不必要的写入。
+152`t[]`t  - 浏览日志清理：系统保留最近90天的浏览日志数据，超期数据定期清理以控制sys_view_log表的数据量增长。
+154`t[]`t  （5）HTTP响应压缩
+155`t[]`t  服务端开启了Gzip压缩，对大于2KB的JSON、XML、HTML、CSS、JavaScript及SVG等响应内容进行压缩传输，有效减少网络带宽占用，提升前端页面加载速度。
+156`t[]`t  （6）前端构建优化
+157`t[]`t  前端基于Vite构建工具，采用代码分割（Code Splitting）策略，将第三方依赖拆分为独立的chunk：
+158`t[]`t- vue-vendor：Vue、Vue Router、Pinia、Element Plus 等核心框架库；
+159`t[]`t- editor-vendor：Markdown-it、DOMPurify 等编辑器相关依赖；
+160`t[]`t- chart-vendor：ECharts、Vue-ECharts 等图表库；
+161`t[]`t- ws-vendor：SockJS、STOMP.js 等 WebSocket 相关依赖；
+162`t[]`t- app-utils-vendor：Axios、date-fns、lucide-vue-next 等工具类依赖；
+163`t[]`t- misc-vendor：其他第三方依赖。
+164`t[]`t  该策略利用浏览器缓存机制，使用户在后续访问时只需加载发生变化的代码块，显著提升页面二次加载速度。
+166`t[2]`t第3章 系统设计
+167`t[3]`t3.1 功能模块设计
+168`t[]`t经过对大量技术社区类平台的调研与分析，结合开发者在内容发布、技术交流、协同互动与社区治理等方面的实际需求，系统在功能设计上采用了角色化模块划分。系统主要面向普通用户、版主和管理员三类角色，不同角色对应差异化功能模块，以满足前台使用与后台治理的双重目标。普通用户侧重于账号认证、个人资料管理、帖子发布与检索、评论点赞收藏、关注私信、通知接收及个性化推荐等功能；版主侧重于板块内容治理，如分类置顶、精华管理与社区秩序维护；管理员侧重于全局运营与系统管理，包括用户封禁与角色分配、板块与举报管理、缓存与日志维护、发展历程管理以及数据统计分析等功能。同时，系统提供热度排行、关键词词云、趋势统计与
+169`t[]`t推荐服务，为社区运营提供数据支撑与辅助决策能力。系统功能结构如图3-1所示。
+170`t[]`t普通用户管理员版主个人中心面向技术社区的智能内容分析与辅助决策论坛系统账号于安全内容使用互动交流个性化服务用户与权限管理社区内容治理数据分析与辅助决策系统运维管理缓存管理发展历程管理版主申请管理个性化服务普通用户管理员版主个人中心面向技术社区的智能内容分析与辅助决策论坛系统账号于安全内容使用互动交流个性化服务用户与权限管理社区内容治理数据分析与辅助决策系统运维管理缓存管理发展历程管理版主申请管理个性化服务
+171`t[]`t普通用户
+172`t[]`t管理员
+173`t[]`t版主
+174`t[]`t个人中心
+175`t[24]`t面向技术社区的智能内容分析与辅助决策论坛系统
+177`t[]`t账号于安全
+178`t[]`t内容使用
+179`t[]`t互动交流
+180`t[]`t个性化服务
+181`t[]`t用户
+182`t[]`t与权限管理
+183`t[]`t社区内容治理
+184`t[]`t数据分析与辅助决策
+185`t[]`t系统运维管理
+186`t[]`t缓存管理
+187`t[]`t发展历程管理
+188`t[]`t版主申请管理
+189`t[]`t个性化服务
+190`t[]`t普通用户
+191`t[]`t管理员
+192`t[]`t版主
+193`t[]`t个人中心
+194`t[24]`t面向技术社区的智能内容分析与辅助决策论坛系统
+196`t[]`t账号于安全
+197`t[]`t内容使用
+198`t[]`t互动交流
+199`t[]`t个性化服务
+200`t[]`t用户
+201`t[]`t与权限管理
+202`t[]`t社区内容治理
+203`t[]`t数据分析与辅助决策
+204`t[]`t系统运维管理
+205`t[]`t缓存管理
+206`t[]`t发展历程管理
+207`t[]`t版主申请管理
+208`t[]`t个性化服务
+209`t[]`t图3—1 系统功能结构图
+210`t[3]`t3.2 数据库设计
+211`t[]`t1.数据库的概念结构设计
+212`t[59]`t数据库系统的概念结构设计旨在抽象反映现实业务对象及其联系的概念模型，常用表示方式为 E-R 模型。通过概念结构设计，可清晰界定系统中的核心实体、关键属性及实体间约束关系，为后续逻辑结构设计与物理实现提供统一依据。本系统围绕“用户—内容—互动—治理—统计推荐”五大业务域展开，覆盖账号认证、社区发帖、消息通知、内容审核与热度分析等核心功能。系统数据库概念结构如图所示。
+213`t[59]`t结合项目实际数据库结构，为避免概念模型过于碎片化，本节选取用户、标签、板块、帖子、帖子点赞、帖子收藏、评论、浏览日志、等级经验日志、通知、私信、举报、关注关系、版主申请、评论点赞、热度快照和趋势统计 17 个核心实体进行说明；邀请码、发展历程及用户标签关联等辅助表在后续逻辑结构设计中进一步展开。
+214`t[]`t（1）用户实体：由 sys_user 表抽象得到，核心属性如图3—2所示。
+215`t[]`tidusernameemailpasswordnicknameavatar用户biogenderschoolmajorenrollment_yearlevelstatusinterest_tagsrolecontribution_valactive_regiontotal_poststotal_likes_receivedtwo_factor_enabledidusernameemailpasswordnicknameavatar用户biogenderschoolmajorenrollment_yearlevelstatusinterest_tagsrolecontribution_valactive_regiontotal_poststotal_likes_receivedtwo_factor_enabled
+216`t[]`tid
+217`t[]`tusername
+218`t[]`temail
+219`t[]`tpassword
+220`t[]`tnickname
+221`t[]`tavatar
+222`t[]`t用户
+223`t[]`tbio
+224`t[]`tgender
+225`t[]`tschool
+226`t[]`tmajor
+227`t[]`tenrollment_year
+228`t[]`tlevel
+229`t[]`tstatus
+230`t[]`tinterest_tags
+231`t[]`trole
+232`t[]`tcontribution_val
+233`t[]`tactive_region
+234`t[]`ttotal_posts
+235`t[]`ttotal_likes_received
+236`t[]`ttwo_factor_enabled
+237`t[]`tid
+238`t[]`tusername
+239`t[]`temail
+240`t[]`tpassword
+241`t[]`tnickname
+242`t[]`tavatar
+243`t[]`t用户
+244`t[]`tbio
+245`t[]`tgender
+246`t[]`tschool
+247`t[]`tmajor
+248`t[]`tenrollment_year
+249`t[]`tlevel
+250`t[]`tstatus
+251`t[]`tinterest_tags
+252`t[]`trole
+253`t[]`tcontribution_val
+254`t[]`tactive_region
+255`t[]`ttotal_posts
+256`t[]`ttotal_likes_received
+257`t[]`ttwo_factor_enabled
+258`t[]`t图3—2 用户实体属性图
+259`t[]`t（2）标签实体：由 sys_tag 表抽象得到，核心属性如图3—3所示。
+260`t[]`tidnametype标签heatcreate_timeidnametype标签heatcreate_time
+261`t[]`tid
+262`t[]`tname
+263`t[]`ttype
+264`t[]`t标签
+265`t[]`theat
+266`t[]`tcreate_time
+267`t[]`tid
+268`t[]`tname
+269`t[]`ttype
+270`t[]`t标签
+271`t[]`theat
+272`t[]`tcreate_time
+273`t[]`t图3—3 标签实体属性图
+274`t[]`t（3）板块实体：由 sections 表抽象得到，核心属性如图3—4所示。
+275`t[]`tidnamedescription板块statussort_orderidnamedescription板块statussort_order
+276`t[]`tid
+277`t[]`tname
+278`t[]`tdescription
+279`t[]`t板块
+280`t[]`tstatus
+281`t[]`tsort_order
+282`t[]`tid
+283`t[]`tname
+284`t[]`tdescription
+285`t[]`t板块
+286`t[]`tstatus
+287`t[]`tsort_order
+288`t[]`t图3—4 板块实体属性图
+289`t[]`t（4）帖子实体：由 sys_post 表抽象得到，核心属性如图3—5所示。
+290`t[59]`tiduser_idsection_idtitlecontentlocation_namesummary帖子cover_imageimagestagsis_anonymousstatusaudit_statusglobal_pincategory_pinview_countlike_countcollect_countcomment_countheat_scoresentiment_scoreiduser_idsection_idtitlecontentlocation_namesummary帖子cover_imageimagestagsis_anonymousstatusaudit_statusglobal_pincategory_pinview_countlike_countcollect_countcomment_countheat_scoresentiment_score
+291`t[]`tid
+292`t[]`tuser_id
+293`t[]`tsection_id
+294`t[]`ttitle
+295`t[]`tcontentlocation_name
+296`t[]`tsummary
+297`t[]`t帖子
+298`t[]`tcover_image
+299`t[]`timages
+300`t[]`ttags
+301`t[]`tis_anonymous
+302`t[]`tstatus
+303`t[]`taudit_status
+304`t[]`tglobal_pin
+305`t[]`tcategory_pin
+306`t[]`tview_count
+307`t[]`tlike_count
+308`t[]`tcollect_count
+309`t[]`tcomment_count
+310`t[]`theat_score
+311`t[]`tsentiment_score
+312`t[]`tid
+313`t[]`tuser_id
+314`t[]`tsection_id
+315`t[]`ttitle
+316`t[]`tcontentlocation_name
+317`t[]`tsummary
+318`t[]`t帖子
+319`t[]`tcover_image
+320`t[]`timages
+321`t[]`ttags
+322`t[]`tis_anonymous
+323`t[]`tstatus
+324`t[]`taudit_status
+325`t[]`tglobal_pin
+326`t[]`tcategory_pin
+327`t[]`tview_count
+328`t[]`tlike_count
+329`t[]`tcollect_count
+330`t[]`tcomment_count
+331`t[]`theat_score
+332`t[]`tsentiment_score
+333`t[]`t图3—5 帖子实体属性图
+334`t[]`t（5）帖子点赞实体：由 sys_post_like 表抽象得到，核心属性如图3—6所示。
+335`t[]`tidpost_iduser_id帖子点赞create_time联合唯一idpost_iduser_id帖子点赞create_time联合唯一
+336`t[]`tid
+337`t[]`tpost_id
+338`t[]`tuser_id
+339`t[]`t帖子点赞
+340`t[]`tcreate_time
+341`t[]`t联合唯一
+342`t[]`tid
+343`t[]`tpost_id
+344`t[]`tuser_id
+345`t[]`t帖子点赞
+346`t[]`tcreate_time
+347`t[]`t联合唯一
+348`t[]`t图3—6 帖子点赞实体属性图
+349`t[]`t（6）帖子收藏实体：由 sys_post_collect 表抽象得到，核心属性如图3—7所示。
+350`t[]`tidpost_iduser_id帖子收藏create_time联合唯一idpost_iduser_id帖子收藏create_time联合唯一
+351`t[]`tid
+352`t[]`tpost_id
+353`t[]`tuser_id
+354`t[]`t帖子收藏
+355`t[]`tcreate_time
+356`t[]`t联合唯一
+357`t[]`tid
+358`t[]`tpost_id
+359`t[]`tuser_id
+360`t[]`t帖子收藏
+361`t[]`tcreate_time
+362`t[]`t联合唯一
+363`t[]`t图3—7 帖子收藏实体属性图
+364`t[]`t（7）评论实体：由 sys_comment 表抽象得到，核心属性如图3—8所示。
+365`t[]`tidpost_iduser_id评论contentparent_ididpost_iduser_id评论contentparent_id
+366`t[]`tid
+367`t[]`tpost_id
+368`t[]`tuser_id
+369`t[]`t评论
+370`t[]`tcontent
+371`t[]`tparent_id
+372`t[]`tid
+373`t[]`tpost_id
+374`t[]`tuser_id
+375`t[]`t评论
+376`t[]`tcontent
+377`t[]`tparent_id
+378`t[]`t图3—8 评论实体属性图
+379`t[]`t（8）浏览日志实体：由 sys_view_log 表抽象得到，核心属性如图3—9所示。
+380`t[]`tidpost_iduser_id浏览日志devicecreate_timeidpost_iduser_id浏览日志devicecreate_time
+381`t[]`tid
+382`t[]`tpost_id
+383`t[]`tuser_id
+384`t[]`t浏览日志
+385`t[]`tdevice
+386`t[]`tcreate_time
+387`t[]`tid
+388`t[]`tpost_id
+389`t[]`tuser_id
+390`t[]`t浏览日志
+391`t[]`tdevice
+392`t[]`tcreate_time
+393`t[]`t图3—9 浏览日志实体属性图
+394`t[]`t（9）等级经验日志实体：由 sys_level_exp_log 表抽象得到，核心属性如图3—10所示。
+395`t[]`tiduser_idexp_delta经验日志reasoncreate_timeiduser_idexp_delta经验日志reasoncreate_time
+396`t[]`tid
+397`t[]`tuser_id
+398`t[]`texp_delta
+399`t[]`t经验日志
+400`t[]`treason
+401`t[]`tcreate_time
+402`t[]`tid
+403`t[]`tuser_id
+404`t[]`texp_delta
+405`t[]`t经验日志
+406`t[]`treason
+407`t[]`tcreate_time
+408`t[]`t图3—10 等级经验日志实体属性图
+409`t[]`t（10）通知实体：由 notifications 表抽象得到，核心属性如图3—11所示。
+410`t[]`tiduser_idtype通知titleis_readiduser_idtype通知titleis_read
+411`t[]`tid
+412`t[]`tuser_id
+413`t[]`ttype
+414`t[]`t通知
+415`t[]`ttitle
+416`t[]`tis_read
+417`t[]`tid
+418`t[]`tuser_id
+419`t[]`ttype
+420`t[]`t通知
+421`t[]`ttitle
+422`t[]`tis_read
+423`t[]`t图3—11 通知实体属性图
+424`t[]`t（11）私信实体：由 direct_messages 表抽象得到，核心属性如图3—12所示。
+425`t[]`tidconversation_idsender_id私信receiver_idcontentidconversation_idsender_id私信receiver_idcontent
+426`t[]`tid
+427`t[]`tconversation_id
+428`t[]`tsender_id
+429`t[]`t私信
+430`t[]`treceiver_id
+431`t[]`tcontent
+432`t[]`tid
+433`t[]`tconversation_id
+434`t[]`tsender_id
+435`t[]`t私信
+436`t[]`treceiver_id
+437`t[]`tcontent
+438`t[]`t图3—12 私信实体属性图
+439`t[]`t（12）举报实体：由 sys_report 表抽象得到，核心属性如图3—13所示。
+440`t[]`tidtarget_typereporter_id举报target_idstatusidtarget_typereporter_id举报target_idstatus
+441`t[]`tid
+442`t[]`ttarget_type
+443`t[]`treporter_id
+444`t[]`t举报
+445`t[]`ttarget_id
+446`t[]`tstatus
+447`t[]`tid
+448`t[]`ttarget_type
+449`t[]`treporter_id
+450`t[]`t举报
+451`t[]`ttarget_id
+452`t[]`tstatus
+453`t[]`t图3—13 举报实体属性图
+454`t[]`t（13）关注关系实体：由 user_follows 表抽象得到，核心属性如图3—14所示。
+455`t[]`tidfollower_idfollowing_id关注关系created_at唯一关系idfollower_idfollowing_id关注关系created_at唯一关系
+456`t[]`tid
+457`t[]`tfollower_id
+458`t[]`tfollowing_id
+459`t[]`t关注关系
+460`t[]`tcreated_at
+461`t[]`t唯一关系
+462`t[]`tid
+463`t[]`tfollower_id
+464`t[]`tfollowing_id
+465`t[]`t关注关系
+466`t[]`tcreated_at
+467`t[]`t唯一关系
+468`t[]`t图3—14 关注关系实体属性图
+469`t[]`t（14）版主申请实体：由 moderator_applications 表抽象得到，核心属性如图3—15所示。
+470`t[]`tiduser_idsection_id版主申请statusreviewed_byiduser_idsection_id版主申请statusreviewed_by
+471`t[]`tid
+472`t[]`tuser_id
+473`t[]`tsection_id
+474`t[]`t版主申请
+475`t[]`tstatus
+476`t[]`treviewed_by
+477`t[]`tid
+478`t[]`tuser_id
+479`t[]`tsection_id
+480`t[]`t版主申请
+481`t[]`tstatus
+482`t[]`treviewed_by
+483`t[]`t图3—15 版主申请实体属性图
+484`t[]`t（15）评论点赞实体：由 comment_likes 表抽象得到，核心属性如图3—16所示。
+485`t[]`tidcomment_iduser_id评论点赞created_at联合唯一idcomment_iduser_id评论点赞created_at联合唯一
+486`t[]`tid
+487`t[]`tcomment_id
+488`t[]`tuser_id
+489`t[]`t评论点赞
+490`t[]`tcreated_at
+491`t[]`t联合唯一
+492`t[]`tid
+493`t[]`tcomment_id
+494`t[]`tuser_id
+495`t[]`t评论点赞
+496`t[]`tcreated_at
+497`t[]`t联合唯一
+498`t[]`t图3—16 评论点赞实体属性图
+499`t[]`t（16）热度快照实体：由 post_heat_snapshots 表抽象得到，核心属性如图3—17所示。
+500`t[]`tidpost_idheat_score热度快照snap_time时间片idpost_idheat_score热度快照snap_time时间片
+501`t[]`tid
+502`t[]`tpost_id
+503`t[]`theat_score
+504`t[]`t热度快照
+505`t[]`tsnap_time
+506`t[]`t时间片
+507`t[]`tid
+508`t[]`tpost_id
+509`t[]`theat_score
+510`t[]`t热度快照
+511`t[]`tsnap_time
+512`t[]`t时间片
+513`t[]`t图3—17 热度快照实体属性图
+514`t[]`t（17）趋势统计实体：由 trend_stats 表抽象得到，核心属性如图3—18所示。
+515`t[]`tidstat_typestat_key趋势统计heat_scorestat_dateidstat_typestat_key趋势统计heat_scorestat_date
+516`t[]`tid
+517`t[]`tstat_type
+518`t[]`tstat_key
+519`t[]`t趋势统计
+520`t[]`theat_score
+521`t[]`tstat_date
+522`t[]`tid
+523`t[]`tstat_type
+524`t[]`tstat_key
+525`t[]`t趋势统计
+526`t[]`theat_score
+527`t[]`tstat_date
+528`t[]`t图3—18 趋势统计实体属性图
+529`t[]`t上述核心实体可进一步抽象为“用户中心、内容中心、互动反馈、治理审核、统计分析”五个簇，围绕帖子实体形成发布、评论、点赞、收藏、举报、通知、私信与热度演化关系，其系统总体 E-R 图如图3—19所示。
+530`t[]`t用户帖子帖子点赞板块评论帖子收藏举报标签版主申请通知私信趋势统计热度快照发布属于评论收藏管理包含关联点赞接收发送发表回复提交统计维护推送申请采样1111111111nnnnnnn1nn1nn1nn1n建立11nn用户帖子帖子点赞板块评论帖子收藏举报标签版主申请通知私信趋势统计热度快照发布属于评论收藏管理包含关联点赞接收发送发表回复提交统计维护推送申请采样1111111111nnnnnnn1nn1nn1nn1n建立11nn
+531`t[]`t用户
+532`t[]`t帖子帖子点赞
+533`t[]`t板块
+534`t[]`t评论
+535`t[]`t帖子收藏
+536`t[]`t举报
+537`t[]`t标签
+538`t[]`t版主申请
+539`t[]`t通知
+540`t[]`t私信
+541`t[]`t趋势统计
+542`t[]`t热度快照
+543`t[]`t发布
+544`t[]`t属于
+545`t[]`t评论
+546`t[]`t收藏
+547`t[]`t管理
+548`t[]`t包含
+549`t[]`t关联
+550`t[]`t点赞
+551`t[]`t接收
+552`t[]`t发送
+553`t[]`t发表
+554`t[]`t回复
+555`t[]`t提交
+556`t[]`t统计
+557`t[]`t维护
+558`t[]`t推送
+559`t[]`t申请
+560`t[]`t采样
+561`t[]`t1
+562`t[]`t1
+563`t[]`t1
+564`t[]`t1
+565`t[]`t1
+566`t[]`t1
+567`t[]`t1
+568`t[]`t1
+569`t[]`t1
+570`t[]`t1
+571`t[]`tn
+572`t[]`tn
+573`t[]`tn
+574`t[]`tn
+575`t[]`tn
+576`t[]`tn
+577`t[]`tn
+578`t[]`t1
+579`t[]`tn
+580`t[]`tn
+581`t[]`t1
+582`t[]`tn
+583`t[]`tn
+584`t[]`t1
+585`t[]`tn
+586`t[]`tn
+587`t[]`t1
+588`t[]`tn
+589`t[]`t建立
+590`t[]`t1
+591`t[]`t1
+592`t[]`tn
+593`t[]`tn
+594`t[]`t用户
+595`t[]`t帖子帖子点赞
+596`t[]`t板块
+597`t[]`t评论
+598`t[]`t帖子收藏
+599`t[]`t举报
+600`t[]`t标签
+601`t[]`t版主申请
+602`t[]`t通知
+603`t[]`t私信
+604`t[]`t趋势统计
+605`t[]`t热度快照
+606`t[]`t发布
+607`t[]`t属于
+608`t[]`t评论
+609`t[]`t收藏
+610`t[]`t管理
+611`t[]`t包含
+612`t[]`t关联
+613`t[]`t点赞
+614`t[]`t接收
+615`t[]`t发送
+616`t[]`t发表
+617`t[]`t回复
+618`t[]`t提交
+619`t[]`t统计
+620`t[]`t维护
+621`t[]`t推送
+622`t[]`t申请
+623`t[]`t采样
+624`t[]`t1
+625`t[]`t1
+626`t[]`t1
+627`t[]`t1
+628`t[]`t1
+629`t[]`t1
+630`t[]`t1
+631`t[]`t1
+632`t[]`t1
+633`t[]`t1
+634`t[]`tn
+635`t[]`tn
+636`t[]`tn
+637`t[]`tn
+638`t[]`tn
+639`t[]`tn
+640`t[]`tn
+641`t[]`t1
+642`t[]`tn
+643`t[]`tn
+644`t[]`t1
+645`t[]`tn
+646`t[]`tn
+647`t[]`t1
+648`t[]`tn
+649`t[]`tn
+650`t[]`t1
+651`t[]`tn
+652`t[]`t建立
+653`t[]`t1
+654`t[]`t1
+655`t[]`tn
+656`t[]`tn
+657`t[]`t图3—19 系统总体E-R图
+658`t[]`t2.数据库的逻辑结构设计
+659`t[12]`t数据库逻辑结构设计在概念模型基础上，将 E-R 实体与联系映射为关系模式。本系统以 MySQL 为核心，遵循 3NF 思想，对“用户、内容、互动、治理、统计推荐”进行分层建模；通过主键、唯一约束与组合索引降低冗余并提升查询效率。结合项目高并发特征，部分跨表关系采用“业务约束 + 索引约束”实现一致性，不强依赖物理外键，从而兼顾写入性能与扩展性。本系统逻辑结构如下。
+660`t[12]`t（1）用户表（sys_user）：本项目未采用 sys_user_profile 双表拆分，而是将账号信息与画像字段合并存储，统一管理登录凭据、角色状态、等级经验、兴趣偏好、GitHub 绑定与二步验证信息，减少联表开销并提升认证与用户中心读取效率。其结构如表3-
+661`t[12]`t1所示。
+662`t[]`t表3—1 用户表
+663`t[]`t字段
+664`t[]`t类型
+665`t[]`t长度
+666`t[]`t主键
+667`t[]`t注释
+668`t[]`tid
+669`t[]`tVarchar
+670`t[]`t64
+671`t[]`t主键
+672`t[]`t用户ID
+673`t[]`tusername
+674`t[]`tVarchar
+675`t[]`t50
+676`t[]`t—
+677`t[]`t学号/工号
+678`t[]`temail
+679`t[]`tVarchar
+680`t[]`t100
+681`t[]`t—
+682`t[]`t邮箱
+683`t[]`tpassword
+684`t[]`tVarchar
+685`t[]`t100
+686`t[]`t—
+687`t[]`t加密密码
+688`t[]`tnickname
+689`t[]`tVarchar
+690`t[]`t50
+691`t[]`t—
+692`t[]`t昵称
+693`t[]`tavatar
+694`t[]`tVarchar
+695`t[]`t255
+696`t[]`t—
+697`t[]`t头像URL
+698`t[]`tbio
+699`t[]`tText
+700`t[]`t—
+701`t[]`t—
+702`t[]`t个人简介
+703`t[]`tgender
+704`t[]`tTinyint
+705`t[]`t—
+706`t[]`t—
+707`t[]`t性别
+708`t[]`tschool
+709`t[]`tVarchar
+710`t[]`t50
+711`t[]`t—
+712`t[]`t学校/学院
+713`t[]`tmajor
+714`t[]`tVarchar
+715`t[]`t50
+716`t[]`t—
+717`t[]`t专业
+718`t[]`tenrollment_year
+719`t[]`tInt
+720`t[]`t—
+721`t[]`t—
+722`t[]`t入学年份
+723`t[]`tlevel
+724`t[]`tInt
+725`t[]`t—
+726`t[]`t—
+727`t[]`t等级
+728`t[]`texperience
+729`t[]`tInt
+730`t[]`t—
+731`t[]`t—
+732`t[]`t经验值
+733`t[]`tstatus
+734`t[]`tTinyint
+735`t[]`t—
+736`t[]`t—
+737`t[]`t账号状态
+738`t[]`tinterest_tags
+739`t[]`tText
+740`t[]`t—
+741`t[]`t—
+742`t[]`t兴趣标签JSON
+743`t[]`trole
+744`t[]`tVarchar
+745`t[]`t50
+746`t[]`t—
+747`t[]`t角色标识
+748`t[]`tcontribution_val
+749`t[]`tInt
+750`t[]`t—
+751`t[]`t—
+752`t[]`t社区贡献值
+753`t[]`tactive_region
+754`t[]`tVarchar
+755`t[]`t100
+756`t[]`t—
+757`t[]`t常活跃地点
+758`t[]`tpreferred_cate_json
+759`t[]`tJson
+760`t[]`t—
+761`t[]`t—
+762`t[]`t偏好分类权重
+763`t[]`ttotal_posts
+764`t[]`tInt
+765`t[]`t—
+766`t[]`t—
+767`t[]`t总发帖数
+768`t[]`ttotal_likes_received
+769`t[]`tInt
+770`t[]`t—
+771`t[]`t—
+772`t[]`t获赞总数
+773`t[]`tlast_active_time
+774`t[]`tDatetime
+775`t[]`t—
+776`t[]`t—
+777`t[]`t最后活跃时间
+778`t[]`tgithub_id
+779`t[]`tVarchar
+780`t[]`t100
+781`t[]`t—
+782`t[]`tGitHub用户ID
+783`t[]`tgithub_login
+784`t[]`tVarchar
+785`t[]`t100
+786`t[]`t—
+787`t[]`tGitHub登录名
+788`t[]`ttwo_factor_enabled
+789`t[]`tTinyint
+790`t[]`t—
+791`t[]`t—
+792`t[]`t是否开启二步验证
+793`t[]`ttwo_factor_secret
+794`t[]`tVarchar
+795`t[]`t128
+796`t[]`t—
+797`t[]`t二步验证密钥
+798`t[]`temail_notify_enabled
+799`t[]`tTinyint
+800`t[]`t—
+801`t[]`t—
+802`t[]`t邮件通知开关
+803`t[]`tprofile_card_theme
+804`t[]`tVarchar
+805`t[]`t32
+806`t[]`t—
+807`t[]`t资料卡主题
+808`t[]`tquick_card_theme
+809`t[]`tVarchar
+810`t[]`t32
+811`t[]`t—
+812`t[]`t头像卡主题
+813`t[]`tprofile_card_bg_url
+814`t[]`tVarchar
+815`t[]`t500
+816`t[]`t—
+817`t[]`t资料卡背景图
+818`t[]`tquick_card_bg_url
+819`t[]`tVarchar
+820`t[]`t500
+821`t[]`t—
+822`t[]`t头像卡背景图
+823`t[]`tcreate_time
+824`t[]`tDatetime
+825`t[]`t—
+826`t[]`t—
+827`t[]`t创建时间
+828`t[]`tupdate_time
+829`t[]`tDatetime
+830`t[]`t—
+831`t[]`t—
+832`t[]`t更新时间
+833`t[12]`t（2）标签表（sys_tag）：用于维护社区标签主数据，记录标签名称、类型、热度分与使用次数，为帖子语义归类、热点聚合与兴趣推荐提供标准标签源；通过标签名唯一约束保证语义一致性。其结构如表3-2所示。
+834`t[]`t表3—2 标签表
+835`t[]`t字段
+836`t[]`t类型
+837`t[]`t长度
+838`t[]`t主键
+839`t[]`t注释
+840`t[]`tid
+841`t[]`tBigint
+842`t[]`t—
+843`t[]`t主键
+844`t[]`t标签ID
+845`t[]`tname
+846`t[]`tVarchar
+847`t[]`t32
+848`t[]`t—
+849`t[]`t标签名称
+850`t[]`ttype
+851`t[]`tTinyint
+852`t[]`t—
+853`t[]`t—
+854`t[]`t类型 1系统 2用户
+855`t[]`theat
+856`t[]`tInt
+857`t[]`t—
+858`t[]`t—
+859`t[]`t热度值
+860`t[]`tcreate_time
+861`t[]`tDatetime
+862`t[]`t—
+863`t[]`t—
+864`t[]`t创建时间
+865`t[12]`t（3）用户标签关联表（sys_user_tag_relation）：作为用户与标签的多对多桥接表，保存用户兴趣权重 score，并以 (user_id,tag_id) 唯一键避免重复关系，为个性化推荐和画像更新提供可计算的偏好向量。其结构如表3-3所示。
+866`t[]`t表3—3 用户标签关联表
+867`t[]`t字段
+868`t[]`t类型
+869`t[]`t长度
+870`t[]`t主键
+871`t[]`t注释
+872`t[]`tid
+873`t[]`tBigint
+874`t[]`t—
+875`t[]`t主键
+876`t[]`t关联ID
+877`t[]`tuser_id
+878`t[]`tVarchar
+879`t[]`t64
+880`t[]`t—
+881`t[]`t用户ID
+882`t[]`ttag_id
+883`t[]`tBigint
+884`t[]`t—
+885`t[]`t—
+886`t[]`t标签ID
+887`t[]`tscore
+888`t[]`tDecimal
+889`t[]`t5,2
+890`t[]`t—
+891`t[]`t兴趣权重
+892`t[]`tcreate_time
+893`t[]`tDatetime
+894`t[]`t—
+895`t[]`t—
+896`t[]`t创建时间
+897`t[12]`t（4）板块表（sections）：用于组织社区内容分区，包含板块名称、描述、图标、排序与启用状态等属性，支撑首页导航、分区检索与运营管理；名称唯一约束与状态索引共同保障展示一致性。其结构如表3-4所示。
+898`t[]`t表3—4 板块表
+899`t[]`t字段
+900`t[]`t类型
+901`t[]`t长度
+902`t[]`t主键
+903`t[]`t注释
+904`t[]`tid
+905`t[]`tBigint
+906`t[]`t—
+907`t[]`t主键
+908`t[]`t板块ID
+909`t[]`tname
+910`t[]`tVarchar
+911`t[]`t50
+912`t[]`t—
+913`t[]`t板块名称
+914`t[]`tdescription
+915`t[]`tVarchar
+916`t[]`t200
+917`t[]`t—
+918`t[]`t板块描述
+919`t[]`ticon
+920`t[]`tVarchar
+921`t[]`t100
+922`t[]`t—
+923`t[]`t图标标识
+924`t[]`tsort_order
+925`t[]`tInt
+926`t[]`t—
+927`t[]`t—
+928`t[]`t排序值
+929`t[]`tstatus
+930`t[]`tTinyint
+931`t[]`t—
+932`t[]`t—
+933`t[]`t状态
+934`t[]`tcreated_at
+935`t[]`tDatetime
+936`t[]`t—
+937`t[]`t—
+938`t[]`t创建时间
+939`t[12]`t（5）帖子表（sys_post）：系统核心内容表，承载标题、正文、摘要、图片、标签、审核状态、置顶策略、互动计数与热度分等字段，统一服务“最新流、热榜流、分区流、审核流”等主查询场景。其结构如表3-5所示。
+940`t[]`t表3—5 帖子表
+941`t[]`t字段
+942`t[]`t类型
+943`t[]`t长度
+944`t[]`t主键
+945`t[]`t注释
+946`t[]`tid
+947`t[]`tVarchar
+948`t[]`t64
+949`t[]`t主键
+950`t[]`t帖子ID
+951`t[]`tuser_id
+952`t[]`tVarchar
+953`t[]`t64
+954`t[]`t—
+955`t[]`t作者ID
+956`t[]`tsection_id
+957`t[]`tBigint
+958`t[]`t—
+959`t[]`t—
+960`t[]`t板块ID
+961`t[]`ttitle
+962`t[]`tVarchar
+963`t[]`t100
+964`t[]`t—
+965`t[]`t标题
+966`t[]`tcontent
+967`t[]`tText
+968`t[]`t—
+969`t[]`t—
+970`t[]`t正文内容
+971`t[]`tsummary
+972`t[]`tVarchar
+973`t[]`t500
+974`t[]`t—
+975`t[]`t摘要
+976`t[]`tcover_image
+977`t[]`tVarchar
+978`t[]`t500
+979`t[]`t—
+980`t[]`t封面图
+981`t[]`timages
+982`t[]`tJson
+983`t[]`t—
+984`t[]`t—
+985`t[]`t图片列表
+986`t[]`ttags
+987`t[]`tVarchar
+988`t[]`t255
+989`t[]`t—
+990`t[]`t标签
+991`t[]`tis_anonymous
+992`t[]`tTinyint
+993`t[]`t—
+994`t[]`t—
+995`t[]`t是否匿名
+996`t[]`tlocation_name
+997`t[]`tVarchar
+998`t[]`t100
+999`t[]`t—
+1000`t[]`t位置名称
+1001`t[]`tsentiment_score
+1002`t[]`tDecimal
+1003`t[]`t5,2
+1004`t[]`t—
+1005`t[]`t情感分数
+1006`t[]`tstatus
+1007`t[]`tTinyint
+1008`t[]`t—
+1009`t[]`t—
+1010`t[]`t状态
+1011`t[]`taudit_status
+1012`t[]`tVarchar
+1013`t[]`t20
+1014`t[]`t—
+1015`t[]`t审核状态
+1016`t[]`treject_reason
+1017`t[]`tVarchar
+1018`t[]`t500
+1019`t[]`t—
+1020`t[]`t打回原因
+1021`t[]`tglobal_pin
+1022`t[]`tTinyint
+1023`t[]`t—
+1024`t[]`t—
+1025`t[]`t全局置顶
+1026`t[]`tcategory_pin
+1027`t[]`tTinyint
+1028`t[]`t—
+1029`t[]`t—
+1030`t[]`t板块置顶
+1031`t[]`tpin_order
+1032`t[]`tInt
+1033`t[]`t—
+1034`t[]`t—
+1035`t[]`t置顶排序
+1036`t[]`tpin_expire_at
+1037`t[]`tDatetime
+1038`t[]`t—
+1039`t[]`t—
+1040`t[]`t置顶过期时间
+1041`t[]`tis_featured
+1042`t[]`tTinyint
+1043`t[]`t—
+1044`t[]`t—
+1045`t[]`t是否精华
+1046`t[]`tview_count
+1047`t[]`tInt
+1048`t[]`t—
+1049`t[]`t—
+1050`t[]`t浏览数
+1051`t[]`tlike_count
+1052`t[]`tInt
+1053`t[]`t—
+1054`t[]`t—
+1055`t[]`t点赞数
+1056`t[]`tcollect_count
+1057`t[]`tInt
+1058`t[]`t—
+1059`t[]`t—
+1060`t[]`t收藏数
+1061`t[]`tcomment_count
+1062`t[]`tInt
+1063`t[]`t—
+1064`t[]`t—
+1065`t[]`t评论数
+1066`t[]`theat_score
+1067`t[]`tDouble
+1068`t[]`t—
+1069`t[]`t—
+1070`t[]`t热度值
+1071`t[]`tlast_reply_at
+1072`t[]`tDatetime
+1073`t[]`t—
+1074`t[]`t—
+1075`t[]`t最后回复时间
+1076`t[]`tlast_activity_at
+1077`t[]`tDatetime
+1078`t[]`t—
+1079`t[]`t—
+1080`t[]`t最后活跃时间
+1081`t[]`tcreate_time
+1082`t[]`tDatetime
+1083`t[]`t—
+1084`t[]`t—
+1085`t[]`t创建时间
+1086`t[]`tupdate_time
+1087`t[]`tDatetime
+1088`t[]`t—
+1089`t[]`t—
+1090`t[]`t更新时间
+1091`t[12]`t（6）帖子点赞表（sys_post_like）：记录用户对帖子的点赞行为，采用用户-帖子联合唯一约束防止重复点赞，并保留时间字段支持行为时间线分析，与帖子计数字段共同构成互动闭环。其结构如表3-6所示。
+1092`t[]`t表3—6 帖子点赞表
+1093`t[]`t字段
+1094`t[]`t类型
+1095`t[]`t长度
+1096`t[]`t主键
+1097`t[]`t注释
+1098`t[]`tid
+1099`t[]`tVarchar
+1100`t[]`t64
+1101`t[]`t主键
+1102`t[]`t点赞ID
+1103`t[]`tpost_id
+1104`t[]`tVarchar
+1105`t[]`t64
+1106`t[]`t—
+1107`t[]`t帖子ID
+1108`t[]`tuser_id
+1109`t[]`tVarchar
+1110`t[]`t64
+1111`t[]`t—
+1112`t[]`t用户ID
+1113`t[]`tcreate_time
+1114`t[]`tDatetime
+1115`t[]`t—
+1116`t[]`t—
+1117`t[]`t创建时间
+1118`t[]`t    （7）帖子收藏表（sys_post_collect）：存储用户收藏行为，结构与点赞表对齐，保证“单用户单帖子唯一收藏”，便于个人收藏夹查询、兴趣信号提取与推荐候选集
+1119`t[]`t构建。其结构如表3-7所示。
+1120`t[]`t表3—7 帖子收藏表
+1121`t[]`t字段
+1122`t[]`t类型
+1123`t[]`t长度
+1124`t[]`t主键
+1125`t[]`t注释
+1126`t[]`tid
+1127`t[]`tVarchar
+1128`t[]`t64
+1129`t[]`t主键
+1130`t[]`t收藏ID
+1131`t[]`tpost_id
+1132`t[]`tVarchar
+1133`t[]`t64
+1134`t[]`t—
+1135`t[]`t帖子ID
+1136`t[]`tuser_id
+1137`t[]`tVarchar
+1138`t[]`t64
+1139`t[]`t—
+1140`t[]`t用户ID
+1141`t[]`tcreate_time
+1142`t[]`tDatetime
+1143`t[]`t—
+1144`t[]`t—
+1145`t[]`t创建时间
+1146`t[]`t（8）评论表（sys_comment）：用于存储帖子评论及回复关系，包含父评论、被回复用户、匿名标记与点赞数等字段，支持楼层与子回复混合展示；按帖子与时间建立索引以优化详情页加载。其结构如表3-8所示。
+1147`t[]`t表3—8 评论表
+1148`t[]`t字段
+1149`t[]`t类型
+1150`t[]`t长度
+1151`t[]`t主键
+1152`t[]`t注释
+1153`t[]`tid
+1154`t[]`tVarchar
+1155`t[]`t64
+1156`t[]`t主键
+1157`t[]`t评论ID
+1158`t[]`tpost_id
+1159`t[]`tVarchar
+1160`t[]`t64
+1161`t[]`t—
+1162`t[]`t帖子ID
+1163`t[]`tuser_id
+1164`t[]`tVarchar
+1165`t[]`t64
+1166`t[]`t—
+1167`t[]`t评论用户ID
+1168`t[]`tcontent
+1169`t[]`tVarchar
+1170`t[]`t1000
+1171`t[]`t—
+1172`t[]`t评论内容
+1173`t[]`tparent_id
+1174`t[]`tVarchar
+1175`t[]`t64
+1176`t[]`t—
+1177`t[]`t父评论ID
+1178`t[]`treply_user_id
+1179`t[]`tVarchar
+1180`t[]`t64
+1181`t[]`t—
+1182`t[]`t被回复用户ID
+1183`t[]`treply_to_user_id
+1184`t[]`tVarchar
+1185`t[]`t64
+1186`t[]`t—
+1187`t[]`t兼容回复用户ID
+1188`t[]`tis_anonymous
+1189`t[]`tTinyint
+1190`t[]`t—
+1191`t[]`t—
+1192`t[]`t是否匿名
+1193`t[]`tlike_count
+1194`t[]`tInt
+1195`t[]`t—
+1196`t[]`t—
+1197`t[]`t点赞数
+1198`t[]`tcreate_time
+1199`t[]`tDatetime
+1200`t[]`t—
+1201`t[]`t—
+1202`t[]`t创建时间
+1203`t[]`t浏览日志表（sys_view_log）：记录帖子浏览行为，覆盖用户、IP、设备与访问时间等信息，既用于阅读历史回溯，也为热度计算、留存分析与反作弊识别提供基础行为数据。其结构如表3-9所示。
+1204`t[]`t表3—9 浏览日志表
+1205`t[]`t字段
+1206`t[]`t类型
+1207`t[]`t长度
+1208`t[]`t主键
+1209`t[]`t注释
+1210`t[]`tid
+1211`t[]`tBigint
+1212`t[]`t—
+1213`t[]`t主键
+1214`t[]`t日志ID
+1215`t[]`tpost_id
+1216`t[]`tVarchar
+1217`t[]`t64
+1218`t[]`t—
+1219`t[]`t帖子ID
+1220`t[]`tuser_id
+1221`t[]`tVarchar
+1222`t[]`t64
+1223`t[]`t—
+1224`t[]`t用户ID
+1225`t[]`tip
+1226`t[]`tVarchar
+1227`t[]`t50
+1228`t[]`t—
+1229`t[]`t访问IP
+1230`t[]`tdevice
+1231`t[]`tVarchar
+1232`t[]`t50
+1233`t[]`t—
+1234`t[]`t设备类型
+1235`t[]`tcreate_time
+1236`t[]`tDatetime
+1237`t[]`t—
+1238`t[]`t—
+1239`t[]`t创建时间
+1240`t[]`t（10）等级经验日志表（sys_level_exp_log）：记录用户经验变动明细，包含变动值与原因字段，形成可追溯的成长流水，用于等级计算、激励反馈与运营审计，避免直接覆盖导致的数据不可追踪问题。其结构如表3-10所示。
+1241`t[]`t表3—10 等级经验日志表
+1242`t[]`t字段
+1243`t[]`t类型
+1244`t[]`t长度
+1245`t[]`t主键
+1246`t[]`t注释
+1247`t[]`tid
+1248`t[]`tBigint
+1249`t[]`t—
+1250`t[]`t主键
+1251`t[]`t日志ID
+1252`t[]`tuser_id
+1253`t[]`tVarchar
+1254`t[]`t64
+1255`t[]`t—
+1256`t[]`t用户ID
+1257`t[]`texp_delta
+1258`t[]`tInt
+1259`t[]`t—
+1260`t[]`t—
+1261`t[]`t经验变化值
+1262`t[]`treason
+1263`t[]`tVarchar
+1264`t[]`t100
+1265`t[]`t—
+1266`t[]`t经验来源
+1267`t[]`tcreate_time
+1268`t[]`tDatetime
+1269`t[]`t—
+1270`t[]`t—
+1271`t[]`t创建时间
+1273`t[]`t（11）通知表（notifications）：用于统一承载点赞、评论、关注等系统通知，记录接收者、触发者、关联资源与已读状态；通过用户维度未读索引优化消息角标与通知中心的实时统计查询。其结构如表3-11所示。
+1274`t[]`t表3—11 通知表
+1275`t[]`t字段
+1276`t[]`t类型
+1277`t[]`t长度
+1278`t[]`t主键
+1279`t[]`t注释
+1280`t[]`tid
+1281`t[]`tBigint
+1282`t[]`t—
+1283`t[]`t主键
+1284`t[]`t通知ID
+1285`t[]`tuser_id
+1286`t[]`tVarchar
+1287`t[]`t64
+1288`t[]`t—
+1289`t[]`t接收者ID
+1290`t[]`ttype
+1291`t[]`tVarchar
+1292`t[]`t20
+1293`t[]`t—
+1294`t[]`t通知类型
+1295`t[]`ttitle
+1296`t[]`tVarchar
+1297`t[]`t100
+1298`t[]`t—
+1299`t[]`t标题
+1300`t[]`tcontent
+1301`t[]`tVarchar
+1302`t[]`t500
+1303`t[]`t—
+1304`t[]`t内容
+1305`t[]`trelated_id
+1306`t[]`tVarchar
+1307`t[]`t64
+1308`t[]`t—
+1309`t[]`t关联资源ID
+1310`t[]`trelated_user_id
+1311`t[]`tVarchar
+1312`t[]`t64
+1313`t[]`t—
+1314`t[]`t触发者ID
+1315`t[]`tis_read
+1316`t[]`tTinyint
+1317`t[]`t—
+1318`t[]`t—
+1319`t[]`t是否已读
+1320`t[]`tcreated_at
+1321`t[]`tDatetime
+1322`t[]`t—
+1323`t[]`t—
+1324`t[]`t创建时间
+1326`t[]`t（12）私信表（direct_messages）：用于用户点对点会话存储，以 conversation_id 聚合双向消息，记录发送者、接收者、内容与已读状态，支持会话列表、未读计数与按时间回溯的聊天场景。其结构如表3-12所示。
+1327`t[]`t表3—12 私信表
+1328`t[]`t字段
+1329`t[]`t类型
+1330`t[]`t长度
+1331`t[]`t主键
+1332`t[]`t注释
+1333`t[]`tid
+1334`t[]`tBigint
+1335`t[]`t—
+1336`t[]`t主键
+1337`t[]`t消息ID
+1338`t[]`tconversation_id
+1339`t[]`tVarchar
+1340`t[]`t130
+1341`t[]`t—
+1342`t[]`t会话ID
+1343`t[]`tsender_id
+1344`t[]`tVarchar
+1345`t[]`t64
+1346`t[]`t—
+1347`t[]`t发送者ID
+1348`t[]`treceiver_id
+1349`t[]`tVarchar
+1350`t[]`t64
+1351`t[]`t—
+1352`t[]`t接收者ID
+1353`t[]`tcontent
+1354`t[]`tVarchar
+1355`t[]`t1000
+1356`t[]`t—
+1357`t[]`t消息内容
+1358`t[]`tis_read
+1359`t[]`tTinyint
+1360`t[]`t—
+1361`t[]`t—
+1362`t[]`t是否已读
+1363`t[]`tcreated_at
+1364`t[]`tDatetime
+1365`t[]`t—
+1366`t[]`t—
+1367`t[]`t创建时间
+1369`t[]`t（13）举报表（sys_report）：面向内容治理流程，记录举报对象类型、对象 ID、原因、详情、举报人及处理状态，支撑审核后台分状态流转与闭环处理，提升社区内容安全与管理可追溯性。其结构如表3-13所示。
+1370`t[]`t表3—13 举报表
+1371`t[]`t字段
+1372`t[]`t类型
+1373`t[]`t长度
+1374`t[]`t主键
+1375`t[]`t注释
+1376`t[]`tid
+1377`t[]`tVarchar
+1378`t[]`t64
+1379`t[]`t主键
+1380`t[]`t举报ID
+1381`t[]`ttarget_type
+1382`t[]`tVarchar
+1383`t[]`t20
+1384`t[]`t—
+1385`t[]`t举报对象类型
+1386`t[]`ttarget_id
+1387`t[]`tVarchar
+1388`t[]`t64
+1389`t[]`t—
+1390`t[]`t举报对象ID
+1391`t[]`treason
+1392`t[]`tVarchar
+1393`t[]`t100
+1394`t[]`t—
+1395`t[]`t举报原因
+1396`t[]`tdetails
+1397`t[]`tText
+1398`t[]`t—
+1399`t[]`t—
+1400`t[]`t举报详情
+1401`t[]`treporter_id
+1402`t[]`tVarchar
+1403`t[]`t64
+1404`t[]`t—
+1405`t[]`t举报人ID
+1406`t[]`tstatus
+1407`t[]`tInt
+1408`t[]`t—
+1409`t[]`t—
+1410`t[]`t处理状态
+1411`t[]`tcreate_time
+1412`t[]`tDatetime
+1413`t[]`t—
+1414`t[]`t—
+1415`t[]`t创建时间
+1416`t[]`tupdate_time
+1417`t[]`tDatetime
+1418`t[]`t—
+1419`t[]`t—
+1420`t[]`t更新时间
+1421`t[]`t（14）关注关系表（follows）：维护用户之间的关注网络，采用 (follower_id, followee_id) 唯一约束保证关系唯一，支持粉丝/关注列表、关系判断与社交推荐等基础能力。其结构如表3-14所示。
+1422`t[]`t表3—14 关注关系表
+1423`t[]`t字段
+1424`t[]`t类型
+1425`t[]`t长度
+1426`t[]`t主键
+1427`t[]`t注释
+1428`t[]`tid
+1429`t[]`tBigint
+1430`t[]`t—
+1431`t[]`t主键
+1432`t[]`t关系ID
+1433`t[]`tfollower_id
+1434`t[]`tVarchar
+1435`t[]`t64
+1436`t[]`t—
+1437`t[]`t关注者ID
+1438`t[]`tfollowee_id
+1439`t[]`tVarchar
+1440`t[]`t64
+1441`t[]`t—
+1442`t[]`t被关注者ID
+1443`t[]`tcreated_at
+1444`t[]`tDatetime
+1445`t[]`t—
+1446`t[]`t—
+1447`t[]`t创建时间
+1448`t[]`t（15）发展历程表（sys_changelog）：用于发布系统版本更新与公告内容，包含版本号、标题、正文、发布时间、状态和排序字段，支持前台展示与后台维护，满足项目迭代记录的内容化管理需求。其结构如表3-15所示。
+1449`t[]`t表3—15 发展历程表
+1450`t[]`t字段
+1451`t[]`t类型
+1452`t[]`t长度
+1453`t[]`t主键
+1454`t[]`t注释
+1455`t[]`tid
+1456`t[]`tBigint
+1457`t[]`t—
+1458`t[]`t主键
+1459`t[]`t记录ID
+1460`t[]`tversion
+1461`t[]`tVarchar
+1462`t[]`t20
+1463`t[]`t—
+1464`t[]`t版本号
+1465`t[]`ttitle
+1466`t[]`tVarchar
+1467`t[]`t200
+1468`t[]`t—
+1469`t[]`t标题
+1470`t[]`tcontent
+1471`t[]`tText
+1472`t[]`t—
+1473`t[]`t—
+1474`t[]`t正文内容
+1475`t[]`ttimestamp
+1476`t[]`tVarchar
+1477`t[]`t20
+1478`t[]`t—
+1479`t[]`t时间标签
+1480`t[]`tstatus
+1481`t[]`tTinyint
+1482`t[]`t—
+1483`t[]`t—
+1484`t[]`t发布状态
+1485`t[]`tsort_order
+1486`t[]`tInt
+1487`t[]`t—
+1488`t[]`t—
+1489`t[]`t排序值
+1490`t[]`tcreated_at
+1491`t[]`tDatetime
+1492`t[]`t—
+1493`t[]`t—
+1494`t[]`t创建时间
+1495`t[]`tupdated_at
+1496`t[]`tDatetime
+1497`t[]`t—
+1498`t[]`t—
+1499`t[]`t更新时间
+1501`t[]`t（16）版主申请表（moderator_applications）：记录用户申请版主的板块、申请理由、审核状态、审核备注与审核时间，形成“申请—审核—结果”治理链路，支撑社区自治与权限管理流程。其结构如表3-16所示。
+1502`t[]`t表3—16 版主申请表
+1503`t[]`t字段
+1504`t[]`t类型
+1505`t[]`t长度
+1506`t[]`t主键
+1507`t[]`t注释
+1508`t[]`tid
+1509`t[]`tBigint
+1510`t[]`t—
+1511`t[]`t主键
+1512`t[]`t申请ID
+1513`t[]`tuser_id
+1514`t[]`tVarchar
+1515`t[]`t64
+1516`t[]`t—
+1517`t[]`t申请人ID
+1518`t[]`tsection_id
+1519`t[]`tBigint
+1520`t[]`t—
+1521`t[]`t—
+1522`t[]`t申请板块ID
+1523`t[]`treason
+1524`t[]`tVarchar
+1525`t[]`t500
+1526`t[]`t—
+1527`t[]`t申请理由
+1528`t[]`tstatus
+1529`t[]`tTinyint
+1530`t[]`t—
+1531`t[]`t—
+1532`t[]`t审核状态
+1533`t[]`treview_note
+1534`t[]`tVarchar
+1535`t[]`t500
+1536`t[]`t—
+1537`t[]`t审核备注
+1538`t[]`treviewed_by
+1539`t[]`tVarchar
+1540`t[]`t64
+1541`t[]`t—
+1542`t[]`t审核人ID
+1543`t[]`treviewed_at
+1544`t[]`tDatetime
+1545`t[]`t—
+1546`t[]`t—
+1547`t[]`t审核时间
+1548`t[]`tcreated_at
+1549`t[]`tDatetime
+1550`t[]`t—
+1551`t[]`t—
+1552`t[]`t创建时间
+1553`t[]`tupdated_at
+1554`t[]`tDatetime
+1555`t[]`t—
+1556`t[]`t—
+1557`t[]`t更新时间
+1558`t[]`t（17）评论点赞表（comment_likes）：用于记录用户对评论的点赞行为，采用用户与评论联合约束避免重复点赞，并为评论互动统计与排序提供基础数据。其结构如表3-17所示。
+1559`t[]`t表3—17 评论点赞表
+1560`t[]`t字段
+1561`t[]`t类型
+1562`t[]`t长度
+1563`t[]`t主键
+1564`t[]`t注释
+1565`t[]`tid
+1566`t[]`tBigint
+1567`t[]`t—
+1568`t[]`t主键
+1569`t[]`t点赞ID
+1570`t[]`tcomment_id
+1571`t[]`tVarchar
+1572`t[]`t64
+1573`t[]`t—
+1574`t[]`t评论ID
+1575`t[]`tuser_id
+1576`t[]`tVarchar
+1577`t[]`t64
+1578`t[]`t—
+1579`t[]`t用户ID
+1580`t[]`tcreated_at
+1581`t[]`tDatetime
+1582`t[]`t—
+1583`t[]`t—
+1584`t[]`t创建时间
+1585`t[]`t（18）热度快照表（post_heat_snapshots）：用于按时间记录帖子热度采样结果，为热度演化分析、趋势回溯与热榜调优提供离线支撑。其结构如表3-18所示。
+1586`t[]`t表3—18 热度快照表
+1587`t[]`t字段
+1588`t[]`t类型
+1589`t[]`t长度
+1590`t[]`t主键
+1591`t[]`t注释
+1592`t[]`tid
+1593`t[]`tBigint
+1594`t[]`t—
+1595`t[]`t主键
+1596`t[]`t快照ID
+1597`t[]`tpost_id
+1598`t[]`tVarchar
+1599`t[]`t64
+1600`t[]`t—
+1601`t[]`t帖子ID
+1602`t[]`theat_score
+1603`t[]`tDouble
+1604`t[]`t—
+1605`t[]`t—
+1606`t[]`t热度值
+1607`t[]`tsnap_time
+1608`t[]`tDatetime
+1609`t[]`t—
+1610`t[]`t—
+1611`t[]`t采样时间
+1612`t[]`t（19）趋势统计表（trend_stats）：用于沉淀按日期聚合的板块、标签和关键词统计结果，服务趋势分析、可视化展示和热点预测场景。其结构如表3-19所示。
+1613`t[]`t表3—19 趋势统计表
+1614`t[]`t字段
+1615`t[]`t类型
+1616`t[]`t长度
+1617`t[]`t主键
+1618`t[]`t注释
+1619`t[]`tid
+1620`t[]`tBigint
+1621`t[]`t—
+1622`t[]`t主键
+1623`t[]`t统计ID
+1624`t[]`tstat_type
+1625`t[]`tVarchar
+1626`t[]`t20
+1627`t[]`t—
+1628`t[]`t统计维度
+1629`t[]`tstat_key
+1630`t[]`tVarchar
+1631`t[]`t100
+1632`t[]`t—
+1633`t[]`t维度值
+1634`t[]`tsection_id
+1635`t[]`tBigint
+1636`t[]`t—
+1637`t[]`t—
+1638`t[]`t关联板块ID
+1639`t[]`tpost_count
+1640`t[]`tInt
+1641`t[]`t—
+1642`t[]`t—
+1643`t[]`t帖子数
+1644`t[]`tview_count
+1645`t[]`tInt
+1646`t[]`t—
+1647`t[]`t—
+1648`t[]`t浏览数
+1649`t[]`tlike_count
+1650`t[]`tInt
+1651`t[]`t—
+1652`t[]`t—
+1653`t[]`t点赞数
+1654`t[]`tcomment_count
+1655`t[]`tInt
+1656`t[]`t—
+1657`t[]`t—
+1658`t[]`t评论数
+1659`t[]`theat_score
+1660`t[]`tDouble
+1661`t[]`t—
+1662`t[]`t—
+1663`t[]`t热度值
+1664`t[]`tstat_date
+1665`t[]`tDate
+1666`t[]`t—
+1667`t[]`t—
+1668`t[]`t统计日期
+1669`t[]`tcreated_at
+1670`t[]`tDatetime
+1671`t[]`t—
+1672`t[]`t—
+1673`t[]`t创建时间
+1674`t[]`t（20）邀请码表（invite_codes）：用于维护邀请码生成、使用、过期和禁用状态，支撑邀请注册及权限化发码等业务流程。其结构如表3-20所示。
+1675`t[]`t表3—20 邀请码表
+1676`t[]`t字段
+1677`t[]`t类型
+1678`t[]`t长度
+1679`t[]`t主键
+1680`t[]`t注释
+1681`t[]`tid
+1682`t[]`tVarchar
+1683`t[]`t64
+1684`t[]`t主键
+1685`t[]`t邀请码ID
+1686`t[]`tcode
+1687`t[]`tVarchar
+1688`t[]`t32
+1689`t[]`t—
+1690`t[]`t邀请码
+1691`t[]`tcreator_id
+1692`t[]`tVarchar
+1693`t[]`t64
+1694`t[]`t—
+1695`t[]`t创建者ID
+1696`t[]`tused_by_user_id
+1697`t[]`tVarchar
+1698`t[]`t64
+1699`t[]`t—
+1700`t[]`t使用者ID
+1701`t[]`tstatus
+1702`t[]`tTinyint
+1703`t[]`t—
+1704`t[]`t—
+1705`t[]`t状态
+1706`t[]`tmax_uses
+1707`t[]`tInt
+1708`t[]`t—
+1709`t[]`t—
+1710`t[]`t最大使用次数
+1711`t[]`tused_count
+1712`t[]`tInt
+1713`t[]`t—
+1714`t[]`t—
+1715`t[]`t已使用次数
+1716`t[]`texpire_time
+1717`t[]`tDatetime
+1718`t[]`t—
+1719`t[]`t—
+1720`t[]`t过期时间
+1721`t[]`tremark
+1722`t[]`tVarchar
+1723`t[]`t200
+1724`t[]`t—
+1725`t[]`t备注
+1726`t[]`tcreate_time
+1727`t[]`tDatetime
+1728`t[]`t—
+1729`t[]`t—
+1730`t[]`t创建时间
+1731`t[]`tupdate_time
+1732`t[]`tDatetime
+1733`t[]`t—
+1734`t[]`t—
+1735`t[]`t更新时间
+1736`t[]`tdeleted
+1737`t[]`tTinyint
+1738`t[]`t—
+1739`t[]`t—
+1740`t[]`t逻辑删除标记
+1741`t[3]`t3.3 系统详细设计
+1742`t[]`t1.系统总体业务流程
+1743`t[]`t系统详细设计部分从前台使用链路与后端处理链路两侧展开，突出登录鉴权、帖子发布、审核治理、缓存同步与实时通知等核心流程。Campus Pulse 的总体业务流程如图3—20所示。
+1744`t[]`t用户进入系统开始完成登录注册浏览搜索与推荐发帖评论点赞通知私信与治理结束用户进入系统开始完成登录注册浏览搜索与推荐发帖评论点赞通知私信与治理结束
+1745`t[]`t用户进入系统
+1746`t[]`t开始
+1747`t[]`t完成登录注册
+1748`t[]`t浏览搜索与推荐
+1749`t[]`t发帖评论点赞
+1750`t[]`t通知私信与治理
+1751`t[]`t结束
+1752`t[]`t用户进入系统
+1753`t[]`t开始
+1754`t[]`t完成登录注册
+1755`t[]`t浏览搜索与推荐
+1756`t[]`t发帖评论点赞
+1757`t[]`t通知私信与治理
+1758`t[]`t结束
+1759`t[]`t图3—20 系统总体业务流程图
+1760`t[]`t2.用户登录与认证流程
+1761`t[]`tCampus Pulse 支持“用户名或邮箱 + 密码”登录，并结合设备标识、Redis 会话校验与可选二步验证完成身份确认。用户登录认证流程如图3—21所示。
+1762`t[]`t开始输入账号/邮箱与密码登录成功提示参数缺失提示凭证错误登录参数是否完整凭证是否校验通过结束是否是2FA校验否开始输入账号/邮箱与密码登录成功提示参数缺失提示凭证错误登录参数是否完整凭证是否校验通过结束是否是2FA校验否
+1763`t[]`t开始
+1764`t[]`t输入账号/邮箱与密码
+1765`t[]`t登录成功
+1766`t[]`t提示参数缺失
+1767`t[]`t提示凭证错误
+1768`t[]`t登录参数是否完整
+1769`t[]`t凭证是否校验通过
+1770`t[]`t结束
+1771`t[]`t是
+1773`t[]`t否
+1774`t[]`t是
+1775`t[]`t2FA校验
+1776`t[]`t否
+1777`t[]`t开始
+1778`t[]`t输入账号/邮箱与密码
+1779`t[]`t登录成功
+1780`t[]`t提示参数缺失
+1781`t[]`t提示凭证错误
+1782`t[]`t登录参数是否完整
+1783`t[]`t凭证是否校验通过
+1784`t[]`t结束
+1785`t[]`t是
+1787`t[]`t否
+1788`t[]`t是
+1789`t[]`t2FA校验
+1790`t[]`t否
+1791`t[]`t图3—21 用户登录与认证流程图
+1792`t[]`t3.后端鉴权与请求处理流程
+1793`t[]`t后端在收到登录或业务请求后，会依次经过 JWT 解析、签名校验、Redis 会话与设备绑定校验，再进入业务服务层和数据库/缓存访问流程；若任一环节失败，系统返回统一错误响应。其处理流程如图3—22所示。
+1794`t[]`t开始接收请求鉴权处理Redis/数据库返回错误登录成功校验是否通过结束解析凭证是签发Token否记录设备开始接收请求鉴权处理Redis/数据库返回错误登录成功校验是否通过结束解析凭证是签发Token否记录设备
+1795`t[]`t开始
+1796`t[]`t接收请求
+1797`t[]`t鉴权处理
+1798`t[]`tRedis/数据库
+1799`t[]`t返回错误
+1800`t[]`t登录成功
+1801`t[]`t校验是否通过
+1802`t[]`t结束
+1803`t[]`t解析凭证
+1804`t[]`t是
+1805`t[]`t签发Token
+1806`t[]`t否
+1807`t[]`t记录设备
+1808`t[]`t开始
+1809`t[]`t接收请求
+1810`t[]`t鉴权处理
+1811`t[]`tRedis/数据库
+1812`t[]`t返回错误
+1813`t[]`t登录成功
+1814`t[]`t校验是否通过
+1815`t[]`t结束
+1816`t[]`t解析凭证
+1817`t[]`t是
+1818`t[]`t签发Token
+1819`t[]`t否
+1820`t[]`t记录设备
+1821`t[]`t图3—22 后端鉴权处理流程图
+1822`t[]`t4.帖子发布与审核流程
+1823`t[]`t普通用户在前台可直接发布帖子，也可先保存草稿。系统会在提交阶段校验板块合法性、执行敏感词过滤，并可调用 AI 服务提取标签与摘要，随后进入写库与缓存刷新流程。
+1824`t[]`t若帖子内容未通过校验，系统会提示用户返回修改；若通过校验，则保存帖子、更新缓存版本并触发通知/实时事件。其流程如图3—23所示。
+1825`t[]`t开始入库并推送校验是否通过结束填写标题/正文是否返回修改开始入库并推送校验是否通过结束填写标题/正文是否返回修改
+1826`t[]`t开始
+1827`t[]`t入库并推送
+1828`t[]`t校验是否通过
+1829`t[]`t结束
+1830`t[]`t填写标题/正文
+1831`t[]`t是
+1832`t[]`t否
+1833`t[]`t返回修改
+1834`t[]`t开始
+1835`t[]`t入库并推送
+1836`t[]`t校验是否通过
+1837`t[]`t结束
+1838`t[]`t填写标题/正文
+1839`t[]`t是
+1840`t[]`t否
+1841`t[]`t返回修改
+1842`t[]`t图3—23 帖子发布与审核流程图
+1843`t[]`t5.帖子编辑与重新提交流程
+1844`t[]`t帖子编辑既支持作者修改已发布或被打回的内容，也支持管理员/版主进行运营性调整。系统会重新校验修改后的标题、正文和板块信息，并在必要时重新进入审核链路，其流程如图3—24所示。
+1845`t[]`t开始定位待修改帖子详情更新数据库校验是否通过结束编辑新内容是重新审核否返回修改开始定位待修改帖子详情更新数据库校验是否通过结束编辑新内容是重新审核否返回修改
+1846`t[]`t开始
+1847`t[]`t定位待修改帖子详情
+1848`t[]`t更新数据库
+1849`t[]`t校验是否通过
+1850`t[]`t结束
+1851`t[]`t编辑新内容
+1852`t[]`t是
+1853`t[]`t重新审核
+1854`t[]`t否
+1855`t[]`t返回修改
+1856`t[]`t开始
+1857`t[]`t定位待修改帖子详情
+1858`t[]`t更新数据库
+1859`t[]`t校验是否通过
+1860`t[]`t结束
+1861`t[]`t编辑新内容
+1862`t[]`t是
+1863`t[]`t重新审核
+1864`t[]`t否
+1865`t[]`t返回修改
+1866`t[]`t图3—24 帖子编辑与重新提交流程图
+1867`t[]`t6.帖子删除与缓存同步流程
+1868`t[]`t帖子删除由作者、板块版主或管理员在具备权限的前提下发起。系统完成权限判断后执行删除操作，并同步刷新帖子流缓存、热榜缓存与前端列表状态，删除流程如图3—25所示。
+1869`t[]`t开始选择目标帖子逻辑删除与清缓存是否具备权限结束是广播更新否返回提示开始选择目标帖子逻辑删除与清缓存是否具备权限结束是广播更新否返回提示
+1870`t[]`t开始
+1871`t[]`t选择目标帖子
+1872`t[]`t逻辑删除与清缓存
+1873`t[]`t是否具备权限
+1874`t[]`t结束
+1875`t[]`t是
+1876`t[]`t广播更新
+1877`t[]`t否
+1878`t[]`t返回提示
+1879`t[]`t开始
+1880`t[]`t选择目标帖子
+1881`t[]`t逻辑删除与清缓存
+1882`t[]`t是否具备权限
+1883`t[]`t结束
+1884`t[]`t是
+1885`t[]`t广播更新
+1886`t[]`t否
+1887`t[]`t返回提示
+1888`t[]`t图3—25 帖子删除与缓存同步流程图
+1890`t[2]`t第4章 系统实现
+1891`t[]`t4.1 普通用户角色功能实现
+1892`t[]`t普通用户是 Campus Pulse 的主要使用主体，其典型使用链路包括注册登录、资料维护、发帖评论、点赞收藏、私信通知与推荐浏览。系统前台围绕“低门槛参与、身份可信、反馈及时”三个目标展开设计，首先从账号认证与会话安全切入。
+1893`t[]`t在会话管理方面，系统并非仅发放 accessToken，而是同时发放 refreshToken，并将会话标识（sid）与设备标识（did）写入令牌声明。服务端在 Redis 中维护 auth:access、auth:refresh、auth:device 等键空间，实现会话级校验与主动失效能力。这样即使令牌
+1894`t[]`t被窃取，只要设备不一致或会话已失效，网关过滤器也会拒绝请求。相比“只校验 JWT 签名”的传统方案，该机制明显提升了会话可控性。
+1895`t[]`t系统还实现了基于 TOTP 的二步验证流程。用户可在设置页发起 2FA 初始化，系统生成密钥、otpauth URI 与二维码，用户在认证器App 完成绑定后，登录阶段将触发二次动态码校验。这一设计在不显著增加交互复杂度的前提下，提高了高价值账号的防护等级。
+1896`t[]`t此外，请求安全层引入了时间戳、随机串（nonce）、签名校验机制。对于 POST/PUT/DELETE 等变更请求，过滤器可校验 X-Request-Timestamp、X-Request-Nonce、X-Request-Signature，并用 Redis 防重放。该机制可有效抑制接口重放攻击和部分中间人篡改风险。
+1898`t[3]`t（1）内容发布与智能处理实现
+1899`t[]`t内容模块是系统主干，围绕“发布—处理—展示—再编辑”形成闭环。后端通过 PostController、PostServiceImpl 实现帖子创建、检索、更新、删除、置顶、加精等全链路操作。用户发布帖子时，系统首先完成板块合法性校验，再执行文本合规处理与智能分析，最终写入结构化数据模型。
+1900`t[]`t在内容安全方面，系统使用 DFA 敏感词算法（ContentSecurityServiceImpl）对标题、正文、评论、个人资料字段进行扫描。命中词条后采用替换策略（*）处理，既保证发布流程连续性，又能降低违规内容传播风险。该策略在校园社区场景下具有较高实用价值：一方面避免“全拦截”导致用户体验断层，另一方面实现风险内容的可控降噪。
+1901`t[]`t在智能处理方面，系统接入 AI 服务用于标签提取与摘要重新生成。发帖与摘要重新生成功能分别通过 extract-tags 与 summary/regenerate 接口暴露。若外部 AI 服务异常，系统自动回退到本地摘要策略（基于正文截断与 Markdown 清洗），保证业务稳定性。
+1902`t[]`t同时系统对帖子执行情感分析（正向/中性/负向），将情感得分写入数据表并参与后续热度计算与趋势标注。
+1903`t[]`t  帖子模型除基本字段外，还扩展了 globalPin、categoryPin、pinOrder、pinExpireAt、lastReplyAt、lastActivityAt 等字段。结合检索接口中的排序规则，系统能够实现“全局置顶优先、板块置顶次之、普通帖子按活跃时间倒序”的信息流组织方式，保证重要信息和活跃讨论都能获得合适曝光。
+1905`t[3]`t（2）社区互动与实时通信实现
+1906`t[]`t互动模块重点解决“反馈即时性”和“行为可沉淀”两类问题。系统实现了评论、点赞、收藏、关注、私信、通知六类核心互动能力，并通过 WebSocket 增强实时感知。
+1907`t[]`t评论能力由 CommentServiceImpl 实现，支持楼中楼回复、匿名评论与评论点赞。评论写入后系统会同步更新帖子 commentCount、lastReplyAt、lastActivityAt，并触发帖子流缓存版本递增，保证列表数据快速一致。点赞与收藏由 PostLikeServiceImpl、PostCollectServiceImpl 提供 toggle 逻辑，避免重复写入，并同步更新帖子计数、作者获赞统计、经验值与通知消息。
+1908`t[]`t   通知模块（NotificationServiceImpl）同时支持站内与站外触达。站内通知通过数据库持久化并提供未读统计；站外通知在用户开启邮箱同步时异步发送邮件。触发类型包括评论、点赞、收藏、关注、@提及，形成完整的社交反馈闭环。前端可在通知页进行“单条已读、全部已读、删除”等管理操作。
+1909`t[]`t  系统还实现私信会话（DirectMessageServiceImpl）：会话按双方用户ID有序拼接生成 conversationId，支持会话列表、消息分页、会话已读和全局未读数统计。该设计既简化了建模，也便于后续扩展“消息撤回/多媒体消息”等功能。
+1910`t[]`t   实时通信层采用 STOMP over SockJS。后端向 /topic/posts、/topic/section/{id} 推送帖子事件（新帖、回复、浏览、点赞、置顶更新等），前端在 TopicList 中消费事件并执行局部刷新或排序前移；当 WebSocket 不可用时自动降级轮询，保证实时能力具备“可增强、可退化”的工程韧性。
+1912`t[3]`t（3）推荐分发与趋势浏览实现
+1913`t[]`t面对校园社区信息过载问题，系统在推荐层采用“个性化 + 协同过滤 + 热门兜底”的混合策略。RecommendController 对外提供推荐列表和详情页相关推荐接口，核心实现位于 PostRecommendServiceImpl。对于登录用户，系统综合用户兴趣标签权重、协同过滤结果与热门内容生成候选集，再按综合得分排序去重；对于匿名用户，则直接返回热门推荐，保证冷启动阶段也有可读内容。
+1914`t[]`t详情页相关推荐进一步引入“同专业用户内容 + 同板块内容 + 热门兜底”三段式策略，提升语义邻近性和场景相关性。推荐参数（如候选池大小、各类来源权重）通过配置类外置，便于论文中的参数调优实验与对比分析。
+1915`t[]`t热度演化方面，系统通过 PostHeatDecayTask 周期性执行热度重算。算法核心遵循“互动得分 / 时间衰减函数”，并加入“负向情感惩罚”和“精华帖加权”机制：既鼓励高质量高互动内容，也抑制消极内容持续霸榜。标签维度同步引入 TagHeatDecayTask 做小时级衰减，避免历史标签长期垄断热门区域。
+1916`t[]`t  该模块使社区流量分发从“静态时间排序”升级为“动态质量排序”，兼顾实时性、公平性与内容质量导向。
+1918`t[3]`t4.2 版主角色功能实现
+1919`t[]`t版主角色聚焦板块级内容治理。前端通过 MyModerationPage 为版主展示其负责板块，后台内容管理页基于 moderatedSectionIds 自动限定可操作范围；后端则通过 /post/moderation-list、approve、reject、category-pin、feature 等接口完成板块帖子审核、置顶与加精处理。
+1920`t[]`t在举报处置方面，版主可进入 ReportsManagePage 查看本板块举报记录，对举报执行“已处理、忽略、打回修改”等操作。系统在打回帖子后会同步修改帖子审核状态，并通过通知服务将处理结果发送给作者，形成“发现问题 - 处置问题 - 反馈作者”的闭环流程。
+1921`t[]`t通过板块级权限约束与独立工作台设计，版主能力不再依赖全局管理员逐条处理，而是以“分区自治 + 分级审核”的方式提升社区治理效率，也降低了后台集中运维压力。
+1923`t[3]`t4.3 管理员角色功能实现
+1924`t[]`t管理员角色承担站点级运营与系统治理职责。前端后台提供 DashboardPage、UsersManagePage、SectionsManagePage、ModeratorApplicationsManagePage、InviteCodesPage、ChangelogManagePage 等页面，支持数据看板、用户管理、板块配置、版主申请审核、邀请码管理与发展历程维护等核心操作。
+1925`t[]`t在数据与运维层面，管理员可通过 StatsController、TrendStatController 获取站点总览、趋势排行和热点统计结果，并通过 CacheManagementController 对 Redis 缓存进行概览、计数与批量清理。定时任务负责热度衰减、等级升级与浏览日志清理，保证系统长期运行时的数据时效性与资源健康。
+1926`t[]`t权限控制目前采用基于角色代码与板块权限的组合判定逻辑（ROLE_ADMIN、ROLE_SUPER_ADMIN 以及 moderatedSectionIds），并在关键管理接口中进行显式校验，确保高危操作具备访问边界。整体上，管理员角色负责全局配置、权限治理、运营分析和系统维护，是平台稳定运行的最终保障层。
+1929`t[2]`t第5章 系统测试
+1930`t[3]`t5.1 测试目标与测试方法
+1931`t[]`t系统测试的目标是验证 Campus Pulse 在真实运行环境下的正确性、稳定性、安全性与可维护性，确保各模块在集成后能够满足技术社区业务需求。
+1932`t[]`t  本项目采用“分层测试 + 端到端验证”的策略，具体包括：
+1933`t[]`t  1. 功能测试：验证注册登录、发帖评论、推荐分发、私信通知、后台管理等核心功能是否符合需求。
+1934`t[]`t  2. 接口测试：验证 REST API 参数校验、权限控制、异常处理与返回结构一致性。
+1935`t[]`t  3. 集成测试：验证后端业务链路与 Redis、MySQL、WebSocket、邮件服务之间的联动逻辑。
+1936`t[]`t  4. 安全测试：验证 JWT 鉴权、Token 刷新、设备绑定、敏感词过滤、请求防重放等安全机制。
+1937`t[]`t  5. 性能测试：验证高并发下帖子流查询、评论写入与通知触达的响应表现。
+1938`t[]`t针对 Campus Pulse 系统的测试，其核心目的并非仅停留于发现程序中的语法错误，而是从业务逻辑、数据安全及系统稳定性三个维度进行综合验证：
+1939`t[]`t功能完整性验证：确保从会员端的“智能化内容发布”、“个性化推荐展示”到管理员端的“教务流程审批”等核心业务链路在逻辑上完全闭合，确保接口返回数据符合 RESTful 规范。
+1940`t[]`t安全边界测试：由于系统涉及学生的真实档案与成绩等敏感教务数据，测试需重点验证 JWT（JSON Web Token） 鉴权机制的有效性，确保未授权用户无法越权访问管理员运维接口。
+1941`t[]`t性能与稳定性评估：验证在校园突发热点引发的高并发场景下，系统通过 Redis 缓存热度排行（HeatRank）的响应时效性，确保系统在高负载下不崩溃、数据不丢失。
+1942`t[]`t智能化准确性校验：通过对不同类型的校园文本进行输入测试，验证系统集成 HanLP 进行自动标签提取的准确率，保障推荐引擎的数据源质量。
+1943`t[]`t2.测试方法
+1944`t[]`t本系统开发过程中采用了**黑盒测试（Black-box Testing）**作为主要的测试手段。黑盒测试不关注代码内部的逻辑实现，而是将系统看作一个“黑匣子”，通过模拟用户行为进行输入，观察输出结果是否符合预期需求。针对 CampusPulse 的系统特性，具体执行策略如下：
+1945`t[]`t等价类划分法： 在“认证与安全”模块测试中，将用户输入的邮箱、学号及密码分为“有效等价类”与“无效等价类”。例如，在注册接口测试时，分别输入格式正确的邮箱后缀与非法字符，验证系统拦截逻辑是否能给出统一的错误反馈，确保后台验证器的健壮性。
+1946`t[]`t边界值分析法： 针对“帖子管理”与“评论系统”，对内容长度限制、分页查询的页码边界（如第 0 页或极大页码）进行极端测试。在“教务选课”模块中，针对选课人数上限等临界点进行反复推演，防止由于边界值处理不当导致的逻辑溢出或数据库死锁。
+1947`t[]`t接口回归测试： 利用 Postman 自动化脚本对已实现的 RESTful API 进行批量调用。在对某个模块（如请假流程）进行优化或代码重构后，重新运行全量接口测试用例，确保新功能的加入未对现有的用户画像、推荐列表等存量功能造成干扰。
+1948`t[]`t异常路径测试（容错性测试）： 模拟网络波动、Token 伪造、Redis 服务宕机等异常场景。测试系统在失去缓存支撑时，能否通过 MySQL 数据库实现实时数据的“降级”展示，验证系统在极端情况下的自我恢复能力与运维治理接口的响应速度。
+1949`t[3]`t5.2 测试环境
+1950`t[]`t测试环境配置如下：
+1951`t[]`t  1. 操作系统：Windows 11
+1952`t[]`t  2. JDK：17
+1953`t[]`t  3. 后端框架：Spring Boot 3.1.2
+1954`t[]`t  4. 数据库：MySQL 8.0
+1955`t[]`t  5. 缓存：Redis 6.x
+1956`t[]`t  6. 前端：Vue 3 + TypeScript + Vite
+1957`t[]`t  7. 接口工具：Postman / Apifox
+1958`t[]`t  8. 压力测试工具：JMeter
+1959`t[]`t  9. 浏览器：Chrome、Edge（最新版）
+1960`t[3]`t5.3 测试内容
+1961`t[]`t本节通过黑盒测试方法，对 Campus Pulse 系统的核心业务模块进行详细验证。测试重点在于业务逻辑的严密性、数据交互的准确性以及异常输入的鲁棒性。
+1962`t[5]`t认证与会话功能测试
+1963`t[]`t认证与会话模块是系统安全的首道防线，主要验证登录鉴权、注册唯一性校验、令牌刷新以及设备绑定等关键链路的响应能力。
+1964`t[]`t测试用例
+1965`t[]`t预计结果
+1966`t[]`t实际操作结果
+1967`t[]`t测试结果
+1968`t[]`t输入已注册的账号和密码（郑永龙、202250734）
+1969`t[]`t认证通过，分配令牌跳转主页
+1970`t[]`t返回 accessToken、refreshToken，进入已登录态
+1971`t[]`t成功
+1972`t[]`t第二次输入的账号和错误密码（郑永龙、11111111111）
+1973`t[]`t提示密码错误，拒绝访问
+1974`t[]`t返回“密码错误”，不签发令牌
+1975`t[]`t成功
+1976`t[]`t使用已注册用户名再次提交注册
+1977`t[]`t提示用户名已存在，注册失败
+1978`t[]`t返回“该用户名已被注册”提示
+1979`t[]`t成功
+1980`t[]`t第三次输入系统未注册的虚假账号
+1981`t[]`t提示用户不存在或身份无效
+1982`t[]`t出现该账号不存在提示
+1983`t[]`t成功
+1984`t[]`t使用错误设备标识调用刷新接口
+1985`t[]`t识别为异常设备并拒绝刷新令牌
+1986`t[]`t返回“检测到异常设备，请重新登录”提示
+1987`t[]`t成功
+1988`t[]`t表5—1 认证与会话功能测试用例表
+1989`t[]`t表 5—1 的首组用例验证了账号密码登录成功场景。用户在登录界面输入正确账号和密码后，后端 AuthController 调用鉴权服务完成身份校验，并向客户端返回 accessToken 与 refreshToken，页面进入已登录状态，如图 5—1 所示。
+1991`t[]`t图5—1 登录成功页面
+1992`t[]`t表 5—1 中的重复账号注册异常用例验证了注册阶段的唯一性校验逻辑。用户填写已存在的用户名并提交注册后，后端返回“该用户名已被注册”提示，前端同步给出错误反馈，如图 5—2 所示。
+1995`t[]`t图5—2 重复账号注册提示页面
+1996`t[5]`t动态内容发布功能测试
+1997`t[]`t该模块测试旨在验证社交互动的核心——帖子的持久化能力，并校验 HanLP 自动标签提取的准确性。
+1998`t[]`t测试用例
+1999`t[]`t预计结果
+2000`t[]`t实际操作结果
+2001`t[]`t测试结果
+2002`t[]`t录入完整标题与具有语义的正文
+2003`t[]`t发布成功，并生成自动提取标签
+2004`t[]`t与预期结果一致
+2005`t[]`t成功
+2006`t[]`t标题或正文内容为空时点击发布
+2007`t[]`t前端/后端拦截并提示内容必填
+2008`t[]`t出现请填写内容
+2009`t[]`t成功
+2010`t[]`t表5—2 发布功能测试用例表
+2011`t[]`t用户在发布页录入关于“校园技术分享活动”的动态描述。提交后，系统根据文本语义完成标签提取并完成帖子发布，页面展示发布结果，如图 5—3 所示。
+2014`t[]`t图5—3 内容发布页面
+2015`t[5]`t推荐功能测试
+2016`t[]`t该模块主要验证推荐接口在登录态与冷启动场景下的结果可用性，以及推荐页面的展示链路是否正常。
+2017`t[]`t测试用例
+2018`t[]`t预计结果
+2019`t[]`t实际操作结果
+2020`t[]`t测试结果
+2021`t[]`t登录用户访问推荐页
+2022`t[]`t返回结合兴趣标签、协同过滤与热门兜底的推荐列表
+2023`t[]`t页面成功展示推荐卡片及推荐理由
+2024`t[]`t成功
+2025`t[]`t匿名用户或兴趣数据不足时访问推荐页
+2026`t[]`t回退展示热门内容，页面正常渲染
+2027`t[]`t推荐页展示热门帖子列表，结果与预期一致
+2028`t[]`t成功
+2029`t[]`t表5—3 推荐功能测试用例表
+2030`t[]`t表 5—3 显示，推荐模块在登录态和冷启动场景下均能正常返回结果，并通过推荐卡片完成页面展示，如图 5—4 所示。
+2032`t[24]`t图5—4 推荐界面
+2037`t[2]`t结  论
+2038`t[]`t系统实现与技术架构总结
+2039`t[]`t本研究围绕高校社区场景设计并实现了 CampusPulse 系统，形成了一套集“内容生产、互动反馈、智能推荐、趋势分析、平台治理”于一体的后端与前端协同平台。系统后端基于 Java 17 与 Spring Boot 3.x 构建，采用 MyBatis-Plus 完成数据持久化，结合 Redis实现高频数据缓存与会话状态管理；前端基于 Vue 3 + TypeScript 实现社区交互与管理可视化页面。在能力层面，系统已实现基于 JWT 的认证鉴权与刷新机制、设备绑定与二步验证、敏感词过滤与情感分析、AI 标签/摘要生成、混合推荐、热度衰减排行、站内通知与私信会话、后台内容治理与缓存运维等核心功能。通过对“用户-内容-行为-统计-治理”多域数据的统一建模，系统有效缓解了传统校园系统中业务割裂、响应滞后和可观测性不足的问题。综合测试结果表明，系统功能链路完整、接口行为稳定、权限边界清晰，能够满足校园社区平台在日常运行中的业务需求，并具备较好的工程可扩展性。
+2040`t[]`t通过对“用户-内容-互动-统计-教务”五大业务域的逻辑抽象，本系统不仅打破了传统校园应用中社交数据与行政数据孤立的局面，还利用 Redis 高速缓存技术保障了热度排行与 Token 鉴权的高并发响应能力。经测试，系统各功能接口均符合预期设计要求，能够稳定支撑学生画像构建、个性化内容推荐及趋势可视化分析等业务逻辑。
+2041`t[]`t2. 开发难点与关键技术解决方案
+2042`t[]`t系统实现过程中，主要难点集中在高并发场景下的数据一致性、智能处理链路的稳定性以及安全与匿名的平衡控制三个方面。
+2043`t[]`t首先，在热度排行与帖子流展示中，若完全依赖数据库实时计算，容易出现查询开销大与响应抖动的问题。为此，系统采用“Redis 缓存 + 定时热度重算 + 版本化失效”的组合策略，在保证响应速度的同时维持数据最终一致性。
+2044`t[]`t其次，在智能处理环节，AI 标签与摘要能力存在外部服务波动风险。系统通过“AI 结果优先、本地摘要兜底”的容错设计，确保在外部能力异常时仍可维持业务连续性，避免核心发布链路被阻断。
+2045`t[]`t  最后，在社区活跃与平台监管之间，系统通过匿名显示与真实身份分离机制实现前台匿名表达，同时保留后台可审计追踪能力；并结合Spring Security、JWT、角色权限校验与请求防重放机制，构建了较完整的安全防护链路。
+2046`t[]`t3. 系统完善性与未来扩展方向
+2047`t[]`t尽管 CampusPulse 已完成毕业设计预期目标，但在精细化治理与智能化深度方面仍有进一步提升空间。
+2048`t[]`t第一，权限体系可由当前角色判定进一步演进为更细粒度的 RBAC/ABAC 模型，补充资源级授权与操作级审计，提升敏感操作的可追溯性与合规能力。
+2049`t[]`t第二，推荐系统目前以兴趣标签、协同过滤与热门兜底为主，后续可引入浏览停留时长、点击反馈、负反馈等行为信号，构建“曝光-点击-反馈”闭环模型，提高推荐准确率与新内容发现能力。
+2050`t[]`t第三，实时能力可继续增强，未来可在现有 WebSocket 推送基础上扩展更完整的事件总线与消息可靠投递机制，并完善移动端/小程序接入，提升多端一致体验与校园通知触达效率。
+2051`t[]`t总体而言，本课题完成了校园社区智能化平台的关键技术落地，验证了“内容社区 + 数据分析 + 安全治理”一体化架构在高校场景中的可行性，为后续工程化部署和持续迭代奠定了基础。
+2057`t[2]`t参考文献
+2058`t[]`t王嘉伟. 基于 Spring Boot 的微服务架构设计与实现 [J]. 电脑知识与技术, 2023, 19(12): 45-48. 
+2059`t[]`t 陈湘瑾. Redis 在高性能 Web 应用中的缓存策略与实践研究 [J]. 信息记录材料, 2022, 23(08): 112-115. 
+2060`t[]`t 张利国, 赵庆松. 基于 JWT 的分布式无状态权限管理方案设计 [J]. 计算机技术与发展, 2021, 31(05): 89-94. 
+2061`t[]`t李想. 面向校园舆情的 HanLP 中文分词与情感分析改进研究 [J]. 现代信息科技, 2024, 8(02): 21-25. 
+2062`t[]`t孙志强. 结合用户画像与混合过滤算法的个性化推荐系统设计 [D]. 北京: 北京邮电大学, 2023. 
+2063`t[]`t周志敏. MySQL 数据库索引优化及海量数据查询效率提升策略 [J]. 数字化用户, 2022, 28(14): 67-69. 
+2064`t[]`t陆平, 刘伟. 自动化黑盒测试在复杂 Web 系统中的应用探索 [J]. 电子技术与软件工程, 2021, (16): 42-44. 
+2065`t[]`t王明亮. 智慧校园背景下的内容聚合与行为趋势分析平台建设 [J]. 教育信息技术, 2024, (01): 33-37. 
+2066`t[]`t刘伟. 软件架构设计模式与工程实践 [M]. 北京: 清华大学出版社, 2023: 156-180. 
+2067`t[]`t 赵雨滴. 基于 MyBatis-Plus 的企业级快速开发框架设计与实现 [D]. 杭州: 浙江工业大学, 2021. 
+2068`t[]`t黎文博. 响应式 Web 交互与后端数据接口的解耦设计 [J]. 软件导刊, 2022, 21(09): 102-106.
+2069`t[]`tWalls Craig. Spring Boot in Action, Sixth Edition [M]. New York: Manning Publications, 2022: 210-235. 
+2070`t[]`tAggarwal Charu C. Recommender Systems: The Textbook [M]. Cham: Springer International Publishing, 2023: 85-110. 
+2071`t[]`tNewman Sam. Building Microservices: Designing Fine-Grained Systems [M]. Sebastopol: O'Reilly Media, 2021: 142-168. 
+2072`t[]`tKleppmann Martin. Designing Data-Intensive Applications: The Big Ideas Behind Reliable, Scalable, and Maintainable Systems [M]. Beijing: China Machine Press, 2021: 280-305. 
+2073`t[]`t Otte R, Stepanchenko S. Security and Scalability of RESTful API in Modern Web Architectures [J]. Journal of Software Engineering and Applications, 2024, 17(03): 215-228.
+2078`t[2]`t致  谢
+2079`t[]`t回首在绥化学院度过的求学时光，这不仅是我专业知识积累的四年，更是我从一名懵懂学子向软件工程专业人员蜕变的关键阶段。在本次毕业设计——CampusPulse（校园脉搏）系统的研发过程中，我得到了许多人的无私帮助与悉心指导，在此谨向他们致以最诚挚的谢意。
+2080`t[]`t首先，我要特别感谢我的指导教师吴亚明老师。 在整个毕业设计的选题、系统架构搭建及论文撰写过程中，吴老师给予了我极大的支持。他严谨的治学态度和深厚的专业造诣令我受益匪浅。特别是在后端逻辑优化与教务模块设计的关键节点，吴老师敏锐的洞察力帮助我避开了许多技术弯路，确保了项目的顺利结项。
+2081`t[]`t其次，感谢大学期间所有授课老师的教诲。 特别感谢孙珊珊老师，在“白帽工作室”项目期间，她不仅教授了我网络安全与系统开发的实战技能，更培养了我独立思考与解决复杂工程问题的能力。正是这些基础知识的沉淀，才有了今天 CampusPulse 系统中关于安全鉴权与高效数据处理的实现。
+2082`t[]`t感谢与我并肩作战的同学们。 感谢王家俊、郑勇龙、李克、张俊豪等校友。在大学四年的项目合作与技术探讨中，我们共同攻克了无数代码漏洞，分享过成功的喜悦，也交流过学习的困惑。这种深厚的友谊与团队协作精神，是我大学生活中最宝贵的财富。
+2083`t[]`t最后，我要感谢我的家人。 感谢父母多年来的默默支持与理解，他们的信任是我勇往直前、专注学术研发的最强后盾。
+2084`t[]`t凡是过往，皆为序章。在未来的软件开发职业生涯中，我将带着在绥化学院学到的知识与精神，继续秉承严谨的态度，在代码的世界里书写新的篇章。
+2090`t[2]`t附录 部分源代码
+2091`t[]`t1．用户注册代码
+2092`t[]`t     @Override
+2093`t[]`t    @Transactional(rollbackFor = Exception.class)
+2094`t[]`t    public void register(RegisterReq req) {
+2096`t[]`t        // 0. 校验验证码
+2097`t[]`t        if (!verificationCodeService.verifyCode(req.getEmail(), req.getCode())) {
+2098`t[]`t            throw new RegisterException("验证码错误或已失效");
+2099`t[]`t        }
+2101`t[]`t        // 1. 用户名（学号）是否已存在
+2102`t[]`t        User exist = userService.lambdaQuery()
+2103`t[]`t                .eq(User::getUsername, req.getUsername())
+2104`t[]`t                .one();
+2106`t[]`t        if (exist != null) {
+2107`t[]`t            throw new UserAlreadyExistsException("该学号已注册");
+2108`t[]`t        }
+2110`t[]`t        // 1.1 校验邮箱是否存在
+2111`t[]`t        User existEmail = userService.lambdaQuery()
+2112`t[]`t                .eq(User::getEmail, req.getEmail())
+2113`t[]`t                .one();
+2114`t[]`t        if (existEmail != null) {
+2115`t[]`t            throw new RegisterException("该邮箱已被其它账号注册");
+2116`t[]`t        }
+2118`t[]`t        // 2. 创建用户实体
+2119`t[]`t        User user = new User();
+2121`t[]`t        user.setUsername(req.getUsername());
+2122`t[]`t        user.setPassword(passwordEncoder.encode(req.getPassword()));
+2123`t[]`t        user.setNickname(req.getNickname());
+2124`t[]`t        user.setAvatar(req.getAvatar());
+2125`t[]`t        user.setEmail(req.getEmail());
+2126`t[]`t        user.setMajor(req.getMajor());
+2127`t[]`t        user.setGrade(req.getGrade());
+2128`t[]`t        user.setGender(req.getGender());
+2129`t[]`t        user.setSchool(req.getSchool());
+2130`t[]`t        user.setRole(req.getRole());
+2131`t[]`t        user.setStatus(1); // 默认正常
+2133`t[]`t        // 3. 保存用户
+2134`t[]`t        boolean saved = userService.save(user);
+2135`t[]`t        if (!saved) {
+2136`t[]`t            throw new RegisterException("注册失败，请稍后重试");
+2137`t[]`t        }
+2139`t[]`t        // 4. 同步创建用户画像
+2140`t[]`t        userProfileService.createProfile(user.getId());
+2141`t[]`t    }
+2142`t[]`t2．用户登录代码
+2143`t[]`t@Override
+2144`t[]`t    public LoginResponse login(LoginReq req) {
+2146`t[]`t        // 0.1 检查账号是否被锁定
+2147`t[]`t        if (verificationCodeService.isLocked(req.getUsername())) {
+2148`t[]`t            long timeLeft = verificationCodeService.getLockTimeLeft(req.getUsername());
+2149`t[]`t            throw new LoginException("账号已被锁定，请 " + (timeLeft / 60 + 1) + " 分钟后再试");
+2150`t[]`t        }
+2152`t[]`t        // 0.2 强制校验图形验证码
+2153`t[]`t        if (!verificationCodeService.verifyCaptcha(req.getUuid(), req.getCode())) {
+2154`t[]`t            throw new LoginException("图形验证码错误或已失效");
+2155`t[]`t        }
+2157`t[]`t        // 0. 检查是否需要验证码
+2158`t[]`t        if (verificationCodeService.needVerificationCode(req.getUsername())) {
+2159`t[]`t            if (req.getCode() == null || req.getCode().trim().isEmpty()) {
+2160`t[]`t                throw new LoginException("登录失败次数过多，请输入验证码");
+2161`t[]`t            }
+2162`t[]`t            // 校验验证码
+2163`t[]`t            if (!verificationCodeService.verifyLoginCode(req.getUsername(), req.getCode())) {
+2164`t[]`t                throw new LoginException("验证码错误或已失效");
+2165`t[]`t            }
+2166`t[]`t        }
+2168`t[]`t        // 1. Token（账户密码封装）
+2169`t[]`t        UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(req.getUsername(),
+2170`t[]`t                req.getPassword());
+2172`t[]`t        // 2. SecurityManager 进行实际认证
+2173`t[]`t        Authentication authentication;
+2174`t[]`t        try {
+2175`t[]`t            authentication = authorizationManager.authenticate(authToken);
+2176`t[]`t        } catch (Exception e) {
+2177`t[]`t            // 登录失败，记录失败次数
+2178`t[]`t            int failCount = verificationCodeService.recordLoginFailure(req.getUsername());
+2179`t[]`t            if (failCount >= 3) {
+2180`t[]`t                long timeLeft = verificationCodeService.getLockTimeLeft(req.getUsername());
+2181`t[]`t                throw new LoginException("登录失败次数过多，账号已锁定，请 " + (timeLeft / 60 + 1) + " 分钟后再试");
+2182`t[]`t            }
+2183`t[]`t            throw new LoginException("登录失败，账号或密码错误（剩余尝试次数：" + (3 - failCount) + "）");
+2184`t[]`t        }
+2186`t[]`t        if (authentication == null || !authentication.isAuthenticated()) {
+2187`t[]`t            int failCount = verificationCodeService.recordLoginFailure(req.getUsername());
+2188`t[]`t            if (failCount >= 3) {
+2189`t[]`t                long timeLeft = verificationCodeService.getLockTimeLeft(req.getUsername());
+2190`t[]`t                throw new LoginException("登录失败次数过多，账号已锁定，请 " + (timeLeft / 60 + 1) + " 分钟后再试");
+2191`t[]`t            }
+2192`t[]`t            throw new LoginException("登录失败，账号或密码错误（剩余尝试次数：" + (3 - failCount) + "）");
+2193`t[]`t        }
+2195`t[]`t        // 3. 获取登录用户信息
+2196`t[]`t        AuthUser authUser = (AuthUser) authentication.getPrincipal();
+2197`t[]`t        User user = authUser.getUser();
+2199`t[]`t        // 登录成功，清除失败记录
+2200`t[]`t        verificationCodeService.clearLoginFailure(req.getUsername());
+2202`t[]`t        // 4. JWT 内容,构造自定义 JWT
+2203`t[]`t        Map<String, Object> claims = jwtUtil.buildClaims(user.getUsername(), user.getRole(), user.getAvatar());
+2205`t[]`t        // 5. 生成 Token ,并存入Redis
+2206`t[]`t        String AccessToken = jwtUtil.generateAccessToken(user.getId(), claims, req.isRememberMe());
+2207`t[]`t        String RefreshToken = jwtUtil.generateRefreshToken(user.getId(), claims);
+2208`t[]`t        LoginResponse response = new LoginResponse();
+2209`t[]`t        response.setAccessToken(AccessToken);
+2210`t[]`t        response.setRefreshToken(RefreshToken);
+2212`t[]`t        // 5.1 构建 Redis ，通过Key-用户ID，Value-token
+2213`t[]`t        stringRedisTemplate.opsForValue().set("access_token" + user.getId(), AccessToken);
+2214`t[]`t        stringRedisTemplate.opsForValue().set("refresh_token" + user.getId(), RefreshToken);
+2215`t[]`t        userService.checkAndUpgradeGrade(user);
+2217`t[]`t        return response;
+2218`t[]`t    }

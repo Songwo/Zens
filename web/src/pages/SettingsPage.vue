@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import MainLayout from '@/layouts/MainLayout.vue'
 import {
   Sunny, 
@@ -16,15 +16,22 @@ import {
   Edit
 } from '@element-plus/icons-vue'
 import { useUserStore } from '@/store/user'
+import { useUiStore } from '@/store/ui'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { userApi } from '@/api/user'
 import { authApi } from '@/api/auth'
+import { uploadApi } from '@/api/upload'
+import { UPLOAD_IMAGE_MAX_SIZE_BYTES, UPLOAD_IMAGE_MAX_SIZE_MB } from '@/constants/upload'
+import { CARD_THEME_OPTIONS, getCardThemePalette } from '@/utils/cardTheme'
+import { ensureCurrentUserProfile, patchCurrentUserProfile } from '@/utils/sessionProfile'
 
 const userStore = useUserStore()
+const uiStore = useUiStore()
 const router = useRouter()
 
-const theme = ref('light')
+// 与 uiStore 同步
+const theme = computed(() => uiStore.colorMode || (uiStore.isDark ? 'dark' : 'light'))
 const notifications = ref(true)
 const twoFactorEnabled = ref(false)
 
@@ -38,38 +45,57 @@ const profileForm = reactive({
   gender: 0,
   enrollmentYear: 2024,
   interestTags: '',
-  avatar: ''
+  avatar: '',
+  profileCardTheme: 'sunset',
+  quickCardTheme: 'ocean',
+  profileCardBgUrl: '',
+  quickCardBgUrl: ''
 })
+
+const cardThemeOptions = CARD_THEME_OPTIONS
+const profileCardBgUploading = ref(false)
+const quickCardBgUploading = ref(false)
+
+const applyProfileForm = (data: any) => {
+  if (!data) return
+  profileForm.nickname = data.nickname || ''
+  profileForm.bio = data.bio || ''
+  profileForm.school = data.school || ''
+  profileForm.major = data.major || ''
+  profileForm.gender = Number(data.gender) || 0
+  profileForm.enrollmentYear = data.enrollmentYear || 2024
+  profileForm.interestTags = data.interestTags || ''
+  profileForm.avatar = data.avatar || ''
+  profileForm.profileCardTheme = data.profileCardTheme || 'sunset'
+  profileForm.quickCardTheme = data.quickCardTheme || 'ocean'
+  profileForm.profileCardBgUrl = data.profileCardBgUrl || ''
+  profileForm.quickCardBgUrl = data.quickCardBgUrl || ''
+  twoFactorEnabled.value = Number(data.twoFactorEnabled || 0) === 1
+  notifications.value = Number(data.emailNotifyEnabled ?? 1) === 1
+}
+
+const getThemePreviewStyle = (themeKey: string, customBgUrl?: string) => {
+  const palette = getCardThemePalette(themeKey, 'sunset')
+  const normalizedUrl = String(customBgUrl || '').trim()
+  const hasCustomBg = /^https?:\/\/[^"'\s]+$/.test(normalizedUrl) || /^\/uploads\/[^"'\s]+$/.test(normalizedUrl)
+  return {
+    background: hasCustomBg
+      ? `linear-gradient(135deg, rgba(255,255,255,0.78), rgba(255,255,255,0.78)), url("${normalizedUrl}") center/cover no-repeat`
+      : palette.background,
+    borderColor: palette.borderColor
+  }
+}
 
 const loadProfile = async () => {
   try {
-    const res = await userApi.getProfile()
-    const data = res.data || res
+    const data = await ensureCurrentUserProfile()
     if (data) {
-      profileForm.nickname = data.nickname || ''
-      profileForm.bio = (data as any).bio || ''
-      profileForm.school = data.school || ''
-      profileForm.major = data.major || ''
-      profileForm.gender = Number(data.gender) || 0
-      profileForm.enrollmentYear = data.enrollmentYear || 2024
-      profileForm.interestTags = data.interestTags || ''
-      profileForm.avatar = data.avatar || ''
-      twoFactorEnabled.value = Number((data as any).twoFactorEnabled || 0) === 1
-      notifications.value = Number((data as any).emailNotifyEnabled ?? 1) === 1
+      applyProfileForm(data)
     }
   } catch {
-    // Song：说明
+    // 网络抖一下别把设置页整崩，优先兜底到当前内存里的用户信息。
     if (userStore.userInfo) {
-      profileForm.nickname = userStore.userInfo.nickname || ''
-      profileForm.bio = userStore.userInfo.bio || ''
-      profileForm.school = userStore.userInfo.school || ''
-      profileForm.major = userStore.userInfo.major || ''
-      profileForm.gender = Number(userStore.userInfo.gender) || 0
-      profileForm.enrollmentYear = userStore.userInfo.enrollmentYear || 2024
-      profileForm.interestTags = (userStore.userInfo as any).interestTags || ''
-      profileForm.avatar = userStore.userInfo.avatar || ''
-      twoFactorEnabled.value = Number((userStore.userInfo as any).twoFactorEnabled || 0) === 1
-      notifications.value = Number((userStore.userInfo as any).emailNotifyEnabled ?? 1) === 1
+      applyProfileForm(userStore.userInfo)
     }
   }
 }
@@ -96,15 +122,30 @@ const handleSaveProfile = async () => {
       gender: profileForm.gender,
       enrollmentYear: profileForm.enrollmentYear,
       interestTags: profileForm.interestTags || 'Java,Spring Boot,Vue3,Docker',
-      avatar: profileForm.avatar || userStore.userInfo?.avatar || ''
+      avatar: profileForm.avatar || userStore.userInfo?.avatar || '',
+      profileCardTheme: profileForm.profileCardTheme,
+      quickCardTheme: profileForm.quickCardTheme,
+      profileCardBgUrl: profileForm.profileCardBgUrl || '',
+      quickCardBgUrl: profileForm.quickCardBgUrl || ''
     })
     ElMessage.success('个人信息已更新')
-    // Song：说明
-    try {
-      const res = await userApi.getProfile()
-      const d = res.data || res
-      if (d) userStore.setUserInfo(d)
-    } catch {}
+    // 这里不再立刻回捞 /user/profile，更新接口刚走完，再补一枪只是在挤接口。
+    patchCurrentUserProfile({
+      nickname: profileForm.nickname,
+      bio: profileForm.bio,
+      school: profileForm.school,
+      major: profileForm.major,
+      gender: profileForm.gender,
+      enrollmentYear: profileForm.enrollmentYear,
+      interestTags: profileForm.interestTags || 'Java,Spring Boot,Vue3,Docker',
+      avatar: profileForm.avatar || userStore.userInfo?.avatar || '',
+      profileCardTheme: profileForm.profileCardTheme,
+      quickCardTheme: profileForm.quickCardTheme,
+      profileCardBgUrl: profileForm.profileCardBgUrl || '',
+      quickCardBgUrl: profileForm.quickCardBgUrl || '',
+      emailNotifyEnabled: notifications.value ? 1 : 0,
+      twoFactorEnabled: twoFactorEnabled.value ? 1 : 0,
+    } as any)
   } catch {
     ElMessage.error('更新失败，请重试')
   } finally {
@@ -114,22 +155,84 @@ const handleSaveProfile = async () => {
 
 const handleAvatarUpload = async (file: any) => {
   const rawFile = file.raw || file
+  if (!rawFile?.type?.startsWith?.('image/')) {
+    ElMessage.warning('请选择图片文件')
+    return
+  }
+  if (rawFile.size > UPLOAD_IMAGE_MAX_SIZE_BYTES) {
+    ElMessage.warning(`头像不能超过 ${UPLOAD_IMAGE_MAX_SIZE_MB}MB`)
+    return
+  }
   try {
     const res = await userApi.updateAvatar(rawFile)
-    const url = res.data || res
-    ElMessage.success('头像更新成功')
-    // Song：说明
-    if (userStore.userInfo) {
-      userStore.setUserInfo({ ...userStore.userInfo, avatar: url })
+    const url = typeof res?.data === 'string' ? res.data : ''
+    if (!url) {
+      throw new Error('头像地址为空')
     }
+    ElMessage.success('头像更新成功')
+    profileForm.avatar = url
+    patchCurrentUserProfile({ avatar: url } as any)
   } catch {
     ElMessage.error('头像上传失败')
   }
 }
 
 const setTheme = (t: string) => {
-  theme.value = t
+  uiStore.setColorMode(t as 'light' | 'dark' | 'system')
   ElMessage.success(`外观模式已切换为: ${t === 'light' ? '浅色' : t === 'dark' ? '深色' : '跟随系统'}`)
+}
+
+const uploadCardBg = async (file: File, target: 'profile' | 'quick') => {
+  if (!file.type.startsWith('image/')) {
+    ElMessage.warning('请选择图片文件')
+    return
+  }
+  if (file.size > UPLOAD_IMAGE_MAX_SIZE_BYTES) {
+    ElMessage.warning(`背景图不能超过 ${UPLOAD_IMAGE_MAX_SIZE_MB}MB`)
+    return
+  }
+
+  if (target === 'profile') profileCardBgUploading.value = true
+  if (target === 'quick') quickCardBgUploading.value = true
+  try {
+    const url = await uploadApi.uploadImage(file, 'profile-card')
+    if (!url) {
+      throw new Error('上传失败')
+    }
+    if (target === 'profile') {
+      profileForm.profileCardBgUrl = url
+    } else {
+      profileForm.quickCardBgUrl = url
+    }
+    ElMessage.success('背景图上传成功，记得点击保存修改')
+  } catch (e: any) {
+    if (!e?.response) {
+      ElMessage.error(e?.message || '背景图上传失败')
+    }
+  } finally {
+    if (target === 'profile') profileCardBgUploading.value = false
+    if (target === 'quick') quickCardBgUploading.value = false
+  }
+}
+
+const handleProfileCardBgUpload = async (file: any) => {
+  const rawFile = file?.raw || file
+  if (!rawFile) return
+  await uploadCardBg(rawFile, 'profile')
+}
+
+const handleQuickCardBgUpload = async (file: any) => {
+  const rawFile = file?.raw || file
+  if (!rawFile) return
+  await uploadCardBg(rawFile, 'quick')
+}
+
+const clearCustomBg = (target: 'profile' | 'quick') => {
+  if (target === 'profile') {
+    profileForm.profileCardBgUrl = ''
+  } else {
+    profileForm.quickCardBgUrl = ''
+  }
 }
 
 const handleNotificationSwitch = async (value: boolean) => {
@@ -193,12 +296,13 @@ const confirmEnableTwoFactor = async () => {
 
 const closeTwoFactor = async () => {
   try {
-    const { value } = await ElMessageBox.prompt('请输入谷歌验证器6位动态码', '关闭二步验证', {
+    const promptResult: any = await ElMessageBox.prompt('请输入谷歌验证器6位动态码', '关闭二步验证', {
       confirmButtonText: '关闭',
       cancelButtonText: '取消',
       inputPattern: /^[0-9]{6}$/,
       inputErrorMessage: '请输入6位数字验证码'
     })
+    const value = String(promptResult?.value || '')
     if (!value) return
     const res = await authApi.disableTwoFactor({ code: value })
     if (res.code !== 2000) {
@@ -392,6 +496,92 @@ onMounted(() => {
               <span class="theme-label">自动切换</span>
             </div>
           </div>
+
+          <div class="card-bg-config">
+            <div class="card-bg-title">资料卡背景</div>
+            <el-row :gutter="16">
+              <el-col :span="12" :xs="24">
+                <div class="bg-config-item">
+                  <span class="bg-label">个人资料卡片</span>
+                  <el-select v-model="profileForm.profileCardTheme" style="width: 100%">
+                    <el-option
+                      v-for="opt in cardThemeOptions"
+                      :key="`profile-${opt.key}`"
+                      :label="opt.label"
+                      :value="opt.key"
+                    />
+                  </el-select>
+                  <div class="bg-upload-row">
+                    <el-upload
+                      :auto-upload="false"
+                      :show-file-list="false"
+                      accept="image/*"
+                      @change="handleProfileCardBgUpload"
+                    >
+                      <el-button
+                        size="small"
+                        :icon="Upload"
+                        :loading="profileCardBgUploading"
+                      >
+                        {{ profileForm.profileCardBgUrl ? '更换背景图' : '上传背景图' }}
+                      </el-button>
+                    </el-upload>
+                    <el-button
+                      size="small"
+                      text
+                      :disabled="!profileForm.profileCardBgUrl"
+                      @click="clearCustomBg('profile')"
+                    >
+                      清空自定义图
+                    </el-button>
+                  </div>
+                  <div class="bg-preview" :style="getThemePreviewStyle(profileForm.profileCardTheme, profileForm.profileCardBgUrl)">
+                    个人资料卡片预览
+                  </div>
+                </div>
+              </el-col>
+              <el-col :span="12" :xs="24">
+                <div class="bg-config-item">
+                  <span class="bg-label">头像预览卡片</span>
+                  <el-select v-model="profileForm.quickCardTheme" style="width: 100%">
+                    <el-option
+                      v-for="opt in cardThemeOptions"
+                      :key="`quick-${opt.key}`"
+                      :label="opt.label"
+                      :value="opt.key"
+                    />
+                  </el-select>
+                  <div class="bg-upload-row">
+                    <el-upload
+                      :auto-upload="false"
+                      :show-file-list="false"
+                      accept="image/*"
+                      @change="handleQuickCardBgUpload"
+                    >
+                      <el-button
+                        size="small"
+                        :icon="Upload"
+                        :loading="quickCardBgUploading"
+                      >
+                        {{ profileForm.quickCardBgUrl ? '更换背景图' : '上传背景图' }}
+                      </el-button>
+                    </el-upload>
+                    <el-button
+                      size="small"
+                      text
+                      :disabled="!profileForm.quickCardBgUrl"
+                      @click="clearCustomBg('quick')"
+                    >
+                      清空自定义图
+                    </el-button>
+                  </div>
+                  <div class="bg-preview" :style="getThemePreviewStyle(profileForm.quickCardTheme, profileForm.quickCardBgUrl)">
+                    头像预览卡片预览
+                  </div>
+                </div>
+              </el-col>
+            </el-row>
+          </div>
         </el-card>
 
         <!-- Notifications -->
@@ -539,7 +729,7 @@ onMounted(() => {
 
 <style scoped>
 .settings-container {
-  max-width: 800px;
+  max-width: min(100%, var(--cp-profile-page-width, 1080px));
   margin: 0 auto;
   padding-bottom: 40px;
 }
@@ -614,6 +804,7 @@ onMounted(() => {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 16px;
+  margin-bottom: 18px;
 }
 
 .theme-item {
@@ -648,6 +839,44 @@ onMounted(() => {
 .theme-label {
   font-size: 12px;
   font-weight: 700;
+}
+
+.card-bg-config {
+  border-top: 1px dashed var(--el-border-color-lighter);
+  padding-top: 16px;
+}
+
+.card-bg-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--el-text-color-secondary);
+  margin-bottom: 12px;
+}
+
+.bg-config-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.bg-label {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+
+.bg-preview {
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 12px;
+  color: var(--el-text-color-primary);
+}
+
+.bg-upload-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 
 .setting-item {

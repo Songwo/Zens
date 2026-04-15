@@ -3,12 +3,18 @@ package com.campus.trend.campus_pulse.service.impl;
 import com.campus.trend.campus_pulse.service.CacheManagementService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.connection.RedisConnection;
+import org.springframework.data.redis.core.RedisCallback;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ScanOptions;
+import org.springframework.data.redis.core.Cursor;
 import org.springframework.stereotype.Service;
 
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 @Service
 @Slf4j
@@ -42,8 +48,8 @@ public class CacheManagementServiceImpl implements CacheManagementService {
     @Override
     public long clearCacheByPattern(String keyPattern) {
         try {
-            Set<String> keys = redisTemplate.keys(keyPattern);
-            if (keys != null && !keys.isEmpty()) {
+            List<String> keys = scanKeys(keyPattern);
+            if (!keys.isEmpty()) {
                 Long deletedCount = redisTemplate.delete(keys);
                 log.info("清除缓存模式 [{}]，共 {} 个键", keyPattern, deletedCount);
                 return deletedCount != null ? deletedCount : 0;
@@ -62,6 +68,10 @@ public class CacheManagementServiceImpl implements CacheManagementService {
         long tagHot = countCacheByPattern("tag:hot:*");
         long postFeed = countCacheByPattern("post:feed:cache:*");
         long postFeedVersion = countCacheByPattern("post:feed:version:*");
+        long postDetail = countCacheByPattern("post:detail:cache:*");
+        long postDetailVersion = countCacheByPattern("post:detail:version:*");
+        long postHeatRank = countCacheByPattern("post:heat:cache:*");
+        long postHeatRankVersion = countCacheByPattern("post:heat:version*");
         long userRecommend = countCacheByPattern("user:recommend:*");
 
         long legacyAccess = countCacheByPattern("access_token*");
@@ -78,6 +88,10 @@ public class CacheManagementServiceImpl implements CacheManagementService {
         overview.put("tagHot", tagHot);
         overview.put("postFeed", postFeed);
         overview.put("postFeedVersion", postFeedVersion);
+        overview.put("postDetail", postDetail);
+        overview.put("postDetailVersion", postDetailVersion);
+        overview.put("postHeatRank", postHeatRank);
+        overview.put("postHeatRankVersion", postHeatRankVersion);
         overview.put("userRecommend", userRecommend);
         overview.put("tokenTotal", tokenTotal);
         overview.put("captcha", captcha);
@@ -100,11 +114,31 @@ public class CacheManagementServiceImpl implements CacheManagementService {
     @Override
     public long countCacheByPattern(String keyPattern) {
         try {
-            Set<String> keys = redisTemplate.keys(keyPattern);
-            return keys == null ? 0L : keys.size();
+            return scanKeys(keyPattern).size();
         } catch (Exception e) {
             log.error("统计缓存失败: pattern={}, err={}", keyPattern, e.getMessage(), e);
             return 0L;
         }
+    }
+
+    private List<String> scanKeys(String keyPattern) {
+        List<String> keys = redisTemplate.execute((RedisCallback<List<String>>) connection -> doScan(connection, keyPattern));
+        return keys != null ? keys : List.of();
+    }
+
+    private List<String> doScan(RedisConnection connection, String keyPattern) {
+        List<String> keys = new ArrayList<>();
+        ScanOptions options = ScanOptions.scanOptions()
+                .match(keyPattern)
+                .count(500)
+                .build();
+        try (Cursor<byte[]> cursor = connection.scan(options)) {
+            while (cursor.hasNext()) {
+                keys.add(new String(cursor.next(), StandardCharsets.UTF_8));
+            }
+        } catch (Exception e) {
+            log.warn("SCAN缓存键失败: pattern={}, err={}", keyPattern, e.getMessage());
+        }
+        return keys;
     }
 }

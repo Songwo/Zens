@@ -12,6 +12,7 @@ const router = useRouter()
 const composerStore = usePostComposerStore()
 
 const showRightRail = ref(false)
+const shellReady = ref(false)
 
 const mobileNavItems = [
   { key: '/', label: '首页', icon: House, action: () => router.push('/') },
@@ -31,6 +32,10 @@ const activeMobileKey = computed(() => {
 })
 
 onMounted(() => {
+  requestAnimationFrame(() => {
+    shellReady.value = true
+  })
+
   const win = window as Window & {
     requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number
   }
@@ -55,7 +60,7 @@ onMounted(() => {
   <div class="page">
     <AppTopbar />
 
-    <div class="shell">
+    <div class="shell" :class="{ 'shell-ready': shellReady }">
       <div class="grid">
         <aside class="left hidden-sm-and-down">
           <LeftNav />
@@ -66,12 +71,14 @@ onMounted(() => {
         </main>
 
         <aside class="right hidden-md-and-down">
-          <template v-if="showRightRail">
-            <slot name="right-rail">
-              <RightRail />
-            </slot>
-          </template>
-          <div v-else class="right-rail-placeholder"></div>
+          <transition name="rail-float" mode="out-in" appear>
+            <div v-if="showRightRail" key="right-rail" class="right-rail-stage">
+              <slot name="right-rail">
+                <RightRail />
+              </slot>
+            </div>
+            <div v-else key="right-rail-placeholder" class="right-rail-placeholder"></div>
+          </transition>
         </aside>
       </div>
     </div>
@@ -103,13 +110,20 @@ onMounted(() => {
   max-width: var(--cp-shell-width);
   margin: 0 auto;
   padding: var(--cp-shell-padding);
-  transition: max-width 0.3s cubic-bezier(0.4, 0, 0.2, 1), padding 0.3s ease;
+  transition: max-width 0.3s cubic-bezier(0.4, 0, 0.2, 1), padding 0.3s ease, opacity 0.32s ease, transform 0.38s cubic-bezier(0.22, 1, 0.36, 1);
+  opacity: 0.94;
+  transform: translate3d(0, 10px, 0);
+}
+
+.shell-ready {
+  opacity: 1;
+  transform: translate3d(0, 0, 0);
 }
 
 .grid {
   display: grid;
-  grid-template-columns: 240px minmax(0, 1fr) 320px;
-  gap: 24px;
+  grid-template-columns: 220px minmax(0, 1fr) 300px;
+  gap: 20px;
   align-items: start;
 }
 
@@ -138,6 +152,16 @@ onMounted(() => {
 
 .right-rail-placeholder {
   height: 320px;
+  border-radius: 14px;
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.28) 50%, rgba(255, 255, 255, 0) 100%),
+    var(--el-fill-color-light);
+  background-size: 240px 100%, auto;
+  animation: rail-shimmer 1.5s ease-in-out infinite;
+}
+
+.right-rail-stage {
+  min-height: 160px;
 }
 
 .left::-webkit-scrollbar,
@@ -165,9 +189,29 @@ onMounted(() => {
   display: none;
 }
 
+.rail-float-enter-active,
+.rail-float-leave-active {
+  transition: opacity 0.28s ease, transform 0.34s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.rail-float-enter-from,
+.rail-float-leave-to {
+  opacity: 0;
+  transform: translate3d(0, 14px, 0);
+}
+
+@keyframes rail-shimmer {
+  0% {
+    background-position: -220px 0, 0 0;
+  }
+  100% {
+    background-position: calc(100% + 220px) 0, 0 0;
+  }
+}
+
 @media (max-width: 1100px) {
   .grid {
-    grid-template-columns: 240px minmax(0, 1fr);
+    grid-template-columns: 220px minmax(0, 1fr);
   }
 }
 

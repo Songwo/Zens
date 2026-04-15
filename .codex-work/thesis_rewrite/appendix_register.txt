@@ -1,0 +1,39 @@
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void register(RegisterReq req) {
+        if (inviteRequired && !StringUtils.hasText(req.getInviteCode())) {
+            throw new RegisterException("注册需要邀请码");
+        }
+        if (!verificationCodeService.verifyCode(req.getEmail(), req.getCode())) {
+            throw new RegisterException("验证码错误或已失效");
+        }
+        User exist = userService.lambdaQuery()
+                .eq(User::getUsername, req.getUsername())
+                .one();
+        if (exist != null) {
+            throw new UserAlreadyExistsException("该用户名已被注册");
+        }
+        User existEmail = userService.lambdaQuery()
+                .eq(User::getEmail, req.getEmail())
+                .one();
+        if (existEmail != null) {
+            throw new RegisterException("该邮箱已被其它账号注册");
+        }
+        User user = new User();
+        user.setUsername(req.getUsername());
+        user.setPassword(passwordEncoder.encode(req.getPassword()));
+        user.setEmail(req.getEmail());
+        user.setNickname(req.getNickname());
+        user.setMajor(req.getMajor());
+        user.setEnrollmentYear(req.getGrade());
+        user.setRole("ROLE_USER");
+        user.setStatus(1);
+        user.setTwoFactorEnabled(0);
+        boolean saved = userService.save(user);
+        if (!saved) {
+            throw new RegisterException("注册失败，请稍后重试");
+        }
+        if (StringUtils.hasText(req.getInviteCode())) {
+            inviteCodeService.consume(req.getInviteCode(), user.getId());
+        }
+    }

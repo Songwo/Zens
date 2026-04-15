@@ -10,8 +10,10 @@ import com.campus.trend.campus_pulse.dto.request.TwoFactorLoginVerifyReq;
 import com.campus.trend.campus_pulse.dto.request.TwoFactorToggleReq;
 import com.campus.trend.campus_pulse.entity.User;
 import com.campus.trend.campus_pulse.service.AuthService;
+import com.campus.trend.campus_pulse.service.TurnstileService;
 import com.campus.trend.campus_pulse.service.UserService;
 import com.campus.trend.campus_pulse.service.VerificationCodeService;
+import com.campus.trend.campus_pulse.utils.ClientIpUtils;
 import com.campus.trend.campus_pulse.utils.JwtUtil;
 import com.campus.trend.campus_pulse.utils.SecurityUtils;
 import jakarta.validation.Valid;
@@ -28,15 +30,18 @@ import java.util.Map;
 public class AuthController {
 
     private final AuthService authService;
+    private final TurnstileService turnstileService;
     private final VerificationCodeService verificationCodeService;
     private final UserService userService;
     private final JwtUtil jwtUtil;
 
     public AuthController(AuthService authService,
+            TurnstileService turnstileService,
             VerificationCodeService verificationCodeService,
             UserService userService,
             JwtUtil jwtUtil) {
         this.authService = authService;
+        this.turnstileService = turnstileService;
         this.verificationCodeService = verificationCodeService;
         this.userService = userService;
         this.jwtUtil = jwtUtil;
@@ -122,6 +127,7 @@ public class AuthController {
             @RequestBody LoginReq loginRequest,
             @RequestHeader(value = "X-Device-Id", required = false) String deviceId,
             HttpServletRequest request) {
+        turnstileService.verifyLoginToken(loginRequest.getCfTurnstileResponse(), resolveClientIp(request));
         return Result.success(authService.login(loginRequest, deviceId, resolveClientIp(request)));
     }
 
@@ -226,22 +232,6 @@ public class AuthController {
     }
 
     private String resolveClientIp(HttpServletRequest request) {
-        String xForwardedFor = request.getHeader("X-Forwarded-For");
-        if (xForwardedFor != null && !xForwardedFor.isBlank()) {
-            String[] parts = xForwardedFor.split(",");
-            if (parts.length > 0) {
-                String ip = parts[0].trim();
-                if (!ip.isEmpty() && !"unknown".equalsIgnoreCase(ip)) {
-                    return ip;
-                }
-            }
-        }
-
-        String realIp = request.getHeader("X-Real-IP");
-        if (realIp != null && !realIp.isBlank() && !"unknown".equalsIgnoreCase(realIp)) {
-            return realIp.trim();
-        }
-
-        return request.getRemoteAddr();
+        return ClientIpUtils.resolveClientIp(request);
     }
 }

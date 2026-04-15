@@ -29,6 +29,8 @@ public enum ResultCode {
     // Song：5000开头：资源问题
     USER_NOT_FOUND(5001, "用户不存在"),
     POST_NOT_FOUND(5002, "帖子不存在"),
+    SECTION_NOT_FOUND(5007, "板块不存在"),
+    DRAFT_NOT_FOUND(5008, "草稿不存在"),
     USERNAME_ALREADY_EXISTED(5003,"用户已经存在"),
     FILE_IS_NULL(5004,"文件为空"),
     FILE_NAME_FAIL(5005,"文件名不合法"),

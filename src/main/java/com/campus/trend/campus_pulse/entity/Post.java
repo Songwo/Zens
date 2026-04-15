@@ -131,6 +131,11 @@ public class Post implements Serializable {
     private LocalDateTime updateTime;
 
     /**
+     * 审核打回原因
+     */
+    private String rejectReason;
+
+    /**
      * Song：当前用户是否已点赞
      */
     @TableField(exist = false)

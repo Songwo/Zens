@@ -20,6 +20,7 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.util.StringUtils;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -52,9 +53,65 @@ public class UserController {
         return Result.success(userService.getSimpleProfile());
     }
 
-    @GetMapping("/test")
-    public String Test() {
-        return "test";
+    @GetMapping("/public/{userId}")
+    public Result<?> getPublicProfile(@PathVariable String userId) {
+        User user = userService.getById(userId);
+        if (user == null || (user.getStatus() != null && user.getStatus() != 1)) {
+            return Result.failed("用户不存在");
+        }
+
+        Long postCount = postMapper.selectCount(
+                new LambdaQueryWrapper<Post>()
+                        .eq(Post::getUserId, userId)
+                        .eq(Post::getStatus, 1));
+
+        Long followingCount = followMapper.selectCount(
+                new LambdaQueryWrapper<Follow>()
+                        .eq(Follow::getFollowerId, userId));
+
+        Long followerCount = followMapper.selectCount(
+                new LambdaQueryWrapper<Follow>()
+                        .eq(Follow::getFolloweeId, userId));
+
+        Map<String, Object> data = new HashMap<>();
+        data.put("id", user.getId());
+        data.put("username", user.getUsername());
+        data.put("nickname", StringUtils.hasText(user.getNickname()) ? user.getNickname() : user.getUsername());
+        data.put("avatar", user.getAvatar());
+        data.put("bio", user.getBio());
+        data.put("school", user.getSchool());
+        data.put("major", user.getMajor());
+        data.put("level", user.getLevel());
+        data.put("roles", List.of(StringUtils.hasText(user.getRole()) ? user.getRole() : "ROLE_USER"));
+        data.put("postCount", postCount != null ? postCount : 0);
+        data.put("followingCount", followingCount != null ? followingCount : 0);
+        data.put("followerCount", followerCount != null ? followerCount : 0);
+        data.put("profileCardTheme", StringUtils.hasText(user.getProfileCardTheme()) ? user.getProfileCardTheme() : "sunset");
+        data.put("quickCardTheme", StringUtils.hasText(user.getQuickCardTheme()) ? user.getQuickCardTheme() : "ocean");
+        data.put("profileCardBgUrl", normalizeCardBgUrl(user.getProfileCardBgUrl()));
+        data.put("quickCardBgUrl", normalizeCardBgUrl(user.getQuickCardBgUrl()));
+
+        return Result.success(data);
+    }
+
+    @GetMapping("/search")
+    public Result<?> searchUsers(@RequestParam(defaultValue = "") String keyword) {
+        List<User> users = userService.lambdaQuery()
+                .and(!keyword.isBlank(), q -> q
+                        .like(User::getNickname, keyword)
+                        .or().like(User::getUsername, keyword))
+                .eq(User::getStatus, 1)
+                .last("LIMIT 10")
+                .list();
+        List<Map<String, Object>> result = users.stream().map(u -> {
+            Map<String, Object> m = new HashMap<>();
+            m.put("id", u.getId());
+            m.put("username", u.getUsername());
+            m.put("nickname", StringUtils.hasText(u.getNickname()) ? u.getNickname() : u.getUsername());
+            m.put("avatar", u.getAvatar());
+            return m;
+        }).toList();
+        return Result.success(result);
     }
 
     @GetMapping("/all")
@@ -63,7 +120,7 @@ public class UserController {
     }
 
     @PutMapping("/avatar")
-    public Result<?> updateAvatar(@RequestPart("avatar") MultipartFile file) {
+    public Result<?> updateAvatar(@RequestParam("avatar") MultipartFile file) {
         String url = userService.uploadAvatar(file);
         return Result.success(url);
     }
@@ -174,6 +231,23 @@ public class UserController {
         return Result.success(data);
     }
 
+    private String normalizeCardBgUrl(String raw) {
+        if (!StringUtils.hasText(raw)) {
+            return null;
+        }
+        String value = raw.trim();
+        if (value.length() > 500) {
+            return null;
+        }
+        if (value.contains("\"") || value.contains("'") || value.contains(" ")) {
+            return null;
+        }
+        if (value.startsWith("http://") || value.startsWith("https://") || value.startsWith("/uploads/")) {
+            return value;
+        }
+        return null;
+    }
+
     // Song：=================== 管理员接口 ===================
 
     /**
@@ -182,9 +256,18 @@ public class UserController {
      */
     @PostMapping("/ban/{id}")
     public Result<?> banUser(@PathVariable String id) {
+        if (!com.campus.trend.campus_pulse.utils.PermissionUtils.isAdmin()) {
+            return Result.failed("无权执行此操作");
+        }
         com.campus.trend.campus_pulse.entity.User user = userService.getById(id);
         if (user == null) {
             return Result.failed("用户不存在");
+        }
+        // Song：不能封禁同级或上级用户
+        String operatorRole = com.campus.trend.campus_pulse.utils.PermissionUtils.getCurrentUserRole();
+        String targetRole = user.getRole() != null ? user.getRole() : "ROLE_USER";
+        if (!com.campus.trend.campus_pulse.utils.PermissionUtils.canManageRole(operatorRole, targetRole)) {
+            return Result.failed("无权封禁该用户：对方角色等级不低于您");
         }
         user.setStatus(2); // Song：2=封禁
         user.setUpdateTime(java.time.LocalDateTime.now());
@@ -198,9 +281,17 @@ public class UserController {
      */
     @PostMapping("/unban/{id}")
     public Result<?> unbanUser(@PathVariable String id) {
+        if (!com.campus.trend.campus_pulse.utils.PermissionUtils.isAdmin()) {
+            return Result.failed("无权执行此操作");
+        }
         com.campus.trend.campus_pulse.entity.User user = userService.getById(id);
         if (user == null) {
             return Result.failed("用户不存在");
+        }
+        String operatorRole = com.campus.trend.campus_pulse.utils.PermissionUtils.getCurrentUserRole();
+        String targetRole = user.getRole() != null ? user.getRole() : "ROLE_USER";
+        if (!com.campus.trend.campus_pulse.utils.PermissionUtils.canManageRole(operatorRole, targetRole)) {
+            return Result.failed("无权解封该用户：对方角色等级不低于您");
         }
         user.setStatus(1); // Song：1=正常
         user.setUpdateTime(java.time.LocalDateTime.now());
@@ -214,9 +305,21 @@ public class UserController {
      */
     @DeleteMapping("/{id}")
     public Result<?> deleteUser(@PathVariable String id) {
+        if (!com.campus.trend.campus_pulse.utils.PermissionUtils.isAdmin()) {
+            return Result.failed("无权执行此操作");
+        }
+        com.campus.trend.campus_pulse.entity.User user = userService.getById(id);
+        if (user == null) {
+            return Result.failed("用户不存在或删除失败");
+        }
+        String operatorRole = com.campus.trend.campus_pulse.utils.PermissionUtils.getCurrentUserRole();
+        String targetRole = user.getRole() != null ? user.getRole() : "ROLE_USER";
+        if (!com.campus.trend.campus_pulse.utils.PermissionUtils.canManageRole(operatorRole, targetRole)) {
+            return Result.failed("无权删除该用户：对方角色等级不低于您");
+        }
         boolean removed = userService.removeById(id);
         if (!removed) {
-            return Result.failed("用户不存在或删除失败");
+            return Result.failed("删除失败");
         }
         return Result.success();
     }
@@ -227,6 +330,9 @@ public class UserController {
      */
     @PostMapping("/{userId}/role")
     public Result<?> assignRole(@PathVariable String userId, @RequestParam String roleCode) {
+        if (!com.campus.trend.campus_pulse.utils.PermissionUtils.isAdmin()) {
+            return Result.failed("无权执行此操作");
+        }
         try {
             userService.assignRole(userId, roleCode);
             return Result.success();

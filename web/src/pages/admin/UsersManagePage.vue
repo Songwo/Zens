@@ -1,19 +1,67 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Search, Delete, Lock, Unlock } from '@element-plus/icons-vue'
+import { Search, Delete, Lock, Unlock, UserFilled } from '@element-plus/icons-vue'
 import api from '@/lib/api'
+import { useUserStore } from '@/store/user'
 
+const userStore = useUserStore()
 const users = ref<any[]>([])
 const loading = ref(true)
 const searchKeyword = ref('')
+const roleDialogVisible = ref(false)
+const roleDialogUser = ref<any>(null)
+const selectedRole = ref('')
+
+const ROLE_LEVEL: Record<string, number> = {
+  'ROLE_USER': 1,
+  'ROLE_MODERATOR': 2,
+  'ROLE_ADMIN': 3,
+  'ROLE_SUPER_ADMIN': 4
+}
+
+const currentUserRole = computed(() => {
+  const roles = userStore.userInfo?.roles || []
+  let maxLevel = 0
+  let maxRole = 'ROLE_USER'
+  for (const r of roles) {
+    const level = ROLE_LEVEL[r] || 0
+    if (level > maxLevel) {
+      maxLevel = level
+      maxRole = r
+    }
+  }
+  return maxRole
+})
+
+const currentUserLevel = computed(() => ROLE_LEVEL[currentUserRole.value] || 0)
+
+const availableRoles = computed(() => {
+  const all = [
+    { value: 'ROLE_USER', label: '普通用户', level: 1 },
+    { value: 'ROLE_ADMIN', label: '管理员', level: 3 },
+    { value: 'ROLE_SUPER_ADMIN', label: '超级管理员', level: 4 },
+  ]
+  return all.filter(r => r.level < currentUserLevel.value)
+})
+
+const canOperateUser = (user: any) => {
+  if (user.id === userStore.userId) return false
+  const targetRole = (user.roles && user.roles[0]) || 'ROLE_USER'
+  return currentUserLevel.value > (ROLE_LEVEL[targetRole] || 0)
+}
+
+const isSelf = (user: any) => user.id === userStore.userId
+
+const isSuperAdmin = (user: any) => {
+  return (user.roles || []).includes('ROLE_SUPER_ADMIN')
+}
 
 const fetchUsers = async () => {
   loading.value = true
   try {
     const res = await api.get<any, any>('/user/all')
     const userList = res.data || res || []
-    // Song：说明
     users.value = userList.map((user: any) => ({
       ...user,
       roles: user.roles || []
@@ -47,7 +95,7 @@ const handleBan = async (user: any) => {
     ElMessage.success('用户已封禁')
     fetchUsers()
   } catch (e: any) {
-    if (e !== 'cancel') ElMessage.error('操作失败')
+    if (e !== 'cancel') ElMessage.error(e?.response?.data?.message || '操作失败')
   }
 }
 
@@ -56,8 +104,8 @@ const handleUnban = async (user: any) => {
     await api.post(`/user/unban/${user.id}`)
     ElMessage.success('用户已解封')
     fetchUsers()
-  } catch {
-    ElMessage.error('操作失败')
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '操作失败')
   }
 }
 
@@ -72,7 +120,27 @@ const handleDelete = async (user: any) => {
     ElMessage.success('用户已删除')
     fetchUsers()
   } catch (e: any) {
-    if (e !== 'cancel') ElMessage.error('操作失败')
+    if (e !== 'cancel') ElMessage.error(e?.response?.data?.message || '操作失败')
+  }
+}
+
+const openRoleDialog = (user: any) => {
+  roleDialogUser.value = user
+  selectedRole.value = (user.roles && user.roles[0]) || 'ROLE_USER'
+  roleDialogVisible.value = true
+}
+
+const submitRoleChange = async () => {
+  if (!roleDialogUser.value) return
+  try {
+    await api.post(`/user/${roleDialogUser.value.id}/role`, null, {
+      params: { roleCode: selectedRole.value }
+    })
+    ElMessage.success('角色设置成功')
+    roleDialogVisible.value = false
+    fetchUsers()
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '角色设置失败')
   }
 }
 
@@ -91,7 +159,7 @@ const getRoleLabel = (role: string) => {
   const roleMap: Record<string, string> = {
     'ROLE_SUPER_ADMIN': '超级管理员',
     'ROLE_ADMIN': '管理员',
-    'ROLE_MODERATOR': '版主',
+    'ROLE_MODERATOR': '旧版全局版主',
     'ROLE_USER': '普通用户'
   }
   return roleMap[role] || role
@@ -117,7 +185,12 @@ onMounted(() => {
 
     <el-table :data="filteredUsers()" v-loading="loading" stripe border class="data-table">
       <el-table-column prop="id" label="ID" width="180" show-overflow-tooltip />
-      <el-table-column prop="username" label="用户名" width="140" />
+      <el-table-column prop="username" label="用户名" width="140">
+        <template #default="{ row }">
+          {{ row.username }}
+          <el-tag v-if="isSelf(row)" size="small" type="primary" style="margin-left: 4px;">（我）</el-tag>
+        </template>
+      </el-table-column>
       <el-table-column prop="nickname" label="昵称" width="140" />
       <el-table-column prop="email" label="邮箱" min-width="180" show-overflow-tooltip />
       <el-table-column prop="roles" label="角色" width="150">
@@ -148,40 +221,92 @@ onMounted(() => {
           {{ formatDate(row.createTime) }}
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="200" fixed="right">
+      <el-table-column label="操作" width="280" fixed="right">
         <template #default="{ row }">
-          <el-button
-            v-if="row.status !== 0"
-            size="small"
-            type="warning"
-            plain
-            :icon="Lock"
-            @click="handleBan(row)"
+          <el-tooltip
+            :disabled="canOperateUser(row)"
+            :content="isSelf(row) ? '不能操作自己' : isSuperAdmin(row) ? '无法操作超级管理员' : '无权操作该用户'"
           >
-            封禁
-          </el-button>
-          <el-button
-            v-else
-            size="small"
-            type="success"
-            plain
-            :icon="Unlock"
-            @click="handleUnban(row)"
+            <el-button
+              size="small"
+              type="primary"
+              plain
+              :icon="UserFilled"
+              :disabled="!canOperateUser(row)"
+              @click="openRoleDialog(row)"
+            >
+              设置角色
+            </el-button>
+          </el-tooltip>
+
+          <el-tooltip
+            :disabled="canOperateUser(row)"
+            :content="isSelf(row) ? '不能操作自己' : isSuperAdmin(row) ? '无法操作超级管理员' : '无权操作该用户'"
           >
-            解封
-          </el-button>
-          <el-button
-            size="small"
-            type="danger"
-            plain
-            :icon="Delete"
-            @click="handleDelete(row)"
+            <el-button
+              v-if="row.status !== 0"
+              size="small"
+              type="warning"
+              plain
+              :icon="Lock"
+              :disabled="!canOperateUser(row)"
+              @click="handleBan(row)"
+            >
+              封禁
+            </el-button>
+            <el-button
+              v-else
+              size="small"
+              type="success"
+              plain
+              :icon="Unlock"
+              :disabled="!canOperateUser(row)"
+              @click="handleUnban(row)"
+            >
+              解封
+            </el-button>
+          </el-tooltip>
+
+          <el-tooltip
+            :disabled="canOperateUser(row)"
+            :content="isSelf(row) ? '不能操作自己' : isSuperAdmin(row) ? '无法操作超级管理员' : '无权操作该用户'"
           >
-            删除
-          </el-button>
+            <el-button
+              size="small"
+              type="danger"
+              plain
+              :icon="Delete"
+              :disabled="!canOperateUser(row)"
+              @click="handleDelete(row)"
+            >
+              删除
+            </el-button>
+          </el-tooltip>
         </template>
       </el-table-column>
     </el-table>
+
+    <!-- 角色设置弹窗 -->
+    <el-dialog v-model="roleDialogVisible" title="设置用户角色" width="400px" append-to-body>
+      <div style="margin-bottom: 12px; color: var(--el-text-color-secondary); font-size: 14px;">
+        用户：{{ roleDialogUser?.nickname || roleDialogUser?.username }}
+      </div>
+      <div style="margin-bottom: 12px; color: var(--el-text-color-placeholder); font-size: 13px;">
+        全局版主角色已停用，板块版主权限需通过版主申请流程授予。
+      </div>
+      <el-select v-model="selectedRole" placeholder="选择角色" style="width: 100%;">
+        <el-option
+          v-for="r in availableRoles"
+          :key="r.value"
+          :label="r.label"
+          :value="r.value"
+        />
+      </el-select>
+      <template #footer>
+        <el-button @click="roleDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="submitRoleChange">确定</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 

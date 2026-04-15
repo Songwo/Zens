@@ -9,6 +9,7 @@ import com.campus.trend.campus_pulse.mapper.PostMapper;
 import com.campus.trend.campus_pulse.mapper.ViewLogMapper;
 import com.campus.trend.campus_pulse.service.ViewLogService;
 import com.campus.trend.campus_pulse.service.LevelService;
+import com.campus.trend.campus_pulse.service.PostEventService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
@@ -28,32 +29,52 @@ import java.util.stream.Collectors;
 public class ViewLogServiceImpl extends ServiceImpl<ViewLogMapper, ViewLog>
         implements ViewLogService {
 
+    private static final String POST_FEED_CACHE_GLOBAL_VERSION_KEY = "post:feed:version:global";
+    private static final String POST_FEED_CACHE_SECTION_VERSION_KEY_PREFIX = "post:feed:version:section:";
+    private static final String POST_DETAIL_CACHE_VERSION_KEY_PREFIX = "post:detail:version:";
+    private static final String POST_HEAT_RANK_VERSION_KEY = "post:heat:version";
+
     private final LevelService levelService;
     private final StringRedisTemplate stringRedisTemplate;
     private final PostMapper postMapper;
+    private final PostEventService postEventService;
 
-    public ViewLogServiceImpl(LevelService levelService, StringRedisTemplate stringRedisTemplate, PostMapper postMapper) {
+    public ViewLogServiceImpl(LevelService levelService, StringRedisTemplate stringRedisTemplate, PostMapper postMapper,
+            PostEventService postEventService) {
         this.levelService = levelService;
         this.stringRedisTemplate = stringRedisTemplate;
         this.postMapper = postMapper;
+        this.postEventService = postEventService;
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void recordView(String postId, String userId, String ip, String device) {
+        LocalDateTime now = LocalDateTime.now();
         ViewLog viewLog = new ViewLog()
                 .setPostId(postId)
                 .setUserId(userId)
                 .setIp(ip)
                 .setDevice(device)
-                .setCreateTime(LocalDateTime.now());
+                .setCreateTime(now);
 
         save(viewLog);
-        // Song：浏览量累计放在埋点接口，避免阻塞帖子详情查询
+        // Song：浏览量累计与活跃时间刷新放在埋点接口，避免阻塞帖子详情查询
         postMapper.update(null, new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<Post>()
                 .eq(Post::getId, postId)
+                .set(Post::getLastActivityAt, now)
                 .setSql("view_count = view_count + 1"));
         log.debug("记录浏览: 帖子[{}], 用户[{}]", postId, userId != null ? userId : "游客");
+
+        Post post = postMapper.selectById(postId);
+        if (post != null) {
+            invalidatePostFeedCache(post.getSectionId(), postId);
+            try {
+                postEventService.pushPostViewed(postId, post.getSectionId(), post.getViewCount(), post.getLastActivityAt());
+            } catch (Exception e) {
+                log.debug("推送浏览事件失败: postId={}, err={}", postId, e.getMessage());
+            }
+        }
 
         // Song：每日浏览经验 +1（上限5次/天）
         if (userId != null) {
@@ -190,6 +211,21 @@ public class ViewLogServiceImpl extends ServiceImpl<ViewLogMapper, ViewLog>
         }
 
         return count;
+    }
+
+    private void invalidatePostFeedCache(Long sectionId, String postId) {
+        try {
+            stringRedisTemplate.opsForValue().increment(POST_FEED_CACHE_GLOBAL_VERSION_KEY);
+            stringRedisTemplate.opsForValue().increment(POST_HEAT_RANK_VERSION_KEY);
+            if (sectionId != null) {
+                stringRedisTemplate.opsForValue().increment(POST_FEED_CACHE_SECTION_VERSION_KEY_PREFIX + sectionId);
+            }
+            if (postId != null && !postId.isBlank()) {
+                stringRedisTemplate.opsForValue().increment(POST_DETAIL_CACHE_VERSION_KEY_PREFIX + postId);
+            }
+        } catch (Exception ignored) {
+            // Song：不影响浏览主流程
+        }
     }
 
 }

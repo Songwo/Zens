@@ -18,14 +18,14 @@ public class PostCreateReq {
      * Song：文章题目
      */
     @NotBlank(message = "文章题目不允许为空")
-    @Size(min = 5, max = 100, message = "文章题目长度需在5-100字符之间")
+    @Size(min = 4, max = 100, message = "文章题目需超过3个字符且不超过100个字符")
     private String title;
 
     /**
      * Song：文章内容
      */
     @NotBlank(message = "文章内容不允许为空")
-    @Size(min = 30, message = "文章内容最小为30字符")
+    @Size(min = 31, message = "文章内容需超过30个字符")
     private String content;
 
     /**

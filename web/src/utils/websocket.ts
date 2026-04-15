@@ -28,7 +28,7 @@ export interface NotificationEvent {
   type: string
   title: string
   content: string
-  relatedId?: number
+  relatedId?: string | number
   relatedUserId?: string
   relatedUserNickname?: string
   relatedUserAvatar?: string
@@ -43,8 +43,12 @@ class WebSocketClient {
   private client: CompatClient | null = null
   private connected = false
   private reconnectAttempts = 0
-  private maxReconnectAttempts = 5
-  private reconnectDelay = 3000
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null
+  private connectingPromise: Promise<void> | null = null
+  private shouldReconnect = true
+  private readonly reconnectBaseDelay = 1500
+  private readonly reconnectMaxDelay = 30000
+  private lastHiddenAt = 0
   private handlers: Map<string, Set<PostEventHandler | NotificationEventHandler>> = new Map()
   private subscriptions: Map<string, any> = new Map()
   private currentUserId: string | null = null
@@ -52,30 +56,149 @@ class WebSocketClient {
 
   constructor(baseUrl: string = '/api/ws') {
     this.baseUrl = baseUrl
+    this.bindLifecycleListeners()
+  }
+
+  private readonly handleOnline = () => {
+    this.resumeConnection(true)
+  }
+
+  private readonly handleOffline = () => {
+    if (this.connected) {
+      console.warn('[WebSocket] 网络离线，等待网络恢复后重连')
+    }
+  }
+
+  private readonly handleVisibilityChange = () => {
+    if (typeof document === 'undefined') {
+      return
+    }
+
+    if (document.hidden) {
+      this.lastHiddenAt = Date.now()
+      return
+    }
+
+    const hiddenDuration = this.lastHiddenAt ? Date.now() - this.lastHiddenAt : 0
+    if (hiddenDuration >= 45000) {
+      this.resumeConnection(true)
+      return
+    }
+    this.resumeConnection(false)
+  }
+
+  private bindLifecycleListeners() {
+    if (typeof window === 'undefined') {
+      return
+    }
+    window.addEventListener('online', this.handleOnline)
+    window.addEventListener('offline', this.handleOffline)
+    document.addEventListener('visibilitychange', this.handleVisibilityChange)
+  }
+
+  private clearReconnectTimer() {
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer)
+      this.reconnectTimer = null
+    }
+  }
+
+  private nextReconnectDelay() {
+    const exponential = this.reconnectBaseDelay * Math.pow(2, Math.min(this.reconnectAttempts, 6))
+    const jitter = Math.floor(Math.random() * 1000)
+    return Math.min(this.reconnectMaxDelay, exponential + jitter)
+  }
+
+  private resetTransportConnection() {
+    const currentClient = this.client
+    this.client = null
+    this.connected = false
+    this.subscriptions.clear()
+
+    if (currentClient) {
+      try {
+        currentClient.disconnect(() => {
+          // noop
+        })
+      } catch {
+        // ignore transport teardown failures
+      }
+    }
+  }
+
+  private scheduleReconnect(immediate = false) {
+    if (!this.shouldReconnect || this.connected || this.connectingPromise || this.reconnectTimer || this.handlers.size === 0) {
+      return
+    }
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      console.warn('[WebSocket] 当前离线，等待网络恢复后重连')
+      return
+    }
+
+    const delay = immediate ? 0 : this.nextReconnectDelay()
+    console.log(`[WebSocket] ${delay === 0 ? '立即' : `${delay}ms 后`}尝试重连...`)
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null
+      if (!this.shouldReconnect || this.connected || this.connectingPromise) {
+        return
+      }
+      this.reconnectAttempts++
+      this.connect().catch(() => {
+        // Song：连接失败后将由 connect 内部继续调度
+      })
+    }, delay)
   }
 
   connect(): Promise<void> {
-    return new Promise((resolve, reject) => {
-      if (this.connected) {
-        resolve()
-        return
-      }
+    if (this.connected) {
+      return Promise.resolve()
+    }
+    if (this.connectingPromise) {
+      return this.connectingPromise as Promise<void>
+    }
 
+    this.shouldReconnect = true
+    this.clearReconnectTimer()
+    this.connectingPromise = new Promise<void>((resolve, reject) => {
       try {
         this.client = Stomp.over(() => new SockJS(this.baseUrl))
         const connectHeaders: Record<string, string> = {}
         if (this.currentUserId) {
           connectHeaders['X-User-Id'] = this.currentUserId
         }
+        // 发送 JWT token，让后端能识别用户 Principal
+        const token = localStorage.getItem('access_token') || sessionStorage.getItem('access_token')
+        if (token) {
+          connectHeaders['Authorization'] = `Bearer ${token}`
+        }
 
         // Song：禁用调试日志（生产环境）
         this.client.debug = () => {}
+        this.client.heartbeat.outgoing = 20000
+        this.client.heartbeat.incoming = 20000
+        const compatClient = this.client as CompatClient & {
+          onWebSocketClose?: (event?: CloseEvent) => void
+          onStompError?: (frame: any) => void
+        }
+        compatClient.onWebSocketClose = () => {
+          const wasConnected = this.connected
+          this.connected = false
+          this.subscriptions.clear()
+          if (wasConnected) {
+            console.warn('[WebSocket] 连接中断，准备重连')
+          }
+          this.scheduleReconnect()
+        }
+        compatClient.onStompError = (frame) => {
+          console.error('[WebSocket] STOMP 错误:', frame)
+        }
 
         this.client.connect(
           connectHeaders,
           () => {
             this.connected = true
             this.reconnectAttempts = 0
+            this.clearReconnectTimer()
             console.log('[WebSocket] 连接成功')
 
             // Song：等待下一个事件循环再重新订阅，确保连接完全就绪
@@ -88,40 +211,58 @@ class WebSocketClient {
           (error: any) => {
             console.error('[WebSocket] 连接失败:', error)
             this.connected = false
-            this.handleReconnect()
+            this.scheduleReconnect()
             reject(error)
           }
         )
       } catch (error) {
         console.error('[WebSocket] 初始化失败:', error)
+        this.scheduleReconnect()
         reject(error)
       }
+    }).finally(() => {
+      this.connectingPromise = null
     })
+
+    return this.connectingPromise as Promise<void>
   }
 
   disconnect() {
-    if (this.client && this.connected) {
+    this.shouldReconnect = false
+    this.clearReconnectTimer()
+    this.reconnectAttempts = 0
+
+    if (this.client) {
       this.client.disconnect(() => {
         console.log('[WebSocket] 已断开连接')
       })
-      this.connected = false
-      this.subscriptions.clear()
     }
+
+    this.client = null
+    this.connected = false
+    this.connectingPromise = null
+    this.subscriptions.clear()
   }
 
-  private handleReconnect() {
-    if (this.reconnectAttempts < this.maxReconnectAttempts) {
-      this.reconnectAttempts++
-      console.log(`[WebSocket] 尝试重连 (${this.reconnectAttempts}/${this.maxReconnectAttempts})...`)
-
-      setTimeout(() => {
-        this.connect().catch(() => {
-          // Song：重连失败，继续尝试
-        })
-      }, this.reconnectDelay * this.reconnectAttempts)
-    } else {
-      console.error('[WebSocket] 重连失败，已达到最大尝试次数')
+  resumeConnection(force = false) {
+    if (!this.shouldReconnect || this.handlers.size === 0) {
+      return
     }
+
+    if (force && this.connected) {
+      this.resetTransportConnection()
+    }
+
+    if (this.connected) {
+      this.resubscribeAll()
+      return
+    }
+
+    if (this.connectingPromise) {
+      return
+    }
+
+    this.scheduleReconnect(true)
   }
 
   private resubscribeAll() {
@@ -191,6 +332,13 @@ class WebSocketClient {
   }
 
   /**
+   * 订阅强制下线事件（单设备策略踢下线）
+   */
+  subscribeForceLogout(userId: string, handler: (reason: string) => void): () => void {
+    return this.subscribe(`/user/${userId}/queue/force-logout`, handler as any)
+  }
+
+  /**
    * Song：说明
    */
   setUserId(userId: string | null) {
@@ -234,6 +382,10 @@ class WebSocketClient {
           }
         }
       }
+
+      if (this.handlers.size === 0) {
+        this.disconnect()
+      }
     }
   }
 
@@ -244,3 +396,4 @@ class WebSocketClient {
 
 // Song：单例实例
 export const wsClient = new WebSocketClient()
+

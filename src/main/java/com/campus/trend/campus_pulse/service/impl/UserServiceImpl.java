@@ -8,35 +8,42 @@ import com.campus.trend.campus_pulse.dto.response.UserSimpleResp;
 import com.campus.trend.campus_pulse.entity.User;
 import com.campus.trend.campus_pulse.mapper.UserMapper;
 import com.campus.trend.campus_pulse.security.AuthUser;
+import com.campus.trend.campus_pulse.service.SectionModeratorService;
+import com.campus.trend.campus_pulse.service.UploadFileService;
 import com.campus.trend.campus_pulse.service.UserService;
-import com.campus.trend.campus_pulse.utils.FileUtils;
 import com.campus.trend.campus_pulse.utils.SecurityUtils;
+import com.campus.trend.campus_pulse.common.api.ResultCode;
+import com.campus.trend.campus_pulse.common.exception.BusinessException;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.File;
-import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.UUID;
+import java.util.Set;
 
 @Service
 @Slf4j
 public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements UserService {
 
+    private static final Set<String> ALLOWED_CARD_THEMES = Set.of(
+            "sunset", "ocean", "forest", "aurora", "graphite", "peach", "violet");
+
     private final PasswordEncoder passwordEncoder;
     private final com.campus.trend.campus_pulse.service.ContentSecurityService contentSecurityService;
-
-    @Value("${Web.AvatarUrl}")
-    private String url;
+    private final UploadFileService uploadFileService;
+    private final SectionModeratorService sectionModeratorService;
 
     public UserServiceImpl(PasswordEncoder passwordEncoder,
-            com.campus.trend.campus_pulse.service.ContentSecurityService contentSecurityService) {
+            com.campus.trend.campus_pulse.service.ContentSecurityService contentSecurityService,
+            UploadFileService uploadFileService,
+            SectionModeratorService sectionModeratorService) {
         this.passwordEncoder = passwordEncoder;
         this.contentSecurityService = contentSecurityService;
+        this.uploadFileService = uploadFileService;
+        this.sectionModeratorService = sectionModeratorService;
     }
 
     @Override
@@ -59,6 +66,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         proFileResponse.setNickname(sysUser.getNickname());
         proFileResponse.setBio(sysUser.getBio());
         proFileResponse.setMajor(sysUser.getMajor());
+        proFileResponse.setLevel(sysUser.getLevel() != null ? sysUser.getLevel() : 1);
         proFileResponse.setEnrollmentYear(sysUser.getEnrollmentYear() != null ? sysUser.getEnrollmentYear() : 0);
         proFileResponse.setGender(sysUser.getGender());
         proFileResponse.setSchool(sysUser.getSchool());
@@ -69,6 +77,11 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         proFileResponse.setTwoFactorEnabled(sysUser.getTwoFactorEnabled() != null ? sysUser.getTwoFactorEnabled() : 0);
         proFileResponse.setEmailNotifyEnabled(sysUser.getEmailNotifyEnabled() != null ? sysUser.getEmailNotifyEnabled() : 1);
         proFileResponse.setGithubBound(sysUser.getGithubId() != null && !sysUser.getGithubId().isBlank());
+        proFileResponse.setProfileCardTheme(resolveCardTheme(sysUser.getProfileCardTheme(), "sunset"));
+        proFileResponse.setQuickCardTheme(resolveCardTheme(sysUser.getQuickCardTheme(), "ocean"));
+        proFileResponse.setProfileCardBgUrl(resolveCardBgUrl(sysUser.getProfileCardBgUrl(), null));
+        proFileResponse.setQuickCardBgUrl(resolveCardBgUrl(sysUser.getQuickCardBgUrl(), null));
+        proFileResponse.setModeratedSectionIds(sectionModeratorService.getModeratedSectionIds(sysUser.getId()).stream().toList());
         proFileResponse.setRoles(roleCodes);
 
         return proFileResponse;
@@ -92,26 +105,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
 
     @Override
     public String uploadAvatar(MultipartFile file) {
-
-        String suffix = FileUtils.validateImageAndGetSuffix(file);
-
-        String uploadDir = FileUtils.getProjectRootPath() + "/data/avatar/";
-
-        File folder = new File(uploadDir);
-        if (!folder.exists()) {
-            folder.mkdirs();
-        }
-
-        String fileName = UUID.randomUUID().toString() + suffix;
-        File dest = new File(folder, fileName);
-
-        try {
-            file.transferTo(dest);
-        } catch (IOException e) {
-            throw new RuntimeException("头像上传失败", e);
-        }
-
-        String avatarUrl = url + fileName;
+        String avatarUrl = uploadFileService.uploadAvatar(file);
 
         // Song：获取当前登录用户并更新数据库
         try {
@@ -140,12 +134,12 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
 
         // Song：2.校验旧密码
         if (!passwordEncoder.matches(req.getOldPassword(), sysUser.getPassword())) {
-            throw new RuntimeException("旧密码错误");
+            throw new BusinessException(ResultCode.PARAM_ERROR, "旧密码错误");
         }
 
         // Song：3.新旧密码不能一样
         if (passwordEncoder.matches(req.getNewPassword(), sysUser.getPassword())) {
-            throw new RuntimeException("新密码不能与旧密码相同");
+            throw new BusinessException(ResultCode.PARAM_ERROR, "新密码不能与旧密码相同");
         }
 
         // Song：4.设置新密码（加密）
@@ -180,6 +174,18 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         sysUser.setGender(updateUserDetailRequest.getGender());
         sysUser.setSchool(updateUserDetailRequest.getSchool());
         sysUser.setInterestTags(updateUserDetailRequest.getInterestTags());
+        sysUser.setProfileCardTheme(resolveCardTheme(
+                updateUserDetailRequest.getProfileCardTheme(),
+                resolveCardTheme(sysUser.getProfileCardTheme(), "sunset")));
+        sysUser.setQuickCardTheme(resolveCardTheme(
+                updateUserDetailRequest.getQuickCardTheme(),
+                resolveCardTheme(sysUser.getQuickCardTheme(), "ocean")));
+        sysUser.setProfileCardBgUrl(resolveCardBgUrl(
+                updateUserDetailRequest.getProfileCardBgUrl(),
+                resolveCardBgUrl(sysUser.getProfileCardBgUrl(), null)));
+        sysUser.setQuickCardBgUrl(resolveCardBgUrl(
+                updateUserDetailRequest.getQuickCardBgUrl(),
+                resolveCardBgUrl(sysUser.getQuickCardBgUrl(), null)));
 
         sysUser.setUpdateTime(LocalDateTime.now());
 
@@ -214,10 +220,34 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     public void assignRole(String userId, String roleCode) {
         User user = getById(userId);
         if (user == null)
-            throw new RuntimeException("用户不存在");
+            throw new BusinessException(ResultCode.USER_NOT_FOUND);
+        if ("ROLE_MODERATOR".equals(roleCode)) {
+            throw new BusinessException(ResultCode.PARAM_ERROR, "全局版主角色已停用，请通过版主申请流程分配板块版主权限");
+        }
+
+        String operatorRole = com.campus.trend.campus_pulse.utils.PermissionUtils.getCurrentUserRole();
+        String currentUserId = SecurityUtils.getCurrentUserId();
+
+        // Song：不能修改自己的角色
+        if (userId.equals(currentUserId)) {
+            throw new BusinessException(ResultCode.NO_PERMISSION, "不能修改自己的角色");
+        }
+
+        String targetCurrentRole = user.getRole() != null ? user.getRole() : "ROLE_USER";
+
+        // Song：操作者角色等级必须高于目标用户当前角色等级
+        if (!com.campus.trend.campus_pulse.utils.PermissionUtils.canManageRole(operatorRole, targetCurrentRole)) {
+            throw new BusinessException(ResultCode.NO_PERMISSION, "无权修改该用户角色：对方角色等级不低于您");
+        }
+
+        // Song：操作者只能分配等级比自己低的角色
+        if (!com.campus.trend.campus_pulse.utils.PermissionUtils.canManageRole(operatorRole, roleCode)) {
+            throw new BusinessException(ResultCode.NO_PERMISSION, "无权分配该角色：目标角色等级不低于您");
+        }
+
         user.setRole(roleCode);
         updateById(user);
-        log.info("为用户 {} 分配角色 {}", userId, roleCode);
+        log.info("为用户 {} 分配角色 {}（操作者角色: {}）", userId, roleCode, operatorRole);
     }
 
     // Song：=================== 资料 方法 ===================
@@ -270,7 +300,24 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
 
     @Override
     public void updatePreferredSections(String userId, String sectionId) {
-        // Song：简化实现：毕设数据量小，暂不做复杂偏好计算
+        if (!org.springframework.util.StringUtils.hasText(userId) || !org.springframework.util.StringUtils.hasText(sectionId)) {
+            return;
+        }
+        try {
+            User user = getById(userId);
+            if (user == null) return;
+            java.util.Map<String, Double> prefs = user.getPreferredCateJson();
+            if (prefs == null) {
+                prefs = new java.util.HashMap<>();
+            }
+            // Song：每次发帖对该板块权重 +1，最高上限 100，防止无限膨胀
+            double current = prefs.getOrDefault(sectionId, 0.0);
+            prefs.put(sectionId, Math.min(current + 1.0, 100.0));
+            user.setPreferredCateJson(prefs);
+            updateById(user);
+        } catch (Exception e) {
+            log.warn("更新用户偏好板块失败: userId={}, sectionId={}, err={}", userId, sectionId, e.getMessage());
+        }
     }
 
     @Override
@@ -280,6 +327,36 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
             return;
         user.setActiveRegion(region);
         updateById(user);
+    }
+
+    private String resolveCardTheme(String raw, String fallback) {
+        if (!StringUtils.hasText(raw)) {
+            return fallback;
+        }
+        String normalized = raw.trim().toLowerCase();
+        if (ALLOWED_CARD_THEMES.contains(normalized)) {
+            return normalized;
+        }
+        return fallback;
+    }
+
+    private String resolveCardBgUrl(String raw, String fallback) {
+        if (!StringUtils.hasText(raw)) {
+            return fallback;
+        }
+        String normalized = raw.trim();
+        boolean httpUrl = normalized.startsWith("http://") || normalized.startsWith("https://");
+        boolean uploadUrl = normalized.startsWith("/uploads/");
+        if (!httpUrl && !uploadUrl) {
+            return fallback;
+        }
+        if (normalized.length() > 500) {
+            return fallback;
+        }
+        if (normalized.contains("\"") || normalized.contains("'") || normalized.contains(" ")) {
+            return fallback;
+        }
+        return normalized;
     }
 
 }

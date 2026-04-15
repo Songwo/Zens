@@ -51,6 +51,7 @@ public class CollaborativeFilteringServiceImpl implements CollaborativeFiltering
         );
 
         if (whoViewedLogs.isEmpty()) {
+            log.debug("[协同过滤-ItemBased] 帖子 {} 无浏览记录，跳过推荐", postId);
             return Collections.emptyList();
         }
 
@@ -107,24 +108,118 @@ public class CollaborativeFilteringServiceImpl implements CollaborativeFiltering
                 .collect(Collectors.toList());
 
         if (recommendationIds.isEmpty()) {
+            log.debug("[协同过滤-ItemBased] 帖子 {} 无候选推荐", postId);
             return Collections.emptyList();
         }
 
-        // Song：5. 查询完整的帖子信息
-        return postMapper.selectBatchIds(recommendationIds);
+        // 5. 查询完整的帖子信息
+        List<Post> result = postMapper.selectBatchIds(recommendationIds);
+        log.debug("[协同过滤-ItemBased] 帖子 {} 推荐 {} 篇", postId, result.size());
+        return result;
     }
 
     /**
-     * Song：说明
-     * Song：逻辑：
-     * Song：说明
-     * Song：2. 推荐这些相似用户看过、但当前用户没看过的帖子
-     * Song：(由于计算量大，这里暂时略过完整矩阵计算，使用简易逻辑)
+     * 基于用户的协同过滤推荐：
+     * 1. 找出与当前用户有相似行为（点赞/收藏）的其他用户
+     * 2. 推荐这些相似用户点赞/收藏过、但当前用户未看过的帖子
      */
     @Override
     public List<Post> recommendByUserBased(String userId, int limit) {
-        // Song：暂时返回空，留作扩展
-        // Song：说明
-        return Collections.emptyList();
+        if (userId == null || userId.isBlank()) {
+            log.debug("[协同过滤-UserBased] userId 为空，跳过推荐");
+            return Collections.emptyList();
+        }
+
+        // 1. 获取当前用户点赞/收藏的帖子 ID
+        Set<String> myLikedPostIds = postLikeMapper.selectList(
+                new LambdaQueryWrapper<PostLike>()
+                        .select(PostLike::getPostId)
+                        .eq(PostLike::getUserId, userId)
+                        .last("LIMIT 200"))
+                .stream().map(PostLike::getPostId).collect(Collectors.toSet());
+
+        Set<String> myCollectedPostIds = postCollectMapper.selectList(
+                new LambdaQueryWrapper<PostCollect>()
+                        .select(PostCollect::getPostId)
+                        .eq(PostCollect::getUserId, userId)
+                        .last("LIMIT 200"))
+                .stream().map(PostCollect::getPostId).collect(Collectors.toSet());
+
+        Set<String> myInteractedPostIds = new HashSet<>();
+        myInteractedPostIds.addAll(myLikedPostIds);
+        myInteractedPostIds.addAll(myCollectedPostIds);
+
+        if (myInteractedPostIds.isEmpty()) {
+            log.debug("[协同过滤-UserBased] 用户 {} 无交互记录，跳过推荐", userId);
+            return Collections.emptyList();
+        }
+
+        // 2. 找出对相同帖子有过点赞/收藏的相似用户
+        Set<String> similarUserIds = new HashSet<>();
+        postLikeMapper.selectList(
+                new LambdaQueryWrapper<PostLike>()
+                        .select(PostLike::getUserId)
+                        .in(PostLike::getPostId, myInteractedPostIds)
+                        .ne(PostLike::getUserId, userId)
+                        .last("LIMIT 300"))
+                .forEach(l -> similarUserIds.add(l.getUserId()));
+        postCollectMapper.selectList(
+                new LambdaQueryWrapper<PostCollect>()
+                        .select(PostCollect::getPostId)
+                        .in(PostCollect::getPostId, myInteractedPostIds)
+                        .ne(PostCollect::getUserId, userId)
+                        .last("LIMIT 300"))
+                .forEach(c -> similarUserIds.add(c.getUserId()));
+
+        if (similarUserIds.isEmpty()) {
+            log.debug("[协同过滤-UserBased] 用户 {} 无相似用户，跳过推荐", userId);
+            return Collections.emptyList();
+        }
+
+        // 3. 收集相似用户的交互帖子，加权评分，排除当前用户已看过的
+        Set<String> myViewedPostIds = viewLogMapper.selectList(
+                new LambdaQueryWrapper<ViewLog>()
+                        .select(ViewLog::getPostId)
+                        .eq(ViewLog::getUserId, userId)
+                        .last("LIMIT 500"))
+                .stream().map(ViewLog::getPostId).collect(Collectors.toSet());
+
+        Map<String, Double> candidateScores = new HashMap<>();
+
+        postLikeMapper.selectList(
+                new LambdaQueryWrapper<PostLike>()
+                        .select(PostLike::getPostId)
+                        .in(PostLike::getUserId, similarUserIds)
+                        .last("LIMIT 500"))
+                .stream()
+                .map(PostLike::getPostId)
+                .filter(pid -> pid != null && !myViewedPostIds.contains(pid))
+                .forEach(pid -> candidateScores.merge(pid, 3.0, Double::sum));
+
+        postCollectMapper.selectList(
+                new LambdaQueryWrapper<PostCollect>()
+                        .select(PostCollect::getPostId)
+                        .in(PostCollect::getUserId, similarUserIds)
+                        .last("LIMIT 500"))
+                .stream()
+                .map(PostCollect::getPostId)
+                .filter(pid -> pid != null && !myViewedPostIds.contains(pid))
+                .forEach(pid -> candidateScores.merge(pid, 5.0, Double::sum));
+
+        // 4. 取分数最高的 postId
+        List<String> recommendIds = candidateScores.entrySet().stream()
+                .sorted(Map.Entry.<String, Double>comparingByValue().reversed())
+                .limit(limit)
+                .map(Map.Entry::getKey)
+                .collect(Collectors.toList());
+
+        if (recommendIds.isEmpty()) {
+            log.debug("[协同过滤-UserBased] 用户 {} 无候选推荐帖子", userId);
+            return Collections.emptyList();
+        }
+
+        List<Post> result = postMapper.selectBatchIds(recommendIds);
+        log.debug("[协同过滤-UserBased] 用户 {} 推荐 {} 篇帖子", userId, result.size());
+        return result;
     }
 }

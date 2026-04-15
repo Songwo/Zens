@@ -8,9 +8,11 @@ import java.util.Map;
  */
 public interface TrendStatService {
 
+    Map<String, Object> getCommunityDashboard();
+
     Map<String, Object> getKeywordCloud();
 
-    List<Map<String, Object>> getPostTrend();
+    List<Map<String, Object>> getPostTrend(int days);
 
     /**
      * 获取最近7天用户增长趋势
@@ -27,4 +29,15 @@ public interface TrendStatService {
      * 分页获取热度排行
      */
     List<Map<String, Object>> getHeatRank(int page, int pageSize);
+
+    /**
+     * 按时间范围分页获取热度排行
+     */
+    List<Map<String, Object>> getHeatRank(int page, int pageSize, String timeRange);
+
+    Map<String, Object> getTagRelations(String keyword);
+
+    Map<String, Object> getUserInsight(String userId);
+
+    Map<String, Object> analyzeCodeSnippet(String code, String language);
 }

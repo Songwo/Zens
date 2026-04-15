@@ -98,6 +98,14 @@ public class SecurityConfig {
                         .requestMatchers("/api/static/**", "/api/uploads/**", "/api/ws/**").permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.GET, SecurityWhitelist.PUBLIC_GET_URLS).permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.POST, SecurityWhitelist.PUBLIC_POST_URLS).permitAll()
+                        .requestMatchers(
+                                "/moderator/applications",
+                                "/moderator/approve/**",
+                                "/moderator/reject/**",
+                                "/api/moderator/applications",
+                                "/api/moderator/approve/**",
+                                "/api/moderator/reject/**")
+                        .hasAnyAuthority("ROLE_ADMIN", "ROLE_SUPER_ADMIN")
                         .requestMatchers("/admin/**").hasAnyAuthority("ROLE_ADMIN", "ROLE_SUPER_ADMIN")
                         .requestMatchers("/api/admin/**").hasAnyAuthority("ROLE_ADMIN", "ROLE_SUPER_ADMIN")
                         .anyRequest().authenticated())
@@ -155,7 +163,7 @@ public class SecurityConfig {
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("*"));
         configuration.setAllowCredentials(true);
-        configuration.setExposedHeaders(List.of("Authorization"));
+        configuration.setExposedHeaders(List.of("Authorization", "X-Access-Token", "X-Access-Token-Expires-In"));
         log.info("CORS allowed origins: {}", finalOrigins);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();

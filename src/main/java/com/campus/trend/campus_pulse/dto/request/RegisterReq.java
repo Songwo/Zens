@@ -48,6 +48,10 @@ public class RegisterReq {
     @Size(max = 50, message = "学校名称长度不能超过 50 个字符")
     private String school;
 
+    /** 邀请码（可选，管理员配置 campus.invite.required=true 时必填） */
+    @Size(max = 20, message = "邀请码格式不正确")
+    private String inviteCode;
+
     // Song：说明
     public interface UrlCheck {
     }

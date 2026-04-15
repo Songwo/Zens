@@ -5,7 +5,7 @@ import { ElMessage } from 'element-plus'
 export interface PostFormData {
     title: string
     content: string
-    sectionId: number
+    sectionId: number | null
     tags: string[]
     coverImage: string
     isAnonymous: number
@@ -15,7 +15,7 @@ export interface PostFormData {
 const getInitialForm = (): PostFormData => ({
     title: '',
     content: '',
-    sectionId: 0,
+    sectionId: null,
     tags: [],
     coverImage: '',
     isAnonymous: 0
@@ -71,7 +71,7 @@ export function usePostDraft() {
                 Object.assign(form, {
                     title: parsed.title || '',
                     content: parsed.content || '',
-                    sectionId: parsed.sectionId || 0,
+                    sectionId: parsed.sectionId || null,
                     tags: parsed.tags || [],
                     coverImage: parsed.coverImage || '',
                     isAnonymous: parsed.isAnonymous || 0
@@ -105,6 +105,10 @@ export function usePostDraft() {
         lastSavedState.value = JSON.stringify(getInitialForm())
     }
 
+    const syncSnapshot = () => {
+        lastSavedState.value = JSON.stringify(form)
+    }
+
     return {
         form,
         isDirty,
@@ -113,6 +117,7 @@ export function usePostDraft() {
         loadDraft,
         loadDraftAction,
         clearDraft,
-        resetForm
+        resetForm,
+        syncSnapshot
     }
 }

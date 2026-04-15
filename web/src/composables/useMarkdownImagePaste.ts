@@ -1,6 +1,7 @@
 import { ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { uploadApi } from '@/api/upload'
+import { UPLOAD_IMAGE_MAX_SIZE_MB } from '@/constants/upload'
 
 interface UseMarkdownImagePasteOptions {
   getTextarea: () => HTMLTextAreaElement | undefined
@@ -38,7 +39,8 @@ function insertTextAtSelection(
 
 export function useMarkdownImagePaste(options: UseMarkdownImagePasteOptions) {
   const isPastingImage = ref(false)
-  const maxSizeBytes = (options.maxImageSizeMb ?? 5) * 1024 * 1024
+  const maxImageSizeMb = options.maxImageSizeMb ?? UPLOAD_IMAGE_MAX_SIZE_MB
+  const maxSizeBytes = maxImageSizeMb * 1024 * 1024
   const uploadModule = options.module ?? 'post'
 
   const handlePaste = async (event: ClipboardEvent) => {
@@ -63,12 +65,12 @@ export function useMarkdownImagePaste(options: UseMarkdownImagePasteOptions) {
     try {
       for (const file of imageFiles) {
         if (file.size > maxSizeBytes) {
-          ElMessage.warning(`图片超过 ${options.maxImageSizeMb ?? 5}MB，已跳过`)
+          ElMessage.warning(`图片超过 ${maxImageSizeMb}MB，已跳过`)
           continue
         }
 
-        const res = await uploadApi.uploadImage(file, uploadModule)
-        const imageMarkdown = `![${file.name || 'image'}](${res.data})`
+        const imageUrl = await uploadApi.uploadImage(file, uploadModule)
+        const imageMarkdown = `![${file.name || 'image'}](${imageUrl})`
         const insertion = insertTextAtSelection(options.getContent(), textarea, imageMarkdown)
         options.setContent(insertion.content)
         textarea.focus()

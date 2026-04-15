@@ -1,12 +1,13 @@
 <script setup lang="ts">
-import { ref, reactive, onUnmounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, reactive, onMounted, onUnmounted } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 import { Message, User, Lock, Ticket, Right, Check } from '@element-plus/icons-vue'
 import { authApi } from '@/api/auth'
 
 const router = useRouter()
+const route = useRoute()
 
 const currentStep = ref(0)
 const loading = ref(false)
@@ -171,9 +172,12 @@ const validateInvite = async () => {
   loading.value = true
   try {
     const res = await authApi.validateInviteCode(form.inviteCode)
-    if (res.data) {
-      inviteAuthDetails.value = res.data
-      ElMessage.success(`邀请码有效`)
+    if (res.code === 2000) {
+      inviteAuthDetails.value = true
+      ElMessage.success('邀请码有效')
+    } else {
+      inviteAuthDetails.value = null
+      ElMessage.error(res.message || '邀请码无效')
     }
   } catch (e: any) {
     ElMessage.error(e.message || '无效邀请码')
@@ -230,6 +234,7 @@ const submitRegistration = async () => {
       email: form.account,
       code: verifiedCode.value,
       nickname: form.nickname || undefined,
+      inviteCode: form.inviteCode || undefined,
     }
 
     const res = await authApi.register(registerData)
@@ -247,6 +252,14 @@ const submitRegistration = async () => {
     loading.value = false
   }
 }
+
+onMounted(() => {
+  // 从邀请链接自动预填邀请码
+  const inviteCode = route.query.invite as string
+  if (inviteCode) {
+    form.inviteCode = inviteCode
+  }
+})
 
 onUnmounted(() => {
   if (timer) clearInterval(timer)

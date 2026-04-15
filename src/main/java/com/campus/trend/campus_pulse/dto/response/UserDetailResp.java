@@ -15,6 +15,7 @@ public class UserDetailResp {
     private String avatar;
     private String bio;
     private String major;
+    private Integer level;
     private int enrollmentYear;
     private String school;
     private Integer gender;
@@ -23,6 +24,11 @@ public class UserDetailResp {
     private Integer twoFactorEnabled;
     private Integer emailNotifyEnabled;
     private Boolean githubBound;
+    private String profileCardTheme;
+    private String quickCardTheme;
+    private String profileCardBgUrl;
+    private String quickCardBgUrl;
+    private List<Long> moderatedSectionIds;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;
 

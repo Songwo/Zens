@@ -268,13 +268,9 @@ public class PostRecommendServiceImpl implements PostRecommendService {
                 .list();
         if (userTags.isEmpty()) return Collections.emptyList();
 
-        List<Tag> tags = userTags.stream()
-                .map(rel -> tagService.getById(rel.getTagId()))
-                .filter(Objects::nonNull)
-                .collect(Collectors.toList());
-
-        Set<String> tagNames = tags.stream()
-                .map(Tag::getName)
+        Map<Long, String> tagNameMap = resolveTagNameMap(userTags);
+        Set<String> tagNames = tagNameMap.values().stream()
+                .filter(StringUtils::hasText)
                 .collect(Collectors.toSet());
 
         if (tagNames.isEmpty()) {
@@ -289,7 +285,9 @@ public class PostRecommendServiceImpl implements PostRecommendService {
         return candidatePosts.stream()
                 .filter(post -> StringUtils.hasText(post.getTags()))
                 .filter(post -> containsAnyTag(post.getTags(), tagNames))
-                .sorted((a, b) -> Double.compare(calculateScore(b, userTags), calculateScore(a, userTags)))
+                .sorted((a, b) -> Double.compare(
+                        calculateScore(b, userTags, tagNameMap),
+                        calculateScore(a, userTags, tagNameMap)))
                 .limit(limit)
                 .collect(Collectors.toList());
     }
@@ -317,18 +315,19 @@ public class PostRecommendServiceImpl implements PostRecommendService {
             return getHotPosts(page, pageSize);
         }
 
-        List<Tag> tags = userTags.stream()
-                .map(rel -> tagService.getById(rel.getTagId()))
-                .filter(Objects::nonNull)
-                .collect(Collectors.toList());
-
-        Set<String> tagNames = tags.stream()
-                .map(Tag::getName)
+        Map<Long, String> tagNameMap = resolveTagNameMap(userTags);
+        Set<String> tagNames = tagNameMap.values().stream()
+                .filter(StringUtils::hasText)
                 .collect(Collectors.toSet());
+        if (tagNames.isEmpty()) {
+            return getHotPosts(page, pageSize);
+        }
 
-        // Song：查询包含这些标签的帖子
-        List<Post> candidatePosts = postMapper.selectList(null).stream()
-                .filter(post -> post.getStatus() != null && post.getStatus() == 1)
+        List<Post> candidatePosts = postMapper.selectList(new LambdaQueryWrapper<Post>()
+                        .eq(Post::getStatus, 1)
+                        .orderByDesc(Post::getCreateTime)
+                        .last("LIMIT " + weightProperties.getCandidateLimit()))
+                .stream()
                 .filter(post -> StringUtils.hasText(post.getTags()))
                 .filter(post -> containsAnyTag(post.getTags(), tagNames))
                 .collect(Collectors.toList());
@@ -336,7 +335,7 @@ public class PostRecommendServiceImpl implements PostRecommendService {
         // Song：计算相关度分数并排序
         List<PostWithScore> scoredPosts = candidatePosts.stream()
                 .map(post -> {
-                    double score = calculateScore(post, userTags);
+                    double score = calculateScore(post, userTags, tagNameMap);
                     return new PostWithScore(post, score);
                 })
                 .sorted((a, b) -> Double.compare(b.score, a.score)) // Song：降序
@@ -364,6 +363,10 @@ public class PostRecommendServiceImpl implements PostRecommendService {
 
     @Override
     public double calculateScore(Post post, List<UserTagRelation> userTags) {
+        return calculateScore(post, userTags, resolveTagNameMap(userTags));
+    }
+
+    private double calculateScore(Post post, List<UserTagRelation> userTags, Map<Long, String> tagNameMap) {
         if (post.getTags() == null || post.getTags().isEmpty()) {
             return 0.0;
         }
@@ -377,8 +380,8 @@ public class PostRecommendServiceImpl implements PostRecommendService {
                 .collect(Collectors.toSet());
 
         for (UserTagRelation userTag : userTags) {
-            Tag tag = tagService.getById(userTag.getTagId());
-            if (tag != null && postTagSet.contains(tag.getName())) {
+            String tagName = tagNameMap.get(userTag.getTagId());
+            if (StringUtils.hasText(tagName) && postTagSet.contains(tagName)) {
                 // Song：用户兴趣权重
                 tagScore += userTag.getScore().doubleValue();
             }
@@ -400,6 +403,26 @@ public class PostRecommendServiceImpl implements PostRecommendService {
         }
 
         return finalScore;
+    }
+
+    private Map<Long, String> resolveTagNameMap(List<UserTagRelation> userTags) {
+        if (userTags == null || userTags.isEmpty()) {
+            return Collections.emptyMap();
+        }
+
+        List<Long> tagIds = userTags.stream()
+                .map(UserTagRelation::getTagId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        if (tagIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+
+        return tagService.listByIds(tagIds).stream()
+                .filter(Objects::nonNull)
+                .filter(tag -> tag.getId() != null && StringUtils.hasText(tag.getName()))
+                .collect(Collectors.toMap(Tag::getId, Tag::getName, (left, right) -> left));
     }
 
     @Override

@@ -17,42 +17,42 @@ const props = defineProps<{
   <el-card shadow="never" class="topic-stats-card">
     <template #header>
       <div class="card-header">
-        <span>主题数据统计</span>
+        <span>主题行为分析</span>
       </div>
     </template>
     
     <div class="stats-grid">
       <div class="grid-item">
         <el-icon class="grid-icon bg-blue"><View /></el-icon>
-        <div class="grid-info">
-          <div class="grid-val">{{ stats.views }}</div>
-          <div class="grid-lbl">浏览次数</div>
+          <div class="grid-info">
+            <div class="grid-val">{{ stats.views }}</div>
+            <div class="grid-lbl">浏览信号</div>
+          </div>
         </div>
-      </div>
       
       <div class="grid-item">
         <el-icon class="grid-icon bg-green"><ChatDotRound /></el-icon>
-        <div class="grid-info">
-          <div class="grid-val">{{ stats.replies }}</div>
-          <div class="grid-lbl">主贴回复</div>
+          <div class="grid-info">
+            <div class="grid-val">{{ stats.replies }}</div>
+            <div class="grid-lbl">回复信号</div>
+          </div>
         </div>
-      </div>
       
       <div class="grid-item">
         <el-icon class="grid-icon bg-red"><Star /></el-icon>
-        <div class="grid-info">
-          <div class="grid-val">{{ stats.likes }}</div>
-          <div class="grid-lbl">点赞数量</div>
+          <div class="grid-info">
+            <div class="grid-val">{{ stats.likes }}</div>
+            <div class="grid-lbl">点赞反馈</div>
+          </div>
         </div>
-      </div>
       
       <div class="grid-item">
         <el-icon class="grid-icon bg-orange"><Box /></el-icon>
-        <div class="grid-info">
-          <div class="grid-val">{{ stats.bookmarks }}</div>
-          <div class="grid-lbl">收藏人数</div>
+          <div class="grid-info">
+            <div class="grid-val">{{ stats.bookmarks }}</div>
+            <div class="grid-lbl">收藏沉淀</div>
+          </div>
         </div>
-      </div>
     </div>
 
     <div class="time-infos">
@@ -61,7 +61,7 @@ const props = defineProps<{
         <span class="val">{{ stats.createdAt }}</span>
       </div>
       <div class="time-item">
-        <span class="lbl">最后活跃</span>
+        <span class="lbl">最近行为活跃</span>
         <span class="val">{{ stats.lastActive }}</span>
       </div>
     </div>

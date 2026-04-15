@@ -16,15 +16,41 @@ export default defineConfig({
     },
   },
   build: {
-    cssCodeSplit: false,
+    cssCodeSplit: true,
+    chunkSizeWarningLimit: 800,
+    minify: 'esbuild',
+    target: 'es2018',
     rollupOptions: {
       output: {
-        manualChunks: {
-          'vue-vendor': ['vue', 'vue-router', 'pinia'],
-          'ui-vendor': ['element-plus', '@element-plus/icons-vue'],
-          'editor-vendor': ['markdown-it', 'dompurify'],
-          'chart-vendor': ['echarts', 'vue-echarts'],
-          'ws-vendor': ['sockjs-client', '@stomp/stompjs'],
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return undefined
+
+          if (
+            id.includes('/vue/') ||
+            id.includes('/vue-router/') ||
+            id.includes('/pinia/') ||
+            id.includes('/element-plus/') ||
+            id.includes('/@element-plus/')
+          ) {
+            return 'vue-vendor'
+          }
+          if (id.includes('/markdown-it/') || id.includes('/dompurify/')) {
+            return 'editor-vendor'
+          }
+          if (id.includes('/echarts/') || id.includes('/vue-echarts/')) {
+            return 'chart-vendor'
+          }
+          if (id.includes('/sockjs-client/') || id.includes('/@stomp/stompjs/')) {
+            return 'ws-vendor'
+          }
+          if (
+            id.includes('/axios/') ||
+            id.includes('/date-fns/') ||
+            id.includes('/lucide-vue-next/')
+          ) {
+            return 'app-utils-vendor'
+          }
+          return 'misc-vendor'
         },
       },
     },

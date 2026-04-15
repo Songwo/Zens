@@ -18,4 +18,5 @@ public class SectionResp {
     private LocalDateTime createdAt;
     private Long postCount;
     private Long todayCount;
+    private Long heatScore;
 }

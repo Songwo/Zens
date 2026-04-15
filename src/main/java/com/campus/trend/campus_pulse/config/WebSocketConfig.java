@@ -1,35 +1,44 @@
 package com.campus.trend.campus_pulse.config;
 
+import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.messaging.simp.config.ChannelRegistration;
 import org.springframework.messaging.simp.config.MessageBrokerRegistry;
 import org.springframework.web.socket.config.annotation.EnableWebSocketMessageBroker;
 import org.springframework.web.socket.config.annotation.StompEndpointRegistry;
 import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerConfigurer;
 
-/**
- * Song：说明
- * Song：用于实时推送帖子更新、新回复、浏览量变化等事件
- */
 @Configuration
 @EnableWebSocketMessageBroker
+@RequiredArgsConstructor
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
+
+    @Value("${campus.security.allowed-origin-patterns:http://localhost:5173,http://127.0.0.1:5173}")
+    private String allowedOriginPatterns;
+
+    private final WebSocketAuthInterceptor webSocketAuthInterceptor;
 
     @Override
     public void configureMessageBroker(MessageBrokerRegistry config) {
-        // Song：启用简单消息代理，用于向客户端推送消息
-        // Song：说明
-        // Song：说明
         config.enableSimpleBroker("/topic", "/queue");
-
-        // Song：客户端发送消息的前缀（如果需要客户端向服务器发送消息）
         config.setApplicationDestinationPrefixes("/app");
+        // 设置用户目标前缀，使 convertAndSendToUser 正确路由
+        config.setUserDestinationPrefix("/user");
     }
 
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
-        // Song：说明
+        String[] origins = java.util.Arrays.stream(allowedOriginPatterns.split(","))
+                .map(String::trim).filter(s -> !s.isEmpty()).toArray(String[]::new);
         registry.addEndpoint("/ws")
-                .setAllowedOriginPatterns("*") // Song：允许跨域（生产环境应配置具体域名）
-                .withSockJS(); // Song：说明
+                .setAllowedOriginPatterns(origins)
+                .withSockJS();
+    }
+
+    @Override
+    public void configureClientInboundChannel(ChannelRegistration registration) {
+        // 注册认证拦截器，从 CONNECT 帧提取 userId 设为 Principal
+        registration.interceptors(webSocketAuthInterceptor);
     }
 }
