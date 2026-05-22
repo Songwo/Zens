@@ -734,6 +734,57 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
         }
     }
 
+    private String resolveNavType(PostSearchReq request) {
+        if (request == null) {
+            return null;
+        }
+        if (StringUtils.hasText(request.getNavType())) {
+            String navType = request.getNavType().trim().toLowerCase();
+            if ("latest".equals(navType) || "hot".equals(navType) || "essence".equals(navType)) {
+                return navType;
+            }
+        }
+        if (Boolean.TRUE.equals(request.getIsFeatured())) {
+            return "essence";
+        }
+        if ("hot".equalsIgnoreCase(request.getOrderBy())) {
+            return "hot";
+        }
+        return null;
+    }
+
+    private String resolveOrderBy(PostSearchReq request, String navType) {
+        if ("hot".equals(navType)) {
+            return "hot";
+        }
+        if ("latest".equals(navType) || "essence".equals(navType)) {
+            return "new";
+        }
+        return request != null && StringUtils.hasText(request.getOrderBy())
+                ? request.getOrderBy()
+                : "new";
+    }
+
+    private boolean hasConcreteCategory(String category) {
+        if (!StringUtils.hasText(category)) {
+            return false;
+        }
+        String normalized = category.trim().toLowerCase();
+        return !"all".equals(normalized) && !"0".equals(normalized) && !"全部".equals(normalized);
+    }
+
+    private Long resolveCategorySectionId(String category) {
+        if (!hasConcreteCategory(category)) {
+            return null;
+        }
+        try {
+            long sectionId = Long.parseLong(category.trim());
+            return sectionId > 0 ? sectionId : null;
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
     private LambdaQueryWrapper<Post> buildSearchWrapper(PostSearchReq request,
                                                         List<String> keywordTerms,
                                                         KeywordSearchMode keywordSearchMode) {
@@ -766,20 +817,31 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
                 Post::getLastReplyAt,
                 Post::getLastActivityAt);
 
-        if (request.getSectionIds() != null && !request.getSectionIds().isEmpty()) {
-            wrapper.in(Post::getSectionId, request.getSectionIds());
-        } else {
-            wrapper.eq(request.getSectionId() != null, Post::getSectionId, request.getSectionId());
+        String navType = resolveNavType(request);
+        String orderBy = resolveOrderBy(request, navType);
+        Long categorySectionId = resolveCategorySectionId(request.getCategory());
+        boolean invalidCategory = hasConcreteCategory(request.getCategory()) && categorySectionId == null;
+        Long effectiveSectionId = request.getSectionId() != null ? request.getSectionId() : categorySectionId;
+
+        if (invalidCategory) {
+            wrapper.eq(Post::getId, "__EMPTY__");
         }
 
-        if (Boolean.TRUE.equals(request.getIsFeatured())) {
+        if (request.getSectionIds() != null && !request.getSectionIds().isEmpty()) {
+            wrapper.in(Post::getSectionId, request.getSectionIds());
+            wrapper.eq(categorySectionId != null, Post::getSectionId, categorySectionId);
+        } else {
+            wrapper.eq(effectiveSectionId != null, Post::getSectionId, effectiveSectionId);
+        }
+
+        if (Boolean.TRUE.equals(request.getIsFeatured()) || "essence".equals(navType)) {
             wrapper.eq(Post::getIsFeatured, 1);
         }
 
         if (StringUtils.hasText(request.getTimeRange())) {
             LocalDateTime start = TimeRangeUtils.resolveRangeStart(request.getTimeRange());
             if (start != null) {
-                if ("hot".equalsIgnoreCase(request.getOrderBy())) {
+                if ("hot".equalsIgnoreCase(orderBy)) {
                     wrapper.ge(Post::getLastActivityAt, start);
                     wrapper.and(w -> w.gt(Post::getViewCount, 0).or().gt(Post::getCommentCount, 0));
                 } else {
@@ -870,10 +932,9 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
             }
         }
 
-        String orderBy = request.getOrderBy();
-        boolean shouldApplyPin = !"new".equalsIgnoreCase(orderBy)
-                || request.getSectionId() != null
-                || (request.getSectionIds() != null && !request.getSectionIds().isEmpty());
+        boolean shouldApplyPin = !StringUtils.hasText(request.getNavType()) && (!"new".equalsIgnoreCase(orderBy)
+                || effectiveSectionId != null
+                || (request.getSectionIds() != null && !request.getSectionIds().isEmpty()));
         if (shouldApplyPin) {
             wrapper.orderByDesc(Post::getGlobalPin);
             wrapper.orderByDesc(Post::getCategoryPin);
@@ -881,7 +942,12 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
         }
 
         if ("hot".equalsIgnoreCase(orderBy)) {
+            wrapper.orderByDesc(Post::getViewCount);
+            wrapper.orderByDesc(Post::getLikeCount);
+            wrapper.orderByDesc(Post::getCommentCount);
+            wrapper.orderByDesc(Post::getCollectCount);
             wrapper.orderByDesc(Post::getHeatScore);
+            wrapper.orderByDesc(Post::getCreateTime);
             wrapper.orderByDesc(Post::getId);
         } else if ("relevance".equalsIgnoreCase(orderBy) && !keywordTerms.isEmpty()) {
             wrapper.orderByDesc(Post::getHeatScore);
@@ -893,13 +959,13 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
                 LocalDateTime cursor = request.getCursor();
                 String cursorId = request.getCursorId();
                 wrapper.and(w -> {
-                    w.lt(Post::getLastActivityAt, cursor);
+                    w.lt(Post::getCreateTime, cursor);
                     if (StringUtils.hasText(cursorId)) {
-                        w.or(w2 -> w2.eq(Post::getLastActivityAt, cursor).lt(Post::getId, cursorId));
+                        w.or(w2 -> w2.eq(Post::getCreateTime, cursor).lt(Post::getId, cursorId));
                     }
                 });
             }
-            wrapper.orderByDesc(Post::getLastActivityAt);
+            wrapper.orderByDesc(Post::getCreateTime);
             wrapper.orderByDesc(Post::getId);
         }
         return wrapper;
@@ -1496,6 +1562,12 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
             Map<String, Object> keyParts = new TreeMap<>();
             keyParts.put("page", request.getPage() != null ? request.getPage() : 1);
             keyParts.put("pageSize", clampPageSize(request.getPageSize()));
+            keyParts.put("navType", StringUtils.hasText(request.getNavType())
+                    ? request.getNavType().trim().toLowerCase()
+                    : "");
+            keyParts.put("category", StringUtils.hasText(request.getCategory())
+                    ? request.getCategory().trim()
+                    : "");
             keyParts.put("orderBy", StringUtils.hasText(request.getOrderBy())
                     ? request.getOrderBy().toLowerCase()
                     : "new");

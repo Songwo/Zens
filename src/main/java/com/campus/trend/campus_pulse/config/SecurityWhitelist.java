@@ -50,6 +50,7 @@ public class SecurityWhitelist {
 
         public static final String[] PUBLIC_POST_URLS = {
                         "/post/search-lists",
+                        "/documents/list",
                         "/comment/create",
         };
 }

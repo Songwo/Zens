@@ -20,6 +20,12 @@ public class PostSearchReq {
 
     private String orderBy;
 
+    // latest / hot / essence：文档列表左侧导航条件
+    private String navType;
+
+    // 顶部分类筛选，all 表示全部；数字值对应 sectionId
+    private String category;
+
     private String timeRange;
 
     // Song：是否只看精华贴

@@ -87,6 +87,8 @@ export interface PostSearchRequest {
     sectionIds?: number[]
     status?: number
     orderBy?: 'new' | 'hot' | string
+    navType?: 'latest' | 'hot' | 'essence' | string
+    category?: string | number
     timeRange?: 'TODAY' | 'WEEK' | 'MONTH' | string
     isFeatured?: boolean
     tag?: string

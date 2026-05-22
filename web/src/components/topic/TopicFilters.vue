@@ -1,49 +1,89 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { onMounted, ref, watch } from 'vue'
+import { publicDataApi, type PublicSectionItem } from '@/api/publicData'
 
-defineProps<{
+const props = defineProps<{
   hideCategories?: boolean
 }>()
 
-const activeTab = ref('latest')
-const selectedSort = ref('default')
+type NavType = 'latest' | 'hot' | 'essence'
+
+const activeNav = ref<NavType>('latest')
+const activeCategory = ref('all')
+const categories = ref<PublicSectionItem[]>([])
+const categoryLoading = ref(false)
 
 const emit = defineEmits<{
-  (e: 'filter-change', payload: { tab: string; sort: string }): void
+  (e: 'filter-change', payload: { navType: NavType; category: string }): void
 }>()
 
-const setTab = (tab: string) => {
-  activeTab.value = tab
-  emit('filter-change', { tab: activeTab.value, sort: selectedSort.value })
+const emitFilterChange = () => {
+  emit('filter-change', {
+    navType: activeNav.value,
+    category: props.hideCategories ? 'all' : activeCategory.value,
+  })
 }
 
-const handleSortChange = () => {
-  emit('filter-change', { tab: activeTab.value, sort: selectedSort.value })
+const setNav = (navType: NavType) => {
+  if (activeNav.value === navType) return
+  activeNav.value = navType
+  emitFilterChange()
 }
+
+const handleCategoryChange = () => {
+  emitFilterChange()
+}
+
+const loadCategories = async () => {
+  if (props.hideCategories || categoryLoading.value || categories.value.length > 0) return
+  categoryLoading.value = true
+  try {
+    const res = await publicDataApi.getActiveSectionsCached()
+    categories.value = Array.isArray(res.data) ? res.data : []
+  } catch {
+    categories.value = []
+  } finally {
+    categoryLoading.value = false
+  }
+}
+
+watch(() => props.hideCategories, (hideCategories) => {
+  if (hideCategories) {
+    activeCategory.value = 'all'
+    emitFilterChange()
+    return
+  }
+  loadCategories()
+})
+
+onMounted(() => {
+  loadCategories()
+})
 </script>
 
 <template>
   <div class="topic-filters">
     <div class="filters-main">
-      <button class="tab-btn" :class="{ active: activeTab === 'latest' }" @click="setTab('latest')">最新发布</button>
-      <button class="tab-btn" :class="{ active: activeTab === 'top' }" @click="setTab('top')">热门排行</button>
-      <button
-        v-if="!hideCategories"
-        class="tab-btn"
-        :class="{ active: activeTab === 'categories' }"
-        @click="setTab('categories')"
-      >
-        板块分类
-      </button>
-      <button class="tab-btn" :class="{ active: activeTab === 'docs' }" @click="setTab('docs')">精华文档</button>
+      <button class="tab-btn" :class="{ active: activeNav === 'latest' }" @click="setNav('latest')">最新发布</button>
+      <button class="tab-btn" :class="{ active: activeNav === 'hot' }" @click="setNav('hot')">热门排行</button>
+      <button class="tab-btn" :class="{ active: activeNav === 'essence' }" @click="setNav('essence')">精华文档</button>
     </div>
 
-    <div class="filters-side">
-      <span class="sort-label">排序</span>
-      <el-select v-model="selectedSort" class="filter-select" @change="handleSortChange">
-        <el-option label="默认" value="default" />
-        <el-option label="评论最多" value="comments" />
-        <el-option label="近期活跃" value="active" />
+    <div v-if="!hideCategories" class="filters-side">
+      <span class="sort-label">分类</span>
+      <el-select
+        v-model="activeCategory"
+        class="filter-select"
+        :loading="categoryLoading"
+        @change="handleCategoryChange"
+      >
+        <el-option label="全部分类" value="all" />
+        <el-option
+          v-for="category in categories"
+          :key="category.id"
+          :label="category.name"
+          :value="String(category.id)"
+        />
       </el-select>
     </div>
   </div>
@@ -108,7 +148,7 @@ const handleSortChange = () => {
 }
 
 .filter-select {
-  width: 120px;
+  width: 160px;
 }
 
 @media (max-width: 768px) {
@@ -125,7 +165,7 @@ const handleSortChange = () => {
 
   .filter-select {
     flex: 1;
-    max-width: 160px;
+    max-width: 220px;
   }
 }
 </style>

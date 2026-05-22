@@ -34,14 +34,17 @@ const cursorId = ref<string | null>(null)
 const loading = ref(false)
 const noMore = ref(false)
 
-const activeTab = ref('latest')
-const activeSort = ref('default')
+type NavType = 'latest' | 'hot' | 'essence'
+
+const activeNav = ref<NavType>('latest')
+const activeCategory = ref('all')
 
 const hasNewContent = ref(false)
 const newContentCount = ref(0)
 let newContentTimer: any = null
 let wsUnsubscribe: (() => void) | null = null
 let realtimeInitialized = false
+let fetchDocumentsToken = 0
 const POST_METRICS_UPDATED_EVENT = 'cp:post-metrics-updated'
 
 const loadTrigger = ref<HTMLElement | null>(null)
@@ -52,21 +55,38 @@ const isFirstLoading = computed(() => loading.value && topics.value.length === 0
 
 const getCurrentPageSize = () => (firstBatchLoaded.value ? pageSize : initialPageSize)
 
-const resolveOrderBy = (): 'new' | 'hot' => {
-  let orderBy: 'new' | 'hot' = activeTab.value === 'top' ? 'hot' : 'new'
+const resolveNavType = (): NavType => {
+  const defaultQuery = props.defaultQuery || {}
+  const requestedNav = String(defaultQuery.navType || '').toLowerCase()
 
-  if (activeSort.value === 'comments') {
-    orderBy = 'hot'
+  if (requestedNav === 'latest' || requestedNav === 'hot' || requestedNav === 'essence') {
+    return requestedNav as NavType
+  }
+  if (Boolean(defaultQuery.isFeatured)) return 'essence'
+  if (defaultQuery.orderBy === 'hot') return 'hot'
+  if (route.query.sort === 'hot' || route.query.sort === 'top') return 'hot'
+  if (route.query.sort === 'essence' || route.query.sort === 'featured') return 'essence'
+  if (route.query.sort === 'latest') return 'latest'
+
+  return activeNav.value
+}
+
+const resolveOrderBy = (navType = resolveNavType()): 'new' | 'hot' => {
+  return navType === 'hot' ? 'hot' : 'new'
+}
+
+const resolveCategory = () => {
+  const defaultQuery = props.defaultQuery || {}
+  const defaultCategory = defaultQuery.category
+
+  if (defaultCategory !== undefined && defaultCategory !== null && `${defaultCategory}`.trim() !== '') {
+    return `${defaultCategory}`
+  }
+  if (defaultQuery.sectionId !== undefined && defaultQuery.sectionId !== null) {
+    return `${defaultQuery.sectionId}`
   }
 
-  if (route.query.sort === 'hot' || route.query.sort === 'top') {
-    orderBy = 'hot'
-  }
-  if (route.query.sort === 'latest') {
-    orderBy = 'new'
-  }
-
-  return orderBy
+  return props.hideCategories ? 'all' : activeCategory.value
 }
 
 const toFiniteMetric = (value: unknown): number | null => {
@@ -98,14 +118,18 @@ const applyTopicMetrics = (postId: string, data?: PostMetricsUpdate | PostEvent[
 }
 
 const buildSearchReq = (): PostSearchRequest => {
-  const orderBy = resolveOrderBy()
+  const navType = resolveNavType()
+  const category = resolveCategory()
+  const orderBy = resolveOrderBy(navType)
   const req: PostSearchRequest = {
+    ...props.defaultQuery,
     page: orderBy === 'new' ? 1 : page.value,
     pageSize: getCurrentPageSize(),
     needTotal: false,
     status: 1,
     orderBy,
-    ...props.defaultQuery,
+    navType,
+    category,
   }
 
   if (orderBy === 'new' && cursor.value) {
@@ -160,38 +184,7 @@ const pulseInsight = computed(() => {
   return `AI 数据脉冲: ${parts.join(' · ')}`
 })
 
-const loadMore = async () => {
-  if (loading.value || noMore.value) return
-  loading.value = true
-
-  try {
-    const currentPageSize = getCurrentPageSize()
-    const res = await postApi.searchList(buildSearchReq())
-    const records = res.data?.records || []
-    if (records.length < currentPageSize) {
-      noMore.value = true
-    }
-    topics.value.push(...records.map(mapPost))
-    firstBatchLoaded.value = true
-
-    if (resolveOrderBy() === 'new') {
-      const last = records[records.length - 1]
-      if (last?.lastActivityAt) {
-        cursor.value = last.lastActivityAt
-        cursorId.value = last.id
-      }
-    } else {
-      page.value++
-    }
-  } catch {
-    ElMessage.error('加载失败，请重试')
-  } finally {
-    loading.value = false
-  }
-}
-
-const refreshLatest = () => {
-  window.scrollTo({ top: 0, behavior: 'smooth' })
+const resetDocumentState = () => {
   hasNewContent.value = false
   newContentCount.value = 0
   topics.value = []
@@ -200,13 +193,62 @@ const refreshLatest = () => {
   cursor.value = null
   cursorId.value = null
   noMore.value = false
-  loadMore()
 }
 
-const handleFilterChange = (filter: { tab: string; sort: string }) => {
-  activeTab.value = filter.tab
-  activeSort.value = filter.sort
-  refreshLatest()
+const fetchDocuments = async (reset = false) => {
+  if (reset) {
+    resetDocumentState()
+  } else if (loading.value || noMore.value) {
+    return
+  }
+
+  const requestToken = ++fetchDocumentsToken
+  loading.value = true
+
+  try {
+    const currentPageSize = getCurrentPageSize()
+    const orderBy = resolveOrderBy()
+    const res = await postApi.searchList(buildSearchReq())
+    if (requestToken !== fetchDocumentsToken) return
+
+    const records = res.data?.records || []
+    if (records.length < currentPageSize) {
+      noMore.value = true
+    }
+    topics.value.push(...records.map(mapPost))
+    firstBatchLoaded.value = true
+
+    if (orderBy === 'new') {
+      const last = records[records.length - 1]
+      if (last?.createTime) {
+        cursor.value = last.createTime
+        cursorId.value = last.id
+      }
+    } else {
+      page.value++
+    }
+  } catch {
+    if (requestToken === fetchDocumentsToken) {
+      ElMessage.error('加载失败，请重试')
+    }
+  } finally {
+    if (requestToken === fetchDocumentsToken) {
+      loading.value = false
+    }
+  }
+}
+
+const loadMore = () => fetchDocuments(false)
+
+const refreshLatest = () => {
+  window.scrollTo({ top: 0, behavior: 'smooth' })
+  fetchDocuments(true)
+}
+
+const handleFilterChange = (filter: { navType: NavType; category: string }) => {
+  activeNav.value = filter.navType
+  activeCategory.value = filter.category || 'all'
+  fetchDocuments(true)
 }
 
 const handlePostEvent = (event: PostEvent) => {
@@ -224,7 +266,7 @@ const handlePostEvent = (event: PostEvent) => {
 
       applyTopicMetrics(event.postId, event.data, { incrementReply: event.type === 'POST_REPLIED' })
 
-      if (event.type === 'POST_REPLIED' && activeTab.value === 'latest') {
+      if (event.type === 'POST_REPLIED' && resolveNavType() === 'latest') {
         const [movedTopic] = topics.value.splice(index, 1)
         topics.value.unshift(movedTopic)
       }
@@ -257,9 +299,18 @@ const startNewContentPolling = () => {
     if (window.scrollY <= 300 || hasNewContent.value) return
     if (typeof document !== 'undefined' && document.hidden) return
     if (typeof navigator !== 'undefined' && !navigator.onLine) return
+    if (resolveNavType() !== 'latest') return
 
     try {
-      const res = await postApi.searchList({ page: 1, pageSize: 1, needTotal: false, status: 1, orderBy: 'new' })
+      const res = await postApi.searchList({
+        ...buildSearchReq(),
+        page: 1,
+        pageSize: 1,
+        cursor: undefined,
+        cursorId: undefined,
+        navType: 'latest',
+        orderBy: 'new',
+      })
       const latestId = res.data?.records?.[0]?.id
       if (latestId && topics.value.length > 0 && latestId !== topics.value[0]?.id) {
         hasNewContent.value = true
@@ -299,6 +350,7 @@ const scheduleRealtimeInit = () => {
 }
 
 watch(() => route.query.sort, () => {
+  activeNav.value = resolveNavType()
   refreshLatest()
 })
 

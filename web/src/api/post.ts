@@ -5,7 +5,7 @@ import type { Post, PostSearchRequest, Result, CreatePostRequest, SaveDraftReque
 export const postApi = {
     // Song：说明
     searchList(data: PostSearchRequest, config?: AxiosRequestConfig) {
-        return api.post<any, Result<{ records: Post[]; total: number; pages: number }>>('/post/search-lists', data, config)
+        return api.post<any, Result<{ records: Post[]; total: number; pages: number }>>('/documents/list', data, config)
     },
 
     getModerationList(data: PostSearchRequest, config?: AxiosRequestConfig) {
