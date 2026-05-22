@@ -32,6 +32,10 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class CommentServiceImpl extends ServiceImpl<CommentMapper, Comment> implements CommentService {
 
+    private static final int POST_STATUS_PUBLISHED = 1;
+    private static final String AUDIT_STATUS_PENDING = "PENDING";
+    private static final String AUDIT_STATUS_APPROVED = "APPROVED";
+    private static final String AUDIT_STATUS_DELETED = "DELETED";
     private static final String POST_FEED_CACHE_GLOBAL_VERSION_KEY = "post:feed:version:global";
     private static final String POST_FEED_CACHE_SECTION_VERSION_KEY_PREFIX = "post:feed:version:section:";
     private static final String POST_DETAIL_CACHE_VERSION_KEY_PREFIX = "post:detail:version:";
@@ -46,11 +50,20 @@ public class CommentServiceImpl extends ServiceImpl<CommentMapper, Comment> impl
     private final com.campus.trend.campus_pulse.service.PostEventService postEventService;
     private final com.campus.trend.campus_pulse.service.LevelService levelService;
     private final com.campus.trend.campus_pulse.service.AsyncTaskService asyncTaskService;
+    private final SectionModeratorService sectionModeratorService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void addComment(CommentCreateReq request, String userId) {
         String actorUserId = userId == null ? "0" : userId;
+        Post post = sysPostMapper.selectById(request.getPostId());
+        if (post == null) {
+            throw new BusinessException(ResultCode.POST_NOT_FOUND);
+        }
+        if (!isCommentablePost(post)) {
+            throw new BusinessException(ResultCode.NO_PERMISSION, "该帖子当前不可评论");
+        }
+
         Comment comment = new Comment();
         comment.setPostId(request.getPostId());
         comment.setUserId(actorUserId);
@@ -71,33 +84,29 @@ public class CommentServiceImpl extends ServiceImpl<CommentMapper, Comment> impl
         comment.setLikeCount(0);
         this.save(comment);
 
-        Post post = sysPostMapper.selectById(comment.getPostId());
         Set<String> alreadyMentionedUserIds = new HashSet<>();
-        if (post != null) {
-            post.setCommentCount(post.getCommentCount() + 1);
-            // Song：更新最后回复时间和最后活跃时间
-            LocalDateTime now = LocalDateTime.now();
-            post.setLastReplyAt(now);
-            post.setLastActivityAt(now);
-            sysPostMapper.updateById(post);
-            invalidatePostFeedCache(post.getSectionId(), post.getId());
+        post.setCommentCount(post.getCommentCount() + 1);
+        // Song：更新最后回复时间和最后活跃时间
+        LocalDateTime now = LocalDateTime.now();
+        post.setLastReplyAt(now);
+        post.setLastActivityAt(now);
+        sysPostMapper.updateById(post);
+        invalidatePostFeedCache(post.getSectionId(), post.getId());
 
-            // 异步：推送新回复事件
-            asyncTaskService.pushPostRepliedAsync(post.getId(), post.getSectionId(), post.getCommentCount());
+        // 异步：推送新回复事件
+        asyncTaskService.pushPostRepliedAsync(post.getId(), post.getSectionId(), post.getCommentCount());
 
-            // 异步：评论通知 + 经验奖励
-            if (!post.getUserId().equals(actorUserId)) {
-                final String postAuthorId = post.getUserId();
-                final String postId = post.getId();
-                final String commentId = comment.getId();
-                final String mentionContent = mentionSource;
-                notificationService.sendCommentNotification(postAuthorId, actorUserId, postId, commentId, mentionContent);
-                alreadyMentionedUserIds.add(postAuthorId);
-                asyncTaskService.addExperienceAsync(postAuthorId, 3, "被评论");
-            }
+        // 异步：评论通知 + 经验奖励
+        if (!post.getUserId().equals(actorUserId)) {
+            final String postAuthorId = post.getUserId();
+            final String postId = post.getId();
+            final String commentId = comment.getId();
+            final String mentionContent = mentionSource;
+            notificationService.sendCommentNotification(postAuthorId, actorUserId, postId, commentId, mentionContent);
+            alreadyMentionedUserIds.add(postAuthorId);
+            asyncTaskService.addExperienceAsync(postAuthorId, 3, "被评论");
         }
 
-        // Song：说明
         if (request.getParentId() != null && !"0".equals(request.getParentId())) {
             Comment parentComment = this.getById(request.getParentId());
             if (parentComment != null && !parentComment.getUserId().equals(actorUserId)) {
@@ -155,6 +164,12 @@ public class CommentServiceImpl extends ServiceImpl<CommentMapper, Comment> impl
     @Override
     public com.baomidou.mybatisplus.core.metadata.IPage<CommentResp> getCommentsByPostId(String postId,
             Integer pageNo, Integer pageSize) {
+        Post post = sysPostMapper.selectById(postId);
+        String currentUserId = SecurityUtils.getCurrentUserId();
+        if (post == null || !canViewHiddenPostComments(currentUserId, post)) {
+            return new Page<CommentResp>(pageNo, pageSize).setRecords(Collections.emptyList());
+        }
+
         Page<Comment> page = new Page<>(pageNo, pageSize);
         Page<Comment> rootPage = this.page(page, Wrappers.<Comment>lambdaQuery()
                 .eq(Comment::getPostId, postId)
@@ -196,11 +211,10 @@ public class CommentServiceImpl extends ServiceImpl<CommentMapper, Comment> impl
         try {
             AuthUser authUser = SecurityUtils.getAuthenticatedUser();
             if (authUser != null) {
-                String currentUserId = authUser.getUser().getId();
-                fillLikeStatus(responseList, currentUserId);
+                String likeStatusUserId = authUser.getUser().getId();
+                fillLikeStatus(responseList, likeStatusUserId);
             }
         } catch (Exception ignored) {
-            // Song：说明
         }
 
         return resultPage;
@@ -227,6 +241,36 @@ public class CommentServiceImpl extends ServiceImpl<CommentMapper, Comment> impl
             userService.incrementLikesReceived(comment.getUserId());
         }
         updateById(comment);
+    }
+
+    private boolean isCommentablePost(Post post) {
+        return isPubliclyVisiblePost(post);
+    }
+
+    private boolean canViewHiddenPostComments(String currentUserId, Post post) {
+        if (isPubliclyVisiblePost(post)) {
+            return true;
+        }
+        if (!StringUtils.hasText(currentUserId)) {
+            return false;
+        }
+        if (currentUserId.equals(post.getUserId())) {
+            return true;
+        }
+        if (com.campus.trend.campus_pulse.utils.PermissionUtils.isUserAdminOrModerator(currentUserId)) {
+            return true;
+        }
+        return post.getSectionId() != null
+                && sectionModeratorService.canModerateSection(currentUserId, post.getSectionId());
+    }
+
+    private boolean isPubliclyVisiblePost(Post post) {
+        return post != null
+                && !AUDIT_STATUS_DELETED.equalsIgnoreCase(post.getAuditStatus())
+                && Integer.valueOf(POST_STATUS_PUBLISHED).equals(post.getStatus())
+                && (!StringUtils.hasText(post.getAuditStatus())
+                || AUDIT_STATUS_PENDING.equalsIgnoreCase(post.getAuditStatus())
+                || AUDIT_STATUS_APPROVED.equalsIgnoreCase(post.getAuditStatus()));
     }
 
     private void attachChildrenTree(Comment parent,
@@ -296,7 +340,6 @@ public class CommentServiceImpl extends ServiceImpl<CommentMapper, Comment> impl
     private void populateInfo(List<CommentResp> responses, Map<String, User> userMap) {
         for (CommentResp c : responses) {
             if (c.getIsAnonymous() != null && c.getIsAnonymous() == 1) {
-                // Song：说明
             } else {
                 User user = userMap.get(c.getUserId());
                 if (user != null) {

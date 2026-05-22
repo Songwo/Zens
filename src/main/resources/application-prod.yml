@@ -15,14 +15,18 @@ server:
       - image/svg+xml
   forward-headers-strategy: framework
   tomcat:
+    threads:
+      max: ${SERVER_TOMCAT_THREADS_MAX:200}
+      min-spare: ${SERVER_TOMCAT_THREADS_MIN_SPARE:20}
+    accept-count: ${SERVER_TOMCAT_ACCEPT_COUNT:200}
     connection-timeout: ${SERVER_CONNECTION_TIMEOUT_MS:120000}
     keep-alive-timeout: ${SERVER_KEEP_ALIVE_TIMEOUT_MS:120000}
+    max-connections: ${SERVER_TOMCAT_MAX_CONNECTIONS:8192}
     max-swallow-size: ${SERVER_TOMCAT_MAX_SWALLOW_SIZE:-1}
 
 spring:
   config:
     import:
-      - optional:file:./.env[.properties]
       - optional:file:./.env.prod[.properties]
       - optional:file:./.env.production[.properties]
   banner:
@@ -82,14 +86,6 @@ spring:
           ssl:
             enable: true
           timeout: 5000
-  mvc:
-    async:
-      request-timeout: ${SPRING_ASYNC_REQUEST_TIMEOUT:10m}
-  servlet:
-    multipart:
-      max-file-size: ${MULTIPART_MAX_FILE_SIZE:512MB}
-      max-request-size: ${MULTIPART_MAX_REQUEST_SIZE:520MB}
-      file-size-threshold: ${MULTIPART_FILE_SIZE_THRESHOLD:2MB}
 
 mybatis-plus:
   configuration:
@@ -103,6 +99,9 @@ management:
     web:
       exposure:
         include: health,info,metrics,prometheus
+  health:
+    mail:
+      enabled: ${MANAGEMENT_HEALTH_MAIL_ENABLED:true}
   endpoint:
     health:
       show-details: when_authorized
@@ -115,6 +114,13 @@ management:
 logging:
   file:
     name: ${LOG_FILE:./log/logfile.log}
+  logback:
+    rollingpolicy:
+      file-name-pattern: ${LOG_ROLLING_PATTERN:./log/archive/campus-pulse.%d{yyyy-MM-dd}.%i.log.gz}
+      max-file-size: ${LOG_MAX_FILE_SIZE:20MB}
+      max-history: ${LOG_MAX_HISTORY:15}
+      total-size-cap: ${LOG_TOTAL_SIZE_CAP:1GB}
+      clean-history-on-start: ${LOG_CLEAN_HISTORY_ON_START:true}
   level:
     root: INFO
     com.campus.trend.campus_pulse: INFO
@@ -123,8 +129,8 @@ logging:
 
 jwt:
   secret: ${JWT_SECRET}
-  access-expire: ${JWT_ACCESS_EXPIRE:3600000}
-  refresh-expire: ${JWT_REFRESH_EXPIRE:604800000}
+  access-expire: ${JWT_ACCESS_EXPIRE:7200000}
+  refresh-expire: ${JWT_REFRESH_EXPIRE:1209600000}
   remember-access-multiplier: ${JWT_REMEMBER_ACCESS_MULTIPLIER:7}
   remember-refresh-multiplier: ${JWT_REMEMBER_REFRESH_MULTIPLIER:4}
   sliding-renew-threshold: ${JWT_SLIDING_RENEW_THRESHOLD:900000}
@@ -175,7 +181,7 @@ campus:
   upload:
     url-prefix: ${UPLOAD_URL_PREFIX:/uploads/}
     avatar-module: ${UPLOAD_AVATAR_MODULE:avatar}
-    max-image-size-mb: ${MAX_IMAGE_SIZE_MB:30}
+    max-image-size-mb: ${MAX_IMAGE_SIZE_MB:15}
     max-image-width: ${MAX_IMAGE_WIDTH:1920}
     max-image-height: ${MAX_IMAGE_HEIGHT:1080}
     jpeg-quality: ${IMAGE_JPEG_QUALITY:0.85}
@@ -197,17 +203,60 @@ campus:
   support:
     admin-username: ${SUPPORT_ADMIN_USERNAME:admin}
     admin-display-name: ${SUPPORT_ADMIN_DISPLAY_NAME:社区管理员}
+  r2:
+    enabled: ${R2_ENABLED:true}
+    endpoint: ${R2_ENDPOINT}
+    region: ${R2_REGION:auto}
+    access-key-id: ${R2_ACCESS_KEY_ID}
+    secret-access-key: ${R2_SECRET_ACCESS_KEY}
+    bucket: ${R2_BUCKET:campus-pulse-media}
+    public-base-url: ${R2_PUBLIC_BASE_URL:https://media.allinsong.top}
+    presign-ttl-seconds: ${R2_PRESIGN_TTL:3600}
+    single-put-threshold-mb: ${R2_SINGLE_PUT_THRESHOLD_MB:10}
+    part-size-mb: ${R2_PART_SIZE_MB:8}
+    max-image-size-mb: ${R2_MAX_IMAGE_MB:15}
+    max-video-size-mb: ${R2_MAX_VIDEO_MB:1024}
+    allowed-image-extensions: ${R2_ALLOWED_IMAGE_EXTENSIONS:.jpg,.jpeg,.png,.gif,.webp}
+    allowed-video-extensions: ${R2_ALLOWED_VIDEO_EXTENSIONS:.mp4,.webm,.ogg,.mov}
+    cache-control: ${R2_CACHE_CONTROL:}
   observability:
     request-log-enabled: ${REQUEST_LOG_ENABLED:true}
     slow-request-ms: ${SLOW_REQUEST_MS:1000}
     slow-sql-ms: ${SLOW_SQL_MS:300}
     request-log-exclude-prefixes: ${REQUEST_LOG_EXCLUDE_PREFIXES:/actuator,/static,/uploads}
+  log-management:
+    enabled: ${LOG_MANAGEMENT_ENABLED:true}
+    base-dir: ${LOG_BASE_DIR:./log}
+    backup-dir: ${LOG_BACKUP_DIR:./log/backups}
+    list-limit: ${LOG_LIST_LIMIT:200}
+    preview-max-lines: ${LOG_PREVIEW_MAX_LINES:400}
+    preview-max-bytes: ${LOG_PREVIEW_MAX_BYTES:131072}
+    default-preview-lines: ${LOG_DEFAULT_PREVIEW_LINES:200}
+    backup-retention-days: ${LOG_BACKUP_RETENTION_DAYS:15}
+    max-backup-files: ${LOG_MAX_BACKUP_FILES:30}
+    max-backup-total-size-mb: ${LOG_MAX_BACKUP_TOTAL_SIZE_MB:1024}
+    auto-backup-enabled: ${LOG_AUTO_BACKUP_ENABLED:false}
+    auto-backup-cron: ${LOG_AUTO_BACKUP_CRON:0 0 */6 * * ?}
+    cleanup-cron: ${LOG_CLEANUP_CRON:0 20 4 * * ?}
+    allowed-extensions: ${LOG_ALLOWED_EXTENSIONS:.log,.txt,.out,.err,.gz}
 
 oauth:
   github:
     client-id: ${GITHUB_CLIENT_ID}
     client-secret: ${GITHUB_CLIENT_SECRET}
     redirect-uri: ${GITHUB_REDIRECT_URI}
+
+cloudflare:
+  turnstile:
+    enabled: ${TURNSTILE_ENABLED:true}
+    allow-local-preview-skip: ${TURNSTILE_ALLOW_LOCAL_PREVIEW_SKIP:false}
+    site-key: ${TURNSTILE_SITE_KEY:0x4AAAAAAC9xtOXBNKG-KQE9}
+    secret-key: ${TURNSTILE_SECRET_KEY:0x4AAAAAAC9xtFFfXflEn-SwY6a7WDL4w3c}
+    verify-url: ${TURNSTILE_VERIFY_URL:https://challenges.cloudflare.com/turnstile/v0/siteverify}
+    connect-timeout-seconds: ${TURNSTILE_CONNECT_TIMEOUT_SECONDS:5}
+    read-timeout-seconds: ${TURNSTILE_READ_TIMEOUT_SECONDS:8}
+    proxy-host: ${TURNSTILE_PROXY_HOST:}
+    proxy-port: ${TURNSTILE_PROXY_PORT:}
 
 security:
   two-factor:
@@ -217,5 +266,5 @@ security:
 
 auth:
   session:
-    single-device: ${AUTH_SESSION_SINGLE_DEVICE:true}
+    single-device: ${AUTH_SESSION_SINGLE_DEVICE:false}
     anomaly-notify-cooldown-seconds: ${AUTH_SESSION_ANOMALY_NOTIFY_COOLDOWN_SECONDS:3600}

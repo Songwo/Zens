@@ -34,9 +34,6 @@ public class Changelog {
      */
     private String timestamp;
 
-    /**
-     * Song：说明
-     */
     private Integer status;
 
     private Integer sortOrder;

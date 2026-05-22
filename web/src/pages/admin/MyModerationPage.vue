@@ -5,6 +5,7 @@ import { useUserStore } from '@/store/user'
 import { sectionApi, type Section } from '@/api/section'
 import { Document, Flag, Grid } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
+import { ensureCurrentUserProfile } from '@/utils/sessionProfile'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -12,9 +13,14 @@ const userStore = useUserStore()
 const sections = ref<Section[]>([])
 const loading = ref(false)
 
-const moderatedSectionIds = computed<number[]>(
-  () => (userStore.userInfo as any)?.moderatedSectionIds || []
-)
+const moderatedSectionIds = computed<number[]>(() => {
+  const rawIds = Array.isArray((userStore.userInfo as any)?.moderatedSectionIds)
+    ? ((userStore.userInfo as any)?.moderatedSectionIds as Array<number | string>)
+    : []
+  return rawIds
+    .map(id => Number(id))
+    .filter(id => Number.isFinite(id) && id > 0)
+})
 
 const moderatedSections = computed(() =>
   sections.value.filter(s => moderatedSectionIds.value.includes(Number(s.id)))
@@ -32,8 +38,9 @@ const fetchSections = async () => {
   }
 }
 
-onMounted(() => {
-  void fetchSections()
+onMounted(async () => {
+  await ensureCurrentUserProfile({ force: true })
+  await fetchSections()
 })
 
 const goToPosts = (sectionId: string) => {

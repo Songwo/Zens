@@ -1,0 +1,17 @@
+# next-env.d.ts in production references this
+.env.local
+.env.production
+.env*.local
+node_modules
+.next
+.git
+.gitignore
+Dockerfile
+docker-compose.yml
+README.md
+docs
+prisma/dev.db*
+*.log
+install.log
+.vscode
+.idea

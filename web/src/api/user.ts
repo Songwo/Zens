@@ -1,5 +1,5 @@
 import api from '@/lib/api'
-import { UPLOAD_REQUEST_TIMEOUT_MS } from '@/constants/upload'
+import { uploadApi } from '@/api/upload'
 import type { Result } from '@/types'
 
 export interface UserProfile {
@@ -57,15 +57,9 @@ export interface UserPublicProfile {
 export const userApi = {
     getProfile: () => api.get<any, Result<UserProfile>>('/user/profile'),
     getSimpleProfile: () => api.get<any, Result<any>>('/user/simple-profile'),
-    updateAvatar: (file: File) => {
-        const formData = new FormData()
-        formData.append('avatar', file)
-        return api.put<any, Result<string>>('/user/avatar', formData, {
-            headers: {
-                'Content-Type': 'multipart/form-data'
-            },
-            timeout: UPLOAD_REQUEST_TIMEOUT_MS
-        })
+    updateAvatar: async (file: File) => {
+        const url = await uploadApi.uploadImage(file, 'avatar')
+        return api.put<any, Result<string>>('/user/avatar', { avatarUrl: url })
     },
     updateUserDetails: (data: any) => api.post('/user/update-udetail', data),
     updatePwd: (data: any) => api.post('/user/update-pwd', data),
@@ -87,9 +81,17 @@ export const userApi = {
 
     getPublicProfile: (userId: string) => api.get<any, Result<UserPublicProfile>>(`/user/public/${userId}`),
 
-    // @mention 用户搜索
     searchUsers: (keyword: string) =>
-        api.get<any, Result<Array<{ id: string; username: string; nickname: string; avatar: string }>>>('/user/search', { params: { keyword } }),
+        api.get<any, Result<Array<{
+            id: string
+            username: string
+            nickname: string
+            avatar: string
+            bio?: string
+            school?: string
+            postCount: number
+            followerCount: number
+        }>>>('/user/search', { params: { keyword } }),
 
     // Song：=================== 管理员接口 ===================
 
@@ -107,5 +109,9 @@ export const userApi = {
 
     /* 设置用户角色 (管理员) */
     assignRole: (id: string, roleCode: string) =>
-        api.post<any, Result<void>>(`/user/${id}/role`, null, { params: { roleCode } })
+        api.post<any, Result<void>>(`/user/${id}/role`, null, { params: { roleCode } }),
+
+    /* 设置用户负责的板块版主范围 (管理员) */
+    updateModeratedSections: (id: string, sectionIds: number[]) =>
+        api.put<any, Result<void>>(`/user/${id}/moderated-sections`, { sectionIds })
 }

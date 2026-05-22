@@ -4,7 +4,6 @@ import com.baomidou.mybatisplus.extension.service.IService;
 import com.campus.trend.campus_pulse.dto.request.CommentCreateReq;
 import com.campus.trend.campus_pulse.entity.Comment;
 
-import java.util.List;
 
 public interface CommentService extends IService<Comment> {
 

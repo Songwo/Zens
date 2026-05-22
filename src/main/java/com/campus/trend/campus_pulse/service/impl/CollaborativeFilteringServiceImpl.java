@@ -31,17 +31,12 @@ public class CollaborativeFilteringServiceImpl implements CollaborativeFiltering
     private final PostCollectMapper postCollectMapper;
 
     /**
-     * Song：说明
      * Song：逻辑：
-     * Song：说明
      * Song：2. 找出这些用户看过的其他帖子
      * Song：3. 统计这些帖子的加权分数 (浏览=1, 点赞=3, 收藏=5)
-     * Song：说明
      */
     @Override
     public List<Post> recommendByItemBased(String postId, int limit) {
-        // Song：说明
-        // Song：说明
         List<ViewLog> whoViewedLogs = viewLogMapper.selectList(
                 new LambdaQueryWrapper<ViewLog>()
                         .select(ViewLog::getUserId) // Song：说明
@@ -100,7 +95,6 @@ public class CollaborativeFilteringServiceImpl implements CollaborativeFiltering
             postScore.merge(collect.getPostId(), 5.0, Double::sum);
         }
 
-        // Song：说明
         List<String> recommendationIds = postScore.entrySet().stream()
                 .sorted(Map.Entry.<String, Double>comparingByValue().reversed())
                 .limit(limit)

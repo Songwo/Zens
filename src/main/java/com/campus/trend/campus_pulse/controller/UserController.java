@@ -1,10 +1,18 @@
 package com.campus.trend.campus_pulse.controller;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.campus.trend.campus_pulse.common.api.Result;
 import com.campus.trend.campus_pulse.config.properties.SupportContactProperties;
-import com.campus.trend.campus_pulse.dto.request.UserPasswordUpdateReq;
-import com.campus.trend.campus_pulse.dto.request.UserDetailUpdateReq;
+import com.campus.trend.campus_pulse.dto.request.AvatarUpdateReq;
 import com.campus.trend.campus_pulse.dto.request.NotificationPreferenceReq;
+import com.campus.trend.campus_pulse.dto.request.UserDetailUpdateReq;
+import com.campus.trend.campus_pulse.dto.request.UserModeratedSectionsUpdateReq;
+import com.campus.trend.campus_pulse.dto.request.UserPasswordUpdateReq;
+import com.campus.trend.campus_pulse.dto.response.NotificationSettingsResp;
+import com.campus.trend.campus_pulse.dto.response.SupportContactResp;
+import com.campus.trend.campus_pulse.dto.response.UserProfileResp;
+import com.campus.trend.campus_pulse.dto.response.UserSearchItemResp;
+import com.campus.trend.campus_pulse.dto.response.UserStatsResp;
 import com.campus.trend.campus_pulse.entity.Follow;
 import com.campus.trend.campus_pulse.entity.Post;
 import com.campus.trend.campus_pulse.entity.User;
@@ -12,31 +20,25 @@ import com.campus.trend.campus_pulse.mapper.FollowMapper;
 import com.campus.trend.campus_pulse.mapper.PostMapper;
 import com.campus.trend.campus_pulse.service.AuthService;
 import com.campus.trend.campus_pulse.service.UserService;
+import com.campus.trend.campus_pulse.utils.PermissionUtils;
 import com.campus.trend.campus_pulse.utils.SecurityUtils;
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import jakarta.validation.Valid;
-import org.springframework.web.bind.annotation.*;
-import org.springframework.web.multipart.MultipartFile;
+import lombok.RequiredArgsConstructor;
 import org.springframework.util.StringUtils;
+import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 @RestController
+@RequiredArgsConstructor
 @RequestMapping("/user")
 public class UserController {
 
-    public UserController(UserService userService, AuthService authService,
-            FollowMapper followMapper, PostMapper postMapper,
-            SupportContactProperties supportContactProperties) {
-        this.userService = userService;
-        this.authService = authService;
-        this.followMapper = followMapper;
-        this.postMapper = postMapper;
-        this.supportContactProperties = supportContactProperties;
-    }
-
+    private static final String AUDIT_STATUS_PENDING = "PENDING";
+    private static final String AUDIT_STATUS_APPROVED = "APPROVED";
     private final UserService userService;
     private final AuthService authService;
     private final FollowMapper followMapper;
@@ -60,42 +62,35 @@ public class UserController {
             return Result.failed("用户不存在");
         }
 
-        Long postCount = postMapper.selectCount(
-                new LambdaQueryWrapper<Post>()
-                        .eq(Post::getUserId, userId)
-                        .eq(Post::getStatus, 1));
+        long postCount = safeCount(postMapper.selectCount(buildPublicVisibleUserPostWrapper(userId)));
+        long followingCount = safeCount(followMapper.selectCount(
+                new LambdaQueryWrapper<Follow>().eq(Follow::getFollowerId, userId)));
+        long followerCount = safeCount(followMapper.selectCount(
+                new LambdaQueryWrapper<Follow>().eq(Follow::getFolloweeId, userId)));
 
-        Long followingCount = followMapper.selectCount(
-                new LambdaQueryWrapper<Follow>()
-                        .eq(Follow::getFollowerId, userId));
-
-        Long followerCount = followMapper.selectCount(
-                new LambdaQueryWrapper<Follow>()
-                        .eq(Follow::getFolloweeId, userId));
-
-        Map<String, Object> data = new HashMap<>();
-        data.put("id", user.getId());
-        data.put("username", user.getUsername());
-        data.put("nickname", StringUtils.hasText(user.getNickname()) ? user.getNickname() : user.getUsername());
-        data.put("avatar", user.getAvatar());
-        data.put("bio", user.getBio());
-        data.put("school", user.getSchool());
-        data.put("major", user.getMajor());
-        data.put("level", user.getLevel());
-        data.put("roles", List.of(StringUtils.hasText(user.getRole()) ? user.getRole() : "ROLE_USER"));
-        data.put("postCount", postCount != null ? postCount : 0);
-        data.put("followingCount", followingCount != null ? followingCount : 0);
-        data.put("followerCount", followerCount != null ? followerCount : 0);
-        data.put("profileCardTheme", StringUtils.hasText(user.getProfileCardTheme()) ? user.getProfileCardTheme() : "sunset");
-        data.put("quickCardTheme", StringUtils.hasText(user.getQuickCardTheme()) ? user.getQuickCardTheme() : "ocean");
-        data.put("profileCardBgUrl", normalizeCardBgUrl(user.getProfileCardBgUrl()));
-        data.put("quickCardBgUrl", normalizeCardBgUrl(user.getQuickCardBgUrl()));
-
-        return Result.success(data);
+        UserProfileResp resp = new UserProfileResp(
+                user.getId(),
+                user.getUsername(),
+                StringUtils.hasText(user.getNickname()) ? user.getNickname() : user.getUsername(),
+                user.getAvatar(),
+                user.getBio(),
+                user.getSchool(),
+                user.getMajor(),
+                user.getLevel(),
+                List.of(StringUtils.hasText(user.getRole()) ? user.getRole() : "ROLE_USER"),
+                postCount,
+                followingCount,
+                followerCount,
+                StringUtils.hasText(user.getProfileCardTheme()) ? user.getProfileCardTheme() : "sunset",
+                StringUtils.hasText(user.getQuickCardTheme()) ? user.getQuickCardTheme() : "ocean",
+                normalizeCardBgUrl(user.getProfileCardBgUrl()),
+                normalizeCardBgUrl(user.getQuickCardBgUrl())
+        );
+        return Result.success(resp);
     }
 
     @GetMapping("/search")
-    public Result<?> searchUsers(@RequestParam(defaultValue = "") String keyword) {
+    public Result<List<UserSearchItemResp>> searchUsers(@RequestParam(defaultValue = "") String keyword) {
         List<User> users = userService.lambdaQuery()
                 .and(!keyword.isBlank(), q -> q
                         .like(User::getNickname, keyword)
@@ -103,14 +98,43 @@ public class UserController {
                 .eq(User::getStatus, 1)
                 .last("LIMIT 10")
                 .list();
-        List<Map<String, Object>> result = users.stream().map(u -> {
-            Map<String, Object> m = new HashMap<>();
-            m.put("id", u.getId());
-            m.put("username", u.getUsername());
-            m.put("nickname", StringUtils.hasText(u.getNickname()) ? u.getNickname() : u.getUsername());
-            m.put("avatar", u.getAvatar());
-            return m;
-        }).toList();
+
+        if (users.isEmpty()) {
+            return Result.success(List.of());
+        }
+
+        List<String> userIds = users.stream().map(User::getId).toList();
+
+        Map<String, Long> postCountMap = new HashMap<>();
+        postMapper.selectList(new LambdaQueryWrapper<Post>()
+                        .select(Post::getUserId)
+                        .in(Post::getUserId, userIds)
+                        .eq(Post::getStatus, 1)
+                        .and(w -> w.isNull(Post::getAuditStatus)
+                                .or()
+                                .eq(Post::getAuditStatus, "")
+                                .or()
+                                .eq(Post::getAuditStatus, AUDIT_STATUS_PENDING)
+                                .or()
+                                .eq(Post::getAuditStatus, AUDIT_STATUS_APPROVED)))
+                .forEach(p -> postCountMap.merge(p.getUserId(), 1L, Long::sum));
+
+        Map<String, Long> followerCountMap = new HashMap<>();
+        followMapper.selectList(new LambdaQueryWrapper<Follow>()
+                        .select(Follow::getFolloweeId)
+                        .in(Follow::getFolloweeId, userIds))
+                .forEach(f -> followerCountMap.merge(f.getFolloweeId(), 1L, Long::sum));
+
+        List<UserSearchItemResp> result = users.stream().map(u -> new UserSearchItemResp(
+                u.getId(),
+                u.getUsername(),
+                StringUtils.hasText(u.getNickname()) ? u.getNickname() : u.getUsername(),
+                u.getAvatar(),
+                u.getBio(),
+                u.getSchool(),
+                postCountMap.getOrDefault(u.getId(), 0L),
+                followerCountMap.getOrDefault(u.getId(), 0L)
+        )).toList();
         return Result.success(result);
     }
 
@@ -120,26 +144,25 @@ public class UserController {
     }
 
     @PutMapping("/avatar")
-    public Result<?> updateAvatar(@RequestParam("avatar") MultipartFile file) {
-        String url = userService.uploadAvatar(file);
-        return Result.success(url);
+    public Result<String> updateAvatar(@Valid @RequestBody AvatarUpdateReq req) {
+        return Result.success(userService.updateAvatar(req.getAvatarUrl()));
     }
 
     @PostMapping("/update-pwd")
-    public Result<?> updatePwd(@Valid @RequestBody UserPasswordUpdateReq updatePasswordRequest) {
+    public Result<Void> updatePwd(@Valid @RequestBody UserPasswordUpdateReq updatePasswordRequest) {
         userService.updateUserPassword(updatePasswordRequest);
         authService.logout();
         return Result.success();
     }
 
     @PostMapping("/update-udetail")
-    public Result<?> updateDetail(@Valid @RequestBody UserDetailUpdateReq updateUserDetailRequest) {
+    public Result<Void> updateDetail(@Valid @RequestBody UserDetailUpdateReq updateUserDetailRequest) {
         userService.updateUserDetails(updateUserDetailRequest);
         return Result.success();
     }
 
     @GetMapping("/notification-settings")
-    public Result<?> getNotificationSettings() {
+    public Result<NotificationSettingsResp> getNotificationSettings() {
         String userId = SecurityUtils.getCurrentUserId();
         if (userId == null) {
             return Result.failed("请先登录");
@@ -148,13 +171,12 @@ public class UserController {
         if (user == null) {
             return Result.failed("用户不存在");
         }
-        Map<String, Object> data = new HashMap<>();
-        data.put("emailNotifyEnabled", user.getEmailNotifyEnabled() == null || user.getEmailNotifyEnabled() == 1);
-        return Result.success(data);
+        boolean enabled = user.getEmailNotifyEnabled() == null || user.getEmailNotifyEnabled() == 1;
+        return Result.success(new NotificationSettingsResp(enabled));
     }
 
     @PostMapping("/notification-settings")
-    public Result<?> updateNotificationSettings(@Valid @RequestBody NotificationPreferenceReq req) {
+    public Result<Void> updateNotificationSettings(@Valid @RequestBody NotificationPreferenceReq req) {
         String userId = SecurityUtils.getCurrentUserId();
         if (userId == null) {
             return Result.failed("请先登录");
@@ -166,47 +188,23 @@ public class UserController {
         return Result.success();
     }
 
-    /**
-     * Song：获取当前用户的动态数、关注数、粉丝数
-     * Song：说明
-     */
     @GetMapping("/profile-stats")
-    public Result<?> getProfileStats() {
+    public Result<UserStatsResp> getProfileStats() {
         String userId = SecurityUtils.getCurrentUserId();
         if (userId == null) {
             return Result.failed("请先登录");
         }
-
-        // Song：帖子数
-        Long postCount = postMapper.selectCount(
-                new LambdaQueryWrapper<Post>()
-                        .eq(Post::getUserId, userId)
-                        .eq(Post::getStatus, 1));
-
-        // Song：说明
-        Long followingCount = followMapper.selectCount(
-                new LambdaQueryWrapper<Follow>()
-                        .eq(Follow::getFollowerId, userId));
-
-        // Song：说明
-        Long followerCount = followMapper.selectCount(
-                new LambdaQueryWrapper<Follow>()
-                        .eq(Follow::getFolloweeId, userId));
-
-        Map<String, Object> data = new HashMap<>();
-        data.put("postCount", postCount != null ? postCount : 0);
-        data.put("followingCount", followingCount != null ? followingCount : 0);
-        data.put("followerCount", followerCount != null ? followerCount : 0);
-
-        return Result.success(data);
+        long postCount = safeCount(postMapper.selectCount(
+                new LambdaQueryWrapper<Post>().eq(Post::getUserId, userId).eq(Post::getStatus, 1)));
+        long followingCount = safeCount(followMapper.selectCount(
+                new LambdaQueryWrapper<Follow>().eq(Follow::getFollowerId, userId)));
+        long followerCount = safeCount(followMapper.selectCount(
+                new LambdaQueryWrapper<Follow>().eq(Follow::getFolloweeId, userId)));
+        return Result.success(new UserStatsResp(postCount, followingCount, followerCount));
     }
 
-    /**
-     * Song：获取平台管理员联系信息（用于私信引导）
-     * Song：说明
-     */
     @GetMapping("/support-contact")
-    public Result<?> getSupportContact() {
+    public Result<SupportContactResp> getSupportContact() {
         String username = supportContactProperties.getAdminUsername();
         User admin = null;
         if (StringUtils.hasText(username)) {
@@ -218,17 +216,101 @@ public class UserController {
                     .last("LIMIT 1")
                     .one();
         }
-
         if (admin == null) {
             return Result.failed("暂未配置管理员账号");
         }
+        return Result.success(new SupportContactResp(
+                admin.getId(),
+                admin.getUsername(),
+                StringUtils.hasText(admin.getNickname()) ? admin.getNickname() : supportContactProperties.getAdminDisplayName(),
+                admin.getAvatar()
+        ));
+    }
 
-        Map<String, Object> data = new HashMap<>();
-        data.put("id", admin.getId());
-        data.put("username", admin.getUsername());
-        data.put("nickname", StringUtils.hasText(admin.getNickname()) ? admin.getNickname() : supportContactProperties.getAdminDisplayName());
-        data.put("avatar", admin.getAvatar());
-        return Result.success(data);
+    // =================== 管理员接口 ===================
+
+    @PostMapping("/ban/{id}")
+    public Result<?> banUser(@PathVariable String id) {
+        return toggleUserStatus(id, 2, "无权封禁该用户：对方角色等级不低于您");
+    }
+
+    @PostMapping("/unban/{id}")
+    public Result<?> unbanUser(@PathVariable String id) {
+        return toggleUserStatus(id, 1, "无权解封该用户：对方角色等级不低于您");
+    }
+
+    @DeleteMapping("/{id}")
+    public Result<?> deleteUser(@PathVariable String id) {
+        if (!PermissionUtils.isAdmin()) {
+            return Result.failed("无权执行此操作");
+        }
+        User user = userService.getById(id);
+        if (user == null) {
+            return Result.failed("用户不存在或删除失败");
+        }
+        if (!canManage(user)) {
+            return Result.failed("无权删除该用户：对方角色等级不低于您");
+        }
+        return userService.removeById(id) ? Result.success() : Result.failed("删除失败");
+    }
+
+    @PostMapping("/{userId}/role")
+    public Result<?> assignRole(@PathVariable String userId, @RequestParam String roleCode) {
+        if (!PermissionUtils.isAdmin()) {
+            return Result.failed("无权执行此操作");
+        }
+        userService.assignRole(userId, roleCode);
+        return Result.success();
+    }
+
+    @PutMapping("/{userId}/moderated-sections")
+    public Result<?> updateModeratedSections(@PathVariable String userId,
+                                             @RequestBody(required = false) UserModeratedSectionsUpdateReq req) {
+        if (!PermissionUtils.isAdmin()) {
+            return Result.failed("无权执行此操作");
+        }
+        userService.updateModeratedSections(userId, req != null ? req.getSectionIds() : List.of());
+        return Result.success();
+    }
+
+    private Result<?> toggleUserStatus(String id, int targetStatus, String denyMsg) {
+        if (!PermissionUtils.isAdmin()) {
+            return Result.failed("无权执行此操作");
+        }
+        User user = userService.getById(id);
+        if (user == null) {
+            return Result.failed("用户不存在");
+        }
+        if (!canManage(user)) {
+            return Result.failed(denyMsg);
+        }
+        user.setStatus(targetStatus);
+        user.setUpdateTime(LocalDateTime.now());
+        userService.updateById(user);
+        return Result.success();
+    }
+
+    private boolean canManage(User target) {
+        String operatorRole = PermissionUtils.getCurrentUserRole();
+        String targetRole = target.getRole() != null ? target.getRole() : "ROLE_USER";
+        return PermissionUtils.canManageRole(operatorRole, targetRole);
+    }
+
+    private LambdaQueryWrapper<Post> buildPublicVisibleUserPostWrapper(String userId) {
+        return new LambdaQueryWrapper<Post>()
+                .eq(Post::getUserId, userId)
+                .eq(Post::getStatus, 1)
+                .and(w -> w.isNull(Post::getAuditStatus)
+                        .or()
+                        .eq(Post::getAuditStatus, "")
+                        .or()
+                        .eq(Post::getAuditStatus, AUDIT_STATUS_PENDING)
+                        .or()
+                        .eq(Post::getAuditStatus, AUDIT_STATUS_APPROVED));
+    }
+
+    private static long safeCount(Long count) {
+        return count == null ? 0L : count;
     }
 
     private String normalizeCardBgUrl(String raw) {
@@ -247,98 +329,4 @@ public class UserController {
         }
         return null;
     }
-
-    // Song：=================== 管理员接口 ===================
-
-    /**
-     * Song：封禁用户
-     * Song：说明
-     */
-    @PostMapping("/ban/{id}")
-    public Result<?> banUser(@PathVariable String id) {
-        if (!com.campus.trend.campus_pulse.utils.PermissionUtils.isAdmin()) {
-            return Result.failed("无权执行此操作");
-        }
-        com.campus.trend.campus_pulse.entity.User user = userService.getById(id);
-        if (user == null) {
-            return Result.failed("用户不存在");
-        }
-        // Song：不能封禁同级或上级用户
-        String operatorRole = com.campus.trend.campus_pulse.utils.PermissionUtils.getCurrentUserRole();
-        String targetRole = user.getRole() != null ? user.getRole() : "ROLE_USER";
-        if (!com.campus.trend.campus_pulse.utils.PermissionUtils.canManageRole(operatorRole, targetRole)) {
-            return Result.failed("无权封禁该用户：对方角色等级不低于您");
-        }
-        user.setStatus(2); // Song：2=封禁
-        user.setUpdateTime(java.time.LocalDateTime.now());
-        userService.updateById(user);
-        return Result.success();
-    }
-
-    /**
-     * Song：解封用户
-     * Song：说明
-     */
-    @PostMapping("/unban/{id}")
-    public Result<?> unbanUser(@PathVariable String id) {
-        if (!com.campus.trend.campus_pulse.utils.PermissionUtils.isAdmin()) {
-            return Result.failed("无权执行此操作");
-        }
-        com.campus.trend.campus_pulse.entity.User user = userService.getById(id);
-        if (user == null) {
-            return Result.failed("用户不存在");
-        }
-        String operatorRole = com.campus.trend.campus_pulse.utils.PermissionUtils.getCurrentUserRole();
-        String targetRole = user.getRole() != null ? user.getRole() : "ROLE_USER";
-        if (!com.campus.trend.campus_pulse.utils.PermissionUtils.canManageRole(operatorRole, targetRole)) {
-            return Result.failed("无权解封该用户：对方角色等级不低于您");
-        }
-        user.setStatus(1); // Song：1=正常
-        user.setUpdateTime(java.time.LocalDateTime.now());
-        userService.updateById(user);
-        return Result.success();
-    }
-
-    /**
-     * Song：删除用户
-     * Song：说明
-     */
-    @DeleteMapping("/{id}")
-    public Result<?> deleteUser(@PathVariable String id) {
-        if (!com.campus.trend.campus_pulse.utils.PermissionUtils.isAdmin()) {
-            return Result.failed("无权执行此操作");
-        }
-        com.campus.trend.campus_pulse.entity.User user = userService.getById(id);
-        if (user == null) {
-            return Result.failed("用户不存在或删除失败");
-        }
-        String operatorRole = com.campus.trend.campus_pulse.utils.PermissionUtils.getCurrentUserRole();
-        String targetRole = user.getRole() != null ? user.getRole() : "ROLE_USER";
-        if (!com.campus.trend.campus_pulse.utils.PermissionUtils.canManageRole(operatorRole, targetRole)) {
-            return Result.failed("无权删除该用户：对方角色等级不低于您");
-        }
-        boolean removed = userService.removeById(id);
-        if (!removed) {
-            return Result.failed("删除失败");
-        }
-        return Result.success();
-    }
-
-    /**
-     * Song：设置用户角色
-     * Song：说明
-     */
-    @PostMapping("/{userId}/role")
-    public Result<?> assignRole(@PathVariable String userId, @RequestParam String roleCode) {
-        if (!com.campus.trend.campus_pulse.utils.PermissionUtils.isAdmin()) {
-            return Result.failed("无权执行此操作");
-        }
-        try {
-            userService.assignRole(userId, roleCode);
-            return Result.success();
-        } catch (Exception e) {
-            return Result.failed(e.getMessage());
-        }
-    }
-
 }

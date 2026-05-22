@@ -23,6 +23,9 @@ public final class ClientIpUtils {
         }
 
         List<String> candidates = new ArrayList<>();
+        addCandidate(candidates, request.getHeader("CF-Connecting-IP"));
+        addCandidate(candidates, request.getHeader("True-Client-IP"));
+        addCandidate(candidates, request.getHeader("X-Client-IP"));
         collectForwardedHeader(candidates, request.getHeader("Forwarded"));
         collectCommaSeparatedHeader(candidates, request.getHeader("X-Forwarded-For"));
         addCandidate(candidates, request.getHeader("X-Real-IP"));

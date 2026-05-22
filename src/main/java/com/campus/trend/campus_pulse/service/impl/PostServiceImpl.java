@@ -22,8 +22,9 @@ import com.campus.trend.campus_pulse.service.*;
 import java.math.BigDecimal;
 
 import com.campus.trend.campus_pulse.entity.UserTagRelation;
-import com.campus.trend.campus_pulse.mapper.UserTagRelationMapper;
+import com.campus.trend.campus_pulse.dto.media.MediaObject;
 import com.campus.trend.campus_pulse.dto.response.PostResp;
+import com.campus.trend.campus_pulse.entity.PostMedia;
 import com.campus.trend.campus_pulse.entity.User;
 import com.campus.trend.campus_pulse.entity.Section;
 import com.campus.trend.campus_pulse.utils.IdUtils;
@@ -50,7 +51,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.TreeSet;
 import java.util.TreeMap;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.regex.Pattern;
@@ -64,7 +64,10 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
     private static final int POST_STATUS_PUBLISHED = 1;
     private static final String AUDIT_STATUS_DRAFT = "DRAFT";
     private static final String AUDIT_STATUS_PENDING = "PENDING";
+    private static final String AUDIT_STATUS_APPROVED = "APPROVED";
     private static final String AUDIT_STATUS_REJECTED = "REJECTED";
+    private static final String AUDIT_STATUS_DELETED = "DELETED";
+    private static final int RESTORE_GRACE_DAYS = 7;
     private static final int DEFAULT_PAGE_SIZE = 10;
     private static final int MAX_PAGE_SIZE = 30;
     private static final int SUMMARY_MAX_LEN = 150;
@@ -116,6 +119,7 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
     private final StringRedisTemplate stringRedisTemplate;
     private final ObjectMapper objectMapper;
     private final AsyncTaskService asyncTaskService;
+    private final PostMediaService postMediaService;
 
     @Value("${campus.cache.null-value-ttl-seconds:30}")
     private long nullValueTtlSeconds;
@@ -141,7 +145,6 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
                 log.info("Post detail: postId={}, userId={}, isLiked={}, isCollected={}", postId, userId,
                         post.getIsLiked(), post.getIsCollected());
             } catch (Exception e) {
-                // Song：说明
                 log.debug("SearchByPostId - User not authenticated or error: {}", e.getMessage());
                 post.setIsLiked(false);
                 post.setIsCollected(false);
@@ -153,7 +156,6 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void createPost(PostCreateReq createPostRequest, String userId) {
-        // Song：说明
         if (createPostRequest.getSectionId() != null) {
             Section section = sectionService.getSectionById(createPostRequest.getSectionId());
             if (section == null) {
@@ -175,7 +177,6 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
             content = contentSecurityService.filterSensitiveWords(content);
         }
         // Song：如果包含 "抢劫"、"自杀" 等严重违规词，可以直接抛异常拦截
-        // Song：说明
 
         // Song：3.构造帖子
         String postID = IdUtils.genId("POST");
@@ -183,7 +184,6 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
         Post sysPost = new Post();
         sysPost.setId(postID);
         sysPost.setUserId(userId);
-        // Song：说明
         sysPost.setSectionId(createPostRequest.getSectionId());
         sysPost.setTitle(title);
         sysPost.setContent(content);
@@ -198,15 +198,21 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
         sysPost.setIsAnonymous(createPostRequest.getIsAnonymous());
         sysPost.setLocationName(createPostRequest.getLocationName());
 
-        // Song：处理图片
-        if (StringUtils.hasText(createPostRequest.getImages())) {
+        // Song：新版媒体字段优先：若前端传了 mediaList，回填 images/coverImage 以兼容老列表接口。
+        List<MediaObject> mediaList = createPostRequest.getMediaList();
+        if (mediaList != null && !mediaList.isEmpty()) {
+            sysPost.setImages(extractAccessUrls(mediaList));
+            if (!StringUtils.hasText(sysPost.getCoverImage())) {
+                sysPost.setCoverImage(firstAccessUrl(mediaList));
+            }
+        } else if (StringUtils.hasText(createPostRequest.getImages())) {
+            // Song：老字段兼容
             try {
                 List<String> images = objectMapper.readValue(createPostRequest.getImages(),
                         new TypeReference<List<String>>() {
                         });
                 sysPost.setImages(images);
             } catch (Exception e) {
-                // Song：如果解析失败，尝试作为单个图片处理，或者忽略
                 List<String> images = new ArrayList<>();
                 images.add(createPostRequest.getImages());
                 sysPost.setImages(images);
@@ -219,8 +225,8 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
         sysPost.setLikeCount(0);
         sysPost.setCollectCount(0);
         sysPost.setCommentCount(0);
-        sysPost.setStatus(POST_STATUS_PUBLISHED); // Song：正常
-        sysPost.setAuditStatus(AUDIT_STATUS_PENDING); // Song：待审核
+        sysPost.setStatus(POST_STATUS_PUBLISHED); // Song：正常发布
+        sysPost.setAuditStatus(AUDIT_STATUS_APPROVED); // 默认通过；举报后再进入人工处理
         sysPost.setHeatScore(0.0); // Song：初始热度
 
         // Song：初始化置顶和活跃时间字段
@@ -231,6 +237,11 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
 
         // Song：3.保存帖子
         this.save(sysPost);
+
+        // Song：3.1 覆盖式写入 sys_post_media
+        if (mediaList != null) {
+            postMediaService.saveForPost(sysPost.getId(), mediaList);
+        }
 
         // 异步：推送新帖创建事件
         asyncTaskService.pushPostCreatedAsync(sysPost);
@@ -277,6 +288,9 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
             if (post == null) {
                 throw new BusinessException(ResultCode.DRAFT_NOT_FOUND);
             }
+            if (isDeletedPost(post)) {
+                throw new BusinessException(ResultCode.NO_PERMISSION, "帖子已删除，请先在回收站恢复后再编辑");
+            }
             if (!userId.equals(post.getUserId())) {
                 throw new BusinessException(ResultCode.NO_PERMISSION, "无权修改该草稿");
             }
@@ -312,6 +326,11 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
             save(post);
         }
 
+        // Song：草稿也支持媒体覆盖保存
+        if (draftRequest.getMediaList() != null) {
+            postMediaService.saveForPost(post.getId(), draftRequest.getMediaList());
+        }
+
         invalidatePostFeedCache(oldSectionId, post.getSectionId());
         bumpPostDetailCacheVersion(post.getId());
         return convertToPostResp(post);
@@ -320,7 +339,6 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
     /**
      * Song：处理帖子标签：自动创建标签并增加热度
      *
-     * Song：说明
      */
     private void processPostTags(String tagsString) {
         if (!StringUtils.hasText(tagsString)) {
@@ -436,21 +454,31 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
 
     @Override
     public void likePost(String postId, String userId) {
-        Long sectionId = getSectionIdByPostId(postId);
-        // Song：说明
+        Post post = getById(postId);
+        if (post == null) {
+            throw new BusinessException(ResultCode.POST_NOT_FOUND);
+        }
+        if (!isPubliclyVisible(post)) {
+            throw new BusinessException(ResultCode.NO_PERMISSION, "该帖子当前不可点赞");
+        }
         // Song：该方法会自动处理点赞状态切换并更新点赞数
         postLikeService.toggleLike(postId, userId);
-        invalidatePostFeedCache(sectionId, sectionId);
+        invalidatePostFeedCache(post.getSectionId(), post.getSectionId());
         bumpPostDetailCacheVersion(postId);
     }
 
     @Override
     public void collectPost(String postId, String userId) {
-        Long sectionId = getSectionIdByPostId(postId);
-        // Song：说明
+        Post post = getById(postId);
+        if (post == null) {
+            throw new BusinessException(ResultCode.POST_NOT_FOUND);
+        }
+        if (!isPubliclyVisible(post)) {
+            throw new BusinessException(ResultCode.NO_PERMISSION, "该帖子当前不可收藏");
+        }
         // Song：该方法会自动处理收藏状态切换并更新收藏数
         postCollectService.toggleCollect(postId, userId);
-        invalidatePostFeedCache(sectionId, sectionId);
+        invalidatePostFeedCache(post.getSectionId(), post.getSectionId());
         bumpPostDetailCacheVersion(postId);
     }
 
@@ -461,11 +489,16 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
         if (post == null) {
             throw new BusinessException(ResultCode.POST_NOT_FOUND);
         }
+        if (isDeletedPost(post)) {
+            throw new BusinessException(ResultCode.NO_PERMISSION, "帖子已删除，请先在回收站恢复后再编辑");
+        }
         Long oldSectionId = post.getSectionId();
 
         boolean isAdmin = com.campus.trend.campus_pulse.utils.PermissionUtils.isUserAdmin(userId);
+        boolean canModerateSection = post.getSectionId() != null
+                && sectionModeratorService.canModerateSection(userId, post.getSectionId());
 
-        if (!post.getUserId().equals(userId) && !isAdmin) {
+        if (!post.getUserId().equals(userId) && !isAdmin && !canModerateSection) {
             throw new BusinessException(ResultCode.NO_PERMISSION, "无权修改该帖子");
         }
 
@@ -498,8 +531,9 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
             post.setSentimentScore(BigDecimal.valueOf(sentimentScore));
             post.setSummary(buildSummary(post.getContent()));
 
-            // Song：重新审核状态
-            post.setAuditStatus(AUDIT_STATUS_PENDING);
+            if (Integer.valueOf(POST_STATUS_PUBLISHED).equals(post.getStatus())) {
+                post.setAuditStatus(AUDIT_STATUS_APPROVED);
+            }
         }
 
         // Song：3. 其他字段
@@ -527,7 +561,8 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
         if (publishAction) {
             validatePostForPublish(post);
             post.setStatus(POST_STATUS_PUBLISHED);
-            post.setAuditStatus(AUDIT_STATUS_PENDING);
+            post.setAuditStatus(AUDIT_STATUS_APPROVED);
+            post.setRejectReason(null);
             processPostTags(post.getTags());
         } else if (Integer.valueOf(POST_STATUS_DRAFT).equals(request.getStatus())) {
             post.setStatus(POST_STATUS_DRAFT);
@@ -538,8 +573,14 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
 
         post.setUpdateTime(LocalDateTime.now());
 
-        // Song：图片处理 (简单实现: 如果传了就覆盖)
-        if (StringUtils.hasText(request.getImages())) {
+        // Song：媒体处理。mediaList 优先（覆盖式），传空列表表示清空；传 null 视为不动。
+        List<MediaObject> updateMediaList = request.getMediaList();
+        if (updateMediaList != null) {
+            post.setImages(extractAccessUrls(updateMediaList));
+            if (!StringUtils.hasText(post.getCoverImage())) {
+                post.setCoverImage(firstAccessUrl(updateMediaList));
+            }
+        } else if (StringUtils.hasText(request.getImages())) {
             try {
                 List<String> images = objectMapper.readValue(request.getImages(), new TypeReference<List<String>>() {
                 });
@@ -550,6 +591,12 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
         }
 
         this.updateById(post);
+
+        // Song：覆盖式同步 sys_post_media
+        if (updateMediaList != null) {
+            postMediaService.saveForPost(post.getId(), updateMediaList);
+        }
+
         invalidatePostFeedCache(oldSectionId, post.getSectionId());
         bumpPostDetailCacheVersion(post.getId());
     }
@@ -563,21 +610,51 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
         }
         Long oldSectionId = post.getSectionId();
 
-        boolean isAdmin = com.campus.trend.campus_pulse.utils.PermissionUtils.isUserAdmin(userId);
-        boolean canModerateSection = sectionModeratorService.canModerateSection(userId, post.getSectionId());
+        if (isDeletedPost(post)) {
+            throw new BusinessException(ResultCode.PARAM_ERROR, "帖子已在回收站中");
+        }
 
-        // Song：校验权限 (作者、管理员或对应板块版主)
-        if (!post.getUserId().equals(userId) && !isAdmin && !canModerateSection) {
+        if (!canDeleteOrRestorePost(post, userId)) {
             throw new BusinessException(ResultCode.NO_PERMISSION, "无权删除该帖子");
         }
 
-        // Song：物理删除
-        this.removeById(postId);
+        post.setStatus(POST_STATUS_DRAFT);
+        post.setAuditStatus(AUDIT_STATUS_DELETED);
+        post.setRejectReason(null);
+        clearModerationDisplayFlags(post);
+        post.setUpdateTime(LocalDateTime.now());
+        this.updateById(post);
         invalidatePostFeedCache(oldSectionId, null);
         bumpPostDetailCacheVersion(postId);
+    }
 
-        // Song：同时可以考虑扣除用户贡献值等，或者清理浏览记录
-        // Song：说明
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void restoreDeletedPost(String postId, String userId) {
+        Post post = getById(postId);
+        if (post == null) {
+            throw new BusinessException(ResultCode.POST_NOT_FOUND);
+        }
+        if (!isDeletedPost(post)) {
+            throw new BusinessException(ResultCode.PARAM_ERROR, "该帖子不在回收站中");
+        }
+        if (!canDeleteOrRestorePost(post, userId)) {
+            throw new BusinessException(ResultCode.NO_PERMISSION, "无权恢复该帖子");
+        }
+        if (post.getUpdateTime() == null
+                || post.getUpdateTime().plusDays(RESTORE_GRACE_DAYS).isBefore(LocalDateTime.now())) {
+            throw new BusinessException(ResultCode.NO_PERMISSION, "已超过7天冷静期，无法恢复");
+        }
+
+        validatePostForPublish(post);
+        post.setStatus(POST_STATUS_PUBLISHED);
+        post.setAuditStatus(AUDIT_STATUS_APPROVED);
+        post.setRejectReason(null);
+        post.setUpdateTime(LocalDateTime.now());
+        this.updateById(post);
+        invalidatePostFeedCache(null, post.getSectionId());
+        bumpPostDetailCacheVersion(postId);
+
     }
 
     @Override
@@ -585,6 +662,9 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
         Post post = getById(postId);
         if (post == null) {
             throw new BusinessException(ResultCode.POST_NOT_FOUND);
+        }
+        if (isDeletedPost(post)) {
+            throw new BusinessException(ResultCode.NO_PERMISSION, "帖子已删除，请先恢复后再操作");
         }
 
         boolean canModerateSection = sectionModeratorService.canModerateSection(userId, post.getSectionId());
@@ -603,10 +683,8 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
     public void rejectPost(String postId, String reason, String operatorId) {
         Post post = getById(postId);
         if (post == null) throw new BusinessException(ResultCode.POST_NOT_FOUND);
-        post.setAuditStatus(AUDIT_STATUS_REJECTED);
-        post.setStatus(0);
-        post.setRejectReason(reason);
-        post.setUpdateTime(java.time.LocalDateTime.now());
+        ensureModerationPermission(post, operatorId);
+        markPostRejected(post, reason);
         this.updateById(post);
         invalidatePostFeedCache(post.getSectionId(), post.getSectionId());
         bumpPostDetailCacheVersion(post.getId());
@@ -623,8 +701,10 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
     public void approvePost(String postId, String operatorId) {
         Post post = getById(postId);
         if (post == null) throw new BusinessException(ResultCode.POST_NOT_FOUND);
-        post.setAuditStatus("APPROVED");
-        post.setStatus(1);
+        ensureModerationPermission(post, operatorId);
+        post.setAuditStatus(AUDIT_STATUS_APPROVED);
+        post.setStatus(POST_STATUS_PUBLISHED);
+        post.setRejectReason(null);
         post.setUpdateTime(java.time.LocalDateTime.now());
         this.updateById(post);
         invalidatePostFeedCache(post.getSectionId(), post.getSectionId());
@@ -710,30 +790,46 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
 
         wrapper.eq(StringUtils.hasText(request.getUserId()), Post::getUserId, request.getUserId());
 
+        String currentUserId = com.campus.trend.campus_pulse.utils.SecurityUtils.getCurrentUserId();
+        boolean isQueryingSelf = StringUtils.hasText(request.getUserId())
+                && request.getUserId().equals(currentUserId);
+        boolean isModerationView = Boolean.TRUE.equals(request.getModerationView());
+        boolean isDeletedFilter = AUDIT_STATUS_DELETED.equalsIgnoreCase(request.getAuditStatus());
+        boolean includeDeleted = Boolean.TRUE.equals(request.getIncludeDeleted()) || isDeletedFilter;
+
         if (StringUtils.hasText(request.getAuditStatus())) {
             wrapper.eq(Post::getAuditStatus, request.getAuditStatus());
         }
 
-        if (request.getStatus() != null && request.getStatus() != -1) {
-            wrapper.eq(Post::getStatus, request.getStatus());
-        } else if (request.getStatus() == null) {
-            String currentUserId = com.campus.trend.campus_pulse.utils.SecurityUtils.getCurrentUserId();
-            boolean isQueryingSelf = StringUtils.hasText(request.getUserId())
-                    && request.getUserId().equals(currentUserId);
-            if (isQueryingSelf) {
-                wrapper.and(w -> w.eq(Post::getStatus, 1)
-                        .or(ow -> ow.eq(Post::getStatus, 0)
-                                .in(Post::getAuditStatus, AUDIT_STATUS_REJECTED, AUDIT_STATUS_DRAFT)));
-            } else {
-                wrapper.eq(Post::getStatus, 1);
+        if (isDeletedFilter && !isQueryingSelf && !isModerationView) {
+            wrapper.eq(Post::getId, "__EMPTY__");
+        } else if (!includeDeleted) {
+            applyNotDeletedFilter(wrapper);
+        }
+
+        if (isModerationView) {
+            if (request.getStatus() != null && request.getStatus() != -1) {
+                wrapper.eq(Post::getStatus, request.getStatus());
             }
+        } else if (isQueryingSelf) {
+            if (request.getStatus() != null && request.getStatus() != -1) {
+                wrapper.eq(Post::getStatus, request.getStatus());
+            } else if (!isDeletedFilter) {
+                wrapper.eq(Post::getStatus, POST_STATUS_PUBLISHED);
+            }
+        } else if (request.getStatus() != null && request.getStatus() != -1
+                && !Integer.valueOf(POST_STATUS_PUBLISHED).equals(request.getStatus())) {
+            wrapper.eq(Post::getId, "__EMPTY__");
+        } else {
+            wrapper.eq(Post::getStatus, POST_STATUS_PUBLISHED);
+            applyPublicAuditVisibilityFilter(wrapper);
         }
 
         if (Boolean.TRUE.equals(request.getPinnedOnly())) {
             wrapper.and(w -> w.eq(Post::getGlobalPin, 1).or().eq(Post::getCategoryPin, 1));
         }
 
-        applyKeywordSearch(wrapper, keywordTerms, keywordSearchMode);
+        applyKeywordSearch(wrapper, keywordTerms, keywordSearchMode, request.getMatchedAuthorIds());
 
         if (StringUtils.hasText(request.getTag())) {
             String[] tagArr = request.getTag().trim().split("[,，]+");
@@ -811,28 +907,40 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
 
     private void applyKeywordSearch(LambdaQueryWrapper<Post> wrapper,
                                     List<String> keywordTerms,
-                                    KeywordSearchMode keywordSearchMode) {
-        if (keywordTerms == null || keywordTerms.isEmpty() || keywordSearchMode == KeywordSearchMode.NONE) {
+                                    KeywordSearchMode keywordSearchMode,
+                                    List<String> matchedAuthorIds) {
+        boolean hasKeywords = keywordTerms != null && !keywordTerms.isEmpty()
+                && keywordSearchMode != KeywordSearchMode.NONE;
+        boolean hasAuthorMatch = matchedAuthorIds != null && !matchedAuthorIds.isEmpty();
+
+        if (!hasKeywords && !hasAuthorMatch) {
             return;
         }
 
-        if (keywordSearchMode == KeywordSearchMode.FULLTEXT) {
-            String booleanQuery = buildBooleanModeKeyword(keywordTerms);
-            wrapper.and(w -> w.apply(
-                    "MATCH(title, content, summary, tags) AGAINST ({0} IN BOOLEAN MODE)",
-                    booleanQuery));
-            return;
-        }
+        wrapper.and(outer -> {
+            if (hasKeywords && keywordSearchMode == KeywordSearchMode.FULLTEXT) {
+                String booleanQuery = buildBooleanModeKeyword(keywordTerms);
+                outer.apply("MATCH(title, content, summary, tags) AGAINST ({0} IN BOOLEAN MODE)", booleanQuery);
+            } else if (hasKeywords) {
+                outer.and(w -> {
+                    for (String term : keywordTerms) {
+                        w.and(inner -> inner.likeRight(Post::getTitle, term)
+                                .or()
+                                .likeRight(Post::getSummary, term)
+                                .or()
+                                .like(Post::getTags, term)
+                                .or()
+                                .like(Post::getContent, term));
+                    }
+                });
+            }
 
-        wrapper.and(w -> {
-            for (String term : keywordTerms) {
-                w.and(inner -> inner.likeRight(Post::getTitle, term)
-                        .or()
-                        .likeRight(Post::getSummary, term)
-                        .or()
-                        .like(Post::getTags, term)
-                        .or()
-                        .like(Post::getContent, term));
+            if (hasAuthorMatch) {
+                if (hasKeywords) {
+                    outer.or().in(Post::getUserId, matchedAuthorIds);
+                } else {
+                    outer.in(Post::getUserId, matchedAuthorIds);
+                }
             }
         });
     }
@@ -903,6 +1011,12 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
             }
             return null;
         }
+        if (!canViewPostDetail(currentUserId, post)) {
+            if (!StringUtils.hasText(currentUserId)) {
+                writePostDetailCache(postId, null);
+            }
+            return null;
+        }
         PostResp result = convertToPostResp(post);
         if (!StringUtils.hasText(currentUserId)) {
             writePostDetailCache(postId, result);
@@ -917,6 +1031,21 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
             return cachedPage;
         }
 
+        String keyword = postSearchRequest.getKeyword();
+        if (StringUtils.hasText(keyword) && keyword.trim().length() >= 2) {
+            List<String> authorIds = userService.lambdaQuery()
+                    .select(User::getId)
+                    .and(q -> q.like(User::getNickname, keyword.trim())
+                            .or().like(User::getUsername, keyword.trim()))
+                    .eq(User::getStatus, 1)
+                    .last("LIMIT 50")
+                    .list()
+                    .stream().map(User::getId).toList();
+            if (!authorIds.isEmpty()) {
+                postSearchRequest.setMatchedAuthorIds(authorIds);
+            }
+        }
+
         // Song：1. 先查询帖子分页数据
         IPage<Post> postPage = searchAllList(postSearchRequest);
         List<Post> posts = postPage.getRecords();
@@ -928,7 +1057,6 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
             return emptyPage;
         }
 
-        // Song：说明
         List<String> userIds = posts.stream().map(Post::getUserId).distinct().toList();
         List<String> postIds = posts.stream().map(Post::getId).filter(StringUtils::hasText).distinct().toList();
         List<Long> sectionIds = posts.stream()
@@ -977,11 +1105,31 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
                     .toList());
         }
 
+        // Song：批量查询媒体，避免 N+1
+        Map<String, List<MediaObject>> mediaByPost = new HashMap<>();
+        if (!postIds.isEmpty()) {
+            try {
+                List<PostMedia> allMedia = postMediaService.listByPostIds(postIds);
+                for (PostMedia row : allMedia) {
+                    MediaObject dto = mediaRowToDto(row);
+                    if (dto == null || !StringUtils.hasText(row.getPostId())) continue;
+                    mediaByPost.computeIfAbsent(row.getPostId(), k -> new ArrayList<>()).add(dto);
+                }
+            } catch (Exception e) {
+                log.debug("批量加载帖子媒体失败, err={}", e.getMessage());
+            }
+        }
+
         List<PostResp> responseList = new ArrayList<>();
         for (Post post : posts) {
             post.setIsLiked(likedPostIds.contains(post.getId()));
             post.setIsCollected(collectedPostIds.contains(post.getId()));
-            responseList.add(convertToPostResp(post, userMap, sectionMap));
+            PostResp resp = convertToPostResp(post, userMap, sectionMap);
+            List<MediaObject> postMedia = mediaByPost.get(post.getId());
+            if (postMedia != null && !postMedia.isEmpty()) {
+                resp.setMediaList(postMedia);
+            }
+            responseList.add(resp);
         }
 
         // Song：5. 构造结果页
@@ -998,11 +1146,13 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
     @Override
     public IPage<PostResp> searchModerationPosts(PostSearchReq postSearchRequest, String userId) {
         PostSearchReq scopedRequest = postSearchRequest != null ? postSearchRequest : new PostSearchReq();
+        scopedRequest.setModerationView(true);
+        scopedRequest.setIncludeDeleted(AUDIT_STATUS_DELETED.equalsIgnoreCase(scopedRequest.getAuditStatus()));
 
-        if (com.campus.trend.campus_pulse.utils.PermissionUtils.isUserAdmin(userId)) {
-            // Song：管理员可查所有状态帖子，不限制 status
+        if (com.campus.trend.campus_pulse.utils.PermissionUtils.isUserAdminOrModerator(userId)) {
+            // 管理员和全局版主可查全部治理状态。
             if (scopedRequest.getStatus() == null) {
-                scopedRequest.setStatus(-1); // Song：-1 表示不过滤状态
+                scopedRequest.setStatus(-1);
             }
             return searchPostsWithAuthor(scopedRequest);
         }
@@ -1030,15 +1180,14 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
             scopedSectionIds = new ArrayList<>(moderatedSectionIds);
         }
 
+        if (scopedRequest.getStatus() == null) {
+            scopedRequest.setStatus(-1);
+        }
         scopedRequest.setSectionId(null);
         scopedRequest.setSectionIds(scopedSectionIds);
         return searchPostsWithAuthor(scopedRequest);
     }
 
-    /**
-     * Song：说明
-     * Song：说明
-     */
     private PostResp convertToPostResp(Post post, Map<String, User> userMap, Map<Long, Section> sectionMap) {
         PostResp response = new PostResp();
 
@@ -1087,7 +1236,6 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
         } else {
             // Song：非匿名帖子
             User author = userMap != null ? userMap.get(post.getUserId()) : null;
-            // Song：说明
             if (userMap == null) {
                 try {
                     author = userService.getById(post.getUserId());
@@ -1156,7 +1304,23 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
     }
 
     private PostResp convertToPostResp(Post post) {
-        return convertToPostResp(post, null, null);
+        PostResp resp = convertToPostResp(post, null, null);
+        if (resp != null && StringUtils.hasText(post.getId())) {
+            try {
+                List<PostMedia> mediaRows = postMediaService.listByPostId(post.getId());
+                if (!mediaRows.isEmpty()) {
+                    List<MediaObject> media = new ArrayList<>(mediaRows.size());
+                    for (PostMedia row : mediaRows) {
+                        MediaObject dto = mediaRowToDto(row);
+                        if (dto != null) media.add(dto);
+                    }
+                    resp.setMediaList(media);
+                }
+            } catch (Exception e) {
+                log.debug("加载帖子媒体失败 postId={}, err={}", post.getId(), e.getMessage());
+            }
+        }
+        return resp;
     }
 
     private void fillSummary(PostResp response, Post post) {
@@ -1171,9 +1335,6 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
         response.setSummary(truncate(post.getTitle(), SUMMARY_MAX_LEN));
     }
 
-    /**
-     * Song：说明
-     */
     private String stripMarkdown(String content) {
         if (content == null || content.isEmpty()) {
             return "";
@@ -1302,6 +1463,12 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
 
     private boolean shouldUsePostFeedCache(PostSearchReq request) {
         if (request == null) {
+            return false;
+        }
+
+        if (Boolean.TRUE.equals(request.getModerationView())
+                || Boolean.TRUE.equals(request.getIncludeDeleted())
+                || StringUtils.hasText(request.getAuditStatus())) {
             return false;
         }
 
@@ -1528,7 +1695,13 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
         post.setLocationName(StringUtils.hasText(draftRequest.getLocationName()) ? draftRequest.getLocationName().trim() : null);
         post.setSummary(buildSummary(post.getContent()));
 
-        if (StringUtils.hasText(draftRequest.getImages())) {
+        List<MediaObject> draftMediaList = draftRequest.getMediaList();
+        if (draftMediaList != null && !draftMediaList.isEmpty()) {
+            post.setImages(extractAccessUrls(draftMediaList));
+            if (!StringUtils.hasText(post.getCoverImage())) {
+                post.setCoverImage(firstAccessUrl(draftMediaList));
+            }
+        } else if (StringUtils.hasText(draftRequest.getImages())) {
             try {
                 List<String> images = objectMapper.readValue(draftRequest.getImages(), new TypeReference<List<String>>() {
                 });
@@ -1539,6 +1712,54 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
                 post.setImages(images);
             }
         }
+    }
+
+    private static List<String> extractAccessUrls(List<MediaObject> mediaList) {
+        if (mediaList == null || mediaList.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<String> urls = new ArrayList<>(mediaList.size());
+        for (MediaObject media : mediaList) {
+            if (media != null && StringUtils.hasText(media.getAccessUrl())) {
+                urls.add(media.getAccessUrl());
+            }
+        }
+        return urls;
+    }
+
+    private static String firstAccessUrl(List<MediaObject> mediaList) {
+        if (mediaList == null) {
+            return null;
+        }
+        for (MediaObject media : mediaList) {
+            if (media != null) {
+                if (StringUtils.hasText(media.getCoverUrl())) {
+                    return media.getCoverUrl();
+                }
+                if (StringUtils.hasText(media.getAccessUrl())) {
+                    return media.getAccessUrl();
+                }
+            }
+        }
+        return null;
+    }
+
+    private static MediaObject mediaRowToDto(PostMedia row) {
+        if (row == null) {
+            return null;
+        }
+        return MediaObject.builder()
+                .fileId(row.getFileId())
+                .mediaType(row.getMediaType())
+                .accessUrl(row.getAccessUrl())
+                .coverUrl(row.getCoverUrl())
+                .mimeType(row.getMimeType())
+                .originalName(row.getOriginalName())
+                .sizeBytes(row.getSizeBytes())
+                .width(row.getWidth())
+                .height(row.getHeight())
+                .durationSeconds(row.getDurationSeconds())
+                .build();
     }
 
     private void validatePostForPublish(Post post) {
@@ -1609,6 +1830,9 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
         if (post == null) {
             throw new BusinessException(ResultCode.POST_NOT_FOUND);
         }
+        if (isDeletedPost(post)) {
+            throw new BusinessException(ResultCode.NO_PERMISSION, "帖子已删除，请先恢复后再操作");
+        }
 
         Integer currentPinned = post.getIsPinned() != null ? post.getIsPinned() : 0;
         Integer newPinned = currentPinned == 1 ? 0 : 1;
@@ -1626,6 +1850,9 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
         Post post = getById(postId);
         if (post == null) {
             throw new BusinessException(ResultCode.POST_NOT_FOUND);
+        }
+        if (isDeletedPost(post)) {
+            throw new BusinessException(ResultCode.NO_PERMISSION, "帖子已删除，请先恢复后再操作");
         }
 
         boolean isAdmin = com.campus.trend.campus_pulse.utils.PermissionUtils.isUserAdmin(userId);
@@ -1676,6 +1903,9 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
         if (post == null) {
             throw new BusinessException(ResultCode.POST_NOT_FOUND);
         }
+        if (isDeletedPost(post)) {
+            throw new BusinessException(ResultCode.NO_PERMISSION, "帖子已删除，请先恢复后再操作");
+        }
 
         boolean canModerateSection = sectionModeratorService.canModerateSection(userId, post.getSectionId());
         if (!canModerateSection) {
@@ -1722,7 +1952,8 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
     @Override
     public java.util.List<com.campus.trend.campus_pulse.dto.response.PostResp> getPinnedPosts(Long sectionId) {
         LambdaQueryWrapper<Post> wrapper = Wrappers.lambdaQuery();
-        wrapper.eq(Post::getStatus, 1);
+        wrapper.eq(Post::getStatus, POST_STATUS_PUBLISHED);
+        applyPublicAuditVisibilityFilter(wrapper);
 
         if (sectionId != null) {
             // Song：查询指定板块的置顶（全局置顶 + 板块置顶）
@@ -1744,10 +1975,110 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
 
         List<Post> posts = this.list(wrapper);
 
-        // Song：说明
         return posts.stream()
                 .map(this::convertToPostResp)
                 .collect(java.util.stream.Collectors.toList());
+    }
+
+    private void applyPublicVisibilityFilter(LambdaQueryWrapper<Post> wrapper) {
+        wrapper.eq(Post::getStatus, POST_STATUS_PUBLISHED);
+        applyNotDeletedFilter(wrapper);
+        applyPublicAuditVisibilityFilter(wrapper);
+    }
+
+    private void applyNotDeletedFilter(LambdaQueryWrapper<Post> wrapper) {
+        wrapper.and(w -> w.isNull(Post::getAuditStatus)
+                .or()
+                .ne(Post::getAuditStatus, AUDIT_STATUS_DELETED));
+    }
+
+    private void applyPublicAuditVisibilityFilter(LambdaQueryWrapper<Post> wrapper) {
+        wrapper.and(w -> w.isNull(Post::getAuditStatus)
+                .or()
+                .eq(Post::getAuditStatus, "")
+                .or()
+                .eq(Post::getAuditStatus, AUDIT_STATUS_PENDING)
+                .or()
+                .eq(Post::getAuditStatus, AUDIT_STATUS_APPROVED));
+    }
+
+    private void ensureModerationPermission(Post post, String operatorId) {
+        if (post == null) {
+            throw new BusinessException(ResultCode.POST_NOT_FOUND);
+        }
+        if (isDeletedPost(post)) {
+            throw new BusinessException(ResultCode.NO_PERMISSION, "帖子已删除，请先恢复后再操作");
+        }
+        boolean isAdmin = com.campus.trend.campus_pulse.utils.PermissionUtils.isUserAdmin(operatorId);
+        boolean canModerateSection = post.getSectionId() != null
+                && sectionModeratorService.canModerateSection(operatorId, post.getSectionId());
+        if (!isAdmin && !canModerateSection) {
+            throw new BusinessException(ResultCode.NO_PERMISSION, "无权审核该帖子");
+        }
+    }
+
+    private void markPostRejected(Post post, String reason) {
+        post.setAuditStatus(AUDIT_STATUS_REJECTED);
+        post.setStatus(POST_STATUS_DRAFT);
+        post.setRejectReason(reason);
+        clearModerationDisplayFlags(post);
+        post.setUpdateTime(java.time.LocalDateTime.now());
+    }
+
+    private void clearModerationDisplayFlags(Post post) {
+        post.setIsPinned(0);
+        post.setGlobalPin(0);
+        post.setCategoryPin(0);
+        post.setPinOrder(0);
+        post.setPinExpireAt(null);
+        post.setIsFeatured(0);
+    }
+
+    private boolean canViewPostDetail(String currentUserId, Post post) {
+        if (post == null) {
+            return false;
+        }
+        if (isPubliclyVisible(post)) {
+            return true;
+        }
+        if (!StringUtils.hasText(currentUserId)) {
+            return false;
+        }
+        if (currentUserId.equals(post.getUserId())) {
+            return true;
+        }
+        if (com.campus.trend.campus_pulse.utils.PermissionUtils.isUserAdminOrModerator(currentUserId)) {
+            return true;
+        }
+        return post.getSectionId() != null
+                && sectionModeratorService.canModerateSection(currentUserId, post.getSectionId());
+    }
+
+    private boolean isPubliclyVisible(Post post) {
+        return post != null
+                && !isDeletedPost(post)
+                && Integer.valueOf(POST_STATUS_PUBLISHED).equals(post.getStatus())
+                && isApprovedAuditStatus(post.getAuditStatus());
+    }
+
+    private boolean isApprovedAuditStatus(String auditStatus) {
+        return !StringUtils.hasText(auditStatus)
+                || AUDIT_STATUS_PENDING.equalsIgnoreCase(auditStatus)
+                || AUDIT_STATUS_APPROVED.equalsIgnoreCase(auditStatus);
+    }
+
+    private boolean isDeletedPost(Post post) {
+        return post != null && AUDIT_STATUS_DELETED.equalsIgnoreCase(post.getAuditStatus());
+    }
+
+    private boolean canDeleteOrRestorePost(Post post, String userId) {
+        if (post == null || !StringUtils.hasText(userId)) {
+            return false;
+        }
+        if (userId.equals(post.getUserId())) {
+            return true;
+        }
+        return post.getSectionId() != null && sectionModeratorService.canModerateSection(userId, post.getSectionId());
     }
 
 }

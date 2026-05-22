@@ -6,7 +6,6 @@ import com.campus.trend.campus_pulse.dto.request.UserDetailUpdateReq;
 import com.campus.trend.campus_pulse.dto.response.UserDetailResp;
 import com.campus.trend.campus_pulse.dto.response.UserSimpleResp;
 import com.campus.trend.campus_pulse.entity.User;
-import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -18,7 +17,7 @@ public interface UserService extends IService<User> {
 
     List<User> getUsers();
 
-    String uploadAvatar(MultipartFile file);
+    String updateAvatar(String avatarUrl);
 
     void updateUserPassword(UserPasswordUpdateReq updatePasswordRequest);
 
@@ -30,6 +29,8 @@ public interface UserService extends IService<User> {
 
     // =================== 角色管理 ===================
     void assignRole(String userId, String roleCode);
+
+    void updateModeratedSections(String userId, List<Long> sectionIds);
 
     // =================== Profile 方法 (原 UserProfileService) ===================
     void addContribution(String userId, int amount);

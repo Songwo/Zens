@@ -3,9 +3,6 @@ package com.campus.trend.campus_pulse.dto.response;
 import lombok.Data;
 import java.util.List;
 
-/**
- * Song：说明
- */
 @Data
 public class PostRecommendResp {
     private String id;
@@ -21,9 +18,6 @@ public class PostRecommendResp {
     private String authorAvatar;
     private String createTime;
     
-    /**
-     * Song：说明
-     */
     private String recommendReason;
     
     private Boolean isLiked;

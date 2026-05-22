@@ -13,7 +13,6 @@ import java.util.*;
 
 /**
  * Song：内容安全服务实现类
- * Song：说明
  */
 @Service
 @Slf4j
@@ -81,7 +80,6 @@ public class ContentSecurityServiceImpl implements ContentSecurityService {
     public void reloadSensitiveWords() {
         Set<String> words = loadSensitiveWordsFromFile();
         // Song：也可以从数据库加载
-        // Song：说明
 
         Map<Object, Object> newMap = new HashMap<>(words.size());
         for (String word : words) {
@@ -122,9 +120,6 @@ public class ContentSecurityServiceImpl implements ContentSecurityService {
         return words;
     }
 
-    /**
-     * Song：说明
-     */
     private void addWordToMap(String word, Map<Object, Object> map) {
         Map<Object, Object> nowMap = map;
         for (int i = 0; i < word.length(); i++) {
@@ -132,10 +127,8 @@ public class ContentSecurityServiceImpl implements ContentSecurityService {
             Object wordMap = nowMap.get(keyChar);
 
             if (wordMap != null) {
-                // Song：说明
                 nowMap = (Map<Object, Object>) wordMap;
             } else {
-                // Song：说明
                 Map<Object, Object> newWorMap = new HashMap<>();
                 newWorMap.put("isEnd", "0");
                 nowMap.put(keyChar, newWorMap);
@@ -168,9 +161,7 @@ public class ContentSecurityServiceImpl implements ContentSecurityService {
         for (int i = 0; i < text.length(); i++) {
             int length = checkSensitiveWord(text, i, matchType);
             if (length > 0) {
-                // Song：说明
                 sensitiveWordList.add(text.substring(i, i + length));
-                // Song：说明
                 i = i + length - 1;
             }
         }
@@ -188,7 +179,6 @@ public class ContentSecurityServiceImpl implements ContentSecurityService {
 
         for (int i = beginIndex; i < text.length(); i++) {
             word = text.charAt(i);
-            // Song：说明
             nowMap = (Map<Object, Object>) nowMap.get(word);
             if (nowMap != null) {
                 // Song：存在，则判断是否为最后一个

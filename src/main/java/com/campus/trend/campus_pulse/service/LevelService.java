@@ -1,9 +1,7 @@
 package com.campus.trend.campus_pulse.service;
 
+import com.campus.trend.campus_pulse.dto.response.LevelExpRecordPageResp;
 import com.campus.trend.campus_pulse.dto.response.LevelInfoResp;
-import com.campus.trend.campus_pulse.dto.response.LevelExpRecordResp;
-
-import java.util.Map;
 
 public interface LevelService {
 
@@ -12,14 +10,13 @@ public interface LevelService {
     LevelInfoResp getUserLevelInfo(String userId);
 
     /**
-     * Song：查询经验记录
-     *
-     * Song：说明
-     * Song：说明
-     * Song：说明
-     * Song：说明
+     * 查询用户经验变动记录（分页）。
+     * @param userId   用户 ID
+     * @param days     过滤最近多少天，null 表示不过滤
+     * @param page     页码，从 1 开始
+     * @param pageSize 每页条数
      */
-    Map<String, Object> getExperienceRecords(String userId, Integer days, int page, int pageSize);
+    LevelExpRecordPageResp getExperienceRecords(String userId, Integer days, int page, int pageSize);
 
     void processLevelUpgrade(String userId);
 

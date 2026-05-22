@@ -11,6 +11,10 @@ function copyEmail() {
     ElMessage.success('邮箱已复制到剪贴板')
   })
 }
+
+function openEmailClient() {
+  window.open('mailto:zhaoqsnyah@gmail.com', '_blank')
+}
 </script>
 
 <template>
@@ -47,7 +51,7 @@ function copyEmail() {
             <el-button
               type="primary"
               class="contact-btn"
-              @click="() => window.open('mailto:zhaoqsnyah@gmail.com', '_blank')"
+              @click="openEmailClient"
             >
               发送邮件
             </el-button>

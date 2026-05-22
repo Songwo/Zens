@@ -36,8 +36,7 @@ class NotificationControllerBatchTest {
 
     @BeforeEach
     void setUp() {
-        NotificationController controller = new NotificationController();
-        org.springframework.test.util.ReflectionTestUtils.setField(controller, "notificationService", notificationService);
+        NotificationController controller = new NotificationController(notificationService);
         mockMvc = ControllerTestSupport.standaloneWithValidation(controller);
         objectMapper = new ObjectMapper();
         ControllerTestSupport.mockLoginUser("u100");

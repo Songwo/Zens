@@ -166,6 +166,14 @@ public class PostController {
         return Result.success();
     }
 
+    /* 恢复软删除帖子（作者/管理员/版主，删除后7天内） */
+    @PostMapping("/{id}/restore")
+    public Result<?> restoreDeletedPost(@PathVariable String id) {
+        AuthUser authUser = SecurityUtils.getAuthenticatedUser();
+        postService.restoreDeletedPost(id, authUser.getUser().getId());
+        return Result.success();
+    }
+
     /* 打回帖子（管理员/版主）*/
     @PostMapping("/{id}/reject")
     public Result<?> rejectPost(@PathVariable String id,

@@ -75,9 +75,9 @@ const removeImage = () => {
       :disabled="uploading"
     >
       <div v-if="modelValue" class="preview-container">
-        <el-image 
-          :src="modelValue" 
-          fit="cover" 
+        <el-image
+          :src="modelValue"
+          fit="contain"
           class="preview-image"
         />
         <div class="preview-overlay">
@@ -118,6 +118,7 @@ const removeImage = () => {
   border-radius: var(--el-border-radius-base);
   overflow: hidden;
   border: 1px solid var(--el-border-color);
+  background-color: var(--el-fill-color-lighter);
 }
 
 .preview-image {

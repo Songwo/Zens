@@ -7,14 +7,12 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /**
- * Song：说明
  * Song：配置分页插件等
  */
 @Configuration
 public class MybatisPlusConfig {
 
     /**
-     * Song：说明
      * Song：添加分页插件支持
      */
     @Bean
@@ -24,7 +22,6 @@ public class MybatisPlusConfig {
         // Song：添加分页插件
         PaginationInnerInterceptor paginationInterceptor = new PaginationInnerInterceptor(DbType.MYSQL);
 
-        // Song：说明
         paginationInterceptor.setOverflow(false);
 
         // Song：设置最大单页限制数量，默认500条，-1不受限制

@@ -24,7 +24,6 @@ public class ModeratorApplicationController {
 
     /**
      * Song：用户申请版主
-     * Song：说明
      */
     @PostMapping("/apply")
     public Result<?> apply(@Valid @RequestBody ModeratorApplyReq body) {
@@ -36,7 +35,6 @@ public class ModeratorApplicationController {
 
     /**
      * Song：获取当前用户的申请列表
-     * Song：说明
      */
     @GetMapping("/my-applications")
     public Result<?> myApplications() {
@@ -46,7 +44,6 @@ public class ModeratorApplicationController {
 
     /**
      * Song：管理员获取所有待审核申请
-     * Song：说明
      */
     @GetMapping("/applications")
     public Result<?> applications() {
@@ -56,7 +53,6 @@ public class ModeratorApplicationController {
 
     /**
      * Song：管理员批准申请
-     * Song：说明
      */
     @PostMapping("/approve/{id}")
     public Result<?> approve(@PathVariable Long id, @Valid @RequestBody(required = false) ModeratorReviewReq body) {
@@ -68,7 +64,6 @@ public class ModeratorApplicationController {
 
     /**
      * Song：管理员拒绝申请
-     * Song：说明
      */
     @PostMapping("/reject/{id}")
     public Result<?> reject(@PathVariable Long id, @Valid @RequestBody ModeratorReviewReq body) {

@@ -39,7 +39,6 @@ public class GlobalExceptionHandler {
         return Result.error(ResultCode.REQUEST_BODY_MISSING, "请求体内容不能为空");
     }
 
-    // Song：说明
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public Result<String> handleValidException(MethodArgumentNotValidException e) {
         String message = extractBindingErrorMessage(e.getBindingResult().getFieldErrors().stream()

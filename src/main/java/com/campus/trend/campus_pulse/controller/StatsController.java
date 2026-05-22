@@ -22,7 +22,6 @@ public class StatsController {
 
     /**
      * Song：站点汇总统计
-     * Song：说明
      */
     @GetMapping("/site")
     public Result<SiteStatsResp> getSiteStats() {

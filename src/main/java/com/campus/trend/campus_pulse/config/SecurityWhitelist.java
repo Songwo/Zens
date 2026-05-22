@@ -2,9 +2,6 @@ package com.campus.trend.campus_pulse.config;
 
 public class SecurityWhitelist {
 
-        /**
-         * Song：说明
-         */
         public static final String[] AUTH_WHITELIST = {
                         // Song：用户认证相关接口
                         "/auth/login",
@@ -21,19 +18,16 @@ public class SecurityWhitelist {
                         "/auth/2fa/verify-login",
                         "/static/**",
                         "/uploads/**",
-                        // Song：说明
                         "/ws/**",
         };
 
-        /**
-         * Song：说明
-         */
         public static final String[] PUBLIC_GET_URLS = {
                         "/post/**",
                         "/category/**",
                         "/categories/**",
                         "/tag/hot",
                         "/tag/hot/**",
+                        "/tag/search",
                         "/recommend/**",
                         "/trend-stat/**",
                         "/heat-rank/**",
@@ -48,14 +42,12 @@ public class SecurityWhitelist {
                         "/follow/stats/**",
                         "/level/thresholds",
                         "/changelog/list",
+                        "/sso/clients/public/**",
                         "/actuator/health",
                         "/actuator/info",
                         "/actuator/prometheus",
         };
 
-        /**
-         * Song：说明
-         */
         public static final String[] PUBLIC_POST_URLS = {
                         "/post/search-lists",
                         "/comment/create",

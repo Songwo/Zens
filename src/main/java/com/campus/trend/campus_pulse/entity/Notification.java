@@ -23,14 +23,8 @@ public class Notification {
     @TableId(type = IdType.AUTO)
     private Long id;
 
-    /**
-     * Song：说明
-     */
     private String userId;
 
-    /**
-     * Song：说明
-     */
     private String type;
 
     /**
@@ -43,14 +37,8 @@ public class Notification {
      */
     private String content;
 
-    /**
-     * Song：说明
-     */
     private String relatedId;
 
-    /**
-     * Song：说明
-     */
     private String relatedUserId;
 
     /**

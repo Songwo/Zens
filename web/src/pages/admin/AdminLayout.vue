@@ -4,6 +4,7 @@ import { useRouter, useRoute } from 'vue-router'
 import {
   PieChart,
   Document,
+  Delete,
   User,
   Flag,
   SwitchButton,
@@ -12,7 +13,10 @@ import {
   Timer,
   Medal,
   SetUp,
-  Ticket
+  Ticket,
+  Reading,
+  Cpu,
+  Connection
 } from '@element-plus/icons-vue'
 import { useUserStore } from '@/store/user'
 import { hasAdminRole, hasModeratorCapability } from '@/utils/sessionProfile'
@@ -25,13 +29,17 @@ const allMenuItems = [
   { id: 'dashboard', name: '数据看板', icon: PieChart, path: '/admin/dashboard', access: 'admin' },
   { id: 'my-sections', name: '我的板块', icon: Medal, path: '/admin/my-sections', access: 'moderator-only' },
   { id: 'posts', name: '内容管理', icon: Document, path: '/admin/posts', access: 'backoffice' },
+  { id: 'posts-trash', name: '内容回收站', icon: Delete, path: '/admin/posts/trash', access: 'backoffice' },
   { id: 'sections', name: '板块管理', icon: IconMenu, path: '/admin/sections', access: 'admin' },
   { id: 'users', name: '用户管理', icon: User, path: '/admin/users', access: 'admin' },
   { id: 'reports', name: '举报管理', icon: Flag, path: '/admin/reports', access: 'backoffice' },
   { id: 'cache', name: '缓存管理', icon: SetUp, path: '/admin/cache', access: 'admin' },
+  { id: 'logs', name: '日志管理', icon: Reading, path: '/admin/logs', access: 'admin' },
+  { id: 'media', name: '媒体存储', icon: Cpu, path: '/admin/media', access: 'admin' },
   { id: 'changelog', name: '发展历程管理', icon: Timer, path: '/admin/changelog', access: 'admin' },
   { id: 'moderator-applications', name: '版主申请管理', icon: Medal, path: '/admin/moderator-applications', access: 'admin' },
-  { id: 'invite-codes', name: '邀请码管理', icon: Ticket, path: '/admin/invite-codes', access: 'admin' }
+  { id: 'invite-codes', name: '邀请码管理', icon: Ticket, path: '/admin/invite-codes', access: 'admin' },
+  { id: 'sso', name: 'SSO 应用管理', icon: Connection, path: '/admin/sso', access: 'admin' }
 ]
 
 const isAdmin = computed(() => hasAdminRole(userStore.userInfo))

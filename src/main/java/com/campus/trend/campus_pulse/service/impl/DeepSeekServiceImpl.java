@@ -90,12 +90,10 @@ public class DeepSeekServiceImpl implements DeepSeekService {
                 if (!messageNode.isMissingNode()) {
                     String jsonString = messageNode.asText();
 
-                    // Song：说明
                     jsonString = jsonString.replaceAll("```json", "")
                             .replaceAll("```", "")
                             .trim();
 
-                    // Song：说明
                     JsonNode resultNode = objectMapper.readTree(jsonString);
 
                     if (resultNode.has("tags") && resultNode.get("tags").isArray()

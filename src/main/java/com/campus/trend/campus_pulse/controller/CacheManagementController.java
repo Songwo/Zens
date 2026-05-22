@@ -39,9 +39,6 @@ public class CacheManagementController {
         return Result.success("标签缓存已清除");
     }
 
-    /**
-     * Song：说明
-     */
     @DeleteMapping("/token/clear")
     public Result<?> clearTokenCache() {
         Result<?> denied = requireAdmin();
@@ -50,6 +47,16 @@ public class CacheManagementController {
         }
         cacheManagementService.clearAllTokenCache();
         return Result.success("Token缓存已清除");
+    }
+
+    @DeleteMapping("/media/clear")
+    public Result<?> clearMediaCache() {
+        Result<?> denied = requireAdmin();
+        if (denied != null) {
+            return denied;
+        }
+        cacheManagementService.clearAllMediaCache();
+        return Result.success("Go媒体服务缓存痕迹已清除");
     }
 
     /**

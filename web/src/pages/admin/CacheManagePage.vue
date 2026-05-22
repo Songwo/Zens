@@ -8,7 +8,7 @@ const loading = ref(false)
 const patternLoading = ref(false)
 const overview = ref<CacheOverview | null>(null)
 
-const pattern = ref('post:feed:cache:*')
+const pattern = ref('media:service:*')
 const patternCount = ref<number | null>(null)
 
 const statCards = computed(() => {
@@ -18,13 +18,31 @@ const statCards = computed(() => {
     { key: 'tagHot', label: '标签缓存', value: data.tagHot },
     { key: 'postFeed', label: '帖子流缓存', value: data.postFeed },
     { key: 'postFeedVersion', label: '帖子流版本键', value: data.postFeedVersion },
+    { key: 'postDetail', label: '帖子详情缓存', value: data.postDetail },
     { key: 'userRecommend', label: '推荐缓存', value: data.userRecommend },
     { key: 'tokenTotal', label: '令牌相关缓存', value: data.tokenTotal },
+    { key: 'mediaToken', label: '旧媒体 Token 痕迹', value: data.mediaToken },
+    { key: 'mediaUpload', label: '旧媒体上传痕迹', value: data.mediaUpload },
+    { key: 'mediaChunk', label: '旧媒体分片痕迹', value: data.mediaChunk },
+    { key: 'mediaAdmin', label: '旧媒体代理痕迹', value: data.mediaAdmin },
+    { key: 'mediaHealth', label: '旧媒体健康检查痕迹', value: data.mediaHealth },
+    { key: 'mediaError', label: '旧媒体错误痕迹', value: data.mediaError },
+    { key: 'mediaMetric', label: '旧媒体指标键', value: data.mediaMetric },
+    { key: 'mediaTotal', label: '旧媒体链路相关总量', value: data.mediaTotal },
     { key: 'captcha', label: '验证码缓存', value: data.captcha },
     { key: 'lock', label: '登录锁定缓存', value: data.lock },
     { key: 'total', label: '统计总量', value: data.total },
   ]
 })
+
+const patternPresets = [
+  { label: '旧媒体链路全部', value: 'media:service:*' },
+  { label: '旧媒体上传', value: 'media:service:upload:*' },
+  { label: '旧媒体分片', value: 'media:service:chunk:*' },
+  { label: '旧媒体管理代理', value: 'media:service:admin:*' },
+  { label: '帖子流缓存', value: 'post:feed:cache:*' },
+  { label: '令牌缓存', value: 'auth:*' },
+]
 
 const fetchOverview = async () => {
   loading.value = true
@@ -74,6 +92,18 @@ const clearTokenCache = async () => {
   await fetchOverview()
 }
 
+const clearMediaCache = async () => {
+  await ElMessageBox.confirm('确认清除旧媒体链路写入 Redis 的联调痕迹？', '操作确认', { type: 'warning' })
+  await cacheAdminApi.clearMediaCache()
+  ElMessage.success('旧媒体链路缓存痕迹已清除')
+  await fetchOverview()
+}
+
+const applyPatternPreset = (value: string) => {
+  pattern.value = value
+  patternCount.value = null
+}
+
 const clearByPattern = async () => {
   if (!pattern.value.trim()) {
     ElMessage.warning('请输入缓存模式，例如 post:feed:cache:*')
@@ -116,6 +146,7 @@ onMounted(() => {
       <div class="quick-actions">
         <el-button type="warning" @click="clearTagCache">清理标签缓存</el-button>
         <el-button type="danger" @click="clearTokenCache">清理令牌缓存</el-button>
+        <el-button type="primary" plain @click="clearMediaCache">清理媒体联调缓存</el-button>
       </div>
     </el-card>
 
@@ -127,11 +158,24 @@ onMounted(() => {
       <div class="pattern-row">
         <el-input
           v-model="pattern"
-          placeholder="输入缓存模式，例如 tag:* 或 post:feed:cache:*"
+          placeholder="输入缓存模式，例如旧链路 media:service:* 或 post:feed:cache:*"
           clearable
         />
         <el-button :loading="patternLoading" @click="countPattern">统计数量</el-button>
         <el-button type="danger" :loading="patternLoading" @click="clearByPattern">按模式清理</el-button>
+      </div>
+
+      <div class="pattern-presets">
+        <span class="pattern-presets__label">快捷模式：</span>
+        <el-button
+          v-for="item in patternPresets"
+          :key="item.value"
+          size="small"
+          text
+          @click="applyPatternPreset(item.value)"
+        >
+          {{ item.label }}
+        </el-button>
       </div>
 
       <div class="pattern-result" v-if="patternCount !== null">
@@ -205,10 +249,22 @@ onMounted(() => {
   color: var(--el-text-color-regular);
 }
 
+.pattern-presets {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+.pattern-presets__label {
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
+}
+
 @media (max-width: 768px) {
   .pattern-row {
     grid-template-columns: 1fr;
   }
 }
 </style>
-

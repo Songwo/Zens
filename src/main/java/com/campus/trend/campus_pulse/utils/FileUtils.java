@@ -19,15 +19,12 @@ public class FileUtils {
 
     /**
      * Song：校验图片文件并获取后缀
-     * Song：说明
-     * Song：说明
      */
     public static String validateImageAndGetSuffix(MultipartFile file) {
         if (file == null || file.isEmpty()) {
             throw new FileEmptyException("上传文件不能为空");
         }
 
-        // Song：说明
         String originalFilename = file.getOriginalFilename();
         if (originalFilename == null) {
             throw new InvalidFileNameException("文件名无效");

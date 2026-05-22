@@ -5,6 +5,10 @@ export interface CacheOverview {
   tagHot: number
   postFeed: number
   postFeedVersion: number
+  postDetail: number
+  postDetailVersion: number
+  postHeatRank: number
+  postHeatRankVersion: number
   userRecommend: number
   tokenTotal: number
   captcha: number
@@ -15,6 +19,14 @@ export interface CacheOverview {
   authRefresh: number
   authDevice: number
   requestNonce: number
+  mediaToken: number
+  mediaUpload: number
+  mediaChunk: number
+  mediaAdmin: number
+  mediaHealth: number
+  mediaError: number
+  mediaMetric: number
+  mediaTotal: number
   total: number
 }
 
@@ -37,10 +49,13 @@ export const cacheAdminApi = {
     return api.delete<any, Result<string>>('/admin/cache/token/clear')
   },
 
+  clearMediaCache() {
+    return api.delete<any, Result<string>>('/admin/cache/media/clear')
+  },
+
   clearByPattern(pattern: string) {
     return api.delete<any, Result<string>>('/admin/cache/clear', {
       params: { pattern },
     })
   },
 }
-

@@ -5,6 +5,7 @@ import { levelApi, type LevelInfo, type LevelThreshold, type LevelExpRecord } fr
 import { userApi, type SupportContact } from '@/api/user'
 import { useUserStore } from '@/store/user'
 import { useRouter } from 'vue-router'
+import { cachedRequest } from '@/utils/requestCache'
 import {
   Trophy,
   Star,
@@ -18,6 +19,8 @@ import {
 
 const userStore = useUserStore()
 const router = useRouter()
+const LEVEL_THRESHOLDS_CACHE_TTL = 30 * 60 * 1000
+const SUPPORT_CONTACT_CACHE_TTL = 5 * 60 * 1000
 
 const levelInfo = ref<LevelInfo | null>(null)
 const thresholds = ref<LevelThreshold[]>([])
@@ -45,11 +48,20 @@ const lv6RemainingExp = computed(() => {
   if (!levelInfo.value) return LV6_REQUIRED_EXP
   return Math.max(0, LV6_REQUIRED_EXP - levelInfo.value.experience)
 })
+const level5RequiredExp = computed(() => levelThresholdMap.value[5] || 500)
 const extraBenefits = computed(() => {
   const currentLevel = levelInfo.value?.level || 0
   const currentExp = levelInfo.value?.experience || 0
   const thresholdMap = levelThresholdMap.value
   const definitions = [
+    {
+      level: 3,
+      title: '二维码工具',
+      icon: 'QR',
+      url: 'https://zens.cc.cd/',
+      buttonText: '打开二维码服务',
+      description: '提供便捷的二维码生成与分享入口，适合活动报名、链接分发和移动端扫码跳转。',
+    },
     {
       level: 7,
       title: '图床系统',
@@ -132,7 +144,11 @@ const fetchLevelInfo = async () => {
 
 const fetchThresholds = async () => {
   try {
-    const res = await levelApi.getThresholds()
+    const res = await cachedRequest(
+      'level:thresholds',
+      LEVEL_THRESHOLDS_CACHE_TTL,
+      () => levelApi.getThresholds()
+    )
     thresholds.value = res.data || []
   } catch {
     // Song：说明
@@ -172,6 +188,7 @@ const fetchFullExpRecords = async (page = 1) => {
 
 const openFullRecords = async () => {
   fullRecordsVisible.value = true
+  fullPagination.value.current = 1
   await fetchFullExpRecords(1)
 }
 
@@ -193,14 +210,24 @@ const formatDateTime = (value: string) => {
 const fetchSupportContact = async () => {
   if (!isLoggedIn.value) return
   try {
-    const res = await userApi.getSupportContact()
+    const res = await cachedRequest(
+      'level:support-contact',
+      SUPPORT_CONTACT_CACHE_TTL,
+      () => userApi.getSupportContact()
+    )
     supportContact.value = res.data || null
   } catch {
     supportContact.value = null
   }
 }
 
-const goSupportDm = () => {
+const ensureSupportContactLoaded = async () => {
+  if (supportContact.value || !isLoggedIn.value) return
+  await fetchSupportContact()
+}
+
+const goSupportDm = async () => {
+  await ensureSupportContactLoaded()
   const mailClaimDraft = '你好，我已达到 Lv6，申请领取社区独立域名邮箱。'
   if (supportContact.value?.id) {
     router.push({
@@ -227,7 +254,10 @@ const goLogin = () => {
 
 onMounted(async () => {
   loading.value = true
-  await Promise.all([fetchThresholds(), fetchLevelInfo(), fetchRecentExpRecords(), fetchSupportContact()])
+  await Promise.all([fetchThresholds(), fetchLevelInfo(), fetchRecentExpRecords()])
+  if (isLv6Unlocked.value) {
+    await fetchSupportContact()
+  }
   loading.value = false
 })
 
@@ -238,7 +268,15 @@ watch(isLoggedIn, async (val) => {
     supportContact.value = null
     return
   }
-  await Promise.all([fetchLevelInfo(), fetchRecentExpRecords(), fetchSupportContact()])
+  await Promise.all([fetchLevelInfo(), fetchRecentExpRecords()])
+  if (isLv6Unlocked.value) {
+    await fetchSupportContact()
+  }
+})
+
+watch(isLv6Unlocked, async (unlocked) => {
+  if (!unlocked || supportContact.value || !isLoggedIn.value) return
+  await fetchSupportContact()
 })
 </script>
 
@@ -329,7 +367,7 @@ watch(isLoggedIn, async (val) => {
           <p v-else>
             达到 <strong>Lv5</strong> 后可生成专属邀请码并邀请好友加入。每成功邀请一人可获得 <strong>+30 经验值</strong>。
             当前 <strong>Lv{{ levelInfo.level }}</strong>，还差
-            <strong>{{ Math.max(0, (thresholds.find(t => t.level === 5)?.experience || 500) - levelInfo.experience) }}</strong>
+            <strong>{{ Math.max(0, level5RequiredExp - levelInfo.experience) }}</strong>
             经验解锁。
           </p>
           <ul class="invite-perks">
@@ -519,7 +557,7 @@ watch(isLoggedIn, async (val) => {
           <div class="card-title">
             <el-icon><Trophy /></el-icon>
             <span>经验加分记录（近7天）</span>
-            <el-button link type="primary" class="view-all-btn" @click="openFullRecords">查看完整记录</el-button>
+            <el-button link type="primary" class="view-all-btn" @click.stop="openFullRecords">查看完整记录</el-button>
           </div>
         </template>
 
@@ -546,6 +584,8 @@ watch(isLoggedIn, async (val) => {
       v-model="fullRecordsVisible"
       title="经验加分完整记录"
       width="760px"
+      append-to-body
+      align-center
       destroy-on-close
     >
       <div v-loading="fullRecordsLoading">

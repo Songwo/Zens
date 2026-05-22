@@ -127,7 +127,7 @@ onMounted(async () => {
 
 <style scoped>
 .page-container {
-  max-width: 900px;
+  width: 100%;
   margin: 0 auto;
   padding: 32px 16px;
   animation: fadeIn 0.5s ease-out;

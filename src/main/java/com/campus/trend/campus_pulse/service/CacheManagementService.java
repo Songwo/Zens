@@ -19,6 +19,11 @@ public interface CacheManagementService {
     void clearAllTokenCache();
 
     /**
+     * 清除旧媒体链路遗留的 Redis 记录
+     */
+    void clearAllMediaCache();
+
+    /**
      * 清除指定前缀的缓存
      * 
      * @param keyPattern 缓存键模式（如 "tag:*"）

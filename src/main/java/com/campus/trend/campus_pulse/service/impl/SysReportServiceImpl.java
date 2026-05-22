@@ -24,7 +24,6 @@ import org.springframework.util.StringUtils;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -42,7 +41,7 @@ public class SysReportServiceImpl extends ServiceImpl<SysReportMapper, SysReport
     private final SectionMapper sectionMapper;
 
     @Override
-    public IPage<ReportManageResp> getManagePage(String userId, Integer current, Integer size, Integer status) {
+    public IPage<ReportManageResp> getManagePage(String userId, Integer current, Integer size, Integer status, Long sectionId) {
         if (!sectionModeratorService.hasModeratorCapability(userId)) {
             throw new BusinessException(ResultCode.NO_PERMISSION, "无权访问举报管理");
         }
@@ -52,7 +51,7 @@ public class SysReportServiceImpl extends ServiceImpl<SysReportMapper, SysReport
         if (status != null) {
             wrapper.eq(SysReport::getStatus, status);
         }
-        applyModerationScope(userId, wrapper);
+        applyModerationScope(userId, wrapper, sectionId);
         wrapper.orderByDesc(SysReport::getCreateTime);
 
         IPage<SysReport> reportPage = this.page(page, wrapper);
@@ -73,52 +72,71 @@ public class SysReportServiceImpl extends ServiceImpl<SysReportMapper, SysReport
         return report;
     }
 
-    private void applyModerationScope(String userId, LambdaQueryWrapper<SysReport> wrapper) {
-        if (PermissionUtils.isUserAdmin(userId)) {
+    private void applyModerationScope(String userId, LambdaQueryWrapper<SysReport> wrapper, Long sectionId) {
+        if (PermissionUtils.isUserAdmin(userId) && sectionId == null) {
             return;
+        }
+
+        Set<Long> scopedSectionIds = resolveScopedSectionIds(userId, sectionId);
+        appendSectionScope(wrapper, scopedSectionIds);
+    }
+
+    private Set<Long> resolveScopedSectionIds(String userId, Long sectionId) {
+        if (PermissionUtils.isUserAdmin(userId)) {
+            return sectionId == null
+                    ? Collections.emptySet()
+                    : Collections.singleton(sectionId);
         }
 
         Set<Long> moderatedSectionIds = sectionModeratorService.getModeratedSectionIds(userId);
         if (moderatedSectionIds.isEmpty()) {
             throw new BusinessException(ResultCode.NO_PERMISSION, "无权访问举报管理");
         }
+        if (sectionId == null) {
+            return moderatedSectionIds;
+        }
+        if (!moderatedSectionIds.contains(sectionId)) {
+            throw new BusinessException(ResultCode.NO_PERMISSION, "无权查看该板块的举报");
+        }
+        return Collections.singleton(sectionId);
+    }
 
-        Set<String> allowedPostIds = postMapper.selectList(new LambdaQueryWrapper<Post>()
-                        .select(Post::getId)
-                        .in(Post::getSectionId, moderatedSectionIds))
-                .stream()
-                .map(Post::getId)
-                .filter(StringUtils::hasText)
-                .collect(Collectors.toCollection(LinkedHashSet::new));
-
-        Set<String> allowedCommentIds = allowedPostIds.isEmpty()
-                ? Collections.emptySet()
-                : commentMapper.selectList(new LambdaQueryWrapper<Comment>()
-                        .select(Comment::getId)
-                        .in(Comment::getPostId, allowedPostIds))
-                .stream()
-                .map(Comment::getId)
-                .filter(StringUtils::hasText)
-                .collect(Collectors.toCollection(LinkedHashSet::new));
-
-        if (allowedPostIds.isEmpty() && allowedCommentIds.isEmpty()) {
+    private void appendSectionScope(LambdaQueryWrapper<SysReport> wrapper, Set<Long> sectionIds) {
+        if (sectionIds == null || sectionIds.isEmpty()) {
             wrapper.eq(SysReport::getId, "__EMPTY__");
             return;
         }
 
-        wrapper.and(scope -> {
-            boolean appended = false;
-            if (!allowedPostIds.isEmpty()) {
-                scope.and(postScope -> postScope.eq(SysReport::getTargetType, "post").in(SysReport::getTargetId, allowedPostIds));
-                appended = true;
-            }
-            if (!allowedCommentIds.isEmpty()) {
-                if (appended) {
-                    scope.or();
-                }
-                scope.and(commentScope -> commentScope.eq(SysReport::getTargetType, "comment").in(SysReport::getTargetId, allowedCommentIds));
-            }
-        });
+        String sectionIdSql = sectionIds.stream()
+                .filter(Objects::nonNull)
+                .map(String::valueOf)
+                .collect(Collectors.joining(","));
+        if (!StringUtils.hasText(sectionIdSql)) {
+            wrapper.eq(SysReport::getId, "__EMPTY__");
+            return;
+        }
+
+        wrapper.and(scope -> scope.apply("""
+                (
+                    LOWER(target_type) = 'post'
+                    AND EXISTS (
+                        SELECT 1
+                        FROM sys_post p
+                        WHERE p.id = sys_report.target_id
+                          AND p.section_id IN (%s)
+                    )
+                )
+                OR (
+                    LOWER(target_type) = 'comment'
+                    AND EXISTS (
+                        SELECT 1
+                        FROM sys_comment c
+                        JOIN sys_post p ON p.id = c.post_id
+                        WHERE c.id = sys_report.target_id
+                          AND p.section_id IN (%s)
+                    )
+                )
+                """.formatted(sectionIdSql, sectionIdSql)));
     }
 
     private List<ReportManageResp> enrichReports(List<SysReport> reports) {

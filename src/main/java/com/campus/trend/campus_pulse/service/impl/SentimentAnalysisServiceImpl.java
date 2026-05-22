@@ -17,7 +17,6 @@ import java.util.Set;
 
 /**
  * Song：情感分析服务实现类
- * Song：说明
  */
 @Service
 @Slf4j
@@ -66,7 +65,6 @@ public class SentimentAnalysisServiceImpl implements SentimentAnalysisService {
         int positiveCount = 0;
         int negativeCount = 0;
 
-        // Song：说明
         List<Term> terms = HanLP.segment(text);
 
         for (Term term : terms) {

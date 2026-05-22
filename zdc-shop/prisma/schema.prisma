@@ -1,0 +1,97 @@
+// Zens 积分商城子站 · Prisma schema
+// 数据库：与主站同实例新建的 MySQL `zens_shop` 库。
+// 用户积分（sys_user.points）不在这里维护，由主站强一致提供。
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ────── 商品 ─────────────────────────────────────────────────────────────
+model Product {
+  id           String   @id @default(cuid())
+  slug         String   @unique
+  title        String
+  subtitle     String?
+  description  String   @db.Text
+  coverUrl     String
+  // CSS gradient 字符串，用于不上传图片也能渲染漂亮的彩色块
+  coverGradient String?  @db.VarChar(255)
+  category     String   // ai / badge / welfare / domain / theme
+  pricePoints  Int
+  // -1 表示无限库存
+  stock        Int      @default(-1)
+  limitPerUser Int      @default(1)
+  status       String   @default("ACTIVE") // ACTIVE | DRAFT | SOLDOUT
+  sortWeight   Int      @default(0)
+  // 是否进入首页 Featured Banner
+  highlight    Boolean  @default(false)
+  // 是否进入首页 This Week 排行
+  thisWeek     Boolean  @default(false)
+  // 兑换后是否需要在主站做 side effect (如发徽章) - 留 hook
+  fulfillment  String   @default("CODE") // CODE | SOFT
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  orders Order[]
+  codes  RedemptionCode[]
+
+  @@map("zs_product")
+  @@index([status, thisWeek, sortWeight])
+  @@index([category, status])
+}
+
+// ────── 订单 ─────────────────────────────────────────────────────────────
+model Order {
+  id             String   @id @default(cuid())
+  userId         String   // = sys_user.id (主站)
+  username       String
+  productId      String
+  pricePoints    Int
+  status         String   @default("PENDING") // PENDING | DELIVERED | FAILED | REFUNDED
+  // 同一 key 仅允许一个订单
+  idempotencyKey String   @unique
+  // DELIVERED 后填入
+  deliveredCode  String?
+  failureReason  String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@map("zs_order")
+  @@index([userId, createdAt])
+  @@index([productId, status])
+}
+
+// ────── 兑换码 ───────────────────────────────────────────────────────────
+model RedemptionCode {
+  id         String    @id @default(cuid())
+  productId  String
+  code       String    @unique
+  consumedBy String?
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@map("zs_redemption_code")
+  @@index([productId, consumedBy])
+}
+
+// ────── 用户同步缓存 (来自主站 SSO) ──────────────────────────────────────
+model UserSync {
+  userId     String   @id
+  username   String
+  nickname   String?
+  avatar     String?  @db.VarChar(500)
+  email      String?
+  role       String
+  lastSyncAt DateTime @default(now())
+
+  @@map("zs_user_sync")
+}

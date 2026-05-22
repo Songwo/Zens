@@ -2,6 +2,8 @@
 import { ref, onMounted, computed, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import MainLayout from '@/layouts/MainLayout.vue'
+import PageBackButton from '@/components/common/PageBackButton.vue'
+import ScrollEdgeBar from '@/components/ui/ScrollEdgeBar.vue'
 import { postApi } from '@/api/post'
 import { commentApi } from '@/api/comment'
 import { recommendApi } from '@/api/recommend'
@@ -14,6 +16,7 @@ import { timeAgo } from '@/utils/timeAgo'
 import { renderMarkdownWithTocResult } from '@/utils/markdownToc'
 import { generateSummary } from '@/utils/markdown'
 import { renderGithubRichCards, mergeConsecutiveBlockquotes } from '@/utils/richLink'
+import { cachedRequest } from '@/utils/requestCache'
 import { 
   View, 
   CaretTop, 
@@ -23,7 +26,9 @@ import {
   More,
   Warning,
   EditPen,
-  Medal
+  Medal,
+  Delete,
+  RefreshRight
 } from '@element-plus/icons-vue'
 import UserRoleBadge from '@/components/common/UserRoleBadge.vue'
 import UserQuickCard from '@/components/common/UserQuickCard.vue'
@@ -52,22 +57,63 @@ const replyingTo = ref<string | null>(null)
 const replyingToName = ref<string | null>(null)
 const regeneratingSummary = ref(false)
 const activeCommentId = ref('')
+const RELATED_POST_CACHE_TTL = 60 * 1000
+const POST_METRICS_UPDATED_EVENT = 'cp:post-metrics-updated'
 
-const postId = (route.params.id as string) || ''
+const postId = computed(() => String(route.params.id || ''))
+
+const toFiniteMetric = (value: unknown): number | null => {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : null
+  }
+  if (typeof value === 'string' && value.trim() !== '') {
+    const parsed = Number(value)
+    return Number.isFinite(parsed) ? parsed : null
+  }
+  return null
+}
+
+const visibleCommentCount = computed(() => {
+  return toFiniteMetric(post.value?.commentCount) ?? comments.value.length
+})
+
+const syncPostMetricsToLists = () => {
+  if (!post.value?.id) return
+  window.dispatchEvent(new CustomEvent(POST_METRICS_UPDATED_EVENT, {
+    detail: {
+      postId: post.value.id,
+      viewCount: post.value.viewCount,
+      commentCount: post.value.commentCount,
+      lastActivityAt: post.value.lastActivityAt,
+    },
+  }))
+}
 
 const isAdmin = computed(() => {
   const roles = userStore.userInfo?.roles || []
   return roles.some((role: string) => role === 'ROLE_ADMIN' || role === 'ROLE_SUPER_ADMIN')
 })
 
-const moderatedSectionIds = computed(() => {
-  const rawIds = userStore.userInfo?.moderatedSectionIds || []
-  return new Set(rawIds.map((id: number | string) => Number(id)).filter(id => Number.isFinite(id) && id > 0))
+const isGlobalModerator = computed(() => {
+  const roles = userStore.userInfo?.roles || []
+  return roles.includes('ROLE_MODERATOR')
 })
 
+const moderatedSectionIds = computed(() => {
+  const rawIds = userStore.userInfo?.moderatedSectionIds || []
+  return new Set(rawIds.map((id: number | string) => Number(id)).filter((id: number) => Number.isFinite(id) && id > 0))
+})
+
+const isDeletedPost = computed(() => post.value?.auditStatus === 'DELETED')
+
 const canModerateCurrentSection = computed(() => {
-  if (!post.value?.sectionId) return isAdmin.value
-  return isAdmin.value || moderatedSectionIds.value.has(Number(post.value.sectionId))
+  if (!post.value?.sectionId) return isAdmin.value || isGlobalModerator.value
+  return isAdmin.value || isGlobalModerator.value || moderatedSectionIds.value.has(Number(post.value.sectionId))
+})
+
+const canManageCurrentPost = computed(() => {
+  if (!post.value || !userStore.userId) return false
+  return post.value.userId === userStore.userId || canModerateCurrentSection.value
 })
 
 const isFollowed = ref(false)
@@ -144,7 +190,7 @@ const aiSummaryText = computed(() => {
 
 const canRegenerateSummary = computed(() => {
   if (!post.value || !userStore.userId) return false
-  return post.value.userId === userStore.userId || canModerateCurrentSection.value
+  return !isDeletedPost.value && canManageCurrentPost.value
 })
 
 const showSidebarToc = computed(() => tocRenderResult.value.hasTocTag)
@@ -179,17 +225,21 @@ watch(
 )
 
 const fetchSecondaryData = async (id: string) => {
+  const recommendCacheKey = `post:detail:recommend:${userStore.userId || 'anonymous'}:${id}`
   const [commentRes, relatedRes] = await Promise.allSettled([
     commentApi.getByPostId(id, 1, 120),
-    recommendApi.getSimilar(id)
+    cachedRequest(
+      recommendCacheKey,
+      RELATED_POST_CACHE_TTL,
+      () => recommendApi.getSimilar(id)
+    )
   ])
 
-  if (commentRes.status === 'fulfilled') {
-    comments.value = commentRes.value.data.records || []
-    scrollToRouteComment()
-  }
-  if (relatedRes.status === 'fulfilled') {
-    relatedPosts.value = (relatedRes.value.data?.slice(0, 5) || []) as RecommendPost[]
+  return {
+    comments: commentRes.status === 'fulfilled' ? commentRes.value.data.records || [] : [],
+    relatedPosts: relatedRes.status === 'fulfilled'
+      ? ((relatedRes.value.data?.slice(0, 5) || []) as RecommendPost[])
+      : [],
   }
 }
 
@@ -213,23 +263,36 @@ const handlePrivateMessage = () => {
 }
 
 const fetchPost = async () => {
+  const id = postId.value
+  if (!id) {
+    loading.value = false
+    return
+  }
+
   loading.value = true
+  post.value = null
+  comments.value = []
+  relatedPosts.value = []
+  cancelReply()
+  activeCommentId.value = getRouteCommentId()
   try {
-    const id = postId
+    const secondaryTask = fetchSecondaryData(id)
     const postRes = await postApi.getDetail(id)
+    const secondaryData = await secondaryTask
 
     post.value = postRes.data || null
+    comments.value = secondaryData.comments
+    relatedPosts.value = secondaryData.relatedPosts
+    syncPostMetricsToLists()
     applyPostSeo()
-    checkFollowStatus()
-    viewLogApi.recordView(id).catch(() => {})
+    scrollToRouteComment()
+    void checkFollowStatus()
+    void viewLogApi.recordView(id).catch(() => {})
   } catch (error) {
+    post.value = null
     ElMessage.error('获取详情失败')
   } finally {
     loading.value = false
-  }
-
-  if (post.value) {
-    fetchSecondaryData(postId).catch(() => {})
   }
 }
 
@@ -285,16 +348,22 @@ const submitComment = async (content: string) => {
   commentLoading.value = true
   try {
     await commentApi.add({
-      postId: postId,
+      postId: postId.value,
       content: content,
       parentId: replyingTo.value || undefined
     })
 
     ElMessage.success('评论成功')
     cancelReply()
+    if (post.value) {
+      const currentCount = toFiniteMetric(post.value.commentCount) ?? comments.value.length
+      post.value.commentCount = currentCount + 1
+      post.value.lastActivityAt = new Date().toISOString()
+      syncPostMetricsToLists()
+    }
 
     // Song：说明
-    const commentRes = await commentApi.getByPostId(postId, 1, 120)
+    const commentRes = await commentApi.getByPostId(postId.value, 1, 120)
     comments.value = commentRes.data.records || []
     scrollToRouteComment()
   } catch (error) {
@@ -356,7 +425,7 @@ const applyPostSeo = () => {
   ensureCanonical(canonicalPath)
 }
 
-const handleCommand = (command: string) => {
+const handleCommand = async (command: string) => {
   if (command === 'report') {
     if (!userStore.accessToken) {
       ElMessage.warning('请先登录后再进行举报')
@@ -375,12 +444,20 @@ const handleCommand = (command: string) => {
       coverImage: post.value?.coverImage
     })
   } else if (command === 'feature') {
-    handleFeature()
+    await handleFeature()
+  } else if (command === 'delete') {
+    await deletePost()
+  } else if (command === 'restore') {
+    await restorePost()
   }
 }
 
 const handleFeature = async () => {
   if (!post.value) return
+  if (isDeletedPost.value) {
+    ElMessage.warning('帖子已删除，请先恢复后再操作')
+    return
+  }
   if (!canModerateCurrentSection.value) {
     ElMessage.warning('仅当前板块版主或管理员可操作精华设置')
     return
@@ -394,6 +471,36 @@ const handleFeature = async () => {
   }
 }
 
+const deletePost = async () => {
+  if (!post.value || !canManageCurrentPost.value) return
+  try {
+    await ElMessageBox.confirm('确定要将这篇帖子移入回收站吗？7 天内可恢复。', '软删除确认', {
+      confirmButtonText: '移入回收站',
+      cancelButtonText: '取消',
+      type: 'warning',
+      confirmButtonClass: 'el-button--danger'
+    })
+    await postApi.delete(post.value.id)
+    post.value.auditStatus = 'DELETED'
+    post.value.status = 0
+    ElMessage.success('已移入回收站')
+  } catch (error) {
+    if (error !== 'cancel') ElMessage.error('删除失败')
+  }
+}
+
+const restorePost = async () => {
+  if (!post.value || !canManageCurrentPost.value) return
+  try {
+    await postApi.restore(post.value.id)
+    post.value.auditStatus = 'APPROVED'
+    post.value.status = 1
+    ElMessage.success('帖子已恢复')
+  } catch (error: any) {
+    ElMessage.error(error?.response?.data?.message || '恢复失败')
+  }
+}
+
 const submitReport = async () => {
   if (!reportForm.value.reason) {
     ElMessage.warning('请选择举报理由')
@@ -403,7 +510,7 @@ const submitReport = async () => {
   try {
     await postApi.report({
       targetType: 'post',
-      targetId: postId,
+      targetId: postId.value,
       reason: reportForm.value.reason,
       details: reportForm.value.details
     })
@@ -495,6 +602,17 @@ const scrollToRouteComment = async (retry = 0) => {
 }
 
 watch(
+  () => postId.value,
+  (newId, oldId) => {
+    if (!newId || newId === oldId) {
+      return
+    }
+    window.scrollTo({ top: 0, behavior: 'auto' })
+    fetchPost()
+  }
+)
+
+watch(
   () => [route.query.commentId, route.hash],
   () => {
     scrollToRouteComment()
@@ -510,6 +628,7 @@ onMounted(() => {
 <template>
   <MainLayout>
     <div class="post-detail-container">
+      <PageBackButton class="post-back-button" fallback="/" />
       <!-- 骨架屏 -->
       <div v-if="loading" class="post-skeleton">
         <div class="skel-card">
@@ -536,6 +655,15 @@ onMounted(() => {
             </div>
             
             <h1 class="post-title">{{ post.title }}</h1>
+
+            <el-alert
+              v-if="isDeletedPost"
+              type="warning"
+              show-icon
+              :closable="false"
+              class="deleted-alert"
+              title="该帖子已移入回收站，删除后 7 天内可由作者、版主或管理员恢复。"
+            />
             
             <div class="author-info">
               <UserQuickCard
@@ -564,7 +692,7 @@ onMounted(() => {
                 </span>
                 <div class="post-stats">
                   <span class="stat-item"><el-icon><View /></el-icon> {{ post.viewCount }}</span>
-                  <span class="stat-item"><el-icon><ChatLineRound /></el-icon> {{ comments.length }}</span>
+                  <span class="stat-item"><el-icon><ChatLineRound /></el-icon> {{ visibleCommentCount }}</span>
                 </div>
               </div>
               <el-button
@@ -590,19 +718,33 @@ onMounted(() => {
                 <template #dropdown>
                   <el-dropdown-menu>
                     <el-dropdown-item
-                      v-if="userStore.userId === post.userId || isAdmin"
+                      v-if="!isDeletedPost && canManageCurrentPost"
                       command="edit"
                     >
                       <el-icon><EditPen /></el-icon> 编辑此贴
                     </el-dropdown-item>
-                    <el-dropdown-item command="report">
+                    <el-dropdown-item v-if="!isDeletedPost" command="report">
                       <el-icon><Warning /></el-icon> 举报违规内容
                     </el-dropdown-item>
                     <el-dropdown-item
-                      v-if="canModerateCurrentSection"
+                      v-if="!isDeletedPost && canModerateCurrentSection"
                       command="feature"
                     >
                       <el-icon><Medal /></el-icon> {{ post.isFeatured === 1 ? '取消精华' : '设为精华' }}
+                    </el-dropdown-item>
+                    <el-dropdown-item
+                      v-if="!isDeletedPost && canManageCurrentPost"
+                      command="delete"
+                      divided
+                    >
+                      <el-icon><Delete /></el-icon> 移入回收站
+                    </el-dropdown-item>
+                    <el-dropdown-item
+                      v-if="isDeletedPost && canManageCurrentPost"
+                      command="restore"
+                      divided
+                    >
+                      <el-icon><RefreshRight /></el-icon> 恢复帖子
                     </el-dropdown-item>
                   </el-dropdown-menu>
                 </template>
@@ -678,7 +820,7 @@ onMounted(() => {
         <div class="comment-section">
           <div class="section-title">
             <h3>评论区</h3>
-            <span class="comment-count">{{ comments.length }} 条评论</span>
+            <span class="comment-count">{{ visibleCommentCount }} 条评论</span>
           </div>
           
           <CommentEditor 
@@ -699,6 +841,8 @@ onMounted(() => {
         </div>
         <el-empty v-else-if="!loading" key="post-empty" description="内容不存在或已被删除" />
       </transition>
+
+      <ScrollEdgeBar v-if="post && !loading" />
     </div>
 
     <!-- 举报弹窗 -->
@@ -850,6 +994,14 @@ onMounted(() => {
   max-width: 100%;
 }
 
+.post-main {
+  min-width: 0;
+}
+
+.post-back-button {
+  margin-bottom: 12px;
+}
+
 .post-content-card {
   border-radius: var(--el-border-radius-base);
   margin-bottom: 24px;
@@ -877,6 +1029,10 @@ onMounted(() => {
   color: var(--el-text-color-primary);
   line-height: 1.3;
   margin: 0 0 20px 0;
+}
+
+.deleted-alert {
+  margin: -4px 0 18px;
 }
 
 .author-info {
@@ -1046,12 +1202,52 @@ onMounted(() => {
 /* Song：说明 */
 .sidebar-card {
   margin-bottom: 16px;
+  overflow: hidden;
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
+}
+
+.post-sidebar {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
+}
+
+.post-sidebar :deep(.el-card__header),
+.post-sidebar :deep(.el-card__body) {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+.card-header,
+.card-header > span,
+.toc-list,
+.related-list,
+.related-meta,
+.related-meta > span {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
 }
 
 .related-item {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
   padding: 12px 0;
   cursor: pointer;
   border-bottom: 1px solid var(--el-border-color-extra-light);
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
+  overflow: hidden;
 }
 
 .related-item:last-child {
@@ -1063,21 +1259,41 @@ onMounted(() => {
 }
 
 .related-title {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
   font-size: 14px;
   font-weight: 500;
   color: var(--el-text-color-primary);
   line-height: 1.4;
   margin-bottom: 4px;
   transition: color 0.2s;
+  white-space: normal;
+  overflow: hidden;
+  text-overflow: unset;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .related-reason {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
   margin-bottom: 4px;
   font-size: 12px;
   color: var(--el-color-primary);
+  white-space: normal;
+  overflow: hidden;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .related-summary {
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
   margin-bottom: 6px;
   font-size: 12px;
   color: var(--el-text-color-secondary);
@@ -1085,14 +1301,28 @@ onMounted(() => {
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
+  white-space: normal;
   overflow: hidden;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .related-meta {
   display: flex;
+  flex-wrap: wrap;
   gap: 12px;
   font-size: 12px;
   color: var(--el-text-color-placeholder);
+}
+
+.related-meta > span {
+  display: inline-flex;
+  width: auto;
+  min-width: 0;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .rules-card {
@@ -1121,14 +1351,25 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
 }
 
 .toc-item {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
   font-size: 13px;
   line-height: 1.5;
   color: var(--el-text-color-regular);
   text-decoration: none;
   transition: color 0.2s;
+  white-space: normal;
+  overflow: hidden;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .toc-item:hover {

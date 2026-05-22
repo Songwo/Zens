@@ -33,6 +33,8 @@ const routePrefetchLoaders = [
 ]
 const routeDataWarmers = [
   () => publicDataApi.getHomeBootstrapCached(12, 5, 'WEEK'),
+  () => publicDataApi.getActiveSectionsCached(),
+  () => publicDataApi.getHotTagsCached(12),
 ]
 
 const clearRoutePrefetch = () => {
@@ -104,7 +106,7 @@ onMounted(async () => {
   stopSessionResilience = initSessionResilience()
   scheduleRoutePrefetch()
 
-  if (userStore.accessToken && !userStore.userInfo) {
+  if ((userStore.accessToken || userStore.refreshToken) && !userStore.userInfo) {
     try {
       await ensureCurrentUserProfile()
     } catch (err: any) {

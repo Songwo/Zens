@@ -165,7 +165,6 @@ public class PostEventServiceImpl implements PostEventService {
             // Song：推送到全局频道（所有用户）
             messagingTemplate.convertAndSend("/topic/posts", event);
 
-            // Song：说明
             if (event.getSectionId() != null) {
                 messagingTemplate.convertAndSend("/topic/section/" + event.getSectionId(), event);
             }

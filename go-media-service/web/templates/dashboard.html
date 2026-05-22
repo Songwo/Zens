@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ .title }}</title>
+  <link rel="stylesheet" href="{{ .basePath }}/static/css/panel.css">
+</head>
+<body>
+  <div class="panel-shell">
+    <aside class="sidebar">
+      <h2>Media Service</h2>
+      <nav>
+        <a class="active" href="{{ .basePath }}">仪表盘</a>
+        <a href="{{ .basePath }}/uploads">上传记录</a>
+        <a href="{{ .basePath }}/files">文件管理</a>
+        <a href="{{ .basePath }}/system">系统监控</a>
+        <a href="{{ .basePath }}/config">运行配置</a>
+      </nav>
+      <form method="post" action="{{ .basePath }}/logout">
+        <button type="submit" class="ghost-btn">退出登录</button>
+      </form>
+    </aside>
+    <main class="panel-main">
+      <header class="panel-header">
+        <h1>仪表盘</h1>
+        <p>高并发图片 / 视频上传服务总览</p>
+      </header>
+      <section class="cards-grid" id="dashboard-cards"></section>
+      <section class="panel-card">
+        <div class="section-title">
+          <h2>最近上传</h2>
+        </div>
+        <div id="recent-uploads"></div>
+      </section>
+    </main>
+  </div>
+  <script>window.MEDIA_PANEL_PAGE = "dashboard"; window.MEDIA_PANEL_BASE = "{{ .basePath }}";</script>
+  <script src="{{ .basePath }}/static/js/panel.js"></script>
+</body>
+</html>

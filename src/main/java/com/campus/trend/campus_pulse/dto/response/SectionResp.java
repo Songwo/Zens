@@ -4,9 +4,6 @@ import lombok.Data;
 
 import java.time.LocalDateTime;
 
-/**
- * Song：说明
- */
 @Data
 public class SectionResp {
     private Long id;

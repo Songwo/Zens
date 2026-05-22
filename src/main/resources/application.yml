@@ -12,6 +12,9 @@ server:
       - text/plain
       - text/css
       - text/javascript
+
+
+
       - application/javascript
       - image/svg+xml
   tomcat:
@@ -24,6 +27,13 @@ server:
     max-connections: ${SERVER_TOMCAT_MAX_CONNECTIONS:8192}
     max-swallow-size: -1
 spring:
+  config:
+
+
+    import:
+      - optional:file:./.env.local[.properties]
+      - optional:file:./.env.dev[.properties]
+      - optional:file:./.env.development[.properties]
   jackson:
     serialization:
       write-dates-as-timestamps: false
@@ -93,16 +103,6 @@ spring:
           ssl:
             enable: true      # 如果使用465端口，改为true
           timeout: 5000
-  mvc:
-    async:
-      request-timeout: 10m
-
-  servlet:
-    multipart:
-      max-file-size: 512MB
-      max-request-size: 520MB
-      file-size-threshold: 2MB
-
 # 3.MyBatis-Plus 配置
 mybatis-plus:
   configuration:
@@ -124,6 +124,9 @@ management:
     web:
       exposure:
         include: health,info,metrics,prometheus
+  health:
+    mail:
+      enabled: ${MANAGEMENT_HEALTH_MAIL_ENABLED:true}
   endpoint:
     health:
       show-details: always
@@ -140,6 +143,13 @@ logging:
   # 文件将输出到项目根目录下的 /log/ 文件夹中。
   file:
     name: ./log/logfile.log
+  logback:
+    rollingpolicy:
+      file-name-pattern: ${LOG_ROLLING_PATTERN:./log/archive/campus-pulse.%d{yyyy-MM-dd}.%i.log.gz}
+      max-file-size: ${LOG_MAX_FILE_SIZE:20MB}
+      max-history: ${LOG_MAX_HISTORY:15}
+      total-size-cap: ${LOG_TOTAL_SIZE_CAP:1GB}
+      clean-history-on-start: ${LOG_CLEAN_HISTORY_ON_START:true}
   # 2. 日志级别和输出格式
   # 设置日志输出格式
   pattern:
@@ -163,15 +173,21 @@ logging:
 # 5.JWT 配置
 jwt:
   secret: ${JWT_SECRET:zf3sg4ikVorzR1S/cel4+o/VkQH+4LZxU8RkX0c0Ne6BFPf9NnPL09AoHSK9Zg95}
-  access-expire: 3600000        # 1 小时
-  refresh-expire: 604800000     # 7 天
+  access-expire: ${JWT_ACCESS_EXPIRE:7200000}        # 默认 2 小时
+  refresh-expire: ${JWT_REFRESH_EXPIRE:1209600000}   # 默认 14 天
   remember-access-multiplier: 7
   remember-refresh-multiplier: 4
   sliding-renew-threshold: 900000
 
+# 5.1 内部 s2s API 配置 (供 zdc-shop 等 Zens 子站调用)
+internal:
+  service:
+    # 与 zdc-shop 共享的 HMAC 密钥;子站 .env 中 SHOP_SERVICE_SECRET 必须一致
+    shop-secret: ${SHOP_SERVICE_SECRET:dev-shop-service-secret-CHANGE_ME_at_least_16_chars}
+
 # 6.Web Url 配置
 Web:
-  AvatarUrl: "https://zenslt.allinsong.top/static/avatar/"
+  AvatarUrl: "https://allinsong.top/static/avatar/"
 
 # 7. AI 深度思考模型配置
 ai:
@@ -220,12 +236,12 @@ campus:
   upload:
     url-prefix: "/uploads/"
     avatar-module: "avatar"
-    max-image-size-mb: ${MAX_IMAGE_SIZE_MB:5}
+    max-image-size-mb: ${MAX_IMAGE_SIZE_MB:15}
     max-image-width: ${MAX_IMAGE_WIDTH:1920}
     max-image-height: ${MAX_IMAGE_HEIGHT:1080}
     jpeg-quality: ${IMAGE_JPEG_QUALITY:0.85}
     allowed-image-extensions: ".jpg,.jpeg,.png,.gif,.webp"
-    max-video-size-mb: ${MAX_VIDEO_SIZE_MB:80}
+    max-video-size-mb: ${MAX_VIDEO_SIZE_MB:512}
     allowed-video-extensions: ".mp4,.webm,.ogg,.mov"
     video-transcode-enabled: ${VIDEO_TRANSCODE_ENABLED:false}
     ffmpeg-bin: ${FFMPEG_BIN:ffmpeg}
@@ -236,16 +252,16 @@ campus:
     imagebed-threshold-mb: ${IMAGEBED_THRESHOLD_MB:3}
   security:
     # 生产环境请替换为前端域名
-    allowed-origin-patterns: ${ALLOWED_ORIGIN_PATTERNS:http://localhost:5173,http://127.0.0.1:5173,http://localhost:4173,http://127.0.0.1:4173,https://zenslt.allinsong.top}
-    # 开发期可关闭强制签名，生产建议开启 true
-    request-signature-required: ${REQUEST_SIGNATURE_REQUIRED:true}
+    allowed-origin-patterns: ${ALLOWED_ORIGIN_PATTERNS:http://localhost:5173,http://127.0.0.1:5173,http://localhost:4173,http://127.0.0.1:4173,https://allinsong.top,https://www.allinsong.top}
+    # 开发环境默认关闭，生产环境请在 application-prod.yml 或 .env 中显式配置
+    request-signature-required: ${REQUEST_SIGNATURE_REQUIRED:false}
   notification:
     dedupe-window-seconds: ${NOTIFICATION_DEDUPE_WINDOW_SECONDS:120}
   invite:
     required: ${INVITE_REQUIRED:false}
     user-min-level: ${INVITE_USER_MIN_LEVEL:5}
   site:
-    url: ${SITE_URL:https://zenslt.allinsong.top}
+    url: ${SITE_URL:https://allinsong.top}
   support:
     admin-username: ${SUPPORT_ADMIN_USERNAME:admin}
     admin-display-name: ${SUPPORT_ADMIN_DISPLAY_NAME:社区管理员}
@@ -254,19 +270,57 @@ campus:
     slow-request-ms: ${SLOW_REQUEST_MS:1000}
     slow-sql-ms: ${SLOW_SQL_MS:300}
     request-log-exclude-prefixes: ${REQUEST_LOG_EXCLUDE_PREFIXES:/actuator,/static,/uploads}
+  r2:
+    # Cloudflare R2（S3 协议）。浏览器直传，Java 只签 URL，不经过 Tunnel。
+    enabled: ${R2_ENABLED:true}
+    endpoint: ${R2_ENDPOINT:}
+    region: ${R2_REGION:auto}
+    access-key-id: ${R2_ACCESS_KEY_ID:}
+    secret-access-key: ${R2_SECRET_ACCESS_KEY:}
+    bucket: ${R2_BUCKET:campus-pulse-media}
+    public-base-url: ${R2_PUBLIC_BASE_URL:https://media.allinsong.top}
+    presign-ttl-seconds: ${R2_PRESIGN_TTL:3600}
+    single-put-threshold-mb: ${R2_SINGLE_PUT_THRESHOLD_MB:10}
+    part-size-mb: ${R2_PART_SIZE_MB:8}
+    max-image-size-mb: ${R2_MAX_IMAGE_MB:15}
+    max-video-size-mb: ${R2_MAX_VIDEO_MB:1024}
+    allowed-image-extensions: ${R2_ALLOWED_IMAGE_EXTENSIONS:.jpg,.jpeg,.png,.gif,.webp}
+    allowed-video-extensions: ${R2_ALLOWED_VIDEO_EXTENSIONS:.mp4,.webm,.ogg,.mov}
+    cache-control: ${R2_CACHE_CONTROL:}
+  log-management:
+    enabled: ${LOG_MANAGEMENT_ENABLED:true}
+    base-dir: ${LOG_BASE_DIR:./log}
+    backup-dir: ${LOG_BACKUP_DIR:./log/backups}
+    list-limit: ${LOG_LIST_LIMIT:200}
+    preview-max-lines: ${LOG_PREVIEW_MAX_LINES:400}
+    preview-max-bytes: ${LOG_PREVIEW_MAX_BYTES:131072}
+    default-preview-lines: ${LOG_DEFAULT_PREVIEW_LINES:200}
+    backup-retention-days: ${LOG_BACKUP_RETENTION_DAYS:15}
+    max-backup-files: ${LOG_MAX_BACKUP_FILES:30}
+    max-backup-total-size-mb: ${LOG_MAX_BACKUP_TOTAL_SIZE_MB:1024}
+    auto-backup-enabled: ${LOG_AUTO_BACKUP_ENABLED:false}
+    auto-backup-cron: ${LOG_AUTO_BACKUP_CRON:0 0 */6 * * ?}
+    cleanup-cron: ${LOG_CLEANUP_CRON:0 20 4 * * ?}
+    allowed-extensions: ${LOG_ALLOWED_EXTENSIONS:.log,.txt,.out,.err,.gz}
 
 # 11. 第三方登录与二步验证配置
 oauth:
   github:
     client-id: ${GITHUB_CLIENT_ID:}
     client-secret: ${GITHUB_CLIENT_SECRET:}
-    redirect-uri: ${GITHUB_REDIRECT_URI:http://zenslt.allinsong.top/auth?type=login&provider=github}
+    redirect-uri: ${GITHUB_REDIRECT_URI:https://allinsong.top/auth?type=login&provider=github}
 
 cloudflare:
   turnstile:
+    enabled: ${TURNSTILE_ENABLED:true}
+    allow-local-preview-skip: ${TURNSTILE_ALLOW_LOCAL_PREVIEW_SKIP:true}
     site-key: ${TURNSTILE_SITE_KEY:0x4AAAAAAC9xtOXBNKG-KQE9}
     secret-key: ${TURNSTILE_SECRET_KEY:0x4AAAAAAC9xtFFfXflEn-SwY6a7WDL4w3c}
     verify-url: ${TURNSTILE_VERIFY_URL:https://challenges.cloudflare.com/turnstile/v0/siteverify}
+    connect-timeout-seconds: ${TURNSTILE_CONNECT_TIMEOUT_SECONDS:5}
+    read-timeout-seconds: ${TURNSTILE_READ_TIMEOUT_SECONDS:8}
+    proxy-host: ${TURNSTILE_PROXY_HOST:}
+    proxy-port: ${TURNSTILE_PROXY_PORT:}
 
 security:
   two-factor:
@@ -276,5 +330,5 @@ security:
 
 auth:
   session:
-    single-device: ${AUTH_SESSION_SINGLE_DEVICE:true}
+    single-device: ${AUTH_SESSION_SINGLE_DEVICE:false}
     anomaly-notify-cooldown-seconds: ${AUTH_SESSION_ANOMALY_NOTIFY_COOLDOWN_SECONDS:3600}

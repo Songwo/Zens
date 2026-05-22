@@ -34,6 +34,8 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class PublicDataServiceImpl implements PublicDataService {
 
+    private static final String AUDIT_STATUS_PENDING = "PENDING";
+    private static final String AUDIT_STATUS_APPROVED = "APPROVED";
     private static final Duration SITE_STATS_CACHE_TTL = Duration.ofSeconds(30);
     private static final Duration HOT_RANK_CACHE_TTL = Duration.ofSeconds(20);
     private static final Duration HOME_BOOTSTRAP_CACHE_TTL = Duration.ofSeconds(45);
@@ -62,11 +64,10 @@ public class PublicDataServiceImpl implements PublicDataService {
 
         SiteStatsResp stats = new SiteStatsResp();
         try {
-            stats.setTotalPosts(postMapper.selectCount(new LambdaQueryWrapper<Post>().eq(Post::getStatus, 1)));
+            stats.setTotalPosts(postMapper.selectCount(applyPublicVisibility(new LambdaQueryWrapper<>())));
             stats.setTotalUsers(userMapper.selectCount(null));
-            stats.setTodayPosts(postMapper.selectCount(new LambdaQueryWrapper<Post>()
-                    .eq(Post::getStatus, 1)
-                    .ge(Post::getCreateTime, LocalDate.now().atStartOfDay())));
+            stats.setTodayPosts(postMapper.selectCount(applyPublicVisibility(new LambdaQueryWrapper<Post>()
+                    .ge(Post::getCreateTime, LocalDate.now().atStartOfDay()))));
 
             long totalComments = 0;
             try {
@@ -109,7 +110,7 @@ public class PublicDataServiceImpl implements PublicDataService {
             log.debug("读取热榜缓存失败: {}", e.getMessage());
         }
 
-        LambdaQueryWrapper<Post> wrapper = new LambdaQueryWrapper<>();
+        LambdaQueryWrapper<Post> wrapper = applyPublicVisibility(new LambdaQueryWrapper<>());
         wrapper.select(
                 Post::getId,
                 Post::getTitle,
@@ -118,7 +119,6 @@ public class PublicDataServiceImpl implements PublicDataService {
                 Post::getLikeCount,
                 Post::getCommentCount,
                 Post::getLastActivityAt);
-        wrapper.eq(Post::getStatus, 1);
 
         LocalDateTime start = TimeRangeUtils.resolveRangeStart(normalizedTimeRange);
         if (start != null) {
@@ -201,5 +201,16 @@ public class PublicDataServiceImpl implements PublicDataService {
             case "TODAY", "WEEK", "MONTH" -> normalized;
             default -> "WEEK";
         };
+    }
+
+    private LambdaQueryWrapper<Post> applyPublicVisibility(LambdaQueryWrapper<Post> wrapper) {
+        return wrapper.eq(Post::getStatus, 1)
+                .and(w -> w.isNull(Post::getAuditStatus)
+                        .or()
+                        .eq(Post::getAuditStatus, "")
+                        .or()
+                        .eq(Post::getAuditStatus, AUDIT_STATUS_PENDING)
+                        .or()
+                        .eq(Post::getAuditStatus, AUDIT_STATUS_APPROVED));
     }
 }

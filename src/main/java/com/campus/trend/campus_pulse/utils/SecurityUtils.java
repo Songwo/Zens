@@ -9,10 +9,6 @@ import org.springframework.security.core.context.SecurityContextHolder;
  */
 public class SecurityUtils {
 
-    /**
-     * Song：说明
-     * Song：说明
-     */
     public static String getCurrentUserId() {
         try {
             Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
@@ -23,14 +19,12 @@ public class SecurityUtils {
                 }
             }
         } catch (Exception e) {
-            // Song：说明
         }
         return null;
     }
 
     /**
      * Song：获取当前登录用户信息
-     * Song：说明
      */
     public static AuthUser getLoginUser() {
         try {
@@ -49,8 +43,6 @@ public class SecurityUtils {
 
     /**
      * Song：获取当前认证用户，如果未认证则抛出异常
-     * Song：说明
-     * Song：说明
      */
     public static AuthUser getAuthenticatedUser() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
@@ -62,7 +54,6 @@ public class SecurityUtils {
 
         Object principal = authentication.getPrincipal();
 
-        // Song：说明
         if (principal instanceof AuthUser) {
             return (AuthUser) principal;
         }

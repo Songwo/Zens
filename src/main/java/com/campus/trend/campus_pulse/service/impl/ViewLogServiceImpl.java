@@ -112,18 +112,15 @@ public class ViewLogServiceImpl extends ServiceImpl<ViewLogMapper, ViewLog>
 
     @Override
     public List<Map<String, Object>> getHotPostsByViews(LocalDateTime startTime, int limit) {
-        // Song：说明
         List<ViewLog> logs = lambdaQuery()
                 .ge(startTime != null, ViewLog::getCreateTime, startTime)
                 .list();
 
-        // Song：说明
         Map<String, Long> postViewCounts = logs.stream()
                 .collect(Collectors.groupingBy(
                         ViewLog::getPostId,
                         Collectors.counting()));
 
-        // Song：说明
         return postViewCounts.entrySet().stream()
                 .sorted(Map.Entry.<String, Long>comparingByValue().reversed())
                 .limit(limit)

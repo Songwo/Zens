@@ -22,6 +22,8 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class TrendStatServiceImpl implements TrendStatService {
 
+    private static final String AUDIT_STATUS_PENDING = "PENDING";
+    private static final String AUDIT_STATUS_APPROVED = "APPROVED";
     private static final int KEYWORD_SOURCE_LIMIT = 100;
     private static final int KEYWORD_RESULT_LIMIT = 30;
     private static final int TAG_RELATION_SOURCE_LIMIT = 200;
@@ -35,7 +37,7 @@ public class TrendStatServiceImpl implements TrendStatService {
     @Override
     public Map<String, Object> getKeywordCloud() {
         List<Post> posts = postMapper.selectList(
-                new QueryWrapper<Post>()
+                applyPublicVisibility(new QueryWrapper<Post>())
                         .select("tags")
                         .isNotNull("tags")
                         .last("LIMIT " + KEYWORD_SOURCE_LIMIT));
@@ -67,7 +69,7 @@ public class TrendStatServiceImpl implements TrendStatService {
     public List<Map<String, Object>> getPostTrend(int days) {
         int limit = (days > 0 && days <= 90) ? days : 7;
         return postMapper.selectMaps(
-                new QueryWrapper<Post>()
+                applyPublicVisibility(new QueryWrapper<Post>())
                         .select("DATE_FORMAT(create_time, '%Y-%m-%d') as date", "count(*) as count")
                         .ge("create_time", java.time.LocalDateTime.now().minusDays(limit))
                         .groupBy("DATE_FORMAT(create_time, '%Y-%m-%d')")
@@ -104,12 +106,12 @@ public class TrendStatServiceImpl implements TrendStatService {
 
             // Song：查近7天包含该标签的帖子数
             long recentCount = postMapper.selectCount(
-                    new QueryWrapper<Post>()
+                    applyPublicVisibility(new QueryWrapper<Post>())
                             .like("tags", name)
                             .ge("create_time", sevenDaysAgo));
             // Song：查前7天（7~14天前）包含该标签的帖子数
             long previousCount = postMapper.selectCount(
-                    new QueryWrapper<Post>()
+                    applyPublicVisibility(new QueryWrapper<Post>())
                             .like("tags", name)
                             .ge("create_time", fourteenDaysAgo)
                             .lt("create_time", sevenDaysAgo));
@@ -139,7 +141,9 @@ public class TrendStatServiceImpl implements TrendStatService {
     @Override
     public Map<String, Object> getSectionPie() {
         List<Map<String, Object>> stats = postMapper.selectMaps(
-                new QueryWrapper<Post>().select("section_id", "count(*) as count").groupBy("section_id"));
+                applyPublicVisibility(new QueryWrapper<Post>())
+                        .select("section_id", "count(*) as count")
+                        .groupBy("section_id"));
 
         Set<Long> sectionIds = stats.stream()
                 .map(item -> parseLong(item.get("section_id")))
@@ -177,8 +181,7 @@ public class TrendStatServiceImpl implements TrendStatService {
         int safePageSize = Math.min(Math.max(pageSize, 1), 100);
         int offset = (safePage - 1) * safePageSize;
 
-        QueryWrapper<Post> wrapper = new QueryWrapper<Post>()
-                .eq("status", 1);
+        QueryWrapper<Post> wrapper = applyPublicVisibility(new QueryWrapper<>());
 
         LocalDateTime start = TimeRangeUtils.resolveRangeStart(timeRange);
         if (start != null) {
@@ -209,7 +212,7 @@ public class TrendStatServiceImpl implements TrendStatService {
     public Map<String, Object> getCommunityDashboard() {
         Map<String, Object> dashboard = new HashMap<>();
         // 这类大屏接口刷新很频繁，能在 SQL 里一次聚合完，就别拆成好几次 count。
-        Map<String, Object> postStats = firstRow(postMapper.selectMaps(new QueryWrapper<Post>()
+        Map<String, Object> postStats = firstRow(postMapper.selectMaps(applyPublicVisibility(new QueryWrapper<Post>())
                 .select(
                         "COUNT(*) AS totalPosts",
                         "SUM(CASE WHEN DATE(create_time) = CURDATE() THEN 1 ELSE 0 END) AS todayPosts")));
@@ -233,7 +236,7 @@ public class TrendStatServiceImpl implements TrendStatService {
         }
 
         List<Post> posts = postMapper.selectList(
-                new QueryWrapper<Post>()
+                applyPublicVisibility(new QueryWrapper<Post>())
                         .select("tags")
                         .like("tags", normalizedKeyword)
                         .isNotNull("tags")
@@ -497,6 +500,17 @@ public class TrendStatServiceImpl implements TrendStatService {
         result.put("suggestions", suggestions);
 
         return result;
+    }
+
+    private QueryWrapper<Post> applyPublicVisibility(QueryWrapper<Post> wrapper) {
+        return wrapper.eq("status", 1)
+                .and(w -> w.isNull("audit_status")
+                        .or()
+                        .eq("audit_status", "")
+                        .or()
+                        .eq("audit_status", AUDIT_STATUS_PENDING)
+                        .or()
+                        .eq("audit_status", AUDIT_STATUS_APPROVED));
     }
 
     private void checkPattern(List<Map<String, Object>> risks, String code,

@@ -1,0 +1,58 @@
+* { box-sizing: border-box; }
+body { margin: 0; font-family: "Segoe UI", "PingFang SC", sans-serif; background: #f4f6fb; color: #172033; }
+a { color: inherit; text-decoration: none; }
+button { cursor: pointer; }
+
+.login-body { display: flex; align-items: center; justify-content: center; min-height: 100vh; background: linear-gradient(135deg, #eef4ff, #f8fbff); }
+.login-card { width: 360px; padding: 32px; background: #fff; border-radius: 18px; box-shadow: 0 20px 60px rgba(20, 54, 128, 0.12); }
+.login-card h1 { margin: 0 0 8px; font-size: 26px; }
+.login-card p { margin: 0 0 24px; color: #5d6b87; }
+.login-form { display: flex; flex-direction: column; gap: 12px; }
+.login-form input { padding: 12px 14px; border: 1px solid #d6dceb; border-radius: 10px; }
+.login-form button { margin-top: 8px; height: 44px; border: 0; border-radius: 10px; background: #1456f1; color: #fff; font-weight: 700; }
+.alert { padding: 12px 14px; border-radius: 10px; margin-bottom: 16px; }
+.alert-error { background: #ffe7e8; color: #a62f2f; }
+
+.panel-shell { display: grid; grid-template-columns: 240px 1fr; min-height: 100vh; }
+.sidebar { padding: 24px; background: #111d37; color: #dfe7fb; display: flex; flex-direction: column; gap: 20px; }
+.sidebar h2 { margin: 0; font-size: 22px; }
+.sidebar nav { display: flex; flex-direction: column; gap: 8px; }
+.sidebar nav a { padding: 12px 14px; border-radius: 10px; color: #b8c4e4; }
+.sidebar nav a.active, .sidebar nav a:hover { background: rgba(255,255,255,0.08); color: #fff; }
+.ghost-btn { width: 100%; padding: 12px 14px; border: 1px solid rgba(255,255,255,0.12); background: transparent; color: #dfe7fb; border-radius: 10px; }
+
+.panel-main { padding: 28px; }
+.panel-header h1 { margin: 0 0 8px; font-size: 30px; }
+.panel-header p { margin: 0; color: #61708b; }
+.cards-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin: 24px 0; }
+.metric-card, .panel-card { background: #fff; border-radius: 16px; box-shadow: 0 12px 30px rgba(15, 38, 95, 0.08); }
+.metric-card { padding: 18px; }
+.metric-card h3 { margin: 0 0 10px; font-size: 14px; color: #64738f; font-weight: 600; }
+.metric-card strong { font-size: 26px; }
+.panel-card { padding: 20px; }
+.section-title { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.section-title h2 { margin: 0; font-size: 20px; }
+.filters { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+.filters input, .filters select { min-width: 180px; padding: 10px 12px; border: 1px solid #d5dcef; border-radius: 10px; background: #fff; }
+.filters button, .config-form button { height: 42px; padding: 0 18px; border: 0; border-radius: 10px; background: #1456f1; color: #fff; font-weight: 700; }
+.config-form { display: flex; flex-direction: column; gap: 16px; }
+.form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
+.form-grid label { display: flex; flex-direction: column; gap: 8px; color: #4a5772; font-size: 14px; }
+.form-grid input { padding: 10px 12px; border: 1px solid #d5dcef; border-radius: 10px; }
+
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: 12px 10px; border-bottom: 1px solid #edf1f7; font-size: 14px; }
+th { color: #5b6984; font-weight: 700; }
+.badge { display: inline-flex; align-items: center; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; }
+.badge-success { background: #e6f7eb; color: #1f8c42; }
+.badge-failed { background: #ffe8e8; color: #b83d3d; }
+.badge-uploading, .badge-merging { background: #e8f0ff; color: #2253d2; }
+.badge-canceled { background: #f3f0ef; color: #7f6959; }
+.muted { color: #74839b; }
+.json-box { padding: 16px; background: #0f1730; color: #eaf0ff; border-radius: 14px; overflow: auto; font-size: 13px; line-height: 1.6; }
+
+@media (max-width: 980px) {
+  .panel-shell { grid-template-columns: 1fr; }
+  .sidebar { flex-direction: row; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+  .sidebar nav { width: 100%; flex-direction: row; flex-wrap: wrap; }
+}

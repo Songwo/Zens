@@ -139,6 +139,89 @@ CREATE TABLE `sys_post` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='帖子表';
 
 -- ============================================================
+-- 4.1) 帖子媒体表（配合 Go 媒体服务，覆盖式写入）
+-- ============================================================
+CREATE TABLE IF NOT EXISTS `sys_post_media` (
+  `id`               bigint         NOT NULL,
+  `post_id`          varchar(64)    NOT NULL COMMENT '所属帖子ID',
+  `file_id`          varchar(64)    DEFAULT NULL COMMENT 'Go 侧文件ID',
+  `media_type`       varchar(16)    NOT NULL DEFAULT 'image' COMMENT 'image/video',
+  `access_url`       varchar(500)   NOT NULL COMMENT '访问URL',
+  `cover_url`        varchar(500)   DEFAULT NULL COMMENT '视频封面URL',
+  `mime_type`        varchar(128)   DEFAULT NULL,
+  `original_name`    varchar(255)   DEFAULT NULL,
+  `size_bytes`       bigint         DEFAULT NULL,
+  `width`            int            DEFAULT NULL,
+  `height`           int            DEFAULT NULL,
+  `duration_seconds` int            DEFAULT NULL,
+  `sort_order`       int            NOT NULL DEFAULT 0,
+  `status`           tinyint        NOT NULL DEFAULT 1 COMMENT '1有效 0已删',
+  `create_time`      datetime       DEFAULT CURRENT_TIMESTAMP,
+  `update_time`      datetime       DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_pm_post` (`post_id`, `sort_order`),
+  KEY `idx_pm_file` (`file_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='帖子媒体关系表';
+
+-- ============================================================
+-- 4.2) 媒体文件元数据表（Cloudflare R2）
+-- ============================================================
+CREATE TABLE IF NOT EXISTS `sys_media_file` (
+  `id`               varchar(64)   NOT NULL,
+  `file_key`         varchar(500)  NOT NULL COMMENT 'R2 object key',
+  `original_name`    varchar(255)  DEFAULT NULL,
+  `mime_type`        varchar(128)  DEFAULT NULL,
+  `media_type`       varchar(16)   NOT NULL COMMENT 'image/video',
+  `size_bytes`       bigint        NOT NULL,
+  `sha256`           varchar(64)   DEFAULT NULL,
+  `width`            int           DEFAULT NULL,
+  `height`           int           DEFAULT NULL,
+  `duration_seconds` int           DEFAULT NULL,
+  `access_url`       varchar(500)  NOT NULL,
+  `cover_url`        varchar(500)  DEFAULT NULL,
+  `uploader_id`      varchar(64)   DEFAULT NULL,
+  `biz_type`         varchar(32)   DEFAULT NULL,
+  `biz_id`           varchar(64)   DEFAULT NULL,
+  `status`           tinyint       NOT NULL DEFAULT 1 COMMENT '1=有效 0=已删',
+  `create_time`      datetime      DEFAULT CURRENT_TIMESTAMP,
+  `update_time`      datetime      DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_file_key` (`file_key`),
+  KEY `idx_sha256` (`sha256`),
+  KEY `idx_uploader_time` (`uploader_id`, `create_time`),
+  KEY `idx_biz` (`biz_type`, `biz_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='媒体文件元数据(R2)';
+
+-- ============================================================
+-- 4.2) 媒体文件元数据表（Cloudflare R2）
+-- ============================================================
+CREATE TABLE IF NOT EXISTS `sys_media_file` (
+  `id`               varchar(64)   NOT NULL,
+  `file_key`         varchar(500)  NOT NULL COMMENT 'R2 object key',
+  `original_name`    varchar(255)  DEFAULT NULL,
+  `mime_type`        varchar(128)  DEFAULT NULL,
+  `media_type`       varchar(16)   NOT NULL COMMENT 'image/video',
+  `size_bytes`       bigint        NOT NULL,
+  `sha256`           varchar(64)   DEFAULT NULL,
+  `width`            int           DEFAULT NULL,
+  `height`           int           DEFAULT NULL,
+  `duration_seconds` int           DEFAULT NULL,
+  `access_url`       varchar(500)  NOT NULL,
+  `cover_url`        varchar(500)  DEFAULT NULL,
+  `uploader_id`      varchar(64)   DEFAULT NULL,
+  `biz_type`         varchar(32)   DEFAULT NULL,
+  `biz_id`           varchar(64)   DEFAULT NULL,
+  `status`           tinyint       NOT NULL DEFAULT 1 COMMENT '1=有效 0=已删',
+  `create_time`      datetime      DEFAULT CURRENT_TIMESTAMP,
+  `update_time`      datetime      DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_file_key` (`file_key`),
+  KEY `idx_sha256` (`sha256`),
+  KEY `idx_uploader_time` (`uploader_id`, `create_time`),
+  KEY `idx_biz` (`biz_type`, `biz_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='媒体文件元数据(R2)';
+
+-- ============================================================
 -- 5) 帖子点赞表
 -- ============================================================
 CREATE TABLE `sys_post_like` (
@@ -395,3 +478,21 @@ CREATE TABLE IF NOT EXISTS `invite_codes` (
   KEY `idx_invite_status` (`status`, `expire_time`),
   KEY `idx_invite_creator` (`creator_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='邀请码表';
+
+-- ============================================================
+-- SSO 应用注册表（增量DDL）
+-- ============================================================
+CREATE TABLE IF NOT EXISTS `sys_sso_client` (
+  `id`            VARCHAR(64)   NOT NULL,
+  `client_id`     VARCHAR(100)  NOT NULL COMMENT '应用标识（唯一）',
+  `client_name`   VARCHAR(200)  NOT NULL COMMENT '应用名称',
+  `client_secret` VARCHAR(200)  NOT NULL COMMENT '应用密钥',
+  `redirect_uri`  VARCHAR(500)  NOT NULL COMMENT '回调地址',
+  `description`   VARCHAR(500)  DEFAULT NULL COMMENT '应用描述',
+  `logo_url`      VARCHAR(500)  DEFAULT NULL COMMENT '应用Logo URL',
+  `enabled`       TINYINT(1)    DEFAULT 1 COMMENT '是否启用 1:是 0:否',
+  `create_time`   DATETIME      DEFAULT CURRENT_TIMESTAMP,
+  `update_time`   DATETIME      DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_client_id` (`client_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='SSO 应用注册表';

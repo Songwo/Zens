@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import MainLayout from '@/layouts/MainLayout.vue'
 import Avatar from '@/components/common/Avatar.vue'
+import PageBackButton from '@/components/common/PageBackButton.vue'
 import PostCard from '@/components/PostCard.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import { userApi, type UserPublicProfile } from '@/api/user'
@@ -11,14 +12,17 @@ import { postApi } from '@/api/post'
 import { useUserStore } from '@/store/user'
 import { ElMessage } from 'element-plus'
 import { getCardThemePalette } from '@/utils/cardTheme'
-import { Document, Connection, Star } from '@element-plus/icons-vue'
+import { Document, Connection } from '@element-plus/icons-vue'
 import type { Post } from '@/types'
+import { cachedRequest } from '@/utils/requestCache'
 
 const route = useRoute()
 const router = useRouter()
 const userStore = useUserStore()
 
-const targetUserId = computed(() => route.params.id as string)
+const targetUserId = computed(() => {
+  return typeof route.params.id === 'string' ? route.params.id.trim() : ''
+})
 const profile = ref<UserPublicProfile | null>(null)
 const loading = ref(false)
 const posts = ref<Post[]>([])
@@ -27,6 +31,9 @@ const page = ref(1)
 const hasMore = ref(true)
 const isFollowing = ref(false)
 const followLoading = ref(false)
+const USER_PROFILE_CACHE_TTL = 60 * 1000
+let profileRequestId = 0
+let postsRequestId = 0
 
 const isSelf = computed(() => userStore.userId === targetUserId.value || String(userStore.userInfo?.id) === targetUserId.value)
 
@@ -42,38 +49,95 @@ const profileCardStyle = computed(() => {
   } as Record<string, string>
 })
 
+const isUserNotFoundError = (error: any) => {
+  const message = String(error?.message || '').trim()
+  return message.includes('用户不存在')
+}
+
 const fetchProfile = async () => {
-  loading.value = true
-  try {
-    const res = await userApi.getPublicProfile(targetUserId.value)
-    profile.value = res.data
-    if (userStore.accessToken && !isSelf.value) {
-      const followRes = await followApi.isFollowing(targetUserId.value)
-      isFollowing.value = followRes.data ?? false
-    }
-  } catch {
-    ElMessage.error('获取用户信息失败')
-  } finally {
+  const userId = targetUserId.value
+  if (!userId) {
+    profile.value = null
+    isFollowing.value = false
     loading.value = false
+    return
+  }
+  loading.value = true
+  const requestId = ++profileRequestId
+  try {
+    const profileRes = await cachedRequest(
+      `user:public:${userId}`,
+      USER_PROFILE_CACHE_TTL,
+      () => userApi.getPublicProfile(userId)
+    )
+    if (requestId !== profileRequestId || userId !== targetUserId.value) {
+      return
+    }
+    profile.value = profileRes.data
+    if (userStore.isLoggedIn && !isSelf.value) {
+      try {
+        const followRes = await followApi.isFollowing(userId)
+        if (requestId !== profileRequestId || userId !== targetUserId.value) {
+          return
+        }
+        isFollowing.value = followRes?.data ?? false
+      } catch {
+        isFollowing.value = false
+      }
+    } else {
+      isFollowing.value = false
+    }
+  } catch (error: any) {
+    if (requestId === profileRequestId && userId === targetUserId.value) {
+      profile.value = null
+      isFollowing.value = false
+      posts.value = []
+      hasMore.value = false
+      postsLoading.value = false
+      postsRequestId++
+      if (!isUserNotFoundError(error)) {
+        ElMessage.error('获取用户信息失败')
+      }
+    }
+  } finally {
+    if (requestId === profileRequestId) {
+      loading.value = false
+    }
   }
 }
 
 const fetchPosts = async (reset = false) => {
+  const userId = targetUserId.value
   if (reset) {
     page.value = 1
     posts.value = []
     hasMore.value = true
   }
+  if (!userId) {
+    posts.value = []
+    hasMore.value = false
+    postsLoading.value = false
+    return
+  }
   if (!hasMore.value || postsLoading.value) return
   postsLoading.value = true
+  const requestId = ++postsRequestId
   try {
-    const res = await postApi.searchList({
+    const requestPayload = {
       page: page.value,
       pageSize: 10,
       needTotal: false,
-      userId: targetUserId.value,
+      userId,
       status: 1
-    })
+    }
+    const res = await cachedRequest(
+      `user:posts:${userId}:${page.value}:${requestPayload.pageSize}`,
+      USER_PROFILE_CACHE_TTL,
+      () => postApi.searchList(requestPayload)
+    )
+    if (requestId !== postsRequestId || userId !== targetUserId.value) {
+      return
+    }
     if (res.data.records.length > 0) {
       posts.value.push(...res.data.records)
       page.value++
@@ -82,9 +146,13 @@ const fetchPosts = async (reset = false) => {
     }
     if (res.data.records.length < 10) hasMore.value = false
   } catch {
-    ElMessage.error('获取帖子失败')
+    if (requestId === postsRequestId && userId === targetUserId.value) {
+      ElMessage.error('获取帖子失败')
+    }
   } finally {
-    postsLoading.value = false
+    if (requestId === postsRequestId) {
+      postsLoading.value = false
+    }
   }
 }
 
@@ -114,13 +182,31 @@ const toggleFollow = async () => {
 }
 
 watch(targetUserId, () => {
+  if (!targetUserId.value) {
+    profile.value = null
+    posts.value = []
+    hasMore.value = false
+    loading.value = false
+    postsLoading.value = false
+    isFollowing.value = false
+    return
+  }
   fetchProfile()
   fetchPosts(true)
 })
 
 onMounted(() => {
+  if (!targetUserId.value) {
+    hasMore.value = false
+    return
+  }
   fetchProfile()
   fetchPosts(true)
+})
+
+onBeforeUnmount(() => {
+  profileRequestId++
+  postsRequestId++
 })
 </script>
 
@@ -128,6 +214,7 @@ onMounted(() => {
   <MainLayout>
     <div class="user-profile-container" v-loading="loading">
       <template v-if="profile">
+        <PageBackButton class="profile-back-button" fallback="/" />
         <el-card class="profile-card" :style="profileCardStyle" shadow="never">
           <div class="profile-flex">
             <div class="profile-info">
@@ -195,8 +282,11 @@ onMounted(() => {
 
 <style scoped>
 .user-profile-container {
-  max-width: 800px;
-  margin: 0 auto;
+  width: 100%;
+}
+
+.profile-back-button {
+  margin-bottom: 12px;
 }
 
 .profile-card {

@@ -82,7 +82,6 @@ onMounted(() => {
         </aside>
       </div>
     </div>
-
     <nav class="mobile-bottom-nav">
       <button
         v-for="item in mobileNavItems"
@@ -221,7 +220,7 @@ onMounted(() => {
   }
 
   .shell {
-    padding: 12px 10px 76px;
+    padding: 12px 10px calc(var(--cp-mobile-nav-height) + 14px);
   }
 
   .mobile-bottom-nav {
@@ -229,7 +228,7 @@ onMounted(() => {
     bottom: 0;
     left: 0;
     right: 0;
-    height: 62px;
+    height: var(--cp-mobile-nav-height);
     background: rgba(255, 255, 255, 0.96);
     border-top: 1px solid var(--el-border-color-light);
     display: grid;

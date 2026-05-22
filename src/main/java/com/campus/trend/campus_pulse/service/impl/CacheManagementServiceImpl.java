@@ -46,6 +46,12 @@ public class CacheManagementServiceImpl implements CacheManagementService {
     }
 
     @Override
+    public void clearAllMediaCache() {
+        long cleared = clearCacheByPattern("media:service:*");
+        log.info("已清除旧媒体链路遗留缓存，共 {} 个", cleared);
+    }
+
+    @Override
     public long clearCacheByPattern(String keyPattern) {
         try {
             List<String> keys = scanKeys(keyPattern);
@@ -85,6 +91,15 @@ public class CacheManagementServiceImpl implements CacheManagementService {
         long captcha = countCacheByPattern("auth:captcha:*");
         long lock = countCacheByPattern("auth:lock:*");
 
+        long mediaToken = countCacheByPattern("media:service:token:*");
+        long mediaUpload = countCacheByPattern("media:service:upload:*");
+        long mediaChunk = countCacheByPattern("media:service:chunk:*");
+        long mediaAdmin = countCacheByPattern("media:service:admin:*");
+        long mediaHealth = countCacheByPattern("media:service:health:*");
+        long mediaError = countCacheByPattern("media:service:error:*");
+        long mediaMetric = countCacheByPattern("media:service:metric:*");
+        long mediaTotal = mediaToken + mediaUpload + mediaChunk + mediaAdmin + mediaHealth + mediaError + mediaMetric;
+
         overview.put("tagHot", tagHot);
         overview.put("postFeed", postFeed);
         overview.put("postFeedVersion", postFeedVersion);
@@ -102,6 +117,14 @@ public class CacheManagementServiceImpl implements CacheManagementService {
         overview.put("authRefresh", refresh);
         overview.put("authDevice", device);
         overview.put("requestNonce", nonce);
+        overview.put("mediaToken", mediaToken);
+        overview.put("mediaUpload", mediaUpload);
+        overview.put("mediaChunk", mediaChunk);
+        overview.put("mediaAdmin", mediaAdmin);
+        overview.put("mediaHealth", mediaHealth);
+        overview.put("mediaError", mediaError);
+        overview.put("mediaMetric", mediaMetric);
+        overview.put("mediaTotal", mediaTotal);
 
         long total = 0L;
         for (Long v : overview.values()) {

@@ -26,9 +26,6 @@ public class LoginReq {
      */
     private String code;
 
-    /**
-     * Song：说明
-     */
     private String loginType;
 
     /**

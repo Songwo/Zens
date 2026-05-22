@@ -1,9 +1,10 @@
 package com.campus.trend.campus_pulse.controller;
 
 import com.campus.trend.campus_pulse.common.api.Result;
-import com.campus.trend.campus_pulse.common.api.ResultCode;
-import com.campus.trend.campus_pulse.common.exception.BusinessException;
+import com.campus.trend.campus_pulse.dto.response.InviteGenerateResp;
+import com.campus.trend.campus_pulse.dto.response.InviteRecordResp;
 import com.campus.trend.campus_pulse.dto.response.LevelInfoResp;
+import com.campus.trend.campus_pulse.dto.response.MyInviteResp;
 import com.campus.trend.campus_pulse.entity.InviteCode;
 import com.campus.trend.campus_pulse.entity.User;
 import com.campus.trend.campus_pulse.service.InviteCodeService;
@@ -13,6 +14,7 @@ import com.campus.trend.campus_pulse.utils.PermissionUtils;
 import com.campus.trend.campus_pulse.utils.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -38,29 +40,23 @@ public class InviteCodeController {
     @Value("${campus.invite.required:false}")
     private boolean inviteRequired;
 
-    /** 是否需要邀请码注册（公开接口） */
     @GetMapping("/required")
-    public Result<?> required() {
+    public Result<Boolean> required() {
         return Result.success(inviteRequired);
     }
 
-    /** 校验邀请码（注册前验证，公开接口） */
     @GetMapping("/validate")
     public Result<?> validate(@RequestParam String code) {
-        boolean valid = inviteCodeService.validate(code);
-        return valid ? Result.success("邀请码有效") : Result.failed("邀请码无效或已过期");
+        return inviteCodeService.validate(code) ? Result.success("邀请码有效") : Result.failed("邀请码无效或已过期");
     }
 
-    /** 普通用户生成自己的邀请码（需达到最低等级） */
     @PostMapping("/generate-self")
     public Result<?> generateSelf() {
         String userId = SecurityUtils.getCurrentUserId();
-        LevelInfoResp info = levelService.getUserLevelInfo(userId);
-        int level = info != null && info.getLevel() != null ? info.getLevel() : 1;
+        int level = currentLevel(userId);
         if (level < userMinLevel) {
             return Result.failed("需要达到 Lv" + userMinLevel + " 才能生成邀请码，当前等级 Lv" + level);
         }
-        // 每个用户限制未使用的邀请码数量不超过5个
         long pendingCount = inviteCodeService.lambdaQuery()
                 .eq(InviteCode::getCreatorId, userId)
                 .eq(InviteCode::getStatus, 0)
@@ -70,90 +66,92 @@ public class InviteCodeController {
         }
         List<String> codes = inviteCodeService.generate(userId, 1, 1, 30, "用户自助生成");
         String code = codes.get(0);
-        // 构建邀请链接
-        String link = inviteBaseUrl + "/auth?type=register&invite=" + code;
-        java.util.Map<String, Object> result = new java.util.HashMap<>();
-        result.put("code", code);
-        result.put("link", link);
-        result.put("expireDays", 30);
-        return Result.success(result);
+        return Result.success(new InviteGenerateResp(code, buildInviteLink(code), 30));
     }
 
-    /** 查询我的邀请记录 */
     @GetMapping("/my")
-    public Result<?> myInvites() {
+    public Result<MyInviteResp> myInvites() {
         String userId = SecurityUtils.getCurrentUserId();
-        LevelInfoResp info = levelService.getUserLevelInfo(userId);
-        int level = info != null && info.getLevel() != null ? info.getLevel() : 1;
-        java.util.List<InviteCode> codes = inviteCodeService.lambdaQuery()
+        int level = currentLevel(userId);
+        List<InviteCode> codes = inviteCodeService.lambdaQuery()
                 .eq(InviteCode::getCreatorId, userId)
                 .orderByDesc(InviteCode::getCreateTime)
                 .list();
-        // 丰富被邀请人信息
-        java.util.List<java.util.Map<String, Object>> records = codes.stream().map(c -> {
-            java.util.Map<String, Object> m = new java.util.HashMap<>();
-            m.put("id", c.getId());
-            m.put("code", c.getCode());
-            m.put("link", inviteBaseUrl + "/auth?type=register&invite=" + c.getCode());
-            m.put("status", c.getStatus());
-            m.put("maxUses", c.getMaxUses());
-            m.put("usedCount", c.getUsedCount());
-            m.put("expireTime", c.getExpireTime());
-            m.put("createTime", c.getCreateTime());
-            m.put("remark", c.getRemark());
-            // 被邀请人信息
-            if (org.springframework.util.StringUtils.hasText(c.getUsedByUserId())) {
-                try {
-                    User u = userService.getById(c.getUsedByUserId());
-                    if (u != null) {
-                        java.util.Map<String, Object> invitee = new java.util.HashMap<>();
-                        invitee.put("id", u.getId());
-                        invitee.put("nickname", org.springframework.util.StringUtils.hasText(u.getNickname()) ? u.getNickname() : u.getUsername());
-                        invitee.put("avatar", u.getAvatar());
-                        invitee.put("level", u.getLevel());
-                        invitee.put("createTime", u.getCreateTime());
-                        m.put("invitee", invitee);
-                    }
-                } catch (Exception ignored) {}
-            }
-            return m;
-        }).collect(java.util.stream.Collectors.toList());
-        java.util.Map<String, Object> resp = new java.util.HashMap<>();
-        resp.put("records", records);
-        resp.put("total", records.size());
-        resp.put("userLevel", level);
-        resp.put("minLevel", userMinLevel);
-        resp.put("canGenerate", level >= userMinLevel);
-        return Result.success(resp);
+        List<InviteRecordResp> records = codes.stream().map(this::toInviteRecord).toList();
+        return Result.success(new MyInviteResp(records, records.size(), level, userMinLevel, level >= userMinLevel));
     }
 
-    /** 生成邀请码（管理员） */
     @PostMapping("/generate")
     public Result<?> generate(@RequestBody Map<String, Object> body) {
         if (!PermissionUtils.isAdmin()) return Result.failed("无权操作");
         String creatorId = SecurityUtils.getCurrentUserId();
-        int count = body.containsKey("count") ? Integer.parseInt(String.valueOf(body.get("count"))) : 1;
-        int maxUses = body.containsKey("maxUses") ? Integer.parseInt(String.valueOf(body.get("maxUses"))) : 1;
-        Integer expireDays = body.containsKey("expireDays") ? Integer.parseInt(String.valueOf(body.get("expireDays"))) : null;
+        int count = parseIntOr(body.get("count"), 1);
+        int maxUses = parseIntOr(body.get("maxUses"), 1);
+        Integer expireDays = body.containsKey("expireDays") ? parseIntOr(body.get("expireDays"), 0) : null;
         String remark = body.containsKey("remark") ? String.valueOf(body.get("remark")) : null;
-        List<String> codes = inviteCodeService.generate(creatorId, count, maxUses, expireDays, remark);
-        return Result.success(codes);
+        return Result.success(inviteCodeService.generate(creatorId, count, maxUses, expireDays, remark));
     }
 
-    /** 禁用邀请码（管理员） */
     @PostMapping("/disable")
-    public Result<?> disable(@RequestBody java.util.Map<String, String> body) {
+    public Result<?> disable(@RequestBody Map<String, String> body) {
         String code = body.get("code");
-        if (!org.springframework.util.StringUtils.hasText(code)) return Result.failed("缺少邀请码参数");
+        if (!StringUtils.hasText(code)) return Result.failed("缺少邀请码参数");
         if (!PermissionUtils.isAdmin()) return Result.failed("无权操作");
         inviteCodeService.disable(code);
         return Result.success();
     }
 
-    /** 查询所有邀请码（管理员） */
     @GetMapping("/list")
     public Result<?> list() {
         if (!PermissionUtils.isAdmin()) return Result.failed("无权操作");
         return Result.success(inviteCodeService.listAll());
+    }
+
+    private int currentLevel(String userId) {
+        LevelInfoResp info = levelService.getUserLevelInfo(userId);
+        return info != null && info.getLevel() != null ? info.getLevel() : 1;
+    }
+
+    private String buildInviteLink(String code) {
+        return inviteBaseUrl + "/auth?type=register&invite=" + code;
+    }
+
+    private InviteRecordResp toInviteRecord(InviteCode c) {
+        InviteRecordResp.Invitee invitee = null;
+        if (StringUtils.hasText(c.getUsedByUserId())) {
+            try {
+                User u = userService.getById(c.getUsedByUserId());
+                if (u != null) {
+                    invitee = new InviteRecordResp.Invitee(
+                            u.getId(),
+                            StringUtils.hasText(u.getNickname()) ? u.getNickname() : u.getUsername(),
+                            u.getAvatar(),
+                            u.getLevel(),
+                            u.getCreateTime());
+                }
+            } catch (Exception ignored) {
+                // 被邀请人查询失败不影响主流程
+            }
+        }
+        return new InviteRecordResp(
+                c.getId(),
+                c.getCode(),
+                buildInviteLink(c.getCode()),
+                c.getStatus(),
+                c.getMaxUses(),
+                c.getUsedCount(),
+                c.getExpireTime(),
+                c.getCreateTime(),
+                c.getRemark(),
+                invitee);
+    }
+
+    private static int parseIntOr(Object value, int fallback) {
+        if (value == null) return fallback;
+        try {
+            return Integer.parseInt(String.valueOf(value));
+        } catch (NumberFormatException e) {
+            return fallback;
+        }
     }
 }

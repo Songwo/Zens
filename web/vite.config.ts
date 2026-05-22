@@ -29,6 +29,7 @@ export default defineConfig({
             id.includes('/vue/') ||
             id.includes('/vue-router/') ||
             id.includes('/pinia/') ||
+            id.includes('/@element-plus/icons-vue/') ||
             id.includes('/element-plus/') ||
             id.includes('/@element-plus/')
           ) {

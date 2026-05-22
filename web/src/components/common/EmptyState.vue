@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { defineComponent, h, type Component } from 'vue'
+import type { Component } from 'vue'
 
 defineProps<{
   title?: string

@@ -54,8 +54,10 @@ class WebSocketClient {
   private currentUserId: string | null = null
   private baseUrl: string
 
-  constructor(baseUrl: string = '/api/ws') {
-    this.baseUrl = baseUrl
+  constructor(baseUrl?: string) {
+    // Song：SockJS 需要 HTTP(S) URL（内部会自己升级到 WS），优先使用 VITE_API_BASE_URL
+    const apiBase = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '')
+    this.baseUrl = baseUrl || `${apiBase}/api/ws`
     this.bindLifecycleListeners()
   }
 

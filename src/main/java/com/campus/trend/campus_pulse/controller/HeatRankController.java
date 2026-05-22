@@ -22,9 +22,6 @@ public class HeatRankController {
 
     private final PublicDataService publicDataService;
 
-    /**
-     * Song：说明
-     */
     @GetMapping("/top")
     public Result<?> getTopHeatRank(@RequestParam(required = false) String timeRange,
                                     @RequestParam(defaultValue = "10") int limit) {

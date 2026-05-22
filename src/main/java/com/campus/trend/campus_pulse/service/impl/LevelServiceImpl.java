@@ -2,6 +2,7 @@ package com.campus.trend.campus_pulse.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.campus.trend.campus_pulse.dto.response.LevelExpRecordPageResp;
 import com.campus.trend.campus_pulse.dto.response.LevelExpRecordResp;
 import com.campus.trend.campus_pulse.dto.response.LevelInfoResp;
 import com.campus.trend.campus_pulse.entity.LevelExpLog;
@@ -14,11 +15,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.HashMap;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 
 @Service
 @Slf4j
@@ -105,7 +104,7 @@ public class LevelServiceImpl implements LevelService {
     }
 
     @Override
-    public Map<String, Object> getExperienceRecords(String userId, Integer days, int page, int pageSize) {
+    public LevelExpRecordPageResp getExperienceRecords(String userId, Integer days, int page, int pageSize) {
         int safePage = Math.max(page, 1);
         int safePageSize = Math.min(Math.max(pageSize, 1), 100);
 
@@ -130,7 +129,7 @@ public class LevelServiceImpl implements LevelService {
             records.add(resp);
         }
 
-        // Song：历史兼容：旧版本累计的经验可能没有日志，给前端返回一条兜底记录
+        // 历史兼容：旧版本累计的经验可能没有日志，给前端返回一条兜底记录
         if (resultPage.getTotal() == 0) {
             User user = userService.getById(userId);
             int experience = user != null && user.getExperience() != null ? user.getExperience() : 0;
@@ -143,24 +142,16 @@ public class LevelServiceImpl implements LevelService {
                     fallback.setCreateTime(LocalDateTime.now());
                     records.add(fallback);
                 }
-                Map<String, Object> fallbackResult = new HashMap<>();
-                fallbackResult.put("records", records);
-                fallbackResult.put("total", 1L);
-                fallbackResult.put("current", (long) safePage);
-                fallbackResult.put("size", (long) safePageSize);
-                fallbackResult.put("pages", 1L);
-                return fallbackResult;
+                return new LevelExpRecordPageResp(records, 1L, safePage, safePageSize, 1L);
             }
         }
 
-        Map<String, Object> result = new HashMap<>();
-        result.put("records", records);
-        result.put("total", resultPage.getTotal());
-        result.put("current", resultPage.getCurrent());
-        result.put("size", resultPage.getSize());
-        result.put("pages", resultPage.getPages());
-
-        return result;
+        return new LevelExpRecordPageResp(
+                records,
+                resultPage.getTotal(),
+                resultPage.getCurrent(),
+                resultPage.getSize(),
+                resultPage.getPages());
     }
 
     @Override

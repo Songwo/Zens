@@ -20,6 +20,10 @@ export const resolveNotificationRoute = (
     return null
   }
 
+  if (ctx?.type && ['system', 'security_alert', 'new_device_login', 'session_terminated', 'password_changed', 'password_reset', 'two_factor_enabled', 'two_factor_disabled', 'login_failed_burst'].includes(ctx.type)) {
+    return { path: '/me', query: { tab: 'notifications' } }
+  }
+
   if (relatedId === null || relatedId === undefined) {
     return null
   }

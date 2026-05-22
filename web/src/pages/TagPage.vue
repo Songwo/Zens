@@ -1,14 +1,16 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute } from 'vue-router'
 import MainLayout from '@/layouts/MainLayout.vue'
 import PostCard from '@/components/PostCard.vue'
+import PageBackButton from '@/components/common/PageBackButton.vue'
 import { postApi } from '@/api/post'
 import { tagApi } from '@/api/tag'
 import type { Post } from '@/types'
 import { ElMessage } from 'element-plus'
 import { CollectionTag, Star, StarFilled } from '@element-plus/icons-vue'
 import { useUserStore } from '@/store/user'
+import { cachedRequest } from '@/utils/requestCache'
 
 const route = useRoute()
 const userStore = useUserStore()
@@ -20,30 +22,63 @@ const sortMode = ref<'new' | 'hot'>('hot')
 const tagId = ref<number | null>(null)
 const isFollowing = ref(false)
 const followLoading = ref(false)
+const TAG_PAGE_CACHE_TTL = 60 * 1000
 
-const tagName = computed(() => route.params.name as string)
+const tagName = computed(() => {
+  return typeof route.params.name === 'string' ? route.params.name.trim() : ''
+})
+let postRequestId = 0
+let tagInfoRequestId = 0
+
+const resetTagFeed = () => {
+  page.value = 1
+  posts.value = []
+  hasMore.value = false
+  loading.value = false
+}
 
 const fetchPosts = async (reset = false) => {
+  const currentTagName = tagName.value
   if (reset) {
     page.value = 1
     posts.value = []
     hasMore.value = true
   }
 
+  if (!currentTagName) {
+    resetTagFeed()
+    return
+  }
   if (!hasMore.value || loading.value) return
 
   loading.value = true
+  const requestId = ++postRequestId
   try {
-    const res = await postApi.searchList({
+    const requestPayload = {
       page: page.value,
       pageSize: 10,
       needTotal: false,
       orderBy: sortMode.value,
-      tag: tagName.value,
+      tag: currentTagName,
       status: 1
-    })
+    }
+    const cacheKey = [
+      'tag:posts',
+      currentTagName.toLowerCase(),
+      sortMode.value,
+      page.value,
+      requestPayload.pageSize
+    ].join(':')
+    const res = await cachedRequest(
+      cacheKey,
+      TAG_PAGE_CACHE_TTL,
+      () => postApi.searchList(requestPayload)
+    )
 
     const records = res?.data?.records || []
+    if (requestId !== postRequestId || currentTagName !== tagName.value) {
+      return
+    }
 
     if (records.length > 0) {
       posts.value.push(...records)
@@ -55,10 +90,15 @@ const fetchPosts = async (reset = false) => {
     if (records.length < 10) {
       hasMore.value = false
     }
-  } catch (error) {
+  } catch (error: any) {
+    if (requestId !== postRequestId || currentTagName !== tagName.value || error?.code === 'ERR_CANCELED') {
+      return
+    }
     ElMessage.error('无法同步标签内容')
   } finally {
-    loading.value = false
+    if (requestId === postRequestId) {
+      loading.value = false
+    }
   }
 }
 
@@ -68,14 +108,26 @@ const changeSort = (mode: any) => {
 }
 
 const loadTagInfo = async () => {
-  if (!userStore.isLoggedIn) return
+  const currentTagName = tagName.value
+  if (!userStore.isLoggedIn || !currentTagName) return
+  const requestId = ++tagInfoRequestId
   try {
     // 通过搜索找到tagId
-    const res = await tagApi.search(tagName.value)
-    const found = res.data?.find((t: any) => t.name === tagName.value)
+    const res = await cachedRequest(
+      `tag:lookup:${currentTagName.toLowerCase()}`,
+      TAG_PAGE_CACHE_TTL,
+      () => tagApi.search(currentTagName)
+    )
+    if (requestId !== tagInfoRequestId || currentTagName !== tagName.value) {
+      return
+    }
+    const found = res.data?.find((t: any) => t.name === currentTagName)
     if (found) {
       tagId.value = found.id
       const statusRes = await tagApi.getStatus(found.id)
+      if (requestId !== tagInfoRequestId || currentTagName !== tagName.value) {
+        return
+      }
       isFollowing.value = statusRes.data?.isFollowing ?? false
     }
   } catch {
@@ -108,13 +160,26 @@ const toggleFollow = async () => {
 watch(() => route.params.name, () => {
   tagId.value = null
   isFollowing.value = false
+  if (!tagName.value) {
+    resetTagFeed()
+    return
+  }
   fetchPosts(true)
   loadTagInfo()
 })
 
 onMounted(() => {
+  if (!tagName.value) {
+    resetTagFeed()
+    return
+  }
   fetchPosts(true)
   loadTagInfo()
+})
+
+onBeforeUnmount(() => {
+  postRequestId++
+  tagInfoRequestId++
 })
 </script>
 
@@ -123,6 +188,7 @@ onMounted(() => {
     <div class="tag-page-container">
       <!-- Tag Header -->
       <div class="tag-hero">
+        <PageBackButton class="tag-back-button" fallback="/search" />
         <div class="tag-banner">
           <div class="tag-badge">
             <el-icon><CollectionTag /></el-icon>
@@ -181,12 +247,15 @@ onMounted(() => {
 
 <style scoped>
 .tag-page-container {
-  max-width: 800px;
-  margin: 0 auto;
+  width: 100%;
 }
 
 .tag-hero {
   margin-bottom: 24px;
+}
+
+.tag-back-button {
+  margin-bottom: 12px;
 }
 
 .tag-banner {
@@ -276,106 +345,5 @@ onMounted(() => {
   .action-btn {
     width: 100%;
   }
-}
-</style>
-
-<style scoped>
-.tag-page-container {
-  max-width: 896px;
-  margin: 0 auto;
-  padding: 24px 16px;
-}
-
-.tag-header {
-  margin-bottom: 32px;
-  padding: 24px;
-  background: linear-gradient(135deg, #ecf5ff, #f0f9ff);
-  border-radius: 16px;
-  border: 1px solid #d9ecff;
-}
-
-.header-content {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-}
-
-.header-info {
-  flex: 1;
-}
-
-.tag-title-wrap {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 12px;
-}
-
-.tag-icon-wrap {
-  width: 48px;
-  height: 48px;
-  background-color: var(--el-color-primary);
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 24px;
-  color: white;
-}
-.text-white {
-  color: white;
-}
-
-.tag-title {
-  font-size: 24px;
-  font-weight: 900;
-  color: #303133;
-  margin: 0;
-  letter-spacing: -0.5px;
-}
-
-.tag-stats {
-  font-size: 12px;
-  color: #606266;
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-
-.follow-btn {
-  font-weight: bold;
-  border-radius: 12px;
-}
-
-.sort-tabs {
-  margin-bottom: 24px;
-}
-
-.posts-list {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  min-height: 200px;
-}
-
-.load-more-wrapper {
-  padding: 32px 0;
-  text-align: center;
-}
-.load-more-btn {
-  width: 200px;
-  font-weight: bold;
-}
-
-.end-msg {
-  padding: 32px 0;
-  color: #c0c4cc;
-}
-.end-msg :deep(.el-divider__text) {
-  color: #c0c4cc;
-  font-size: 12px;
-  font-weight: bold;
-  text-transform: uppercase;
-  letter-spacing: 1px;
 }
 </style>

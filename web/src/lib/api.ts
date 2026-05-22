@@ -10,7 +10,6 @@ import { useUserStore } from '@/store/user'
 type RetryConfig = InternalAxiosRequestConfig & {
   _retry?: boolean
   _networkRetryCount?: number
-  _skipSign?: boolean
 }
 type RefreshFailReason = 'no_refresh' | 'invalid' | 'network'
 type RefreshResult = { ok: true; token: string } | { ok: false; reason: RefreshFailReason }
@@ -38,15 +37,17 @@ const SAFE_RETRY_METHODS = new Set(['GET', 'HEAD', 'OPTIONS'])
 // ─────────────────────────────────────────────────────────
 // Axios 实例
 // ─────────────────────────────────────────────────────────
+const API_BASE_URL = `${(import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '')}/api`
+
 const api = axios.create({
-  baseURL: '/api',
+  baseURL: API_BASE_URL,
   timeout: 15000,
   headers: { 'Content-Type': 'application/json' },
 })
 
 // 专用刷新客户端：不经过主拦截器，避免递归
 const refreshClient = axios.create({
-  baseURL: '/api',
+  baseURL: API_BASE_URL,
   timeout: 12000,
   headers: { 'Content-Type': 'application/json' },
 })
@@ -68,8 +69,9 @@ function showErrorMessage(msg: string, key = msg) {
 function decodeJwtPayload(token: string): Record<string, any> | null {
   try {
     const seg = token.split('.')
-    if (seg.length < 2) return null
-    const raw = seg[1].replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(seg[1].length / 4) * 4, '=')
+    const payloadRaw = seg[1]
+    if (!payloadRaw) return null
+    const raw = payloadRaw.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(payloadRaw.length / 4) * 4, '=')
     return JSON.parse(atob(raw))
   } catch { return null }
 }
@@ -128,6 +130,18 @@ function persistTokens(accessToken: string, refreshToken: string) {
     const store = useUserStore()
     store.accessToken = accessToken
     store.refreshToken = refreshToken
+  } catch { /* store 可能未初始化 */ }
+}
+
+function persistAccessToken(accessToken: string) {
+  const keep = localStorage.getItem('remember_me') === 'true' || localStorage.getItem('access_token')
+    ? localStorage
+    : sessionStorage
+  const drop = keep === localStorage ? sessionStorage : localStorage
+  keep.setItem('access_token', accessToken)
+  drop.removeItem('access_token')
+  try {
+    useUserStore().accessToken = accessToken
   } catch { /* store 可能未初始化 */ }
 }
 
@@ -228,6 +242,20 @@ function applyAuthHeaders(config: RetryConfig) {
   config.headers['X-Device-Id'] = getOrCreateDeviceId()
 }
 
+function resetSecurityHeaders(config: RetryConfig) {
+  const keys = [
+    'X-Request-Timestamp',
+    'X-Request-Nonce',
+    'X-Request-Signature',
+    'x-request-timestamp',
+    'x-request-nonce',
+    'x-request-signature',
+  ]
+  keys.forEach((key) => {
+    delete config.headers[key]
+  })
+}
+
 function randomNonce() {
   if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
     const b = new Uint8Array(16); crypto.getRandomValues(b)
@@ -250,6 +278,37 @@ function redirectToLogin() {
   const p = new URLSearchParams({ type: 'login' })
   if (redirect && redirect !== '/') p.set('redirect', redirect)
   window.location.href = `/auth?${p.toString()}`
+}
+
+function readRenewedAccessToken(headers?: Record<string, unknown>) {
+  const renewedByHeader = typeof headers?.['x-access-token'] === 'string'
+    ? headers['x-access-token'].trim()
+    : ''
+  if (renewedByHeader) return renewedByHeader
+
+  const authorization = typeof headers?.authorization === 'string'
+    ? headers.authorization.trim()
+    : ''
+  if (authorization.startsWith('Bearer ')) {
+    return authorization.slice(7).trim()
+  }
+  return ''
+}
+
+function syncRenewedAccessToken(headers?: Record<string, unknown>) {
+  const renewedAccessToken = readRenewedAccessToken(headers)
+  if (!renewedAccessToken) return
+
+  const currentAccessToken = getAccessToken()
+  if (renewedAccessToken === currentAccessToken) return
+
+  const currentRefreshToken = getRefreshToken()
+  if (currentRefreshToken) {
+    persistTokens(renewedAccessToken, currentRefreshToken)
+    return
+  }
+
+  persistAccessToken(renewedAccessToken)
 }
 
 // ─────────────────────────────────────────────────────────
@@ -282,8 +341,8 @@ api.interceptors.request.use(async (config) => {
     delete config.headers['Authorization']
   }
 
-  // 请求签名（跳过重试请求）
-  if (needSign(config, token) && !(config as RetryConfig)._skipSign) {
+  // 请求签名（重试请求也要重新生成，避免 refresh 后继续带旧 token 的签名）
+  if (needSign(config, token)) {
     const method = String(config.method || 'get').toUpperCase()
     const timestamp = String(Date.now())
     const nonce = randomNonce()
@@ -301,6 +360,7 @@ api.interceptors.request.use(async (config) => {
 // ─────────────────────────────────────────────────────────
 api.interceptors.response.use(
   (response) => {
+    syncRenewedAccessToken(response.headers as Record<string, unknown> | undefined)
     const res = response.data
     if (response.config.responseType === 'blob' || res instanceof Blob) return res
     if (res?.code && res.code !== ResultCode.SUCCESS) {
@@ -323,13 +383,13 @@ api.interceptors.response.use(
       if (!isPublic) {
         // 标记已重试，防止无限循环
         originalRequest._retry = true
-        originalRequest._skipSign = true  // 重试时跳过重签名
 
         if (_isRefreshing) {
           // 刷新进行中：挂入队列，等待新 token 后重放
           try {
             await _enqueueRefresh()
             applyAuthHeaders(originalRequest)
+            resetSecurityHeaders(originalRequest)
             return api(originalRequest)
           } catch {
             return Promise.reject(error)
@@ -343,6 +403,7 @@ api.interceptors.response.use(
             // 刷新成功：唤醒队列 + 重放当前请求
             _flushQueue(result.token)
             applyAuthHeaders(originalRequest)
+            resetSecurityHeaders(originalRequest)
             return api(originalRequest)
           }
           // 刷新失败：拒绝队列中所有挂起请求
@@ -384,6 +445,26 @@ api.interceptors.response.use(
       || (error?.code === 'ECONNABORTED' ? '请求超时，请重试' : null)
       || (!error?.response ? '网络连接异常，请检查网络' : null)
     if (errMsg) showErrorMessage(errMsg, error?.code || errMsg)
+
+    // 增强错误日志（仅在开发环境或启用调试时）
+    if (import.meta.env.DEV || localStorage.getItem('debug_auth') === 'true') {
+      console.group('🔴 API请求失败')
+      console.log('URL:', originalRequest?.url)
+      console.log('Method:', originalRequest?.method)
+      console.log('Status:', status)
+      console.log('Error:', error?.response?.data || error?.message)
+      console.log('Has Access Token:', !!getAccessToken())
+      console.log('Has Refresh Token:', !!getRefreshToken())
+      console.log('Device ID:', getOrCreateDeviceId())
+      if (status === 401) {
+        console.log('401错误 - 可能原因:')
+        console.log('  1. Token已过期')
+        console.log('  2. Token刷新失败')
+        console.log('  3. 设备ID不匹配')
+        console.log('  4. Redis会话丢失')
+      }
+      console.groupEnd()
+    }
 
     return Promise.reject(error)
   }

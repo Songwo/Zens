@@ -110,4 +110,10 @@ public class User implements Serializable {
     @TableField(exist = false)
     private List<String> roles;
 
+    /**
+     * 已审核通过的板块版主范围（非数据库字段，用于返回给前端）
+     */
+    @TableField(exist = false)
+    private List<Long> moderatedSectionIds;
+
 }

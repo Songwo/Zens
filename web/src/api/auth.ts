@@ -47,7 +47,7 @@ export const authApi = {
         code?: string
         rememberMe?: boolean
         twoFactorCode?: string
-        'cf-turnstile-response': string
+        'cf-turnstile-response'?: string
     }) {
         return api.post<any, Result<{
             accessToken?: string

@@ -38,9 +38,6 @@ public class PostLikeServiceImpl extends ServiceImpl<PostLikeMapper, PostLike> i
     /**
      * Song：判断用户是否已点赞该帖子
      *
-     * Song：说明
-     * Song：说明
-     * Song：说明
      */
     @Override
     public boolean isLike(String postId, String userId) {
@@ -51,14 +48,6 @@ public class PostLikeServiceImpl extends ServiceImpl<PostLikeMapper, PostLike> i
         return count != null && count > 0;
     }
 
-    /**
-     * Song：说明
-     *
-     * Song：说明
-     * Song：说明
-     * Song：说明
-     * Song：说明
-     */
     @Override
     public IPage<Post> getPostLikeWithPage(String userId, int page, int pageSize) {
         // Song：1. 查询该用户所有的点赞记录（分页）
@@ -76,7 +65,6 @@ public class PostLikeServiceImpl extends ServiceImpl<PostLikeMapper, PostLike> i
             return emptyPage;
         }
 
-        // Song：说明
         List<String> postIds = postLikes.getRecords().stream()
                 .map(PostLike::getPostId)
                 .collect(Collectors.toList());
@@ -102,9 +90,6 @@ public class PostLikeServiceImpl extends ServiceImpl<PostLikeMapper, PostLike> i
     /**
      * Song：用户点赞帖子
      *
-     * Song：说明
-     * Song：说明
-     * Song：说明
      */
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -151,9 +136,6 @@ public class PostLikeServiceImpl extends ServiceImpl<PostLikeMapper, PostLike> i
     /**
      * Song：用户取消点赞帖子
      *
-     * Song：说明
-     * Song：说明
-     * Song：说明
      */
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -190,9 +172,6 @@ public class PostLikeServiceImpl extends ServiceImpl<PostLikeMapper, PostLike> i
     /**
      * Song：切换点赞状态（点赞/取消点赞）
      *
-     * Song：说明
-     * Song：说明
-     * Song：说明
      */
     @Override
     @Transactional(rollbackFor = Exception.class)

@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/store/user'
 import { ChatDotRound, Clock, Document, Setting, Star, SwitchButton, User } from '@element-plus/icons-vue'
+import { hasAdminRole, hasBackofficeAccess } from '@/utils/sessionProfile'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -10,10 +11,9 @@ const userStore = useUserStore()
 const isLoggedIn = computed(() => !!userStore.accessToken)
 const userInfo = computed(() => userStore.userInfo)
 
-const isAdmin = computed(() => {
-  const roles = userInfo.value?.roles || []
-  return roles.some((role: string) => role === 'ROLE_ADMIN' || role === 'ROLE_SUPER_ADMIN')
-})
+const isAdmin = computed(() => hasAdminRole(userInfo.value))
+const canEnterBackoffice = computed(() => hasBackofficeAccess(userInfo.value))
+const backofficeLabel = computed(() => (isAdmin.value ? '管理后台' : '版务后台'))
 
 const handleCommand = (command: string) => {
   if (command === 'logout') {
@@ -62,8 +62,8 @@ const goToLogin = () => {
             <el-dropdown-item command="/settings" divided>
               <el-icon><Setting /></el-icon> 账户设置
             </el-dropdown-item>
-            <el-dropdown-item v-if="isAdmin" command="/admin" divided>
-              <el-icon><Setting /></el-icon> 管理后台
+            <el-dropdown-item v-if="canEnterBackoffice" command="/admin" divided>
+              <el-icon><Setting /></el-icon> {{ backofficeLabel }}
             </el-dropdown-item>
             <el-dropdown-item command="logout" divided class="logout-item">
               <el-icon><SwitchButton /></el-icon> 退出登录

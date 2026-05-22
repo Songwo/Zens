@@ -1,16 +1,17 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
-import { useRoute } from 'vue-router'
+import { ref, onMounted, computed, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { postApi } from '@/api/post'
 import { sectionApi, type Section } from '@/api/section'
 import { useUserStore } from '@/store/user'
-import { hasAdminRole } from '@/utils/sessionProfile'
+import { ensureCurrentUserProfile, hasAdminRole } from '@/utils/sessionProfile'
 import type { Post } from '@/types'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Search, View, Delete, Top, Medal, CircleCheck, CircleClose } from '@element-plus/icons-vue'
+import { Search, View, Delete, Top, Medal, CircleCheck, CircleClose, RefreshRight } from '@element-plus/icons-vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 
 const route = useRoute()
+const router = useRouter()
 const userStore = useUserStore()
 
 const posts = ref<Post[]>([])
@@ -22,27 +23,75 @@ const total = ref(0)
 
 // 板块筛选
 const allSections = ref<Section[]>([])
-const selectedSectionId = ref<number | undefined>(
-  route.query.sectionId ? Number(route.query.sectionId) : undefined
-)
+
+const readRouteSectionId = () => {
+  const raw = Array.isArray(route.query.sectionId) ? route.query.sectionId[0] : route.query.sectionId
+  const id = Number(raw)
+  return Number.isFinite(id) && id > 0 ? id : undefined
+}
+
+const selectedSectionId = ref<number | undefined>(readRouteSectionId())
 
 const isAdmin = computed(() => hasAdminRole(userStore.userInfo))
-const moderatedSectionIds = computed<number[]>(
-  () => (userStore.userInfo as any)?.moderatedSectionIds || []
-)
+const isGlobalModerator = computed(() => {
+  const roles = (userStore.userInfo as any)?.roles || []
+  return roles.includes('ROLE_MODERATOR')
+})
+const moderatedSectionIds = computed<number[]>(() => {
+  const rawIds = Array.isArray((userStore.userInfo as any)?.moderatedSectionIds)
+    ? ((userStore.userInfo as any)?.moderatedSectionIds as Array<number | string>)
+    : []
+  return rawIds
+    .map(id => Number(id))
+    .filter(id => Number.isFinite(id) && id > 0)
+})
+
+const isTrashMode = computed(() => route.name === 'admin-posts-trash' || route.path.endsWith('/trash'))
+const pageTitle = computed(() => isTrashMode.value ? '内容回收站' : '内容管理')
+const pageSubtitle = computed(() => isTrashMode.value
+  ? '集中查看已移入回收站的帖子，删除后 7 天内可恢复。'
+  : '按当前账号可管理的板块范围加载内容，管理员可查看全部。')
+const emptyTitle = computed(() => isTrashMode.value ? '回收站暂无内容' : '暂无帖子数据')
+const emptyDescription = computed(() => isTrashMode.value ? '已删除的帖子会在这里集中显示' : '尝试调整搜索关键词')
 
 // 版主只看自己板块；管理员看全部
 const availableSections = computed(() => {
-  if (isAdmin.value) return allSections.value
+  if (isAdmin.value || isGlobalModerator.value) return allSections.value
   return allSections.value.filter(s => moderatedSectionIds.value.includes(Number(s.id)))
 })
 
+const moderatedSectionNames = computed(() => {
+  const nameById = new Map(allSections.value.map(section => [Number(section.id), section.name]))
+  return moderatedSectionIds.value.map(id => nameById.get(id) || `板块 #${id}`)
+})
+
+const scopeSummary = computed(() => {
+  if (isAdmin.value) return '当前账号为管理员，可管理全部板块。'
+  if (isGlobalModerator.value) return '当前账号为全局版主，可管理全部板块。'
+  if (moderatedSectionNames.value.length === 0) return '当前账号尚未加载到可管理板块。'
+  return `当前账号是 ${moderatedSectionNames.value.join('、')} 的版主。`
+})
+
+const unwrapPageData = <T,>(res: any): { records: T[]; total: number } => {
+  const pageData = res?.data?.records
+    ? res.data
+    : res?.records
+      ? res
+      : res?.data?.data?.records
+        ? res.data.data
+        : null
+  return {
+    records: Array.isArray(pageData?.records) ? pageData.records : [],
+    total: Number(pageData?.total || 0),
+  }
+}
+
 const fetchSections = async () => {
   try {
-    const res = await sectionApi.getActiveList()
+    const res = await sectionApi.getList()
     allSections.value = res.data || []
     // 版主若未指定板块，默认选第一个负责的板块
-    if (!isAdmin.value && selectedSectionId.value === undefined && moderatedSectionIds.value.length > 0) {
+    if (!isAdmin.value && !isGlobalModerator.value && selectedSectionId.value === undefined && moderatedSectionIds.value.length > 0) {
       selectedSectionId.value = moderatedSectionIds.value[0]
     }
   } catch {
@@ -59,11 +108,13 @@ const fetchPosts = async () => {
       needTotal: true,
       keyword: searchQuery.value || undefined,
       sectionId: selectedSectionId.value,
-      status: undefined
+      status: undefined,
+      auditStatus: isTrashMode.value ? 'DELETED' : undefined
     })
 
-    posts.value = res.data.records || []
-    total.value = res.data.total || 0
+    const pageData = unwrapPageData<Post>(res)
+    posts.value = pageData.records
+    total.value = pageData.total
   } catch (error) {
     ElMessage.error('获取帖子列表失败')
   } finally {
@@ -81,26 +132,48 @@ const handleSectionFilter = () => {
   fetchPosts()
 }
 
+const handleModeChange = (mode: string | number | boolean) => {
+  const path = mode === 'trash' ? '/admin/posts/trash' : '/admin/posts'
+  router.push({
+    path,
+    query: selectedSectionId.value ? { sectionId: String(selectedSectionId.value) } : {}
+  })
+}
+
 const handlePageChange = (val: number) => {
   page.value = val
   fetchPosts()
 }
 
+const isDeletedPost = (row: Post) => row.auditStatus === 'DELETED'
+
 const deletePost = async (postId: string) => {
   try {
-    await ElMessageBox.confirm('确定要永久删除这篇帖子吗？此操作不可撤销。', '警告', {
-      confirmButtonText: '确定删除',
+    await ElMessageBox.confirm('确定要将这篇帖子移入回收站吗？7 天内可恢复。', '软删除确认', {
+      confirmButtonText: '移入回收站',
       cancelButtonText: '取消',
-      type: 'error',
+      type: 'warning',
       confirmButtonClass: 'el-button--danger'
     })
 
     await postApi.delete(postId)
-    ElMessage.success('删除成功')
+    ElMessage.success('已移入回收站')
     fetchPosts()
   } catch (error) {
     if (error !== 'cancel') {
       ElMessage.error('删除失败')
+    }
+  }
+}
+
+const restorePost = async (postId: string) => {
+  try {
+    await postApi.restore(postId)
+    ElMessage.success('帖子已恢复')
+    fetchPosts()
+  } catch (error) {
+    if (error !== 'cancel') {
+      ElMessage.error('恢复失败')
     }
   }
 }
@@ -175,21 +248,65 @@ const formatDate = (dateStr: string) => {
   })
 }
 
+const getAuditStatusType = (row: Post) => {
+  if (row.auditStatus === 'DELETED') return 'danger'
+  if (row.auditStatus === 'REJECTED') return 'danger'
+  if (row.auditStatus === 'DRAFT' || row.status === 0) return 'info'
+  if (row.auditStatus === 'PENDING') return 'warning'
+  if (row.auditStatus === 'APPROVED' || row.status === 1) return 'success'
+  return 'info'
+}
+
+const getAuditStatusLabel = (row: Post) => {
+  if (row.auditStatus === 'DELETED') return '已删除'
+  if (row.auditStatus === 'REJECTED') return '已打回'
+  if (row.auditStatus === 'DRAFT' || row.status === 0) return '草稿'
+  if (row.auditStatus === 'PENDING') return '待审核'
+  if (row.auditStatus === 'APPROVED' || row.status === 1) return '已发布'
+  return '未知状态'
+}
+
 onMounted(async () => {
+  await ensureCurrentUserProfile({ force: true })
   await fetchSections()
   fetchPosts()
 })
+
+watch(
+  () => [route.name, route.query.sectionId],
+  () => {
+    selectedSectionId.value = readRouteSectionId()
+    page.value = 1
+    fetchPosts()
+  }
+)
 </script>
 
 <template>
   <div class="manage-page">
     <div class="page-header">
       <div class="header-info">
-        <h1 class="title">内容管理</h1>
-        <p class="subtitle">按当前账号可管理的板块范围加载内容，管理员可查看全部。</p>
+        <h1 class="title">{{ pageTitle }}</h1>
+        <p class="subtitle">{{ pageSubtitle }}</p>
+        <p class="scope-line">{{ scopeSummary }}</p>
+        <div v-if="!isAdmin && !isGlobalModerator && moderatedSectionNames.length > 0" class="scope-tags">
+          <el-tag
+            v-for="name in moderatedSectionNames"
+            :key="name"
+            size="small"
+            type="success"
+            effect="plain"
+          >
+            {{ name }}
+          </el-tag>
+        </div>
       </div>
       
       <div class="header-actions">
+        <el-radio-group :model-value="isTrashMode ? 'trash' : 'list'" @change="handleModeChange">
+          <el-radio-button label="list">全部内容</el-radio-button>
+          <el-radio-button label="trash">回收站</el-radio-button>
+        </el-radio-group>
         <el-select
           v-model="selectedSectionId"
           placeholder="全部板块"
@@ -254,11 +371,12 @@ onMounted(async () => {
           <template #default="{ row }">
             <el-tag
               size="small"
-              :type="row.auditStatus === 'APPROVED' || row.status === 1 ? 'success' : row.auditStatus === 'REJECTED' ? 'danger' : row.auditStatus === 'DRAFT' ? 'info' : 'warning'"
+              :type="getAuditStatusType(row)"
             >
-              {{ row.auditStatus === 'APPROVED' || row.status === 1 ? '已发布' : row.auditStatus === 'REJECTED' ? '已打回' : row.auditStatus === 'DRAFT' ? '草稿' : '待审核' }}
+              {{ getAuditStatusLabel(row) }}
             </el-tag>
             <div v-if="row.auditStatus === 'REJECTED' && row.rejectReason" class="reject-reason-tip">{{ row.rejectReason }}</div>
+            <div v-if="row.auditStatus === 'DELETED'" class="deleted-tip">7 天内可恢复</div>
           </template>
         </el-table-column>
 
@@ -292,7 +410,7 @@ onMounted(async () => {
         <el-table-column label="操作" width="180" fixed="right">
           <template #default="{ row }">
             <div class="action-btns">
-              <el-tooltip :content="row.categoryPin === 1 ? '取消板块置顶' : '板块置顶'" placement="top">
+              <el-tooltip v-if="!isDeletedPost(row)" :content="row.categoryPin === 1 ? '取消板块置顶' : '板块置顶'" placement="top">
                 <el-button
                   circle
                   size="small"
@@ -301,7 +419,7 @@ onMounted(async () => {
                   @click="toggleCategoryPin(row)"
                 />
               </el-tooltip>
-              <el-tooltip :content="row.isFeatured ? '取消精华' : '设为精华'" placement="top">
+              <el-tooltip v-if="!isDeletedPost(row)" :content="row.isFeatured ? '取消精华' : '设为精华'" placement="top">
                 <el-button
                   circle
                   size="small"
@@ -310,7 +428,7 @@ onMounted(async () => {
                   @click="toggleFeature(row)"
                 />
               </el-tooltip>
-              <el-tooltip v-if="row.status !== 1" content="通过审核" placement="top">
+              <el-tooltip v-if="!isDeletedPost(row) && (row.auditStatus === 'PENDING' || row.auditStatus === 'REJECTED')" content="通过审核" placement="top">
                 <el-button
                   circle
                   size="small"
@@ -319,7 +437,7 @@ onMounted(async () => {
                   @click="approvePost(row.id)"
                 />
               </el-tooltip>
-              <el-tooltip content="打回修改" placement="top">
+              <el-tooltip v-if="!isDeletedPost(row)" content="打回修改" placement="top">
                 <el-button
                   circle
                   size="small"
@@ -336,7 +454,17 @@ onMounted(async () => {
                   @click="handleView(row.id)"
                 />
               </el-tooltip>
-              <el-tooltip content="删除" placement="top">
+              <el-tooltip v-if="isDeletedPost(row)" content="恢复" placement="top">
+                <el-button
+                  circle
+                  size="small"
+                  type="success"
+                  plain
+                  :icon="RefreshRight"
+                  @click="restorePost(row.id)"
+                />
+              </el-tooltip>
+              <el-tooltip v-else content="移入回收站" placement="top">
                 <el-button
                   circle
                   size="small"
@@ -353,8 +481,8 @@ onMounted(async () => {
         <template #empty>
           <EmptyState 
             v-if="!loading"
-            title="暂无帖子数据" 
-            description="尝试调整搜索关键词"
+            :title="emptyTitle"
+            :description="emptyDescription"
           />
         </template>
       </el-table>
@@ -489,5 +617,11 @@ onMounted(async () => {
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 120px;
+}
+
+.deleted-tip {
+  font-size: 11px;
+  color: var(--el-color-danger);
+  margin-top: 3px;
 }
 </style>

@@ -4,7 +4,9 @@
 export function timeAgo(dateStr: string | undefined | null): string {
     if (!dateStr) return ''
 
-    const date = new Date(dateStr)
+    const date = parseDate(dateStr)
+    if (!date) return ''
+
     const now = new Date()
     const diff = now.getTime() - date.getTime()
 
@@ -21,7 +23,7 @@ export function timeAgo(dateStr: string | undefined | null): string {
     if (days === 1) {
         return `昨天 ${pad(date.getHours())}:${pad(date.getMinutes())}`
     }
-    if (days < 7) return `${days}天前`
+    if (days < 7) return `${weekdayName(date)} ${pad(date.getHours())}:${pad(date.getMinutes())}`
 
     // Song：说明
     if (date.getFullYear() === now.getFullYear()) {
@@ -29,9 +31,28 @@ export function timeAgo(dateStr: string | undefined | null): string {
     }
 
     // Song：说明
-    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
 }
 
 function pad(n: number): string {
     return n < 10 ? `0${n}` : `${n}`
+}
+
+function parseDate(value: string): Date | null {
+    const trimmed = value.trim()
+    if (!trimmed) return null
+
+    const normalized = trimmed.includes('T')
+        ? trimmed
+        : trimmed.replace(' ', 'T')
+    const date = new Date(normalized)
+    if (!Number.isNaN(date.getTime())) return date
+
+    const fallback = new Date(trimmed)
+    return Number.isNaN(fallback.getTime()) ? null : fallback
+}
+
+function weekdayName(date: Date): string {
+    const names = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
+    return names[date.getDay()] || ''
 }

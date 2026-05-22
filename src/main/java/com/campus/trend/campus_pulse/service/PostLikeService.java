@@ -10,46 +10,26 @@ public interface PostLikeService extends IService<PostLike> {
     /**
      * Song：判断用户是否已点赞该帖子
      *
-     * Song：说明
-     * Song：说明
-     * Song：说明
      */
     boolean isLike(String postId, String userId);
 
-    /**
-     * Song：说明
-     *
-     * Song：说明
-     * Song：说明
-     * Song：说明
-     * Song：说明
-     */
     IPage<Post> getPostLikeWithPage(String userId, int page, int pageSize);
 
     /**
      * Song：用户点赞帖子
      *
-     * Song：说明
-     * Song：说明
-     * Song：说明
      */
     boolean likePost(String postId, String userId);
 
     /**
      * Song：用户取消点赞帖子
      *
-     * Song：说明
-     * Song：说明
-     * Song：说明
      */
     boolean unlikePost(String postId, String userId);
 
     /**
      * Song：切换点赞状态（点赞/取消点赞）
      *
-     * Song：说明
-     * Song：说明
-     * Song：说明
      */
     boolean toggleLike(String postId, String userId);
 

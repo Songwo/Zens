@@ -36,9 +36,6 @@ public class PostCollectServiceImpl extends ServiceImpl<PostCollectMapper, PostC
     /**
      * Song：判断用户是否已收藏该帖子
      *
-     * Song：说明
-     * Song：说明
-     * Song：说明
      */
     @Override
     public boolean isCollect(String postId, String userId) {
@@ -49,14 +46,6 @@ public class PostCollectServiceImpl extends ServiceImpl<PostCollectMapper, PostC
         return count != null && count > 0;
     }
 
-    /**
-     * Song：说明
-     *
-     * Song：说明
-     * Song：说明
-     * Song：说明
-     * Song：说明
-     */
     @Override
     public IPage<Post> getPostCollectWithPage(String userId, int page, int pageSize) {
         // Song：1. 查询该用户所有的收藏记录（分页）
@@ -74,7 +63,6 @@ public class PostCollectServiceImpl extends ServiceImpl<PostCollectMapper, PostC
             return emptyPage;
         }
 
-        // Song：说明
         List<String> postIds = postCollects.getRecords().stream()
                 .map(PostCollect::getPostId)
                 .collect(Collectors.toList());
@@ -100,9 +88,6 @@ public class PostCollectServiceImpl extends ServiceImpl<PostCollectMapper, PostC
     /**
      * Song：用户收藏帖子
      *
-     * Song：说明
-     * Song：说明
-     * Song：说明
      */
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -146,9 +131,6 @@ public class PostCollectServiceImpl extends ServiceImpl<PostCollectMapper, PostC
     /**
      * Song：用户取消收藏帖子
      *
-     * Song：说明
-     * Song：说明
-     * Song：说明
      */
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -182,9 +164,6 @@ public class PostCollectServiceImpl extends ServiceImpl<PostCollectMapper, PostC
     /**
      * Song：切换收藏状态（收藏/取消收藏）
      *
-     * Song：说明
-     * Song：说明
-     * Song：说明
      */
     @Override
     @Transactional(rollbackFor = Exception.class)

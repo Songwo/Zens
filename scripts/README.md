@@ -1,5 +1,8 @@
 # 运维脚本
 
+> Campus Pulse 运行时分为两个进程：Java Spring Boot（`:7800`）与 Go media service（`:8090`）。
+> 本目录脚本仅覆盖 Java 主应用；Go 服务的开发 / 烟雾 / Docker 脚本在 [`../go-media-service/scripts/`](../go-media-service/) 下。
+
 ## 1. 发布脚本
 
 ```bash
@@ -78,3 +81,25 @@ REDIS_POOL_MIN_IDLE=2
 
 - Web 层线程和 DB 连接池必须联动调，不要只拉高 `SERVER_TOMCAT_THREADS_MAX`。
 - 建议先在与生产接近的压测机上，以 60%、80%、100% 目标并发分阶段压，观察 P95、P99、GC、MySQL CPU、慢 SQL、Redis 命中率。
+
+## 6. Go 媒体服务
+
+Go 服务自带独立脚本，与主应用解耦：
+
+```powershell
+# 开发启动
+cd go-media-service
+.\scripts\dev.ps1          # Windows
+bash scripts/dev.sh        # *nix
+
+# 健康 + 上传基础用例烟雾
+.\scripts\smoke.ps1
+```
+
+部署优先用 Docker：`docker compose up -d --build`；或参考 `go-media-service/deployments/systemd/` 托管进程。配置、环境变量、可热更新字段见 [`../go-media-service/README.md`](../go-media-service/README.md)。
+
+压测重点：
+
+- 健康探活：`hey -n 5000 -c 100 http://127.0.0.1:8090/health`
+- 分片上传：用 `k6` / `vegeta` 构造 multipart，关注 `media_upload_active`、磁盘 IOPS、`p99`
+- 观测入口：`/metrics`（Prometheus）、`/debug/pprof`（仅内网开启）

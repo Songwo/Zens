@@ -3,23 +3,53 @@ import { computed, ref, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import MainLayout from '@/layouts/MainLayout.vue'
 import PostCard from '@/components/PostCard.vue'
+import PageBackButton from '@/components/common/PageBackButton.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import { postApi } from '@/api/post'
 import { publicDataApi } from '@/api/publicData'
 import { tagApi } from '@/api/tag'
+import { userApi } from '@/api/user'
 import type { Post } from '@/types'
 import { ElMessage } from 'element-plus'
 import { Search, Filter, Close, Loading } from '@element-plus/icons-vue'
+import { cachedRequest } from '@/utils/requestCache'
 
 const route = useRoute()
 const router = useRouter()
 
 const SEARCH_HISTORY_KEY = 'cp:search:history'
 const SEARCH_HISTORY_MAX = 12
+const SEARCH_RESULT_CACHE_TTL = 60 * 1000
+const SEARCH_SUGGEST_CACHE_TTL = 5 * 60 * 1000
+
+type SearchTab = 'post' | 'user' | 'tag'
+
+interface SearchUserItem {
+  id: string
+  username: string
+  nickname: string
+  avatar: string
+  bio?: string
+  school?: string
+  postCount: number
+  followerCount: number
+}
+
+interface SearchTagItem {
+  id: number
+  name: string
+  heat?: number
+  postCount?: number
+}
 
 const searchQuery = ref('')
+const searchTab = ref<SearchTab>('post')
 const posts = ref<Post[]>([])
+const userResults = ref<SearchUserItem[]>([])
+const tagResults = ref<SearchTagItem[]>([])
 const loading = ref(false)
+const userLoading = ref(false)
+const tagLoading = ref(false)
 const page = ref(1)
 const hasMore = ref(true)
 const total = ref(0)
@@ -28,6 +58,8 @@ let suggestTimer: ReturnType<typeof setTimeout> | null = null
 let suggestRequestId = 0
 let searchAbortController: AbortController | null = null
 let suggestAbortController: AbortController | null = null
+let userAbortController: AbortController | null = null
+let tagAbortController: AbortController | null = null
 
 const filters = ref({
   category: '' as string | number,
@@ -140,7 +172,7 @@ const fetchCategories = async () => {
 
 const fetchHotSuggestions = async () => {
   try {
-    const res = await tagApi.getHotTags(12)
+    const res = await publicDataApi.getHotTagsCached(12)
     const list = Array.isArray(res.data) ? res.data : []
     hotSuggestions.value = list
       .map((item) => item?.name?.trim())
@@ -165,7 +197,11 @@ const fetchDynamicSuggestions = async (keyword: string) => {
   const controller = new AbortController()
   suggestAbortController = controller
   try {
-    const res = await tagApi.search(normalizedKeyword, { signal: controller.signal })
+    const res = await cachedRequest(
+      `search:suggest:${normalizedKeyword.toLowerCase()}`,
+      SEARCH_SUGGEST_CACHE_TTL,
+      () => tagApi.search(normalizedKeyword, { signal: controller.signal })
+    )
     if (requestId !== suggestRequestId) {
       return
     }
@@ -231,8 +267,7 @@ const fetchPosts = async (reset = false) => {
     const timeRange = filters.value.timeRange === 'all'
       ? undefined
       : filters.value.timeRange.toUpperCase()
-
-    const res = await postApi.searchList({
+    const requestPayload = {
       page: page.value,
       pageSize: 10,
       needTotal: true,
@@ -241,7 +276,23 @@ const fetchPosts = async (reset = false) => {
       orderBy: filters.value.sortBy,
       timeRange,
       status: 1
-    }, { signal: controller.signal })
+    }
+    const cacheKey = [
+      'search:list',
+      requestPayload.page,
+      requestPayload.pageSize,
+      keyword.trim().toLowerCase() || '_',
+      sectionId ?? '_',
+      requestPayload.orderBy,
+      timeRange ?? 'all',
+      requestPayload.status
+    ].join(':')
+
+    const res = await cachedRequest(
+      cacheKey,
+      SEARCH_RESULT_CACHE_TTL,
+      () => postApi.searchList(requestPayload, { signal: controller.signal })
+    )
 
     const records = res.data?.records || []
     if (records.length > 0) {
@@ -268,12 +319,68 @@ const fetchPosts = async (reset = false) => {
   }
 }
 
+const fetchUsers = async () => {
+  const keyword = normalizedQuery.value
+  if (!keyword) {
+    userResults.value = []
+    return
+  }
+  userAbortController?.abort()
+  const controller = new AbortController()
+  userAbortController = controller
+  userLoading.value = true
+  try {
+    const res = await userApi.searchUsers(keyword)
+    if (userAbortController !== controller) return
+    userResults.value = Array.isArray(res.data) ? res.data : []
+  } catch (error: any) {
+    if (error?.code === 'ERR_CANCELED') return
+    ElMessage.error('用户搜索失败')
+  } finally {
+    if (userAbortController === controller) {
+      userAbortController = null
+      userLoading.value = false
+    }
+  }
+}
+
+const fetchTags = async () => {
+  const keyword = normalizedQuery.value
+  if (!keyword) {
+    tagResults.value = []
+    return
+  }
+  tagAbortController?.abort()
+  const controller = new AbortController()
+  tagAbortController = controller
+  tagLoading.value = true
+  try {
+    const res = await tagApi.search(keyword, { signal: controller.signal })
+    if (tagAbortController !== controller) return
+    tagResults.value = Array.isArray(res.data) ? res.data : []
+  } catch (error: any) {
+    if (error?.code === 'ERR_CANCELED') return
+    ElMessage.error('标签搜索失败')
+  } finally {
+    if (tagAbortController === controller) {
+      tagAbortController = null
+      tagLoading.value = false
+    }
+  }
+}
+
 const scheduleFetch = (reset = true) => {
   if (fetchTimer) {
     clearTimeout(fetchTimer)
   }
   fetchTimer = setTimeout(() => {
-    fetchPosts(reset)
+    if (searchTab.value === 'post') {
+      fetchPosts(reset)
+    } else if (searchTab.value === 'user') {
+      fetchUsers()
+    } else if (searchTab.value === 'tag') {
+      fetchTags()
+    }
   }, 250)
 }
 
@@ -324,6 +431,12 @@ watch(() => route.query.q, (newQuery) => {
 })
 
 watch(() => [filters.value.category, filters.value.sortBy, filters.value.timeRange], () => {
+  if (normalizedQuery.value && searchTab.value === 'post') {
+    scheduleFetch(true)
+  }
+})
+
+watch(searchTab, () => {
   if (normalizedQuery.value) {
     scheduleFetch(true)
   }
@@ -344,6 +457,8 @@ onMounted(() => {
 onUnmounted(() => {
   searchAbortController?.abort()
   suggestAbortController?.abort()
+  userAbortController?.abort()
+  tagAbortController?.abort()
 
   if (fetchTimer) {
     clearTimeout(fetchTimer)
@@ -360,6 +475,7 @@ onUnmounted(() => {
   <MainLayout>
     <div class="search-page-container">
       <div class="search-hero">
+        <PageBackButton class="search-back-button" fallback="/" />
         <h1 class="search-title">探索校园</h1>
         <div class="search-bar-wrapper">
           <el-input
@@ -377,6 +493,7 @@ onUnmounted(() => {
           </el-input>
 
           <el-button
+            v-if="searchTab === 'post'"
             class="filter-toggle"
             :type="showFilters ? 'primary' : 'default'"
             plain
@@ -388,7 +505,7 @@ onUnmounted(() => {
         </div>
 
         <el-collapse-transition>
-          <div v-show="showFilters" class="filter-panel">
+          <div v-show="showFilters && searchTab === 'post'" class="filter-panel">
             <el-row :gutter="20">
               <el-col :span="8" :xs="24">
                 <div class="filter-item">
@@ -481,13 +598,31 @@ onUnmounted(() => {
         </el-collapse-transition>
       </div>
 
-      <div v-if="normalizedQuery" class="results-info">
+      <div v-if="normalizedQuery" class="search-tabs">
+        <button
+          v-for="tab in ([
+            { key: 'post', label: '帖子' },
+            { key: 'user', label: '用户' },
+            { key: 'tag', label: '标签' },
+          ] as { key: SearchTab; label: string }[])"
+          :key="tab.key"
+          type="button"
+          class="search-tab"
+          :class="{ active: searchTab === tab.key }"
+          @click="searchTab = tab.key"
+        >
+          {{ tab.label }}
+        </button>
+      </div>
+
+      <div v-if="normalizedQuery && searchTab === 'post'" class="results-info">
         <p v-if="posts.length > 0">
           为您找到相关结果约 <span class="highlight">{{ total }}</span> 个
         </p>
       </div>
 
-      <div class="posts-list">
+      <!-- 帖子结果 -->
+      <div v-if="searchTab === 'post'" class="posts-list">
         <PostCard
           v-for="post in posts"
           :key="post.id"
@@ -530,18 +665,93 @@ onUnmounted(() => {
           <span class="end-marker">已显示全部搜索结果</span>
         </div>
       </div>
+
+      <!-- 用户结果 -->
+      <div v-if="searchTab === 'user'" class="user-results">
+        <div v-if="userLoading" class="loading-state">
+          <el-icon class="is-loading"><Loading /></el-icon> 正在搜索用户...
+        </div>
+
+        <div v-if="!userLoading && userResults.length > 0" class="user-cards">
+          <div
+            v-for="user in userResults"
+            :key="user.id"
+            class="user-card"
+            @click="router.push(`/user/${user.id}`)"
+          >
+            <el-avatar :size="48" :src="user.avatar" class="user-card-avatar">
+              {{ user.nickname?.charAt(0) || '?' }}
+            </el-avatar>
+            <div class="user-card-info">
+              <div class="user-card-name">
+                <span class="nickname">{{ user.nickname }}</span>
+                <span class="username">@{{ user.username }}</span>
+              </div>
+              <p v-if="user.bio" class="user-card-bio">{{ user.bio }}</p>
+              <div class="user-card-stats">
+                <span v-if="user.school" class="stat-item school">{{ user.school }}</span>
+                <span class="stat-item">帖子 {{ user.postCount }}</span>
+                <span class="stat-item">粉丝 {{ user.followerCount }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <EmptyState
+          v-if="!userLoading && userResults.length === 0 && normalizedQuery"
+          title="没有找到相关用户"
+          description="换个关键词试试？"
+        />
+      </div>
+
+      <!-- 标签结果 -->
+      <div v-if="searchTab === 'tag'" class="tag-results">
+        <div v-if="tagLoading" class="loading-state">
+          <el-icon class="is-loading"><Loading /></el-icon> 正在搜索标签...
+        </div>
+
+        <div v-if="!tagLoading && tagResults.length > 0" class="tag-cards">
+          <div
+            v-for="tag in tagResults"
+            :key="tag.id"
+            class="tag-card"
+            @click="router.push(`/tag/${encodeURIComponent(tag.name)}`)"
+          >
+            <div class="tag-card-name"># {{ tag.name }}</div>
+            <div class="tag-card-meta">
+              <span v-if="tag.heat" class="tag-heat">热度 {{ tag.heat }}</span>
+              <span v-if="tag.postCount" class="tag-post-count">{{ tag.postCount }} 篇帖子</span>
+            </div>
+          </div>
+        </div>
+
+        <EmptyState
+          v-if="!tagLoading && tagResults.length === 0 && normalizedQuery"
+          title="没有找到相关标签"
+          description="换个关键词试试？"
+        />
+      </div>
     </div>
   </MainLayout>
 </template>
 
 <style scoped>
 .search-page-container {
-  max-width: 800px;
-  margin: 0 auto;
+  width: 100%;
 }
 
 .search-hero {
+  padding: 24px;
   margin-bottom: 26px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at top right, var(--el-color-primary-light-9), transparent 34%),
+    linear-gradient(180deg, var(--el-bg-color-overlay), var(--el-fill-color-extra-light));
+}
+
+.search-back-button {
+  margin-bottom: 12px;
 }
 
 .search-title {
@@ -723,10 +933,164 @@ onUnmounted(() => {
   width: 100%;
 }
 
+.search-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 20px;
+  padding: 4px;
+  background: var(--el-fill-color-light);
+  border-radius: 12px;
+  border: 1px solid var(--el-border-color-lighter);
+}
+
+.search-tab {
+  flex: 1;
+  padding: 10px 0;
+  border: none;
+  background: transparent;
+  color: var(--el-text-color-secondary);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: 10px;
+  transition: all 0.2s ease;
+}
+
+.search-tab:hover {
+  color: var(--el-text-color-primary);
+}
+
+.search-tab.active {
+  background: var(--el-bg-color-overlay);
+  color: var(--el-color-primary);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.user-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.user-card {
+  display: flex;
+  gap: 16px;
+  padding: 18px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 14px;
+  background: var(--el-bg-color-overlay);
+  cursor: pointer;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.user-card:hover {
+  border-color: var(--el-color-primary-light-5);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.user-card-avatar {
+  flex-shrink: 0;
+}
+
+.user-card-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.user-card-name {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.user-card-name .nickname {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--el-text-color-primary);
+}
+
+.user-card-name .username {
+  font-size: 13px;
+  color: var(--el-text-color-placeholder);
+}
+
+.user-card-bio {
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
+  margin: 4px 0 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.user-card-stats {
+  display: flex;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--el-text-color-placeholder);
+  font-weight: 600;
+}
+
+.user-card-stats .school {
+  color: var(--el-color-primary);
+}
+
+.tag-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+.tag-card {
+  padding: 16px 18px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 14px;
+  background: var(--el-bg-color-overlay);
+  cursor: pointer;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.tag-card:hover {
+  border-color: var(--el-color-primary-light-5);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.tag-card-name {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--el-color-primary);
+  margin-bottom: 8px;
+}
+
+.tag-card-meta {
+  display: flex;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--el-text-color-placeholder);
+  font-weight: 600;
+}
+
+.tag-heat {
+  color: var(--el-color-danger);
+}
+
 @media (max-width: 768px) {
+  .search-hero {
+    padding: 18px;
+  }
+
   .suggest-actions {
     grid-template-columns: 1fr;
   }
+
+  .tag-cards {
+    grid-template-columns: 1fr;
+  }
+
+  .user-card-name {
+    flex-direction: column;
+    gap: 2px;
+  }
 }
 </style>
-

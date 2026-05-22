@@ -8,6 +8,9 @@ target/
 ./log
 ./data
 
+.env
+.env.production
+
 ### STS ###
 .apt_generated
 .classpath
@@ -50,3 +53,53 @@ docs/
 .env.local
 .env.prod
 .env.production
+
+# Local runtime and generated artifacts
+out/
+tmp/
+tmp*/
+.codex-work/
+.playwright-mcp/
+*.log
+~$*
+**/__pycache__/
+*.pyc
+
+# Environment files - never commit secrets
+.env
+.env.*
+!.env.example
+!**/.env.example
+web/.env
+web/.env.*
+!web/.env.example
+zdc-shop/.env
+zdc-shop/.env.*
+!zdc-shop/.env.example
+cdk-airdrop-station/.env
+cdk-airdrop-station/.env.*
+!cdk-airdrop-station/.env.example
+go-media-service/.env
+go-media-service/.env.*
+!go-media-service/.env.example
+
+# Nested app generated artifacts
+go-media-service/bin/
+go-media-service/data/
+go-media-service/logs/
+go-media-service/tmp/
+go-media-service/uploads/
+go-media-service/media-service
+go-media-service/media-service-*
+go-media-service/*.tgz
+zdc-shop/.next/
+zdc-shop/node_modules/
+zdc-shop/tsconfig.tsbuildinfo
+
+.nested-git-backups/
+
+# CDK subproject generated/runtime files
+cdk-airdrop-station/bin/
+cdk-airdrop-station/server/bin/
+cdk-airdrop-station/server/data/
+cdk-airdrop-station/**/*.bak

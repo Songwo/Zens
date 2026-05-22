@@ -18,6 +18,7 @@ import com.campus.trend.campus_pulse.service.CollaborativeFilteringService;
 import com.campus.trend.campus_pulse.service.PostRecommendService;
 import com.campus.trend.campus_pulse.service.TagService;
 import com.campus.trend.campus_pulse.service.UserTagRelationService;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -36,6 +37,8 @@ import java.util.stream.Collectors;
 @Slf4j
 public class PostRecommendServiceImpl implements PostRecommendService {
 
+    private static final String AUDIT_STATUS_PENDING = "PENDING";
+    private static final String AUDIT_STATUS_APPROVED = "APPROVED";
     private final UserTagRelationService userTagRelationService;
     private final TagService tagService;
     private final PostMapper postMapper;
@@ -68,33 +71,52 @@ public class PostRecommendServiceImpl implements PostRecommendService {
     }
 
     private static final String RECOMMEND_CACHE_KEY = "user:recommend:";
+    private static final String POST_DETAIL_RECOMMEND_CACHE_KEY = "post:recommend:detail:";
     private static final long RECOMMEND_CACHE_TTL_SECONDS = 90;
+    private static final long POST_DETAIL_RECOMMEND_CACHE_TTL_SECONDS = 90;
+    private static final int MAX_POST_DETAIL_RECOMMEND_LIMIT = 10;
 
     @Override
     public List<PostRecommendResp> getPostDetailRecommendations(String postId, String userId, int limit) {
-        Post currentPost = postMapper.selectById(postId);
-        if (currentPost == null) return Collections.emptyList();
+        int safeLimit = Math.min(Math.max(limit, 1), MAX_POST_DETAIL_RECOMMEND_LIMIT);
+        String cacheKey = buildPostDetailRecommendCacheKey(postId, userId, safeLimit);
+        List<PostRecommendResp> cached = readPostDetailRecommendCache(cacheKey);
+        if (cached != null) {
+            return cached;
+        }
+
+        Post currentPost = postMapper.selectOne(applyPublicVisibilityFilter(new LambdaQueryWrapper<Post>())
+                .select(Post::getId, Post::getSectionId)
+                .eq(Post::getId, postId)
+                .last("LIMIT 1"));
+        if (currentPost == null) {
+            return Collections.emptyList();
+        }
 
         List<Post> recommendations = new ArrayList<>();
         Set<String> recommendedIds = new HashSet<>();
         recommendedIds.add(postId);
 
         // Song：1. 同专业推荐 (如果登录且有专业信息)
-        if (userId != null) {
-            var currentUser = userMapper.selectById(userId);
+        if (StringUtils.hasText(userId)) {
+            User currentUser = userMapper.selectOne(new LambdaQueryWrapper<User>()
+                    .select(User::getId, User::getMajor)
+                    .eq(User::getId, userId)
+                    .last("LIMIT 1"));
             if (currentUser != null && StringUtils.hasText(currentUser.getMajor())) {
                 List<User> sameMajorUsers = userMapper.selectList(new LambdaQueryWrapper<User>()
+                        .select(User::getId)
                         .eq(User::getMajor, currentUser.getMajor()));
                 List<String> sameMajorUserIds = sameMajorUsers.stream()
                         .map(User::getId)
                         .distinct()
                         .toList();
                 if (!sameMajorUserIds.isEmpty()) {
-                    List<Post> majorPosts = postMapper.selectList(new LambdaQueryWrapper<Post>()
+                    List<Post> majorPosts = postMapper.selectList(baseRecommendPostQuery()
                             .eq(Post::getStatus, 1)
                             .ne(Post::getId, postId)
                             .in(Post::getUserId, sameMajorUserIds)
-                            .last("LIMIT " + limit));
+                            .last("LIMIT " + safeLimit));
                     for (Post p : majorPosts) {
                         if (recommendedIds.add(p.getId())) {
                             recommendations.add(p);
@@ -105,12 +127,12 @@ public class PostRecommendServiceImpl implements PostRecommendService {
         }
 
         // Song：2. 相同板块或标签
-        if (recommendations.size() < limit) {
-            List<Post> catPosts = postMapper.selectList(new LambdaQueryWrapper<Post>()
+        if (recommendations.size() < safeLimit) {
+            List<Post> catPosts = postMapper.selectList(baseRecommendPostQuery()
                     .eq(Post::getStatus, 1)
                     .eq(Post::getSectionId, currentPost.getSectionId())
                     .ne(Post::getId, postId)
-                    .last("LIMIT " + limit));
+                    .last("LIMIT " + safeLimit));
             for (Post p : catPosts) {
                 if (recommendedIds.add(p.getId())) {
                     recommendations.add(p);
@@ -119,8 +141,8 @@ public class PostRecommendServiceImpl implements PostRecommendService {
         }
 
         // Song：3. 热度兜底
-        if (recommendations.size() < limit) {
-            List<Post> hotPosts = getHotPostsList(limit * 2);
+        if (recommendations.size() < safeLimit) {
+            List<Post> hotPosts = getHotPostsList(safeLimit * 2);
             for (Post p : hotPosts) {
                 if (recommendedIds.add(p.getId())) {
                     recommendations.add(p);
@@ -129,8 +151,10 @@ public class PostRecommendServiceImpl implements PostRecommendService {
         }
 
         // Song：裁剪
-        List<Post> resultPosts = recommendations.stream().limit(limit).collect(Collectors.toList());
-        return convertToRecommendDTO(resultPosts, "相关内容推荐");
+        List<Post> resultPosts = recommendations.stream().limit(safeLimit).collect(Collectors.toList());
+        List<PostRecommendResp> result = convertToRecommendDTO(resultPosts, "相关内容推荐");
+        writePostDetailRecommendCache(cacheKey, result);
+        return result;
     }
 
     @Override
@@ -154,11 +178,9 @@ public class PostRecommendServiceImpl implements PostRecommendService {
             // Song：登录用户：混合推荐
             log.info("生成用户推荐: userId={}, page={}, pageSize={}", userId, safePage, safePageSize);
             
-            // Song：说明
             List<Post> interestPosts = recommendPostsList(userId, weightProperties.getInterestLimit());
             allRecommendations.addAll(convertToRecommendDTO(interestPosts, "基于你的兴趣标签"));
 
-            // Song：说明
             try {
                 List<Post> cfPosts = collaborativeFilteringService.recommendByUserBased(userId, weightProperties.getCfLimit());
                 allRecommendations.addAll(convertToRecommendDTO(cfPosts, "志趣相投的同学也在看"));
@@ -166,7 +188,6 @@ public class PostRecommendServiceImpl implements PostRecommendService {
                 log.warn("Collaborative filtering failed: {}", e.getMessage());
             }
 
-            // Song：说明
             List<Post> hotPosts = getHotPostsList(weightProperties.getHotLimit());
             allRecommendations.addAll(convertToRecommendDTO(hotPosts, "全校都在看"));
         }
@@ -212,21 +233,23 @@ public class PostRecommendServiceImpl implements PostRecommendService {
 
         Map<String, User> userMap = new HashMap<>();
         if (!userIds.isEmpty()) {
-            userMapper.selectBatchIds(userIds).forEach(u -> userMap.put(u.getId(), u));
+            userMapper.selectList(new LambdaQueryWrapper<User>()
+                    .select(User::getId, User::getNickname, User::getAvatar)
+                    .in(User::getId, userIds)).forEach(u -> userMap.put(u.getId(), u));
         }
 
         Map<Long, Section> sectionMap = new HashMap<>();
         if (!sectionIds.isEmpty()) {
-            sectionMapper.selectBatchIds(sectionIds).forEach(s -> sectionMap.put(s.getId(), s));
+            sectionMapper.selectList(new LambdaQueryWrapper<Section>()
+                    .select(Section::getId, Section::getName)
+                    .in(Section::getId, sectionIds)).forEach(s -> sectionMap.put(s.getId(), s));
         }
 
         return posts.stream().map(post -> {
             PostRecommendResp dto = new PostRecommendResp();
             dto.setId(post.getId());
             dto.setTitle(post.getTitle());
-            // Song：摘要
-            String content = post.getContent();
-            dto.setSummary(content != null ? (content.length() > 100 ? content.substring(0, 100) + "..." : content) : "");
+            dto.setSummary(buildRecommendSummary(post));
 
             // Song：作者
             var author = userMap.get(post.getUserId());
@@ -254,7 +277,7 @@ public class PostRecommendServiceImpl implements PostRecommendService {
             dto.setLikeCount(post.getLikeCount());
             dto.setCollectCount(post.getCollectCount());
             dto.setCommentCount(post.getCommentCount());
-            dto.setCreateTime(post.getCreateTime().toString());
+            dto.setCreateTime(post.getCreateTime() != null ? post.getCreateTime().toString() : null);
             dto.setRecommendReason(reason);
             dto.setIsLiked(post.getIsLiked());
             dto.setIsCollected(post.getIsCollected());
@@ -277,7 +300,7 @@ public class PostRecommendServiceImpl implements PostRecommendService {
             return Collections.emptyList();
         }
 
-        List<Post> candidatePosts = postMapper.selectList(new LambdaQueryWrapper<Post>()
+        List<Post> candidatePosts = postMapper.selectList(baseRecommendPostQuery()
                 .eq(Post::getStatus, 1)
                 .orderByDesc(Post::getCreateTime)
                 .last("LIMIT " + weightProperties.getCandidateLimit()));
@@ -293,7 +316,7 @@ public class PostRecommendServiceImpl implements PostRecommendService {
     }
 
     private List<Post> getHotPostsList(int limit) {
-        return postMapper.selectList(new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<Post>()
+        return postMapper.selectList(baseRecommendPostQuery()
                 .eq(Post::getStatus, 1)
                 .orderByDesc(Post::getHeatScore)
                 .last("LIMIT " + limit));
@@ -323,7 +346,7 @@ public class PostRecommendServiceImpl implements PostRecommendService {
             return getHotPosts(page, pageSize);
         }
 
-        List<Post> candidatePosts = postMapper.selectList(new LambdaQueryWrapper<Post>()
+        List<Post> candidatePosts = postMapper.selectList(baseRecommendPostQuery()
                         .eq(Post::getStatus, 1)
                         .orderByDesc(Post::getCreateTime)
                         .last("LIMIT " + weightProperties.getCandidateLimit()))
@@ -451,8 +474,7 @@ public class PostRecommendServiceImpl implements PostRecommendService {
     private IPage<Post> getHotPosts(int page, int pageSize) {
         Page<Post> queryPage = new Page<>(page, pageSize);
         return postMapper.selectPage(queryPage,
-                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<Post>()
-                        .eq(Post::getStatus, 1)
+                applyPublicVisibilityFilter(new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<Post>())
                         .orderByDesc(Post::getHeatScore)
                         .orderByDesc(Post::getCreateTime));
     }
@@ -466,6 +488,43 @@ public class PostRecommendServiceImpl implements PostRecommendService {
             }
         }
         return false;
+    }
+
+    private LambdaQueryWrapper<Post> baseRecommendPostQuery() {
+        return applyPublicVisibilityFilter(new LambdaQueryWrapper<Post>()).select(
+                Post::getId,
+                Post::getUserId,
+                Post::getSectionId,
+                Post::getTitle,
+                Post::getSummary,
+                Post::getTags,
+                Post::getViewCount,
+                Post::getLikeCount,
+                Post::getCollectCount,
+                Post::getCommentCount,
+                Post::getHeatScore,
+                Post::getCreateTime);
+    }
+
+    private LambdaQueryWrapper<Post> applyPublicVisibilityFilter(LambdaQueryWrapper<Post> wrapper) {
+        return wrapper.eq(Post::getStatus, 1)
+                .and(w -> w.isNull(Post::getAuditStatus)
+                        .or()
+                        .eq(Post::getAuditStatus, "")
+                        .or()
+                        .eq(Post::getAuditStatus, AUDIT_STATUS_PENDING)
+                        .or()
+                        .eq(Post::getAuditStatus, AUDIT_STATUS_APPROVED));
+    }
+
+    private String buildRecommendSummary(Post post) {
+        String text = StringUtils.hasText(post.getSummary())
+                ? post.getSummary().trim()
+                : (StringUtils.hasText(post.getContent()) ? post.getContent().trim() : "");
+        if (!StringUtils.hasText(text)) {
+            return "";
+        }
+        return text.length() > 100 ? text.substring(0, 100) + "..." : text;
     }
 
     private double calculateTimeFactor(LocalDateTime createTime) {
@@ -532,6 +591,11 @@ public class PostRecommendServiceImpl implements PostRecommendService {
         return RECOMMEND_CACHE_KEY + uid + ":" + page + ":" + pageSize;
     }
 
+    private String buildPostDetailRecommendCacheKey(String postId, String userId, int limit) {
+        String uid = StringUtils.hasText(userId) ? userId : "anonymous";
+        return POST_DETAIL_RECOMMEND_CACHE_KEY + postId + ":" + uid + ":" + limit;
+    }
+
     private IPage<PostRecommendResp> readRecommendCache(String cacheKey) {
         try {
             String cached = redisTemplate.opsForValue().get(cacheKey);
@@ -544,6 +608,20 @@ public class PostRecommendServiceImpl implements PostRecommendService {
             return page;
         } catch (Exception e) {
             log.debug("读取推荐缓存失败: key={}, err={}", cacheKey, e.getMessage());
+            return null;
+        }
+    }
+
+    private List<PostRecommendResp> readPostDetailRecommendCache(String cacheKey) {
+        try {
+            String cached = redisTemplate.opsForValue().get(cacheKey);
+            if (!StringUtils.hasText(cached)) {
+                return null;
+            }
+            return objectMapper.readValue(cached, new TypeReference<List<PostRecommendResp>>() {
+            });
+        } catch (Exception e) {
+            log.debug("读取帖子详情推荐缓存失败: key={}, err={}", cacheKey, e.getMessage());
             return null;
         }
     }
@@ -563,6 +641,18 @@ public class PostRecommendServiceImpl implements PostRecommendService {
                     TimeUnit.SECONDS);
         } catch (Exception e) {
             log.debug("写入推荐缓存失败: key={}, err={}", cacheKey, e.getMessage());
+        }
+    }
+
+    private void writePostDetailRecommendCache(String cacheKey, List<PostRecommendResp> recommendations) {
+        try {
+            redisTemplate.opsForValue().set(
+                    cacheKey,
+                    objectMapper.writeValueAsString(recommendations != null ? recommendations : Collections.emptyList()),
+                    POST_DETAIL_RECOMMEND_CACHE_TTL_SECONDS,
+                    TimeUnit.SECONDS);
+        } catch (Exception e) {
+            log.debug("写入帖子详情推荐缓存失败: key={}, err={}", cacheKey, e.getMessage());
         }
     }
 

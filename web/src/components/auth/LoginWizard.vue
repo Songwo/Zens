@@ -9,6 +9,7 @@ import { authApi } from '@/api/auth'
 import { useUiStore } from '@/store/ui'
 import { useUserStore } from '@/store/user'
 import { ensureCurrentUserProfile } from '@/utils/sessionProfile'
+import { loadTurnstileApi } from '@/utils/turnstile'
 
 const router = useRouter()
 const route = useRoute()
@@ -17,6 +18,14 @@ const userStore = useUserStore()
 const { isDark } = storeToRefs(uiStore)
 
 const TURNSTILE_TEST_SITE_KEY = '1x00000000000000000000AA'
+const TURNSTILE_DISABLED_VALUES = ['false', '0', 'off', 'no']
+const localPreviewHosts = new Set(['localhost', '127.0.0.1', '::1'])
+const configuredTurnstileEnabled = (import.meta.env.VITE_TURNSTILE_ENABLED || '').trim().toLowerCase()
+const isLocalPreviewHost =
+  typeof window !== 'undefined' && localPreviewHosts.has(window.location.hostname)
+const turnstileEnabled = configuredTurnstileEnabled
+  ? !TURNSTILE_DISABLED_VALUES.includes(configuredTurnstileEnabled)
+  : !isLocalPreviewHost
 
 const loading = ref(false)
 const githubLoading = ref(false)
@@ -27,17 +36,25 @@ const twoFactorTicket = ref('')
 const pendingRememberMe = ref(false)
 const GITHUB_REMEMBER_KEY = 'oauth_github_remember_me'
 const configuredTurnstileSiteKey = (import.meta.env.VITE_TURNSTILE_SITE_KEY || '').trim()
-const turnstileSiteKey = (configuredTurnstileSiteKey || (import.meta.env.DEV ? TURNSTILE_TEST_SITE_KEY : '')).trim()
+const turnstileSiteKey = (
+  turnstileEnabled
+    ? configuredTurnstileSiteKey || (import.meta.env.DEV ? TURNSTILE_TEST_SITE_KEY : '')
+    : ''
+).trim()
 const turnstileContainerRef = ref<HTMLElement>()
 const turnstileWidgetId = ref<string | null>(null)
 const turnstileToken = ref('')
 const turnstileScriptReady = ref(false)
-const turnstilePollTimer = ref<number | null>(null)
-const canSubmitLogin = computed(() => !!turnstileToken.value && !loading.value)
+const turnstileScriptLoading = ref(false)
+const turnstileLoadWarningShown = ref(false)
+const canSubmitLogin = computed(() => (turnstileEnabled ? !!turnstileToken.value : true) && !loading.value)
 const turnstileTheme = computed<'light' | 'dark'>(() => (isDark.value ? 'dark' : 'light'))
-const showTurnstileUnavailable = computed(() => !turnstileSiteKey)
-const showTurnstileUsingTestKey = computed(() => !configuredTurnstileSiteKey && import.meta.env.DEV)
-const showTurnstileLoading = computed(() => !!turnstileSiteKey && !turnstileScriptReady.value)
+const showTurnstileDisabled = computed(() => !turnstileEnabled)
+const showTurnstileUnavailable = computed(() => turnstileEnabled && !turnstileSiteKey)
+const showTurnstileUsingTestKey = computed(() => turnstileEnabled && !configuredTurnstileSiteKey && import.meta.env.DEV)
+const showTurnstileLoading = computed(
+  () => turnstileEnabled && !!turnstileSiteKey && (turnstileScriptLoading.value || !turnstileScriptReady.value)
+)
 const twoFactorForm = reactive({
   code: ''
 })
@@ -143,7 +160,7 @@ const pwdFormRef = ref<FormInstance>()
 const pwdForm = reactive({
   account: '',
   password: '',
-  rememberMe: false
+  rememberMe: true
 })
 
 const pwdRules = reactive<FormRules>({
@@ -162,7 +179,7 @@ const otpFormRef = ref<FormInstance>()
 const otpForm = reactive({
   email: '',
   code: '',
-  rememberMe: false
+  rememberMe: true
 })
 
 const otpRules = reactive<FormRules>({
@@ -268,43 +285,37 @@ const resetTurnstileWidget = (message?: string) => {
   }
 }
 
-const ensureTurnstileReady = () => {
+const ensureTurnstileReady = async () => {
   if (!turnstileSiteKey) {
     return
   }
-  if (window.turnstile?.render) {
-    turnstileScriptReady.value = true
-    void renderTurnstileWidget()
-    return
-  }
-  if (turnstilePollTimer.value !== null) {
-    return
-  }
-  turnstilePollTimer.value = window.setInterval(() => {
-    if (window.turnstile?.render) {
-      if (turnstilePollTimer.value !== null) {
-        window.clearInterval(turnstilePollTimer.value)
-        turnstilePollTimer.value = null
-      }
-      turnstileScriptReady.value = true
-      void renderTurnstileWidget()
-    }
-  }, 200)
 
-  window.setTimeout(() => {
-    if (!turnstileScriptReady.value && turnstilePollTimer.value !== null) {
-      ElMessage.warning('Turnstile 脚本加载较慢，请检查网络或稍后刷新页面')
+  turnstileScriptLoading.value = true
+  try {
+    const turnstileApi = await loadTurnstileApi()
+    if (!turnstileApi?.render) {
+      throw new Error('Turnstile API unavailable')
     }
-  }, 4000)
+    turnstileScriptReady.value = true
+    await renderTurnstileWidget()
+  } catch {
+    clearTurnstileTokenState()
+    if (!turnstileLoadWarningShown.value) {
+      turnstileLoadWarningShown.value = true
+      ElMessage.warning('Turnstile 脚本加载失败，请检查网络或稍后刷新页面')
+    }
+  } finally {
+    turnstileScriptLoading.value = false
+  }
 }
 
 // Song：---- 密码登录 ----
 const handlePasswordLogin = async () => {
-  if (!turnstileSiteKey) {
+  if (turnstileEnabled && !turnstileSiteKey) {
     ElMessage.error('未配置 Turnstile Site Key，当前无法登录')
     return
   }
-  if (!turnstileToken.value) {
+  if (turnstileEnabled && !turnstileToken.value) {
     ElMessage.warning('请先完成人机验证')
     return
   }
@@ -318,7 +329,7 @@ const handlePasswordLogin = async () => {
         account: pwdForm.account,
         password: pwdForm.password,
         rememberMe: pwdForm.rememberMe,
-        'cf-turnstile-response': turnstileToken.value
+        'cf-turnstile-response': turnstileEnabled ? turnstileToken.value : ''
       })
       if (res.code !== 2000 || !res.data) {
         resetTurnstileWidget('人机验证已刷新，请重新完成验证后再试')
@@ -337,11 +348,11 @@ const handlePasswordLogin = async () => {
 
 // Song：---- 验证码登录 ----
 const handleOtpLogin = async () => {
-  if (!turnstileSiteKey) {
+  if (turnstileEnabled && !turnstileSiteKey) {
     ElMessage.error('未配置 Turnstile Site Key，当前无法登录')
     return
   }
-  if (!turnstileToken.value) {
+  if (turnstileEnabled && !turnstileToken.value) {
     ElMessage.warning('请先完成人机验证')
     return
   }
@@ -355,7 +366,7 @@ const handleOtpLogin = async () => {
         email: otpForm.email,
         code: otpForm.code,
         rememberMe: otpForm.rememberMe,
-        'cf-turnstile-response': turnstileToken.value
+        'cf-turnstile-response': turnstileEnabled ? turnstileToken.value : ''
       })
       if (res.code !== 2000 || !res.data) {
         resetTurnstileWidget('人机验证已刷新，请重新完成验证后再试')
@@ -511,7 +522,7 @@ const applyRoutePrefill = () => {
 onMounted(() => {
   applyRoutePrefill()
   handleGithubCallbackIfNeeded()
-  ensureTurnstileReady()
+  void ensureTurnstileReady()
 })
 
 watch(
@@ -538,10 +549,6 @@ watch(isDark, () => {
 onUnmounted(() => {
   if (timer) clearInterval(timer)
   if (resetTimer) clearInterval(resetTimer)
-  if (turnstilePollTimer.value !== null) {
-    window.clearInterval(turnstilePollTimer.value)
-    turnstilePollTimer.value = null
-  }
   removeTurnstileWidget()
 })
 </script>
@@ -608,10 +615,16 @@ onUnmounted(() => {
 
           <div class="turnstile-block">
             <p class="turnstile-label">安全验证</p>
+            <p v-if="showTurnstileDisabled" class="turnstile-dev-tip">
+              当前环境已关闭 Cloudflare Turnstile，仅用于本地联调。
+            </p>
             <p v-if="showTurnstileUsingTestKey" class="turnstile-dev-tip">
               当前为开发环境，已自动启用 Cloudflare Turnstile 测试 Site Key。
             </p>
-            <div v-if="showTurnstileUnavailable" class="turnstile-placeholder">
+            <div v-if="showTurnstileDisabled" class="turnstile-placeholder">
+              本地调试模式已跳过人机验证，可直接登录。
+            </div>
+            <div v-else-if="showTurnstileUnavailable" class="turnstile-placeholder">
               未配置 Turnstile Site Key，当前无法显示人机验证。
             </div>
             <div v-else ref="turnstileContainerRef" class="turnstile-widget"></div>
@@ -619,7 +632,7 @@ onUnmounted(() => {
               正在加载 Cloudflare Turnstile...
             </p>
             <p class="turnstile-hint">
-              Turnstile token 约 5 分钟内有效，提交失败后需要重新完成验证。
+              {{ showTurnstileDisabled ? '本地联调请勿沿用到线上环境。' : 'Turnstile token 约 5 分钟内有效，提交失败后需要重新完成验证。' }}
             </p>
           </div>
 
@@ -685,10 +698,16 @@ onUnmounted(() => {
 
           <div class="turnstile-block">
             <p class="turnstile-label">安全验证</p>
+            <p v-if="showTurnstileDisabled" class="turnstile-dev-tip">
+              当前环境已关闭 Cloudflare Turnstile，仅用于本地联调。
+            </p>
             <p v-if="showTurnstileUsingTestKey" class="turnstile-dev-tip">
               当前为开发环境，已自动启用 Cloudflare Turnstile 测试 Site Key。
             </p>
-            <div v-if="showTurnstileUnavailable" class="turnstile-placeholder">
+            <div v-if="showTurnstileDisabled" class="turnstile-placeholder">
+              本地调试模式已跳过人机验证，可直接登录。
+            </div>
+            <div v-else-if="showTurnstileUnavailable" class="turnstile-placeholder">
               未配置 Turnstile Site Key，当前无法显示人机验证。
             </div>
             <div v-else ref="turnstileContainerRef" class="turnstile-widget"></div>
@@ -696,7 +715,7 @@ onUnmounted(() => {
               正在加载 Cloudflare Turnstile...
             </p>
             <p class="turnstile-hint">
-              Turnstile token 约 5 分钟内有效，提交失败后需要重新完成验证。
+              {{ showTurnstileDisabled ? '本地联调请勿沿用到线上环境。' : 'Turnstile token 约 5 分钟内有效，提交失败后需要重新完成验证。' }}
             </p>
           </div>
 

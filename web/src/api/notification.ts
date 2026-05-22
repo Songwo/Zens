@@ -1,13 +1,20 @@
 import api from '@/lib/api'
 import type { Result } from '@/types'
 
+export type NotificationCategory = 'SOCIAL' | 'SECURITY' | 'SYSTEM'
+
 export interface Notification {
     id: string | number
     userId: string
     type: string
+    /** 后端根据 type 派生：SOCIAL / SECURITY / SYSTEM */
+    category?: NotificationCategory
     title: string
     content: string
     relatedId?: string | number
+    relatedUserId?: string
+    relatedUserNickname?: string
+    relatedUserAvatar?: string
     isRead: number
     createTime?: string
     createdAt?: string
@@ -56,3 +63,4 @@ function normalizeIds(ids: Array<string | number>) {
         )
     )
 }
+

@@ -25,9 +25,6 @@ public class Comment implements Serializable {
 
     private String content;
 
-    /**
-     * Song：说明
-     */
     private String parentId;
 
     /**
@@ -36,14 +33,8 @@ public class Comment implements Serializable {
     @TableField(exist = false)
     private List<Comment> children;
 
-    /**
-     * Song：说明
-     */
     private String replyToUserId;
 
-    /**
-     * Song：说明
-     */
     private String replyUserId;
 
     /**

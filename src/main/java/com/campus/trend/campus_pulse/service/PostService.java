@@ -37,7 +37,6 @@ public interface PostService extends IService<Post> {
     /**
      * Song：重新生成帖子摘要
      *
-     * Song：说明
      */
     String regenerateSummary(String postId, String userId);
 
@@ -50,6 +49,8 @@ public interface PostService extends IService<Post> {
     void updatePost(PostUpdateReq request, String userId);
 
     void deletePost(String postId, String userId);
+
+    void restoreDeletedPost(String postId, String userId);
 
     void pinPost(String postId, String userId);
 

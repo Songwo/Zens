@@ -1,0 +1,16 @@
+bin/
+coverage.out
+/media-service
+/media-service.exe
+
+data/*
+!data/.gitkeep
+
+uploads/*
+!uploads/.gitkeep
+
+tmp/*
+!tmp/.gitkeep
+
+logs/*
+!logs/.gitkeep

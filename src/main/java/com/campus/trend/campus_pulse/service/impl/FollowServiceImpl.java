@@ -99,6 +99,7 @@ public class FollowServiceImpl implements FollowService {
 
         List<User> users = userMapper.selectBatchIds(followingIds);
         return users.stream()
+                .filter(this::isActiveUser)
                 .map(this::convertToSimpleResp)
                 .collect(Collectors.toList());
     }
@@ -112,6 +113,7 @@ public class FollowServiceImpl implements FollowService {
 
         List<User> users = userMapper.selectBatchIds(followerIds);
         return users.stream()
+                .filter(this::isActiveUser)
                 .map(this::convertToSimpleResp)
                 .collect(Collectors.toList());
     }
@@ -138,5 +140,9 @@ public class FollowServiceImpl implements FollowService {
         resp.setAvatar(user.getAvatar());
         resp.setLevel(user.getLevel());
         return resp;
+    }
+
+    private boolean isActiveUser(User user) {
+        return user != null && (user.getStatus() == null || user.getStatus() == 1);
     }
 }

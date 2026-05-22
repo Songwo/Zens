@@ -34,10 +34,6 @@ public class UserTagRelationServiceImpl extends ServiceImpl<UserTagRelationMappe
     /**
      * Song：关注标签
      *
-     * Song：说明
-     * Song：说明
-     * Song：说明
-     * Song：说明
      */
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -73,9 +69,6 @@ public class UserTagRelationServiceImpl extends ServiceImpl<UserTagRelationMappe
     /**
      * Song：取消关注标签
      *
-     * Song：说明
-     * Song：说明
-     * Song：说明
      */
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -102,9 +95,6 @@ public class UserTagRelationServiceImpl extends ServiceImpl<UserTagRelationMappe
     /**
      * Song：判断是否关注
      *
-     * Song：说明
-     * Song：说明
-     * Song：说明
      */
     @Override
     public boolean isFollowing(String userId, Long tagId) {
@@ -118,8 +108,6 @@ public class UserTagRelationServiceImpl extends ServiceImpl<UserTagRelationMappe
     /**
      * Song：获取用户关注的标签
      *
-     * Song：说明
-     * Song：说明
      */
     @Override
     public List<Tag> getUserFollowingTags(String userId) {
@@ -135,7 +123,6 @@ public class UserTagRelationServiceImpl extends ServiceImpl<UserTagRelationMappe
             return List.of();
         }
 
-        // Song：说明
         List<Long> tagIds = relations.stream()
                 .map(UserTagRelation::getTagId)
                 .collect(Collectors.toList());
@@ -154,10 +141,6 @@ public class UserTagRelationServiceImpl extends ServiceImpl<UserTagRelationMappe
     /**
      * Song：更新兴趣权重
      *
-     * Song：说明
-     * Song：说明
-     * Song：说明
-     * Song：说明
      */
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -191,10 +174,6 @@ public class UserTagRelationServiceImpl extends ServiceImpl<UserTagRelationMappe
     /**
      * Song：切换关注状态
      *
-     * Song：说明
-     * Song：说明
-     * Song：说明
-     * Song：说明
      */
     @Override
     @Transactional(rollbackFor = Exception.class)

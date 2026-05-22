@@ -718,6 +718,7 @@ onUnmounted(() => {
               <!-- Cover Image -->
               <el-form-item label="封面图片 (可选)">
                 <ImageUploader v-model="draft.form.coverImage" />
+                <div class="cover-hint">封面仅为缩略展示，不会压缩或影响原图</div>
               </el-form-item>
 
               <!-- Content Editor -->
@@ -1048,6 +1049,13 @@ html.dark .title-input :deep(.el-input__inner) {
 .paste-status {
   font-size: 12px;
   color: var(--el-color-primary);
+}
+
+.cover-hint {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  line-height: 1.4;
 }
 
 .editor-form-item {

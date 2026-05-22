@@ -1,0 +1,266 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* =============================================================================
+   Zens 积分商城 · 设计 token
+   ----------------------------------------------------------------------------
+   Editorial 极简体系：
+   - 只用品牌黄做强调点（按钮主态、余额芯片、Hover 立柱）
+   - 内容块之间用 1px divider + 大留白，避免卡片
+   - 明暗双主题用 .dark class 切换（next-themes 注入）
+   ============================================================================= */
+
+@layer base {
+  :root {
+    --zens-yellow:        #f4b400;
+    --zens-yellow-soft:   #fff6d6;
+    --zens-yellow-hover:  #d89b00;
+    --zens-yellow-glow:   rgba(244, 180, 0, 0.18);
+
+    --bg:                 #fcfcfd;
+    --surface:            #ffffff;
+    --surface-elev:       #f7f8fa;
+    --ink:                #0f1115;
+    --ink-soft:           #2c3038;
+    --muted:              #6b7280;
+    --faint:              #a3a3a3;
+    --divider:            rgba(15, 17, 21, 0.08);
+    --divider-strong:     rgba(15, 17, 21, 0.14);
+    --hairline:           rgba(15, 17, 21, 0.06);
+
+    --header-bg:          rgba(252, 252, 253, 0.72);
+    --gradient-fade-top:  linear-gradient(180deg, var(--bg) 0%, rgba(252, 252, 253, 0) 100%);
+    --gradient-fade-bot:  linear-gradient(0deg, var(--bg) 0%, rgba(252, 252, 253, 0) 100%);
+
+    --shadow-pop:         0 18px 48px -24px rgba(15, 17, 21, 0.18);
+    --shadow-card:        0 1px 0 var(--hairline), 0 12px 32px -20px rgba(15, 17, 21, 0.12);
+  }
+
+  .dark {
+    --zens-yellow:        #ffcb33;
+    --zens-yellow-soft:   #3a2e08;
+    --zens-yellow-hover:  #ffd766;
+    --zens-yellow-glow:   rgba(255, 203, 51, 0.22);
+
+    --bg:                 #0a0a0b;
+    --surface:            #111114;
+    --surface-elev:       #1a1a1f;
+    --ink:                #f5f5f7;
+    --ink-soft:           #d4d4d8;
+    --muted:              #8a8a93;
+    --faint:              #54545b;
+    --divider:            rgba(255, 255, 255, 0.08);
+    --divider-strong:     rgba(255, 255, 255, 0.14);
+    --hairline:           rgba(255, 255, 255, 0.05);
+
+    --header-bg:          rgba(10, 10, 11, 0.68);
+    --gradient-fade-top:  linear-gradient(180deg, var(--bg) 0%, rgba(10, 10, 11, 0) 100%);
+    --gradient-fade-bot:  linear-gradient(0deg, var(--bg) 0%, rgba(10, 10, 11, 0) 100%);
+
+    --shadow-pop:         0 18px 48px -24px rgba(0, 0, 0, 0.6);
+    --shadow-card:        0 1px 0 var(--hairline), 0 12px 32px -20px rgba(0, 0, 0, 0.5);
+  }
+
+  * {
+    border-color: var(--divider);
+  }
+
+  html {
+    color-scheme: light dark;
+    -webkit-text-size-adjust: 100%;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    background-color: var(--bg);
+    color: var(--ink);
+    font-feature-settings: "ss01", "cv11";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  ::selection {
+    background-color: var(--zens-yellow);
+    color: #000;
+  }
+
+  /* 默认文字数字等宽对齐 */
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@layer components {
+  /* ───── Editorial 容器 ───────────────────────────────────────────────── */
+  .editorial-container {
+    @apply mx-auto w-full max-w-[1180px] px-5 sm:px-8 lg:px-12;
+  }
+
+  /* ───── Eyebrow 小标签 ───────────────────────────────────────────────── */
+  .eyebrow {
+    @apply text-eyebrow font-bold uppercase text-muted;
+  }
+  .eyebrow-brand {
+    @apply eyebrow text-brand;
+  }
+
+  /* ───── Section 标题 ─────────────────────────────────────────────────── */
+  .section-title {
+    @apply flex items-baseline justify-between gap-4 pb-6;
+  }
+  .section-title h2 {
+    @apply text-xl font-bold tracking-tight text-ink sm:text-2xl;
+  }
+
+  /* ───── 横分割线（核心反卡片元素） ──────────────────────────────────── */
+  .row-divider {
+    border-bottom: 1px solid var(--divider);
+  }
+  .row-divider:last-child {
+    border-bottom: 0;
+  }
+
+  /* ───── 行式商品（无卡片）─────────────────────────────────────────── */
+  /* 使用方需在 JSX 上额外加 `group` class,这里不能 @apply group */
+  .product-row {
+    @apply relative grid grid-cols-[auto_1fr_auto] items-center gap-5 py-6 transition-all duration-300;
+  }
+  .product-row::before {
+    content: "";
+    @apply absolute left-0 top-1/2 h-0 w-[3px] -translate-y-1/2 rounded-pill bg-brand opacity-0 transition-all duration-300;
+  }
+  .product-row:hover::before {
+    @apply h-10 opacity-100;
+  }
+  .product-row:hover .product-row__title {
+    @apply -translate-x-1 text-brand;
+  }
+  .product-row__title {
+    @apply text-base font-semibold text-ink transition-all duration-300 sm:text-lg;
+  }
+
+  /* ───── 玻璃徽章（余额展示） ───────────────────────────────────────── */
+  .glass-chip {
+    @apply inline-flex items-center gap-2 rounded-pill border px-3 py-1.5 text-sm font-medium tracking-tight;
+    background: color-mix(in srgb, var(--surface) 70%, transparent);
+    border-color: var(--divider);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  /* ───── 主按钮 ───────────────────────────────────────────────────── */
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-pill bg-ink px-5 py-2 text-sm font-semibold text-bg transition-all duration-200;
+  }
+  .btn-primary:hover {
+    @apply -translate-y-0.5;
+    box-shadow: 0 8px 20px -6px var(--zens-yellow-glow);
+  }
+  .btn-primary:active {
+    @apply translate-y-0;
+  }
+
+  .btn-brand {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-pill bg-brand px-5 py-2 text-sm font-semibold text-ink transition-all duration-200;
+  }
+  .btn-brand:hover {
+    @apply -translate-y-0.5;
+    box-shadow: 0 8px 20px -6px var(--zens-yellow-glow);
+    background-color: var(--zens-yellow-hover);
+  }
+
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-pill px-4 py-2 text-sm font-medium text-ink-soft transition-colors;
+  }
+  .btn-ghost:hover {
+    background-color: var(--surface-elev);
+    color: var(--ink);
+  }
+
+  /* ───── 顶栏渐变发丝 ─────────────────────────────────────────────── */
+  .header-hairline {
+    @apply pointer-events-none absolute inset-x-0 bottom-0 h-px;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      var(--divider-strong) 30%,
+      var(--zens-yellow) 50%,
+      var(--divider-strong) 70%,
+      transparent 100%
+    );
+    opacity: 0.5;
+  }
+
+  /* ───── 骨架 shimmer ─────────────────────────────────────────────── */
+  .skeleton {
+    @apply animate-shimmer rounded-md;
+    background: linear-gradient(
+      90deg,
+      var(--surface-elev) 0%,
+      color-mix(in srgb, var(--surface-elev) 60%, var(--divider) 40%) 50%,
+      var(--surface-elev) 100%
+    );
+    background-size: 200% 100%;
+  }
+
+  /* ───── Hero balance pill ─────────────────────────────────────────── */
+  .balance-pill {
+    @apply inline-flex items-center gap-2.5 rounded-pill border px-4 py-2 font-mono text-sm tabular-nums;
+    background: color-mix(in srgb, var(--surface) 86%, transparent);
+    border-color: var(--divider);
+    backdrop-filter: blur(10px);
+  }
+  .balance-pill__star {
+    color: var(--zens-yellow);
+  }
+  .balance-pill__num {
+    @apply font-semibold text-ink;
+  }
+
+  /* ───── Featured banner 大图块 ────────────────────────────────────── */
+  .feature-frame {
+    @apply relative overflow-hidden rounded-3xl;
+    box-shadow: var(--shadow-card);
+  }
+  .feature-frame::after {
+    content: "";
+    @apply pointer-events-none absolute inset-0;
+    background: linear-gradient(
+      180deg,
+      transparent 50%,
+      color-mix(in srgb, var(--ink) 92%, transparent) 100%
+    );
+  }
+
+  /* ───── 浮动移动端胶囊导航 ────────────────────────────────────────── */
+  .mobile-nav {
+    @apply fixed bottom-4 left-1/2 z-40 flex h-14 -translate-x-1/2 items-center gap-1 rounded-pill border px-2 shadow-lg;
+    background: color-mix(in srgb, var(--surface) 80%, transparent);
+    border-color: var(--divider);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+  }
+  .mobile-nav__item {
+    @apply flex h-10 min-w-[64px] flex-col items-center justify-center gap-0.5 rounded-pill px-3 text-[10px] font-medium text-muted transition-all;
+  }
+  .mobile-nav__item--active {
+    background: var(--zens-yellow-soft);
+    color: var(--ink);
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+  .text-pretty {
+    text-wrap: pretty;
+  }
+  .scrollbar-none {
+    scrollbar-width: none;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+}

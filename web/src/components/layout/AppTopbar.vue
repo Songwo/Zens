@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Bell, ChatDotRound, Check, EditPen, Search } from '@element-plus/icons-vue'
+import { Bell, ChatDotRound, Check, Delete, EditPen, Search } from '@element-plus/icons-vue'
 import { ElNotification } from 'element-plus'
 import AppLogo from '@/components/common/AppLogo.vue'
 import UserMenu from '@/components/common/UserMenu.vue'
@@ -28,6 +28,7 @@ const unreadCount = ref(0)
 const dmUnreadCount = ref(0)
 const notifications = ref<Notification[]>([])
 const notifLoading = ref(false)
+const notifPopoverVisible = ref(false)
 let pollTimer: ReturnType<typeof setInterval> | null = null
 let unsubscribeWs: (() => void) | null = null
 let unsubscribeUnreadSync: (() => void) | null = null
@@ -171,7 +172,8 @@ const handleNotifClick = async (notif: Notification) => {
 
   const targetRoute = resolveNotificationRoute(notif.relatedId, { type: notif.type, relatedUserId: notif.relatedUserId })
   if (targetRoute) {
-    router.push(targetRoute)
+    notifPopoverVisible.value = false
+    await router.push(targetRoute)
   }
 }
 
@@ -189,6 +191,26 @@ const handleMarkAllRead = async () => {
   }
 }
 
+const handleNotifDelete = async (event: MouseEvent, notif: Notification) => {
+  event.stopPropagation()
+  try {
+    await notificationApi.delete(String(notif.id))
+    notifications.value = notifications.value.filter((item) => String(item.id) !== String(notif.id))
+    if (notif.isRead === 0) {
+      updateUnreadCountByDelta(-1)
+      invalidateNotificationUnreadCache()
+      emitNotificationUnreadSync({ unreadCount: unreadCount.value })
+    }
+  } catch {
+    // Song：说明
+  }
+}
+
+const goNotificationCenter = async () => {
+  notifPopoverVisible.value = false
+  await router.push({ path: '/me', query: { tab: 'notifications' } })
+}
+
 const getNotifTime = (item: Notification) => {
   return timeAgo((item as any).createTime || (item as any).createdAt || '')
 }
@@ -198,20 +220,21 @@ const handleWebSocketNotification = (event: NotificationEvent) => {
   invalidateNotificationUnreadCache()
   emitNotificationUnreadSync({ unreadCount: unreadCount.value })
 
-  if (notifications.value.length > 0) {
-    notifications.value.unshift({
-      id: String(event.id),
-      userId: event.userId,
-      type: event.type,
-      title: event.title,
-      content: event.content,
-      relatedId: event.relatedId,
-      isRead: 0,
-      createdAt: event.createdAt,
-    })
-  }
+  notifications.value.unshift({
+    id: String(event.id),
+    userId: event.userId,
+    type: event.type,
+    title: event.title,
+    content: event.content,
+    relatedId: event.relatedId,
+    relatedUserId: event.relatedUserId,
+    isRead: 0,
+    createdAt: event.createdAt,
+  })
+  notifications.value = notifications.value.slice(0, 20)
 
-  const isLoginAlert = event.type === 'system' && event.title?.includes('登录')
+  const isLoginAlert = ['system', 'security_alert', 'new_device_login', 'login_failed_burst'].includes(event.type)
+    && Boolean(event.title?.includes('登录') || event.title?.includes('安全'))
   ElNotification({
     title: event.title,
     message: event.content,
@@ -356,7 +379,7 @@ onUnmounted(() => {
           </el-button>
         </el-badge>
 
-        <el-popover placement="bottom-end" :width="360" trigger="click" popper-class="notif-popover" @show="handlePopoverShow">
+        <el-popover v-model:visible="notifPopoverVisible" placement="bottom-end" :width="360" trigger="click" popper-class="notif-popover" @show="handlePopoverShow">
           <template #reference>
             <el-badge :value="unreadCount > 0 ? unreadCount : ''" :max="99" class="notification-badge">
               <el-button circle text class="icon-btn">
@@ -388,6 +411,7 @@ onUnmounted(() => {
                   <div class="notif-content">{{ notif.content }}</div>
                   <div class="notif-time">{{ getNotifTime(notif) }}</div>
                 </div>
+                <el-button class="notif-delete" text type="danger" size="small" :icon="Delete" @click="handleNotifDelete($event, notif)" />
               </div>
 
               <div v-if="!notifLoading && notifications.length === 0" class="notif-empty">
@@ -396,7 +420,7 @@ onUnmounted(() => {
             </div>
 
             <div class="notif-footer">
-              <el-button link type="primary" size="small" @click="router.push({ path: '/me', query: { tab: 'notifications' } })">查看全部通知</el-button>
+              <el-button link type="primary" size="small" @click="goNotificationCenter">查看全部通知</el-button>
             </div>
           </div>
         </el-popover>
@@ -571,6 +595,16 @@ onUnmounted(() => {
 .notif-body {
   flex: 1;
   min-width: 0;
+}
+
+.notif-delete {
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.notif-item:hover .notif-delete {
+  opacity: 1;
 }
 
 .notif-item-title {

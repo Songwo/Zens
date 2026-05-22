@@ -1,16 +1,18 @@
 package com.campus.trend.campus_pulse.dto.request;
 
+import com.campus.trend.campus_pulse.dto.media.MediaObject;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
+import lombok.Setter;
+
+import java.util.List;
 
 @Getter
+@Setter
 public class PostCreateReq {
 
-    /**
-     * Song：说明
-     */
     @NotNull(message = "板块ID不允许为空")
     private Long sectionId;
 
@@ -29,9 +31,15 @@ public class PostCreateReq {
     private String content;
 
     /**
-     * Song：文章引用图片
+     * Song：文章引用图片（兼容字段，可是 JSON 字符串或单 URL）
      */
     private String images;
+
+    /**
+     * Song：新版媒体字段。前端上传完成后把返回的 MediaObject 列表原样透传过来。
+     * 与 images 互斥；若两者都传，mediaList 优先。
+     */
+    private List<MediaObject> mediaList;
 
     /**
      * Song：封面图

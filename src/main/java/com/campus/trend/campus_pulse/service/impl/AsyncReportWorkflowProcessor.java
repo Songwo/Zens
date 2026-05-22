@@ -68,8 +68,16 @@ public class AsyncReportWorkflowProcessor {
             throw new IllegalArgumentException("帖子不存在");
         }
 
+        String finalReason = StringUtils.hasText(reason) ? reason : report.getReason();
         post.setAuditStatus("REJECTED");
         post.setStatus(0);
+        post.setRejectReason(StringUtils.hasText(finalReason) ? finalReason : null);
+        post.setIsPinned(0);
+        post.setGlobalPin(0);
+        post.setCategoryPin(0);
+        post.setPinOrder(0);
+        post.setPinExpireAt(null);
+        post.setIsFeatured(0);
         post.setUpdateTime(LocalDateTime.now());
         postMapper.updateById(post);
         invalidatePostCache(post.getSectionId(), post.getId());
@@ -78,7 +86,6 @@ public class AsyncReportWorkflowProcessor {
         report.setUpdateTime(LocalDateTime.now());
         sysReportService.updateById(report);
 
-        String finalReason = StringUtils.hasText(reason) ? reason : report.getReason();
         String title = "帖子被打回修改";
         String content = String.format(
                 "您的帖子「%s」因被举报已被审核人员打回，请及时修改后重新发布。打回原因：%s。如未在规定时间内修改，帖子将被删除。",

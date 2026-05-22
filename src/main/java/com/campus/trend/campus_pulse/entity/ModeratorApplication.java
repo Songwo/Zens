@@ -29,9 +29,6 @@ public class ModeratorApplication {
 
     private String reason;
 
-    /**
-     * Song：说明
-     */
     private Integer status;
 
     private String reviewNote;

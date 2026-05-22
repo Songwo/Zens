@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, nextTick, watch, computed } from 'vue'
+import { ref, nextTick, watch } from 'vue'
 import { Close } from '@element-plus/icons-vue'
 import { userApi } from '@/api/user'
 
@@ -16,7 +16,6 @@ const emit = defineEmits<{
 
 const content = ref('')
 const textareaRef = ref<HTMLTextAreaElement | null>(null)
-const editorRef = ref<HTMLElement | null>(null)
 
 // @mention 相关状态
 const mentionVisible = ref(false)
@@ -50,13 +49,14 @@ const onInput = (e: Event) => {
   for (let i = cursor - 1; i >= 0; i--) {
     if (val[i] === '@') {
       // @ 前面必须是行首、空格或换行
-      if (i === 0 || /[\s\n]/.test(val[i - 1])) {
+      const prevChar = i > 0 ? val.charAt(i - 1) : ''
+      if (i === 0 || /[\s\n]/.test(prevChar)) {
         atIdx = i
       }
       break
     }
     // 遇到空格或换行说明 @ 已不在当前词
-    if (/[\s\n]/.test(val[i])) break
+    if (/[\s\n]/.test(val.charAt(i))) break
   }
 
   if (atIdx >= 0) {
@@ -123,7 +123,7 @@ watch(() => props.replyingTo, async (val) => {
 })
 </script>
 <template>
-  <div class="comment-editor" ref="editorRef">
+  <div class="comment-editor">
     <!-- Reply indicator -->
     <div v-if="replyingTo && replyName" class="reply-indicator">
       <span>回复 <strong>{{ replyName }}</strong></span>

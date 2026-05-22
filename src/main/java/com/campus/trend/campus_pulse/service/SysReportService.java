@@ -7,7 +7,7 @@ import com.campus.trend.campus_pulse.entity.SysReport;
 
 public interface SysReportService extends IService<SysReport> {
 
-    IPage<ReportManageResp> getManagePage(String userId, Integer current, Integer size, Integer status);
+    IPage<ReportManageResp> getManagePage(String userId, Integer current, Integer size, Integer status, Long sectionId);
 
     SysReport getAccessibleReport(String userId, String reportId);
 }

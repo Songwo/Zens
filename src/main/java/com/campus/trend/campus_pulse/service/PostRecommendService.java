@@ -30,18 +30,12 @@ public interface PostRecommendService {
     /**
      * Song：计算帖子相关度分数
      *
-     * Song：说明
-     * Song：说明
-     * Song：说明
      */
     double calculateScore(Post post, List<UserTagRelation> userTags);
 
     /**
      * Song：获取用户可能感兴趣的标签
      *
-     * Song：说明
-     * Song：说明
-     * Song：说明
      */
     List<Tag> recommendTags(String userId, int limit);
 }

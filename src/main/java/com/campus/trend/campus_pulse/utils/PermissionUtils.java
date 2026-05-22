@@ -74,6 +74,10 @@ public class PermissionUtils {
         return "ROLE_ADMIN".equals(role) || "ROLE_SUPER_ADMIN".equals(role);
     }
 
+    public static boolean isUserGlobalModerator(String userId) {
+        return "ROLE_MODERATOR".equals(getUserRole(userId));
+    }
+
     public static boolean isUserAdminOrModerator(String userId) {
         String role = getUserRole(userId);
         return role.equals("ROLE_ADMIN") || role.equals("ROLE_SUPER_ADMIN") || role.equals("ROLE_MODERATOR");

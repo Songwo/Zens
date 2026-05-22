@@ -1,0 +1,38 @@
+# 子站独立部署 - 数据库复用主站 MySQL 实例。
+# 主站本身 + Redis 都在宿主机上,这里只起 Next.js 容器。
+services:
+  zdc-shop:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: zdc-shop
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      # ↓ 部署时改为生产值
+      DATABASE_URL: ${DATABASE_URL}
+      JWT_SECRET: ${JWT_SECRET}
+      SHOP_SERVICE_SECRET: ${SHOP_SERVICE_SECRET}
+      SHOP_SERVICE_ID: zdc-shop
+      MAIN_SITE_BACKEND_URL: ${MAIN_SITE_BACKEND_URL}
+      NEXT_PUBLIC_COMMUNITY_URL: ${NEXT_PUBLIC_COMMUNITY_URL}
+      NEXT_PUBLIC_SSO_CLIENT_ID: zdc-shop
+      SESSION_PASSWORD: ${SESSION_PASSWORD}
+      SESSION_COOKIE_NAME: zs_session
+      NEXT_PUBLIC_SITE_NAME: "Zens · 积分商城"
+      NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL}
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/api/auth/community-config', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    networks:
+      - zens-network
+
+networks:
+  zens-network:
+    name: zens-network
+    external: false

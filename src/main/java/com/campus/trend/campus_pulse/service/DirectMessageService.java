@@ -1,8 +1,6 @@
 package com.campus.trend.campus_pulse.service;
 
 import com.campus.trend.campus_pulse.dto.request.DirectMessageSendReq;
-import com.campus.trend.campus_pulse.dto.response.DirectConversationResp;
-import com.campus.trend.campus_pulse.dto.response.DirectMessageResp;
 
 import java.util.Map;
 

@@ -74,11 +74,7 @@ public class MailServiceImpl implements MailService {
         log.info("登录验证码邮件发送完成: {}", to);
     }
 
-    /**
-     * Song：说明
-     */
     private String buildZensVerificationHtml(String code, String action, String greeting) {
-        // Song：说明
         String logoUrl = "https://api.dicebear.com/7.x/shapes/png?seed=Zens&backgroundColor=000000&radius=10";
 
         return """

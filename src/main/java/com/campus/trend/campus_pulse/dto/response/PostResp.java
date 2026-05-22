@@ -1,5 +1,6 @@
 package com.campus.trend.campus_pulse.dto.response;
 
+import com.campus.trend.campus_pulse.dto.media.MediaObject;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
 import lombok.experimental.Accessors;
@@ -10,7 +11,6 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 /**
- * Song：说明
  * Song：用于解决前端无法显示帖子作者信息的问题
  */
 @Data
@@ -95,15 +95,9 @@ public class PostResp implements Serializable {
     // Song：=================== 作者信息 (新增) ===================
     /**
      * Song：作者昵称
-     * Song：说明
-     * Song：说明
      */
     private String authorName;
 
-    /**
-     * Song：说明
-     * Song：说明
-     */
     private String authorAvatar;
 
     /**
@@ -117,9 +111,6 @@ public class PostResp implements Serializable {
      */
     private BigDecimal sentimentScore;
 
-    /**
-     * Song：说明
-     */
     private String sentimentLabel;
 
     /**
@@ -127,13 +118,15 @@ public class PostResp implements Serializable {
      */
     private String sectionName;
 
-    /**
-     * Song：说明
-     */
     private String trendLevel;
 
     /**
      * Song：智能 生成的摘要 (新增)
      */
     private String summary;
+
+    /**
+     * Song：新版媒体列表（来自 sys_post_media）。与 images 字段并存，老前端继续用 images，新前端读 mediaList。
+     */
+    private List<MediaObject> mediaList;
 }

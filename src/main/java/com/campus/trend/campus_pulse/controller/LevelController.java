@@ -1,20 +1,19 @@
 package com.campus.trend.campus_pulse.controller;
 
 import com.campus.trend.campus_pulse.common.api.Result;
+import com.campus.trend.campus_pulse.dto.response.LevelExpRecordPageResp;
 import com.campus.trend.campus_pulse.dto.response.LevelInfoResp;
-import com.campus.trend.campus_pulse.security.AuthUser;
+import com.campus.trend.campus_pulse.dto.response.LevelThresholdResp;
 import com.campus.trend.campus_pulse.service.LevelService;
 import com.campus.trend.campus_pulse.utils.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 @RestController
 @RequestMapping("/level")
@@ -27,35 +26,23 @@ public class LevelController {
 
     @GetMapping("/info")
     public Result<LevelInfoResp> getLevelInfo() {
-        AuthUser authUser = SecurityUtils.getAuthenticatedUser();
-        String userId = authUser.getUser().getId();
-        LevelInfoResp info = levelService.getUserLevelInfo(userId);
-        return Result.success(info);
+        return Result.success(levelService.getUserLevelInfo(SecurityUtils.getAuthenticatedUser().getUser().getId()));
     }
 
     @GetMapping("/thresholds")
-    public Result<List<Map<String, Object>>> getThresholds() {
-        List<Map<String, Object>> list = new ArrayList<>();
+    public Result<List<LevelThresholdResp>> getThresholds() {
+        List<LevelThresholdResp> list = new ArrayList<>(LEVEL_THRESHOLDS.length);
         for (int i = 0; i < LEVEL_THRESHOLDS.length; i++) {
-            Map<String, Object> item = new HashMap<>();
-            item.put("level", i + 1);
-            item.put("experience", LEVEL_THRESHOLDS[i]);
-            list.add(item);
+            list.add(new LevelThresholdResp(i + 1, LEVEL_THRESHOLDS[i]));
         }
         return Result.success(list);
     }
 
-    /**
-     * Song：经验记录
-     * Song：说明
-     */
     @GetMapping("/exp-records")
-    public Result<Map<String, Object>> getExpRecords(@RequestParam(defaultValue = "7") int days,
-                                                     @RequestParam(defaultValue = "1") int page,
-                                                     @RequestParam(defaultValue = "10") int pageSize) {
-        AuthUser authUser = SecurityUtils.getAuthenticatedUser();
-        String userId = authUser.getUser().getId();
-
+    public Result<LevelExpRecordPageResp> getExpRecords(@RequestParam(defaultValue = "7") int days,
+                                                        @RequestParam(defaultValue = "1") int page,
+                                                        @RequestParam(defaultValue = "10") int pageSize) {
+        String userId = SecurityUtils.getAuthenticatedUser().getUser().getId();
         Integer daysFilter = days > 0 ? days : null;
         return Result.success(levelService.getExperienceRecords(userId, daysFilter, page, pageSize));
     }

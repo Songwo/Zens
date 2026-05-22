@@ -9,6 +9,13 @@ import { postApi } from '@/api/post'
 import type { PostSearchRequest } from '@/types'
 import { wsClient, type PostEvent } from '@/utils/websocket'
 
+type PostMetricsUpdate = {
+  postId: string
+  viewCount?: number | string | null
+  commentCount?: number | string | null
+  lastActivityAt?: string | null
+}
+
 const props = defineProps<{
   defaultQuery?: PostSearchRequest
   hideFilters?: boolean
@@ -35,6 +42,7 @@ const newContentCount = ref(0)
 let newContentTimer: any = null
 let wsUnsubscribe: (() => void) | null = null
 let realtimeInitialized = false
+const POST_METRICS_UPDATED_EVENT = 'cp:post-metrics-updated'
 
 const loadTrigger = ref<HTMLElement | null>(null)
 let observer: IntersectionObserver | null = null
@@ -59,6 +67,34 @@ const resolveOrderBy = (): 'new' | 'hot' => {
   }
 
   return orderBy
+}
+
+const toFiniteMetric = (value: unknown): number | null => {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : null
+  }
+  if (typeof value === 'string' && value.trim() !== '') {
+    const parsed = Number(value)
+    return Number.isFinite(parsed) ? parsed : null
+  }
+  return null
+}
+
+const applyTopicMetrics = (postId: string, data?: PostMetricsUpdate | PostEvent['data'], options: { incrementReply?: boolean } = {}) => {
+  const index = topics.value.findIndex((item) => String(item.id) === String(postId))
+  if (index === -1) return
+
+  const topic = topics.value[index]
+  const viewCount = toFiniteMetric(data?.viewCount)
+  const commentCount = toFiniteMetric(data?.commentCount)
+
+  if (viewCount !== null) topic.views = viewCount
+  if (commentCount !== null) {
+    topic.replies = commentCount
+  } else if (options.incrementReply) {
+    topic.replies = Math.max(0, toFiniteMetric(topic.replies) ?? 0) + 1
+  }
+  if (data?.lastActivityAt) topic.lastActive = data.lastActivityAt
 }
 
 const buildSearchReq = (): PostSearchRequest => {
@@ -98,8 +134,8 @@ const mapPost = (p: any) => ({
   },
   createdAt: p.createTime,
   lastActive: p.lastActivityAt || p.createTime,
-  replies: p.commentCount ?? 0,
-  views: p.viewCount ?? 0,
+  replies: toFiniteMetric(p.commentCount) ?? 0,
+  views: toFiniteMetric(p.viewCount) ?? 0,
   heatScore: p.heatScore,
   isPinned: p.isPinned === 1,
   isFeatured: p.isFeatured === 1,
@@ -181,14 +217,12 @@ const handlePostEvent = (event: PostEvent) => {
     }
   }
 
-  if (event.data && event.postId) {
+  if (event.postId) {
     const index = topics.value.findIndex((item) => item.id === event.postId)
     if (index !== -1) {
       const topic = topics.value[index]
 
-      if (event.data.viewCount !== undefined) topic.views = event.data.viewCount
-      if (event.data.commentCount !== undefined) topic.replies = event.data.commentCount
-      if (event.data.lastActivityAt) topic.lastActive = event.data.lastActivityAt
+      applyTopicMetrics(event.postId, event.data, { incrementReply: event.type === 'POST_REPLIED' })
 
       if (event.type === 'POST_REPLIED' && activeTab.value === 'latest') {
         const [movedTopic] = topics.value.splice(index, 1)
@@ -200,6 +234,12 @@ const handlePostEvent = (event: PostEvent) => {
       }
     }
   }
+}
+
+const handleLocalMetricsUpdate = (event: Event) => {
+  const detail = (event as CustomEvent<PostMetricsUpdate>).detail
+  if (!detail?.postId) return
+  applyTopicMetrics(detail.postId, detail)
 }
 
 const stopNewContentPolling = () => {
@@ -270,6 +310,7 @@ onMounted(() => {
   }
 
   startNewContentPolling()
+  window.addEventListener(POST_METRICS_UPDATED_EVENT, handleLocalMetricsUpdate)
 
   observer = new IntersectionObserver(
     (entries) => {
@@ -287,6 +328,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   if (observer) observer.disconnect()
+  window.removeEventListener(POST_METRICS_UPDATED_EVENT, handleLocalMetricsUpdate)
   stopNewContentPolling()
   if (wsUnsubscribe) wsUnsubscribe()
 })

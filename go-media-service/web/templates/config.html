@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ .title }}</title>
+  <link rel="stylesheet" href="{{ .basePath }}/static/css/panel.css">
+</head>
+<body>
+  <div class="panel-shell">
+    <aside class="sidebar">
+      <h2>Media Service</h2>
+      <nav>
+        <a href="{{ .basePath }}">仪表盘</a>
+        <a href="{{ .basePath }}/uploads">上传记录</a>
+        <a href="{{ .basePath }}/files">文件管理</a>
+        <a href="{{ .basePath }}/system">系统监控</a>
+        <a class="active" href="{{ .basePath }}/config">运行配置</a>
+      </nav>
+      <form method="post" action="{{ .basePath }}/logout">
+        <button type="submit" class="ghost-btn">退出登录</button>
+      </form>
+    </aside>
+    <main class="panel-main">
+      <header class="panel-header">
+        <h1>运行配置</h1>
+        <p>仅开放运行时可调整字段，适合后续快速二次开发</p>
+      </header>
+      <section class="panel-card">
+        <div id="config-view"></div>
+        <form id="config-form" class="config-form">
+          <div class="form-grid">
+            <label>上传开关<input type="text" name="upload_enabled" placeholder="true / false"></label>
+            <label>图片大小上限(MB)<input type="number" name="max_image_size_mb"></label>
+            <label>视频大小上限(MB)<input type="number" name="max_video_size_mb"></label>
+            <label>分片大小(MB)<input type="number" name="chunk_size_mb"></label>
+            <label>全局上传并发<input type="number" name="global_upload_concurrency"></label>
+            <label>合并并发<input type="number" name="merge_concurrency"></label>
+            <label>单 IP RPS<input type="number" name="per_ip_rps"></label>
+            <label>单用户 RPS<input type="number" name="per_user_rps"></label>
+          </div>
+          <button type="submit">保存运行配置</button>
+        </form>
+      </section>
+    </main>
+  </div>
+  <script>window.MEDIA_PANEL_PAGE = "config"; window.MEDIA_PANEL_BASE = "{{ .basePath }}";</script>
+  <script src="{{ .basePath }}/static/js/panel.js"></script>
+</body>
+</html>

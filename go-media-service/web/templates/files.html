@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ .title }}</title>
+  <link rel="stylesheet" href="{{ .basePath }}/static/css/panel.css">
+</head>
+<body>
+  <div class="panel-shell">
+    <aside class="sidebar">
+      <h2>Media Service</h2>
+      <nav>
+        <a href="{{ .basePath }}">仪表盘</a>
+        <a href="{{ .basePath }}/uploads">上传记录</a>
+        <a class="active" href="{{ .basePath }}/files">文件管理</a>
+        <a href="{{ .basePath }}/system">系统监控</a>
+        <a href="{{ .basePath }}/config">运行配置</a>
+      </nav>
+      <form method="post" action="{{ .basePath }}/logout">
+        <button type="submit" class="ghost-btn">退出登录</button>
+      </form>
+    </aside>
+    <main class="panel-main">
+      <header class="panel-header">
+        <h1>文件管理</h1>
+        <p>支持图片 / 视频筛选、查看和删除</p>
+      </header>
+      <section class="panel-card">
+        <div class="filters">
+          <input id="files-keyword" type="text" placeholder="搜索原始文件名 / 上传人">
+          <select id="files-media-type">
+            <option value="">全部类型</option>
+            <option value="image">图片</option>
+            <option value="video">视频</option>
+          </select>
+          <button id="files-refresh">刷新</button>
+        </div>
+        <div id="files-table"></div>
+      </section>
+    </main>
+  </div>
+  <script>window.MEDIA_PANEL_PAGE = "files"; window.MEDIA_PANEL_BASE = "{{ .basePath }}";</script>
+  <script src="{{ .basePath }}/static/js/panel.js"></script>
+</body>
+</html>

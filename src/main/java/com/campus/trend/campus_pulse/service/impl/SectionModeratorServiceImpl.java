@@ -47,7 +47,7 @@ public class SectionModeratorServiceImpl implements SectionModeratorService {
 
     @Override
     public boolean hasModeratorCapability(String userId) {
-        return PermissionUtils.isUserAdmin(userId) || !getModeratedSectionIds(userId).isEmpty();
+        return PermissionUtils.isUserAdminOrModerator(userId) || !getModeratedSectionIds(userId).isEmpty();
     }
 
     @Override
@@ -60,7 +60,7 @@ public class SectionModeratorServiceImpl implements SectionModeratorService {
 
     @Override
     public boolean canModerateSection(String userId, Long sectionId) {
-        if (PermissionUtils.isUserAdmin(userId)) {
+        if (PermissionUtils.isUserAdminOrModerator(userId)) {
             return true;
         }
         return isSectionModerator(userId, sectionId);
@@ -71,7 +71,7 @@ public class SectionModeratorServiceImpl implements SectionModeratorService {
         if (!StringUtils.hasText(postId)) {
             return false;
         }
-        if (PermissionUtils.isUserAdmin(userId)) {
+        if (PermissionUtils.isUserAdminOrModerator(userId)) {
             return true;
         }
         Post post = postMapper.selectById(postId);
@@ -83,7 +83,7 @@ public class SectionModeratorServiceImpl implements SectionModeratorService {
         if (!StringUtils.hasText(commentId)) {
             return false;
         }
-        if (PermissionUtils.isUserAdmin(userId)) {
+        if (PermissionUtils.isUserAdminOrModerator(userId)) {
             return true;
         }
         Comment comment = commentMapper.selectById(commentId);
@@ -95,7 +95,7 @@ public class SectionModeratorServiceImpl implements SectionModeratorService {
         if (report == null) {
             return false;
         }
-        if (PermissionUtils.isUserAdmin(userId)) {
+        if (PermissionUtils.isUserAdminOrModerator(userId)) {
             return true;
         }
         if ("post".equalsIgnoreCase(report.getTargetType())) {

@@ -16,80 +16,54 @@ public interface ViewLogService extends IService<ViewLog> {
     /**
      * Song：记录一次浏览
      * 
-     * Song：说明
-     * Song：说明
-     * Song：说明
-     * Song：说明
      */
     void recordView(String postId, String userId, String ip, String device);
 
     /**
      * Song：获取帖子在指定时间段内的浏览次数
      * 
-     * Song：说明
-     * Song：说明
-     * Song：说明
-     * Song：说明
      */
     long getViewCount(String postId, LocalDateTime startTime, LocalDateTime endTime);
 
     /**
      * Song：获取帖子总浏览次数
      * 
-     * Song：说明
-     * Song：说明
      */
     long getTotalViewCount(String postId);
 
     /**
      * Song：获取热门帖子排行（按浏览量）
      * 
-     * Song：说明
-     * Song：说明
-     * Song：说明
      */
     List<Map<String, Object>> getHotPostsByViews(LocalDateTime startTime, int limit);
 
     /**
      * Song：获取用户的浏览历史（带去重和帖子标题）
      * 
-     * Song：说明
-     * Song：说明
-     * Song：说明
      */
     List<ViewHistoryDto> getUserViewHistory(String userId, int limit);
 
     /**
      * Song：分页获取用户浏览历史（去重）
      *
-     * Song：说明
-     * Song：说明
-     * Song：说明
-     * Song：说明
      */
     Map<String, Object> getUserViewHistoryPaged(String userId, int page, int pageSize);
 
     /**
      * Song：获取每日访问统计
      * 
-     * Song：说明
-     * Song：说明
-     * Song：说明
      */
     List<Map<String, Object>> getDailyViewStats(LocalDateTime startDate, LocalDateTime endDate);
 
     /**
      * Song：获取设备类型分布
      * 
-     * Song：说明
      */
     Map<String, Long> getDeviceDistribution();
 
     /**
      * Song：清理指定天数之前的日志（用于定时任务）
      * 
-     * Song：说明
-     * Song：说明
      */
     long cleanOldLogs(int daysToKeep);
 

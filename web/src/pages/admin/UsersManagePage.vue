@@ -4,14 +4,20 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, Delete, Lock, Unlock, UserFilled } from '@element-plus/icons-vue'
 import api from '@/lib/api'
 import { useUserStore } from '@/store/user'
+import { sectionApi, type Section } from '@/api/section'
+import { userApi } from '@/api/user'
 
 const userStore = useUserStore()
 const users = ref<any[]>([])
+const sections = ref<Section[]>([])
 const loading = ref(true)
+const sectionsLoading = ref(false)
 const searchKeyword = ref('')
 const roleDialogVisible = ref(false)
 const roleDialogUser = ref<any>(null)
 const selectedRole = ref('')
+const selectedModeratedSectionIds = ref<number[]>([])
+const permissionSaving = ref(false)
 
 const ROLE_LEVEL: Record<string, number> = {
   'ROLE_USER': 1,
@@ -35,6 +41,7 @@ const currentUserRole = computed(() => {
 })
 
 const currentUserLevel = computed(() => ROLE_LEVEL[currentUserRole.value] || 0)
+const currentUserId = computed(() => userStore.userId || userStore.userInfo?.id || '')
 
 const availableRoles = computed(() => {
   const all = [
@@ -45,13 +52,17 @@ const availableRoles = computed(() => {
   return all.filter(r => r.level < currentUserLevel.value)
 })
 
+const sectionNameMap = computed(() => {
+  return new Map(sections.value.map(section => [Number(section.id), section.name]))
+})
+
 const canOperateUser = (user: any) => {
-  if (user.id === userStore.userId) return false
+  if (user.id === currentUserId.value) return false
   const targetRole = (user.roles && user.roles[0]) || 'ROLE_USER'
   return currentUserLevel.value > (ROLE_LEVEL[targetRole] || 0)
 }
 
-const isSelf = (user: any) => user.id === userStore.userId
+const isSelf = (user: any) => user.id === currentUserId.value
 
 const isSuperAdmin = (user: any) => {
   return (user.roles || []).includes('ROLE_SUPER_ADMIN')
@@ -64,7 +75,12 @@ const fetchUsers = async () => {
     const userList = res.data || res || []
     users.value = userList.map((user: any) => ({
       ...user,
-      roles: user.roles || []
+      roles: user.roles || [],
+      moderatedSectionIds: Array.isArray(user.moderatedSectionIds)
+        ? user.moderatedSectionIds
+            .map((id: number | string) => Number(id))
+            .filter((id: number) => Number.isFinite(id) && id > 0)
+        : []
     }))
   } catch (error) {
     ElMessage.error('获取用户列表失败')
@@ -74,14 +90,42 @@ const fetchUsers = async () => {
   }
 }
 
+const fetchSections = async () => {
+  sectionsLoading.value = true
+  try {
+    const res = await sectionApi.getList()
+    sections.value = res.data || []
+  } catch {
+    ElMessage.error('获取板块列表失败')
+    sections.value = []
+  } finally {
+    sectionsLoading.value = false
+  }
+}
+
 const filteredUsers = () => {
   if (!searchKeyword.value) return users.value
   const kw = searchKeyword.value.toLowerCase()
   return users.value.filter((u: any) =>
     (u.username || '').toLowerCase().includes(kw) ||
     (u.nickname || '').toLowerCase().includes(kw) ||
-    (u.email || '').toLowerCase().includes(kw)
+    (u.email || '').toLowerCase().includes(kw) ||
+    ((kw.includes('版主') || kw.includes('moderator')) && hasSectionModeratorRole(u))
   )
+}
+
+const hasSectionModeratorRole = (user: any) => {
+  return Array.isArray(user.moderatedSectionIds) && user.moderatedSectionIds.length > 0
+}
+
+const getModeratedSectionNames = (user: any) => {
+  const ids = Array.isArray(user.moderatedSectionIds) ? user.moderatedSectionIds : []
+  return ids
+    .map((id: number | string) => {
+      const numericId = Number(id)
+      return sectionNameMap.value.get(numericId) || `板块 #${numericId}`
+    })
+    .filter(Boolean)
 }
 
 const handleBan = async (user: any) => {
@@ -127,20 +171,27 @@ const handleDelete = async (user: any) => {
 const openRoleDialog = (user: any) => {
   roleDialogUser.value = user
   selectedRole.value = (user.roles && user.roles[0]) || 'ROLE_USER'
+  selectedModeratedSectionIds.value = Array.isArray(user.moderatedSectionIds)
+    ? user.moderatedSectionIds.map((id: number | string) => Number(id)).filter((id: number) => Number.isFinite(id) && id > 0)
+    : []
   roleDialogVisible.value = true
 }
 
 const submitRoleChange = async () => {
   if (!roleDialogUser.value) return
+  permissionSaving.value = true
   try {
     await api.post(`/user/${roleDialogUser.value.id}/role`, null, {
       params: { roleCode: selectedRole.value }
     })
-    ElMessage.success('角色设置成功')
+    await userApi.updateModeratedSections(roleDialogUser.value.id, selectedModeratedSectionIds.value)
+    ElMessage.success('权限设置成功')
     roleDialogVisible.value = false
     fetchUsers()
   } catch (e: any) {
-    ElMessage.error(e?.response?.data?.message || '角色设置失败')
+    ElMessage.error(e?.response?.data?.message || e?.message || '权限设置失败')
+  } finally {
+    permissionSaving.value = false
   }
 }
 
@@ -159,13 +210,14 @@ const getRoleLabel = (role: string) => {
   const roleMap: Record<string, string> = {
     'ROLE_SUPER_ADMIN': '超级管理员',
     'ROLE_ADMIN': '管理员',
-    'ROLE_MODERATOR': '旧版全局版主',
+    'ROLE_MODERATOR': '全局版主',
     'ROLE_USER': '普通用户'
   }
   return roleMap[role] || role
 }
 
 onMounted(() => {
+  fetchSections()
   fetchUsers()
 })
 </script>
@@ -207,6 +259,22 @@ onMounted(() => {
           <el-tag v-if="!row.roles || row.roles.length === 0" type="info" size="small">
             普通用户
           </el-tag>
+        </template>
+      </el-table-column>
+      <el-table-column label="版主板块" min-width="180">
+        <template #default="{ row }">
+          <div v-if="getModeratedSectionNames(row).length > 0" class="section-tags">
+            <el-tag
+              v-for="name in getModeratedSectionNames(row)"
+              :key="name"
+              size="small"
+              type="success"
+              effect="plain"
+            >
+              {{ name }}
+            </el-tag>
+          </div>
+          <span v-else class="muted-text">—</span>
         </template>
       </el-table-column>
       <el-table-column prop="status" label="状态" width="90">
@@ -286,25 +354,52 @@ onMounted(() => {
       </el-table-column>
     </el-table>
 
-    <!-- 角色设置弹窗 -->
-    <el-dialog v-model="roleDialogVisible" title="设置用户角色" width="400px" append-to-body>
+    <!-- 权限设置弹窗 -->
+    <el-dialog v-model="roleDialogVisible" title="设置用户权限" width="520px" append-to-body>
       <div style="margin-bottom: 12px; color: var(--el-text-color-secondary); font-size: 14px;">
         用户：{{ roleDialogUser?.nickname || roleDialogUser?.username }}
       </div>
-      <div style="margin-bottom: 12px; color: var(--el-text-color-placeholder); font-size: 13px;">
-        全局版主角色已停用，板块版主权限需通过版主申请流程授予。
+
+      <div class="permission-block">
+        <div class="permission-title">全局角色</div>
+        <el-select v-model="selectedRole" placeholder="选择角色" style="width: 100%;">
+          <el-option
+            v-for="r in availableRoles"
+            :key="r.value"
+            :label="r.label"
+            :value="r.value"
+          />
+        </el-select>
       </div>
-      <el-select v-model="selectedRole" placeholder="选择角色" style="width: 100%;">
-        <el-option
-          v-for="r in availableRoles"
-          :key="r.value"
-          :label="r.label"
-          :value="r.value"
-        />
-      </el-select>
+
+      <div class="permission-block">
+        <div class="permission-title">板块版主身份</div>
+        <div class="permission-hint">选择后，该用户只会获得对应板块的内容管理与举报处理权限。</div>
+        <el-select
+          v-model="selectedModeratedSectionIds"
+          multiple
+          filterable
+          clearable
+          collapse-tags
+          collapse-tags-tooltip
+          :loading="sectionsLoading"
+          placeholder="请选择负责的板块"
+          style="width: 100%;"
+        >
+          <el-option
+            v-for="section in sections"
+            :key="section.id"
+            :label="section.name"
+            :value="Number(section.id)"
+          >
+            <span>{{ section.name }}</span>
+            <span v-if="section.status === 0" class="option-note">已禁用</span>
+          </el-option>
+        </el-select>
+      </div>
       <template #footer>
         <el-button @click="roleDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="submitRoleChange">确定</el-button>
+        <el-button type="primary" :loading="permissionSaving" @click="submitRoleChange">保存权限</el-button>
       </template>
     </el-dialog>
   </div>
@@ -331,5 +426,32 @@ onMounted(() => {
 }
 .data-table {
   border-radius: 8px;
+}
+.section-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.muted-text {
+  color: var(--el-text-color-placeholder);
+}
+.permission-block {
+  margin-top: 16px;
+}
+.permission-title {
+  margin-bottom: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--el-text-color-primary);
+}
+.permission-hint {
+  margin-bottom: 8px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+.option-note {
+  float: right;
+  color: var(--el-text-color-placeholder);
+  font-size: 12px;
 }
 </style>

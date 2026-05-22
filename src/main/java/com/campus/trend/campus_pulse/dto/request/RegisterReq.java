@@ -52,7 +52,6 @@ public class RegisterReq {
     @Size(max = 20, message = "邀请码格式不正确")
     private String inviteCode;
 
-    // Song：说明
     public interface UrlCheck {
     }
 }

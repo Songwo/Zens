@@ -1,6 +1,5 @@
 import { createRouter, createWebHistory, type RouteLocationNormalized } from 'vue-router'
 import { usePostComposerStore } from '@/store/postComposer'
-import { useUserStore } from '@/store/user'
 import { ensureCurrentUserProfile, hasAdminRole, hasBackofficeAccess } from '@/utils/sessionProfile'
 
 const router = createRouter({
@@ -23,7 +22,7 @@ const router = createRouter({
       path: '/sections',
       name: 'sections-overview',
       component: () => import('@/pages/SectionsOverview.vue'),
-      meta: { title: '板块全景', description: '浏览校园社区全部板块与话题方向' }
+      meta: { keepAlive: true, title: '板块全景', description: '浏览校园社区全部板块与话题方向' }
     },
     {
       path: '/s/:id',
@@ -39,6 +38,7 @@ const router = createRouter({
       path: '/tag/:name',
       name: 'tag',
       component: () => import('@/pages/TagPage.vue'),
+      meta: { keepAlive: true, title: '标签话题', description: '查看标签下的相关内容与讨论' }
     },
     {
       path: '/search',
@@ -134,6 +134,12 @@ const router = createRouter({
       meta: { guest: true, title: '登录 / 注册', description: '登录或注册 Zens 校园社区账号' }
     },
     {
+      path: '/sso/authorize',
+      name: 'sso-authorize',
+      component: () => import('@/pages/auth/SsoAuthorizePage.vue'),
+      meta: { title: 'SSO 授权', description: '授权第三方应用使用社区账号登录' }
+    },
+    {
       path: '/admin',
       name: 'admin',
       component: () => import('@/pages/admin/AdminPage.vue'),
@@ -149,6 +155,12 @@ const router = createRouter({
         {
           path: 'posts',
           name: 'admin-posts',
+          component: () => import('@/pages/admin/PostsManagePage.vue'),
+          meta: { requiresBackoffice: true },
+        },
+        {
+          path: 'posts/trash',
+          name: 'admin-posts-trash',
           component: () => import('@/pages/admin/PostsManagePage.vue'),
           meta: { requiresBackoffice: true },
         },
@@ -194,10 +206,28 @@ const router = createRouter({
           meta: { requiresAdmin: true },
         },
         {
+          path: 'logs',
+          name: 'admin-logs',
+          component: () => import('@/pages/admin/LogsManagePage.vue'),
+          meta: { requiresAdmin: true },
+        },
+        {
+          path: 'media',
+          name: 'admin-media',
+          component: () => import('@/pages/admin/MediaStatusPage.vue'),
+          meta: { requiresAdmin: true },
+        },
+        {
           path: 'my-sections',
           name: 'admin-my-sections',
           component: () => import('@/pages/admin/MyModerationPage.vue'),
           meta: { requiresBackoffice: true },
+        },
+        {
+          path: 'sso',
+          name: 'admin-sso',
+          component: () => import('@/pages/admin/SsoManagePage.vue'),
+          meta: { requiresAdmin: true },
         },
         // Song：说明
         {
@@ -219,7 +249,7 @@ const router = createRouter({
       path: '/user/:id',
       name: 'user-profile',
       component: () => import('@/pages/UserProfilePage.vue'),
-      meta: { title: '用户主页', description: '查看该用户的主页与发帖' }
+      meta: { keepAlive: true, title: '用户主页', description: '查看该用户的主页与发帖' }
     },
     {
       path: '/:pathMatch(.*)*',
@@ -280,7 +310,6 @@ function hasOauthCallbackParams(to: RouteLocationNormalized) {
 // Song：说明
 router.beforeEach(async (to, _from, next) => {
   const composerStore = usePostComposerStore()
-  const userStore = useUserStore()
   const accessToken = readToken('access_token')
   const refreshToken = readToken('refresh_token')
   const hasSessionToken = !!(accessToken || refreshToken)
@@ -298,9 +327,7 @@ router.beforeEach(async (to, _from, next) => {
     next({ path: '/auth', query: { type: 'login', redirect: to.fullPath } })
   } else if ((requiresBackoffice || requiresAdmin) && hasSessionToken) {
     try {
-      const profile = userStore.userInfo
-        ? userStore.userInfo
-        : await ensureCurrentUserProfile()
+      const profile = await ensureCurrentUserProfile({ force: requiresBackoffice || requiresAdmin })
       const isAdmin = hasAdminRole(profile)
       const canEnterBackoffice = hasBackofficeAccess(profile)
 

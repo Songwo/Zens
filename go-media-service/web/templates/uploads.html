@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ .title }}</title>
+  <link rel="stylesheet" href="{{ .basePath }}/static/css/panel.css">
+</head>
+<body>
+  <div class="panel-shell">
+    <aside class="sidebar">
+      <h2>Media Service</h2>
+      <nav>
+        <a href="{{ .basePath }}">仪表盘</a>
+        <a class="active" href="{{ .basePath }}/uploads">上传记录</a>
+        <a href="{{ .basePath }}/files">文件管理</a>
+        <a href="{{ .basePath }}/system">系统监控</a>
+        <a href="{{ .basePath }}/config">运行配置</a>
+      </nav>
+      <form method="post" action="{{ .basePath }}/logout">
+        <button type="submit" class="ghost-btn">退出登录</button>
+      </form>
+    </aside>
+    <main class="panel-main">
+      <header class="panel-header">
+        <h1>上传记录 / 任务状态</h1>
+        <p>适合直接映射到 Java 后台表格页</p>
+      </header>
+      <section class="panel-card">
+        <div class="filters">
+          <input id="uploads-keyword" type="text" placeholder="搜索文件名 / 上传人">
+          <select id="uploads-status">
+            <option value="">全部状态</option>
+            <option value="uploading">上传中</option>
+            <option value="merging">合并中</option>
+            <option value="success">成功</option>
+            <option value="failed">失败</option>
+            <option value="canceled">已取消</option>
+          </select>
+          <button id="uploads-refresh">刷新</button>
+        </div>
+        <div id="uploads-table"></div>
+      </section>
+    </main>
+  </div>
+  <script>window.MEDIA_PANEL_PAGE = "uploads"; window.MEDIA_PANEL_BASE = "{{ .basePath }}";</script>
+  <script src="{{ .basePath }}/static/js/panel.js"></script>
+</body>
+</html>

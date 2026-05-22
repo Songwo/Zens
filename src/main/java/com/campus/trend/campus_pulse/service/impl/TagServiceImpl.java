@@ -44,8 +44,6 @@ public class TagServiceImpl extends ServiceImpl<TagMapper, Tag> implements TagSe
     /**
      * Song：获取或创建标签（不存在时自动创建）
      *
-     * Song：说明
-     * Song：说明
      */
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -78,7 +76,6 @@ public class TagServiceImpl extends ServiceImpl<TagMapper, Tag> implements TagSe
     /**
      * Song：增加标签热度（同时清除缓存）
      *
-     * Song：说明
      */
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -99,7 +96,6 @@ public class TagServiceImpl extends ServiceImpl<TagMapper, Tag> implements TagSe
     /**
      * Song：减少标签热度（同时清除缓存）
      *
-     * Song：说明
      */
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -133,12 +129,6 @@ public class TagServiceImpl extends ServiceImpl<TagMapper, Tag> implements TagSe
         }
     }
 
-    /**
-     * Song：说明
-     *
-     * Song：说明
-     * Song：说明
-     */
     @Override
     public List<Tag> getHotTags(int limit) {
         String cacheKey = "tag:hot:" + limit;
@@ -187,8 +177,6 @@ public class TagServiceImpl extends ServiceImpl<TagMapper, Tag> implements TagSe
     /**
      * Song：搜索标签
      *
-     * Song：说明
-     * Song：说明
      */
     @Override
     public List<Tag> searchTags(String keyword) {
@@ -232,8 +220,6 @@ public class TagServiceImpl extends ServiceImpl<TagMapper, Tag> implements TagSe
     /**
      * Song：批量获取或创建标签
      *
-     * Song：说明
-     * Song：说明
      */
     @Override
     @Transactional(rollbackFor = Exception.class)

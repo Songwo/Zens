@@ -1,15 +1,21 @@
 package com.campus.trend.campus_pulse.service.impl;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.campus.trend.campus_pulse.dto.request.UserPasswordUpdateReq;
 import com.campus.trend.campus_pulse.dto.request.UserDetailUpdateReq;
 import com.campus.trend.campus_pulse.dto.response.UserDetailResp;
 import com.campus.trend.campus_pulse.dto.response.UserSimpleResp;
+import com.campus.trend.campus_pulse.entity.ModeratorApplication;
+import com.campus.trend.campus_pulse.entity.Section;
 import com.campus.trend.campus_pulse.entity.User;
+import com.campus.trend.campus_pulse.mapper.ModeratorApplicationMapper;
+import com.campus.trend.campus_pulse.mapper.SectionMapper;
 import com.campus.trend.campus_pulse.mapper.UserMapper;
 import com.campus.trend.campus_pulse.security.AuthUser;
+import com.campus.trend.campus_pulse.r2.R2Properties;
+import com.campus.trend.campus_pulse.service.NotificationService;
 import com.campus.trend.campus_pulse.service.SectionModeratorService;
-import com.campus.trend.campus_pulse.service.UploadFileService;
 import com.campus.trend.campus_pulse.service.UserService;
 import com.campus.trend.campus_pulse.utils.SecurityUtils;
 import com.campus.trend.campus_pulse.common.api.ResultCode;
@@ -17,12 +23,16 @@ import com.campus.trend.campus_pulse.common.exception.BusinessException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
-import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @Slf4j
@@ -33,22 +43,30 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
 
     private final PasswordEncoder passwordEncoder;
     private final com.campus.trend.campus_pulse.service.ContentSecurityService contentSecurityService;
-    private final UploadFileService uploadFileService;
+    private final R2Properties r2Properties;
     private final SectionModeratorService sectionModeratorService;
+    private final NotificationService notificationService;
+    private final ModeratorApplicationMapper moderatorApplicationMapper;
+    private final SectionMapper sectionMapper;
 
     public UserServiceImpl(PasswordEncoder passwordEncoder,
             com.campus.trend.campus_pulse.service.ContentSecurityService contentSecurityService,
-            UploadFileService uploadFileService,
-            SectionModeratorService sectionModeratorService) {
+            R2Properties r2Properties,
+            SectionModeratorService sectionModeratorService,
+            NotificationService notificationService,
+            ModeratorApplicationMapper moderatorApplicationMapper,
+            SectionMapper sectionMapper) {
         this.passwordEncoder = passwordEncoder;
         this.contentSecurityService = contentSecurityService;
-        this.uploadFileService = uploadFileService;
+        this.r2Properties = r2Properties;
         this.sectionModeratorService = sectionModeratorService;
+        this.notificationService = notificationService;
+        this.moderatorApplicationMapper = moderatorApplicationMapper;
+        this.sectionMapper = sectionMapper;
     }
 
     @Override
     public UserDetailResp getProfile() {
-        // Song：说明
         AuthUser auUser = SecurityUtils.getAuthenticatedUser();
 
         // Song：2.获取用户详细信息
@@ -89,7 +107,6 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
 
     @Override
     public UserSimpleResp getSimpleProfile() {
-        // Song：说明
         AuthUser auUser = SecurityUtils.getAuthenticatedUser();
 
         // Song：2.获取用户详细信息
@@ -104,25 +121,27 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     }
 
     @Override
-    public String uploadAvatar(MultipartFile file) {
-        String avatarUrl = uploadFileService.uploadAvatar(file);
+    public String updateAvatar(String avatarUrl) {
+        String userId = SecurityUtils.getCurrentUserId();
+        if (userId == null || userId.isBlank()) {
+            throw new BusinessException(ResultCode.TOKEN_MISSING, "请先登录后再更新头像");
+        }
+        String normalizedUrl = normalizeAvatarUrl(avatarUrl);
 
-        // Song：获取当前登录用户并更新数据库
         try {
             AuthUser authUser = SecurityUtils.getAuthenticatedUser();
             if (authUser != null) {
                 User user = new User();
                 user.setId(authUser.getUser().getId());
-                user.setAvatar(avatarUrl);
+                user.setAvatar(normalizedUrl);
                 user.setUpdateTime(LocalDateTime.now());
                 this.updateById(user);
             }
         } catch (Exception e) {
-            log.warn("上传头像时更新用户信息失败: {}", e.getMessage());
-            // Song：不抛出异常，保证上传本身是成功的，但记录日志
+            log.warn("更新头像时写入用户信息失败: {}", e.getMessage());
         }
 
-        return avatarUrl;
+        return normalizedUrl;
     }
 
     @Override
@@ -146,6 +165,13 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         sysUser.setPassword(passwordEncoder.encode(req.getNewPassword()));
         sysUser.setUpdateTime(LocalDateTime.now());
         updateById(sysUser);
+
+        // 密码修改成功后发送安全通知
+        try {
+            notificationService.sendPasswordChangedNotification(sysUser.getId(), null);
+        } catch (Exception ex) {
+            log.warn("密码修改通知发送失败: userId={}, err={}", sysUser.getId(), ex.getMessage());
+        }
     }
 
     @Override
@@ -206,9 +232,29 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     @Override
     public List<User> getUsers() {
         List<User> users = this.list();
+        List<String> userIds = users.stream()
+                .map(User::getId)
+                .filter(StringUtils::hasText)
+                .toList();
+        Map<String, List<Long>> moderatedSectionIdsByUser = userIds.isEmpty()
+                ? Map.of()
+                : moderatorApplicationMapper.selectList(new LambdaQueryWrapper<ModeratorApplication>()
+                                .select(ModeratorApplication::getUserId, ModeratorApplication::getSectionId)
+                                .in(ModeratorApplication::getUserId, userIds)
+                                .eq(ModeratorApplication::getStatus, 1))
+                        .stream()
+                        .filter(app -> StringUtils.hasText(app.getUserId()) && app.getSectionId() != null)
+                        .collect(Collectors.groupingBy(
+                                ModeratorApplication::getUserId,
+                                Collectors.mapping(
+                                        ModeratorApplication::getSectionId,
+                                        Collectors.collectingAndThen(
+                                                Collectors.toCollection(LinkedHashSet::new),
+                                                ArrayList::new))));
         for (User user : users) {
             String role = user.getRole() != null ? user.getRole() : "ROLE_USER";
             user.setRoles(List.of(role));
+            user.setModeratedSectionIds(moderatedSectionIdsByUser.getOrDefault(user.getId(), List.of()));
         }
         return users;
     }
@@ -221,9 +267,6 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         User user = getById(userId);
         if (user == null)
             throw new BusinessException(ResultCode.USER_NOT_FOUND);
-        if ("ROLE_MODERATOR".equals(roleCode)) {
-            throw new BusinessException(ResultCode.PARAM_ERROR, "全局版主角色已停用，请通过版主申请流程分配板块版主权限");
-        }
 
         String operatorRole = com.campus.trend.campus_pulse.utils.PermissionUtils.getCurrentUserRole();
         String currentUserId = SecurityUtils.getCurrentUserId();
@@ -248,6 +291,89 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         user.setRole(roleCode);
         updateById(user);
         log.info("为用户 {} 分配角色 {}（操作者角色: {}）", userId, roleCode, operatorRole);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void updateModeratedSections(String userId, List<Long> sectionIds) {
+        User user = getById(userId);
+        if (user == null) {
+            throw new BusinessException(ResultCode.USER_NOT_FOUND);
+        }
+
+        String operatorRole = com.campus.trend.campus_pulse.utils.PermissionUtils.getCurrentUserRole();
+        String currentUserId = SecurityUtils.getCurrentUserId();
+        if (userId.equals(currentUserId)) {
+            throw new BusinessException(ResultCode.NO_PERMISSION, "不能修改自己的版主板块");
+        }
+
+        String targetCurrentRole = user.getRole() != null ? user.getRole() : "ROLE_USER";
+        if (!com.campus.trend.campus_pulse.utils.PermissionUtils.canManageRole(operatorRole, targetCurrentRole)) {
+            throw new BusinessException(ResultCode.NO_PERMISSION, "无权修改该用户版主板块：对方角色等级不低于您");
+        }
+
+        Set<Long> targetSectionIds = sectionIds == null
+                ? Set.of()
+                : sectionIds.stream()
+                    .filter(id -> id != null && id > 0)
+                    .collect(Collectors.toCollection(LinkedHashSet::new));
+
+        if (!targetSectionIds.isEmpty()) {
+            Set<Long> existingSectionIds = sectionMapper.selectBatchIds(targetSectionIds).stream()
+                    .map(Section::getId)
+                    .collect(Collectors.toSet());
+            if (existingSectionIds.size() != targetSectionIds.size()) {
+                throw new BusinessException(ResultCode.SECTION_NOT_FOUND, "包含不存在的板块");
+            }
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        List<ModeratorApplication> existingApplications = moderatorApplicationMapper.selectList(
+                new LambdaQueryWrapper<ModeratorApplication>()
+                        .eq(ModeratorApplication::getUserId, userId));
+        Set<Long> existingSectionIds = existingApplications.stream()
+                .map(ModeratorApplication::getSectionId)
+                .filter(id -> id != null && id > 0)
+                .collect(Collectors.toSet());
+
+        for (ModeratorApplication app : existingApplications) {
+            Long sectionId = app.getSectionId();
+            if (sectionId == null) {
+                continue;
+            }
+            if (targetSectionIds.contains(sectionId)) {
+                app.setStatus(1);
+                if (!StringUtils.hasText(app.getReason())) {
+                    app.setReason("管理员直接授权");
+                }
+                app.setReviewNote("用户管理直接设置为板块版主");
+                app.setReviewedAt(now);
+                moderatorApplicationMapper.updateById(app);
+            } else if (app.getStatus() != null && app.getStatus() == 1) {
+                app.setStatus(2);
+                app.setReviewNote("用户管理取消板块版主身份");
+                app.setReviewedAt(now);
+                moderatorApplicationMapper.updateById(app);
+            }
+        }
+
+        for (Long sectionId : targetSectionIds) {
+            if (existingSectionIds.contains(sectionId)) {
+                continue;
+            }
+            ModeratorApplication app = ModeratorApplication.builder()
+                    .userId(userId)
+                    .sectionId(sectionId)
+                    .reason("管理员直接授权")
+                    .status(1)
+                    .reviewNote("用户管理直接设置为板块版主")
+                    .createdAt(now)
+                    .reviewedAt(now)
+                    .build();
+            moderatorApplicationMapper.insert(app);
+        }
+
+        log.info("为用户 {} 设置板块版主范围: {}", userId, targetSectionIds);
     }
 
     // Song：=================== 资料 方法 ===================
@@ -355,6 +481,25 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         }
         if (normalized.contains("\"") || normalized.contains("'") || normalized.contains(" ")) {
             return fallback;
+        }
+        return normalized;
+    }
+
+    private String normalizeAvatarUrl(String raw) {
+        if (!StringUtils.hasText(raw)) {
+            throw new BusinessException(ResultCode.PARAM_ERROR, "头像地址不能为空");
+        }
+        String normalized = raw.trim();
+        if (normalized.length() > 500 || normalized.contains("\"") || normalized.contains("'") || normalized.contains(" ")) {
+            throw new BusinessException(ResultCode.PARAM_ERROR, "头像地址非法");
+        }
+        String baseUrl = r2Properties.getPublicBaseUrl();
+        if (!StringUtils.hasText(baseUrl)) {
+            throw new BusinessException(ResultCode.SYSTEM_ERROR, "R2 公网地址未配置");
+        }
+        String normalizedBase = baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
+        if (!normalized.startsWith(normalizedBase + "/")) {
+            throw new BusinessException(ResultCode.PARAM_ERROR, "头像必须使用系统 R2 域名");
         }
         return normalized;
     }

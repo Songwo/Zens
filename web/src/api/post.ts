@@ -89,6 +89,11 @@ export const postApi = {
         return api.delete<any, Result<void>>(`/post/${id}`)
     },
 
+    // Song：恢复软删除帖子
+    restore(id: string) {
+        return api.post<any, Result<void>>(`/post/${id}/restore`)
+    },
+
     // Song：说明
     report(data: { targetType: string; targetId: string; reason: string; details?: string }) {
         return api.post<any, Result<void>>('/report/create', data)

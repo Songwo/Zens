@@ -15,6 +15,16 @@ import org.springframework.stereotype.Component;
 public class TurnstileProperties {
 
     /**
+     * 是否启用 Turnstile 校验。
+     */
+    private boolean enabled = true;
+
+    /**
+     * 是否允许本地预览环境跳过 Turnstile 校验。
+     */
+    private boolean allowLocalPreviewSkip = false;
+
+    /**
      * 前端使用的 Site Key，主要用于统一配置管理。
      */
     private String siteKey;
@@ -28,4 +38,24 @@ public class TurnstileProperties {
      * 官方校验地址。
      */
     private String verifyUrl = "https://challenges.cloudflare.com/turnstile/v0/siteverify";
+
+    /**
+     * 校验接口连接超时秒数。
+     */
+    private int connectTimeoutSeconds = 5;
+
+    /**
+     * 校验接口读取超时秒数。
+     */
+    private int readTimeoutSeconds = 8;
+
+    /**
+     * 出站代理主机，可选。
+     */
+    private String proxyHost;
+
+    /**
+     * 出站代理端口，可选。
+     */
+    private Integer proxyPort;
 }

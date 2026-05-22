@@ -1,26 +1,96 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { reportApi, type ReportManageItem } from '@/api/report'
+import { sectionApi, type Section } from '@/api/section'
+import { useUserStore } from '@/store/user'
+import { ensureCurrentUserProfile, hasAdminRole } from '@/utils/sessionProfile'
 
+const route = useRoute()
+const userStore = useUserStore()
 const reports = ref<ReportManageItem[]>([])
 const loading = ref(true)
 const current = ref(1)
 const total = ref(0)
 const pageSize = ref(10)
 const statusFilter = ref<number | undefined>(undefined)
+const allSections = ref<Section[]>([])
+const selectedSectionId = ref<number | undefined>(
+  route.query.sectionId ? Number(route.query.sectionId) : undefined
+)
 
 const rejectDialogVisible = ref(false)
 const rejectReason = ref('')
 const rejectingRow = ref<ReportManageItem | null>(null)
 const rejectLoading = ref(false)
 
+const isAdmin = computed(() => hasAdminRole(userStore.userInfo))
+const isGlobalModerator = computed(() => {
+  const roles = (userStore.userInfo as any)?.roles || []
+  return roles.includes('ROLE_MODERATOR')
+})
+const moderatedSectionIds = computed<number[]>(() => {
+  const rawIds = Array.isArray((userStore.userInfo as any)?.moderatedSectionIds)
+    ? ((userStore.userInfo as any)?.moderatedSectionIds as Array<number | string>)
+    : []
+  return rawIds
+    .map(id => Number(id))
+    .filter(id => Number.isFinite(id) && id > 0)
+})
+
+const availableSections = computed(() => {
+  if (isAdmin.value || isGlobalModerator.value) return allSections.value
+  return allSections.value.filter(section => moderatedSectionIds.value.includes(Number(section.id)))
+})
+
+const unwrapPageData = <T,>(res: any): { records: T[]; total: number } => {
+  const pageData = res?.data?.records
+    ? res.data
+    : res?.records
+      ? res
+      : res?.data?.data?.records
+        ? res.data.data
+        : null
+  return {
+    records: Array.isArray(pageData?.records) ? pageData.records : [],
+    total: Number(pageData?.total || 0),
+  }
+}
+
+const normalizeSelectedSection = () => {
+  if (selectedSectionId.value != null && !Number.isFinite(Number(selectedSectionId.value))) {
+    selectedSectionId.value = undefined
+  }
+  if (isAdmin.value || isGlobalModerator.value) {
+    return
+  }
+  if (selectedSectionId.value == null && moderatedSectionIds.value.length > 0) {
+    selectedSectionId.value = moderatedSectionIds.value[0]
+    return
+  }
+  if (selectedSectionId.value != null && !moderatedSectionIds.value.includes(Number(selectedSectionId.value))) {
+    selectedSectionId.value = undefined
+  }
+}
+
+const fetchSections = async () => {
+  try {
+    const res = await sectionApi.getActiveList()
+    allSections.value = res.data || []
+    normalizeSelectedSection()
+  } catch {
+    allSections.value = []
+  }
+}
+
 const fetchReports = async () => {
   loading.value = true
   try {
-    const res = await reportApi.getList(current.value, pageSize.value, statusFilter.value)
-    reports.value = res.data?.records || []
-    total.value = res.data?.total || 0
+    const res = await reportApi.getList(current.value, pageSize.value, statusFilter.value, selectedSectionId.value)
+    const pageData = unwrapPageData<ReportManageItem>(res)
+    reports.value = pageData.records
+    total.value = pageData.total
   } catch (error: any) {
     reports.value = []
     ElMessage.error(error?.response?.data?.message || '举报列表加载失败')
@@ -35,6 +105,12 @@ const handlePageChange = (val: number) => {
 }
 
 const handleFilterChange = () => {
+  current.value = 1
+  void fetchReports()
+}
+
+const handleSectionFilter = () => {
+  normalizeSelectedSection()
   current.value = 1
   void fetchReports()
 }
@@ -125,30 +201,63 @@ const formatDate = (dateStr: string) => {
   return new Date(dateStr).toLocaleString('zh-CN')
 }
 
-onMounted(() => {
-  void fetchReports()
+watch(
+  () => route.query.sectionId,
+  (sectionId) => {
+    const nextSectionId = Number(sectionId)
+    selectedSectionId.value = Number.isFinite(nextSectionId) && nextSectionId > 0 ? nextSectionId : undefined
+    normalizeSelectedSection()
+    current.value = 1
+    void fetchReports()
+  }
+)
+
+onMounted(async () => {
+  await ensureCurrentUserProfile({ force: true })
+  await fetchSections()
+  await fetchReports()
 })
 </script>
 
 <template>
   <div class="manage-page">
     <div class="page-header">
-      <h1 class="title">举报管理</h1>
-      <el-select
-        v-model="statusFilter"
-        placeholder="全部状态"
-        clearable
-        class="status-filter"
-        @change="handleFilterChange"
-        @clear="handleFilterChange"
-      >
-        <el-option :value="0" label="待处理" />
-        <el-option :value="1" label="已处理" />
-        <el-option :value="2" label="已忽略" />
-        <el-option :value="3" label="已打回" />
-        <el-option :value="10" label="排队中" />
-        <el-option :value="11" label="处理中" />
-      </el-select>
+      <div class="header-info">
+        <h1 class="title">举报管理</h1>
+        <p class="subtitle">按当前账号可处理的板块范围加载举报，版主仅能处理自己负责板块的内容。</p>
+      </div>
+      <div class="header-actions">
+        <el-select
+          v-model="selectedSectionId"
+          placeholder="全部板块"
+          clearable
+          class="section-filter"
+          @change="handleSectionFilter"
+          @clear="handleSectionFilter"
+        >
+          <el-option
+            v-for="section in availableSections"
+            :key="section.id"
+            :label="section.name"
+            :value="Number(section.id)"
+          />
+        </el-select>
+        <el-select
+          v-model="statusFilter"
+          placeholder="全部状态"
+          clearable
+          class="status-filter"
+          @change="handleFilterChange"
+          @clear="handleFilterChange"
+        >
+          <el-option :value="0" label="待处理" />
+          <el-option :value="1" label="已处理" />
+          <el-option :value="2" label="已忽略" />
+          <el-option :value="3" label="已打回" />
+          <el-option :value="10" label="排队中" />
+          <el-option :value="11" label="处理中" />
+        </el-select>
+      </div>
     </div>
 
     <el-table :data="reports" v-loading="loading" stripe border class="data-table">
@@ -225,7 +334,7 @@ onMounted(() => {
         style="margin-bottom: 16px"
       >
         <template #title>
-          帖子将被设为草稿状态并通知作者修改，若作者未在规定时间内修改，帖子将被直接删除。
+          帖子将被设为不可见的打回修改状态并通知作者修改，作者完成修改后需要重新发布提交审核。
         </template>
       </el-alert>
       <el-form label-position="top">
@@ -257,9 +366,20 @@ onMounted(() => {
 
 .page-header {
   display: flex;
-  align-items: center;
   justify-content: space-between;
+  align-items: flex-end;
   margin-bottom: 24px;
+  gap: 16px;
+}
+
+.header-info {
+  min-width: 0;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .page-header .title {
@@ -269,6 +389,13 @@ onMounted(() => {
   color: var(--el-text-color-primary);
 }
 
+.page-header .subtitle {
+  margin: 6px 0 0 0;
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
+}
+
+.section-filter,
 .status-filter {
   width: 160px;
 }

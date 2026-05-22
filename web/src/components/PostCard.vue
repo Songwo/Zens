@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { ChatDotRound, Pointer, View, MagicStick, Discount, More, EditPen, Star, StarFilled, Share } from '@element-plus/icons-vue'
+import { ChatDotRound, Pointer, View, MagicStick, Discount, More, EditPen, Star, StarFilled, Share, Delete, RefreshRight } from '@element-plus/icons-vue'
 import { postApi } from '@/api/post'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/store/user'
@@ -16,10 +16,34 @@ const props = defineProps<{
   post: any
   highlightKeyword?: string
 }>()
+const emit = defineEmits<{
+  deleted: [postId: string]
+  restored: [postId: string]
+}>()
 
 const isAdmin = computed(() => {
   const roles = userStore.userInfo?.roles || []
   return roles.some((role: string) => role === 'ROLE_ADMIN' || role === 'ROLE_SUPER_ADMIN')
+})
+
+const isGlobalModerator = computed(() => {
+  const roles = userStore.userInfo?.roles || []
+  return roles.includes('ROLE_MODERATOR')
+})
+
+const moderatedSectionIds = computed(() => {
+  const rawIds = userStore.userInfo?.moderatedSectionIds || []
+  return new Set(rawIds.map((id: number | string) => Number(id)).filter((id: number) => Number.isFinite(id) && id > 0))
+})
+
+const isDeletedPost = computed(() => props.post?.auditStatus === 'DELETED')
+const currentUserId = computed(() => userStore.userId || userStore.userInfo?.id || '')
+
+const canManagePost = computed(() => {
+  if (!props.post || !currentUserId.value) return false
+  if (props.post.userId === currentUserId.value) return true
+  if (isAdmin.value || isGlobalModerator.value) return true
+  return Boolean(props.post.sectionId && moderatedSectionIds.value.has(Number(props.post.sectionId)))
 })
 
 const formatDate = (dateStr: string) => {
@@ -92,6 +116,42 @@ const handleCommand = async (command: string) => {
     reportVisible.value = true
   } else if (command === 'edit') {
     await openEditor()
+  } else if (command === 'delete') {
+    await deletePost()
+  } else if (command === 'restore') {
+    await restorePost()
+  }
+}
+
+const deletePost = async () => {
+  if (!canManagePost.value || !props.post?.id) return
+  try {
+    await ElMessageBox.confirm('确定要将这篇帖子移入回收站吗？7 天内可恢复。', '软删除确认', {
+      confirmButtonText: '移入回收站',
+      cancelButtonText: '取消',
+      type: 'warning',
+      confirmButtonClass: 'el-button--danger'
+    })
+    await postApi.delete(props.post.id)
+    props.post.auditStatus = 'DELETED'
+    props.post.status = 0
+    ElMessage.success('已移入回收站')
+    emit('deleted', props.post.id)
+  } catch (error) {
+    if (error !== 'cancel') ElMessage.error('删除失败')
+  }
+}
+
+const restorePost = async () => {
+  if (!canManagePost.value || !props.post?.id) return
+  try {
+    await postApi.restore(props.post.id)
+    props.post.auditStatus = 'APPROVED'
+    props.post.status = 1
+    ElMessage.success('帖子已恢复')
+    emit('restored', props.post.id)
+  } catch (error) {
+    ElMessage.error('恢复失败')
   }
 }
 
@@ -233,7 +293,14 @@ const highlightedSummary = computed(() => highlightText(postSummary.value))
 <template>
   <div class="post-card" @click="goToPost">
     <!-- Song：被打回提示 -->
-    <div v-if="post.auditStatus === 'REJECTED'" class="rejected-banner">
+    <div v-if="post.auditStatus === 'DELETED'" class="deleted-banner">
+      <div class="rejected-banner-text">
+        <span>该帖子已移入回收站</span>
+        <span class="reject-reason">删除后 7 天内可由作者、版主或管理员恢复</span>
+      </div>
+      <el-button v-if="canManagePost" size="small" type="success" @click.stop="handleCommand('restore')">恢复</el-button>
+    </div>
+    <div v-else-if="post.auditStatus === 'REJECTED'" class="rejected-banner">
       <div class="rejected-banner-text">
         <span>该帖子已被管理员打回，请修改后重新发布</span>
         <span v-if="post.rejectReason" class="reject-reason">打回原因：{{ post.rejectReason }}</span>
@@ -281,13 +348,19 @@ const highlightedSummary = computed(() => highlightText(postSummary.value))
               </span>
               <template #dropdown>
                 <el-dropdown-menu>
-                  <el-dropdown-item v-if="userStore.userId === post.userId || isAdmin" command="edit">
+                  <el-dropdown-item v-if="!isDeletedPost && canManagePost" command="edit">
                     <el-icon><EditPen /></el-icon> 编辑此贴
                   </el-dropdown-item>
-                  <el-dropdown-item v-if="isAdmin" command="pin">
+                  <el-dropdown-item v-if="isAdmin && !isDeletedPost" command="pin">
                     {{ post.isPinned === 1 ? '取消置顶' : '置顶帖' }}
                   </el-dropdown-item>
-                  <el-dropdown-item command="report" :divided="isAdmin">
+                  <el-dropdown-item v-if="canManagePost && !isDeletedPost" command="delete" divided>
+                    <el-icon><Delete /></el-icon> 移入回收站
+                  </el-dropdown-item>
+                  <el-dropdown-item v-if="canManagePost && isDeletedPost" command="restore" divided>
+                    <el-icon><RefreshRight /></el-icon> 恢复帖子
+                  </el-dropdown-item>
+                  <el-dropdown-item v-if="!isDeletedPost" command="report" :divided="isAdmin && !canManagePost">
                     举报违规内容
                   </el-dropdown-item>
                 </el-dropdown-menu>
@@ -585,12 +658,18 @@ const highlightedSummary = computed(() => highlightText(postSummary.value))
   overflow: hidden;
   border: 1px solid var(--el-border-color-lighter);
   flex-shrink: 0;
+  background-color: var(--el-fill-color-lighter);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .thumbnail-image {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
   transition: transform 0.36s cubic-bezier(0.22, 1, 0.36, 1), filter 0.24s ease;
 }
 
@@ -669,6 +748,18 @@ const highlightedSummary = computed(() => highlightText(postSummary.value))
 }
 
 .rejected-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 20px;
+  background: var(--el-color-danger-light-9);
+  border-bottom: 1px solid var(--el-color-danger-light-5);
+  color: var(--el-color-danger);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.deleted-banner {
   display: flex;
   align-items: center;
   justify-content: space-between;

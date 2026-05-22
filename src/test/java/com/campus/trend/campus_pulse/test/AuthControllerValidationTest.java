@@ -1,5 +1,6 @@
 package com.campus.trend.campus_pulse.test;
 
+import com.campus.trend.campus_pulse.config.TurnstileProperties;
 import com.campus.trend.campus_pulse.controller.AuthController;
 import com.campus.trend.campus_pulse.service.AuthService;
 import com.campus.trend.campus_pulse.service.TurnstileService;
@@ -19,6 +20,7 @@ import java.util.Map;
 
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -42,9 +44,12 @@ class AuthControllerValidationTest {
 
     @BeforeEach
     void setUp() {
+        TurnstileProperties turnstileProperties = new TurnstileProperties();
+        turnstileProperties.setAllowLocalPreviewSkip(false);
         AuthController authController = new AuthController(
                 authService,
                 turnstileService,
+                turnstileProperties,
                 verificationCodeService,
                 userService,
                 jwtUtil);
@@ -108,5 +113,41 @@ class AuthControllerValidationTest {
         verify(turnstileService).verifyLoginToken("ts-token", "203.0.113.10");
         verify(authService).login(org.mockito.ArgumentMatchers.any(),
                 org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq("203.0.113.10"));
+    }
+
+    @Test
+    void login_shouldSkipTurnstileValidation_forLocalPreviewWhenEnabled() throws Exception {
+        TurnstileProperties turnstileProperties = new TurnstileProperties();
+        turnstileProperties.setAllowLocalPreviewSkip(true);
+        AuthController authController = new AuthController(
+                authService,
+                turnstileService,
+                turnstileProperties,
+                verificationCodeService,
+                userService,
+                jwtUtil);
+        mockMvc = ControllerTestSupport.standaloneWithValidation(authController);
+
+        String payload = """
+                {
+                  "loginType": "password",
+                  "account": "tester",
+                  "password": "123456"
+                }
+                """;
+
+        mockMvc.perform(post("/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("Origin", "http://localhost:5173")
+                        .with(request -> {
+                            request.setRemoteAddr("127.0.0.1");
+                            return request;
+                        })
+                        .content(payload))
+                .andExpect(status().isOk());
+
+        verifyNoInteractions(turnstileService);
+        verify(authService).login(org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq("127.0.0.1"));
     }
 }

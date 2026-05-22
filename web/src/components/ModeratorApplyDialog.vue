@@ -28,14 +28,21 @@ const form = ref({
   reason: ''
 })
 
-const isLoggedIn = computed(() => !!userStore.accessToken)
-const currentRoles = computed(() => userStore.userInfo?.roles || [])
-const isAdminUser = computed(() => {
-  return currentRoles.value.some(role => role === 'ROLE_ADMIN' || role === 'ROLE_SUPER_ADMIN')
+const isLoggedIn = computed(() => userStore.isLoggedIn)
+const currentRoles = computed<string[]>(() => {
+  const roles = userStore.userInfo?.roles
+  return Array.isArray(roles) ? roles.map((role) => String(role)) : []
 })
-const moderatedSectionIds = computed(() => {
-  const rawIds = userStore.userInfo?.moderatedSectionIds || []
-  return new Set(rawIds.map(id => Number(id)).filter(id => Number.isFinite(id) && id > 0))
+const isAdminUser = computed(() => {
+  return currentRoles.value.some((role: string) => role === 'ROLE_ADMIN' || role === 'ROLE_SUPER_ADMIN')
+})
+const moderatedSectionIds = computed<number[]>(() => {
+  const rawIds = Array.isArray(userStore.userInfo?.moderatedSectionIds)
+    ? (userStore.userInfo?.moderatedSectionIds as Array<string | number>)
+    : []
+  return rawIds
+    .map((id: string | number) => Number(id))
+    .filter((id): id is number => Number.isFinite(id) && id > 0)
 })
 const approvedSectionIds = computed(() => {
   const ids = new Set<number>(moderatedSectionIds.value)
@@ -57,6 +64,7 @@ const pendingSectionIds = computed(() => {
     myApplications.value
       .filter(app => app.status === 0)
       .map(app => Number(app.sectionId))
+      .filter((id): id is number => Number.isFinite(id) && id > 0)
   )
 })
 const unavailableSectionIds = computed(() => {

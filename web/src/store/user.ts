@@ -8,7 +8,7 @@ export const useUserStore = defineStore('user', () => {
     const userId = ref(localStorage.getItem('user_id') || sessionStorage.getItem('user_id'))
     const userInfo = ref<any>(null)
 
-    const isLoggedIn = computed(() => !!accessToken.value)
+    const isLoggedIn = computed(() => !!(accessToken.value || refreshToken.value))
 
     /**
      * Song：设置认证信息

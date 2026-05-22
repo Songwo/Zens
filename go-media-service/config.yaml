@@ -1,0 +1,85 @@
+server:
+  name: campus-pulse-media
+  host: 0.0.0.0
+  port: 8090
+  read_timeout_seconds: 600
+  write_timeout_seconds: 600
+  idle_timeout_seconds: 120
+  shutdown_timeout_seconds: 20
+  public_base_url: https://media.allinsong.top
+  trust_proxy: true
+  enable_pprof: true
+  enable_metrics: true
+
+database:
+  driver: sqlite
+  dsn: ./data/media.db
+
+storage:
+  driver: local
+  root_dir: ./uploads
+  image_dir: images
+  video_dir: videos
+  chunk_dir: chunks
+  temp_dir: ./tmp
+  date_path_layout: "2006/01/02"
+  dir_mode: "0755"
+  file_mode: "0644"
+
+upload:
+  enabled: true
+  max_multipart_memory_mb: 32
+  max_batch_files: 12
+  max_image_size_mb: 15
+  max_video_size_mb: 512
+  chunk_size_mb: 8
+  max_chunk_count: 4096
+  chunk_expire_hours: 48
+  merge_concurrency: 2
+  global_upload_concurrency: 64
+  allow_image_exts: [".jpg", ".jpeg", ".png", ".gif", ".webp"]
+  allow_video_exts: [".mp4", ".mov", ".webm", ".ogg"]
+  allow_image_mimes: ["image/jpeg", "image/png", "image/gif", "image/webp"]
+  allow_video_mimes: ["video/mp4", "video/quicktime", "video/webm", "video/ogg", "application/ogg"]
+
+auth:
+  upload:
+    enabled: true
+    jwt_secret: 01e4515ae21b09a86f1e6471d2ded654ba0e2e2adb9afc03697f46ceab1c5457
+    issuer: campus-pulse-java
+    audience: campus-pulse-media
+    header_name: Authorization
+    allow_debug_user_header: true
+    debug_user_header: X-User-Id
+  admin:
+    jwt_secret: 56da45c249191254737ae886b56c8d0bc056a589e6b3163b34fcc93e99478103
+    issuer: campus-pulse-media-admin
+    username: admin
+    password: Xs2ieHiviTGaLrUFTOj2t7t
+    token_ttl_minutes: 720
+    cookie_name: media_panel_token
+    service_tokens:
+      - eaf8adb2a803bba9849e71bd4742d38b6ab9975dc2d29259
+
+security:
+  request_id_header: X-Request-Id
+  max_request_body_mb: 1024
+  per_ip_rps: 20
+  per_user_rps: 15
+  public_file_access: true
+  java_admin_allow_ips: []
+  enable_delete_audit: true
+  # 浏览器直传必需：允许跨域的源（精确匹配，不加尾斜杠）
+  cors_allowed_origins:
+    - https://allinsong.top
+    - https://www.allinsong.top
+    - http://localhost:5173
+    - http://localhost:4173
+
+logging:
+  level: info
+  pretty: true
+
+panel:
+  enabled: true
+  base_path: /panel

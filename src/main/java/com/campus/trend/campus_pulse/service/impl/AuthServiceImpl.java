@@ -63,6 +63,9 @@ public class AuthServiceImpl implements AuthService {
     private static final String MFA_TICKET_PREFIX = "auth:mfa:ticket:";
     private static final String MFA_SETUP_PREFIX = "auth:mfa:setup:";
     private static final String GITHUB_STATE_PREFIX = "auth:github:state:";
+    private static final String LOGIN_SEEN_PREFIX = "auth:login:seen:";
+    private static final long LOGIN_CONTEXT_TTL_DAYS = 30;
+    private static final long LOGIN_IP_TYPE_TTL_DAYS = 7;
 
     private final PasswordEncoder passwordEncoder;
     private final StringRedisTemplate stringRedisTemplate;
@@ -236,6 +239,11 @@ public class AuthServiceImpl implements AuthService {
         user.setTwoFactorSecret(secret);
         userService.updateById(user);
         stringRedisTemplate.delete(MFA_SETUP_PREFIX + userId);
+        try {
+            notificationService.sendTwoFactorToggleNotification(userId, true);
+        } catch (Exception ex) {
+            log.warn("2FA 开启通知发送失败: userId={}, err={}", userId, ex.getMessage());
+        }
     }
 
     @Override
@@ -250,6 +258,11 @@ public class AuthServiceImpl implements AuthService {
         user.setTwoFactorSecret(null);
         userService.updateById(user);
         stringRedisTemplate.delete(MFA_SETUP_PREFIX + userId);
+        try {
+            notificationService.sendTwoFactorToggleNotification(userId, false);
+        } catch (Exception ex) {
+            log.warn("2FA 关闭通知发送失败: userId={}, err={}", userId, ex.getMessage());
+        }
     }
 
     private User loginByOtp(LoginReq req) {
@@ -272,8 +285,31 @@ public class AuthServiceImpl implements AuthService {
                 ? userService.lambdaQuery().eq(User::getEmail, account).one()
                 : userService.lambdaQuery().eq(User::getUsername, account).one();
         if (user == null) throw new LoginException("账号不存在，请检查后重试");
-        if (!passwordEncoder.matches(password, user.getPassword())) throw new LoginException("密码错误");
+        if (!passwordEncoder.matches(password, user.getPassword())) {
+            trackLoginFailure(user.getId());
+            throw new LoginException("密码错误");
+        }
         return user;
+    }
+
+    private static final int LOGIN_FAILURE_BURST_THRESHOLD = 5;
+    private static final long LOGIN_FAILURE_WINDOW_SECONDS = 600;
+
+    /** 记录登录失败次数，达到阈值后发送安全通知（10 分钟滑窗，每个阈值只通知一次）。 */
+    private void trackLoginFailure(String userId) {
+        if (!StringUtils.hasText(userId)) return;
+        try {
+            String key = "auth:login:fail:" + userId;
+            Long count = stringRedisTemplate.opsForValue().increment(key);
+            if (count != null && count == 1L) {
+                stringRedisTemplate.expire(key, LOGIN_FAILURE_WINDOW_SECONDS, TimeUnit.SECONDS);
+            }
+            if (count != null && count == LOGIN_FAILURE_BURST_THRESHOLD) {
+                notificationService.sendLoginFailedBurstNotification(userId, count.intValue(), null);
+            }
+        } catch (Exception e) {
+            log.warn("登录失败计数失败: userId={}, err={}", userId, e.getMessage());
+        }
     }
 
     private LoginResponse finalizeLogin(User user, boolean rememberMe, String deviceId, String existsSessionId, String clientIp, String twoFactorCode) {
@@ -309,6 +345,7 @@ public class AuthServiceImpl implements AuthService {
         stringRedisTemplate.opsForValue().set(buildAccessKey(user.getId(), sessionId), accessToken, accessTtlMs, TimeUnit.MILLISECONDS);
         stringRedisTemplate.opsForValue().set(buildRefreshKey(user.getId(), sessionId), hashToken(refreshToken), refreshTtlMs, TimeUnit.MILLISECONDS);
         stringRedisTemplate.opsForValue().set(buildDeviceKey(user.getId(), sessionId), safeDid, refreshTtlMs, TimeUnit.MILLISECONDS);
+        rememberLoginContext(user.getId(), safeDid, clientIp);
         stringRedisTemplate.opsForValue().set("access_token" + user.getId(), accessToken, accessTtlMs, TimeUnit.MILLISECONDS);
         stringRedisTemplate.opsForValue().set("refresh_token" + user.getId(), refreshToken, refreshTtlMs, TimeUnit.MILLISECONDS);
         userService.updateLastActiveTime(user.getId());
@@ -397,13 +434,18 @@ public class AuthServiceImpl implements AuthService {
                     log.info("踢下线旧会话: userId={}, deviceType={}, sessionId={}", userId, deviceType, sessionId);
                 }
             }
-            // 发送 WS 强制下线通知
+            // 发送 WS 强制下线通知 + 站内信留底
             if (kicked) {
                 try {
                     messagingTemplate.convertAndSendToUser(userId, "/queue/force-logout",
                             java.util.Map.of("reason", "another_device_login"));
                 } catch (Exception ex) {
                     log.warn("WS 强制下线推送失败: userId={}, err={}", userId, ex.getMessage());
+                }
+                try {
+                    notificationService.sendSessionTerminatedNotification(userId, deviceType, null);
+                } catch (Exception ex) {
+                    log.warn("强制下线站内信发送失败: userId={}, err={}", userId, ex.getMessage());
                 }
             }
         } catch (Exception e) {
@@ -433,25 +475,74 @@ public class AuthServiceImpl implements AuthService {
                 return;
             }
 
+            String deviceType = resolveDeviceType(deviceId);
+            if (isKnownLoginContext(userId, deviceId, clientIp, deviceType)) {
+                return;
+            }
+
             long cooldown = Math.max(60L, anomalyNotifyCooldownSeconds);
-            String throttleKey = "auth:anomaly:notice:" + userId;
+            String throttleKey = "auth:anomaly:notice:" + userId + ":" + deviceType + ":" + shortHash(clientIp);
             Boolean first = stringRedisTemplate.opsForValue().setIfAbsent(throttleKey, "1", cooldown, TimeUnit.SECONDS);
             if (!Boolean.TRUE.equals(first)) {
                 return;
             }
 
-            String region = StringUtils.hasText(clientIp) ? clientIp : "未知IP";
-            notificationService.createNotification(
-                    userId,
-                    "system",
-                    "登录安全提醒",
-                    "检测到你的账号在不同设备登录，当前登录 IP: " + region + "。如非本人操作请尽快修改密码。",
-                    null,
-                    null);
-            log.warn("检测到异常登录行为: userId={}, deviceId={}, ip={}", userId, deviceId, region);
+            notificationService.sendNewDeviceLoginNotification(userId, deviceType, clientIp, null);
+            log.warn("检测到异常登录行为: userId={}, deviceId={}, ip={}", userId, deviceId,
+                    StringUtils.hasText(clientIp) ? clientIp : "未知IP");
         } catch (Exception e) {
             log.warn("异常登录检测失败: userId={}, err={}", userId, e.getMessage());
         }
+    }
+
+    private void rememberLoginContext(String userId, String deviceId, String clientIp) {
+        if (!StringUtils.hasText(userId) || !StringUtils.hasText(deviceId) || "unknown-device".equals(deviceId)) {
+            return;
+        }
+        try {
+            String deviceType = resolveDeviceType(deviceId);
+            String ipKey = normalizeLoginIp(clientIp);
+            stringRedisTemplate.opsForValue().set(loginSeenDeviceKey(userId, deviceId, ipKey), "1", LOGIN_CONTEXT_TTL_DAYS, TimeUnit.DAYS);
+            if (StringUtils.hasText(ipKey)) {
+                stringRedisTemplate.opsForValue().set(loginSeenIpTypeKey(userId, deviceType, ipKey), "1", LOGIN_IP_TYPE_TTL_DAYS, TimeUnit.DAYS);
+            }
+        } catch (Exception e) {
+            log.debug("记录登录上下文失败: userId={}, err={}", userId, e.getMessage());
+        }
+    }
+
+    private boolean isKnownLoginContext(String userId, String deviceId, String clientIp, String deviceType) {
+        String ipKey = normalizeLoginIp(clientIp);
+        try {
+            if (Boolean.TRUE.equals(stringRedisTemplate.hasKey(loginSeenDeviceKey(userId, deviceId, ipKey)))) {
+                return true;
+            }
+            return StringUtils.hasText(ipKey)
+                    && Boolean.TRUE.equals(stringRedisTemplate.hasKey(loginSeenIpTypeKey(userId, deviceType, ipKey)));
+        } catch (Exception e) {
+            log.debug("读取登录上下文失败: userId={}, err={}", userId, e.getMessage());
+            return false;
+        }
+    }
+
+    private String loginSeenDeviceKey(String userId, String deviceId, String ipKey) {
+        return LOGIN_SEEN_PREFIX + "device:" + userId + ":" + shortHash(deviceId) + ":" + shortHash(ipKey);
+    }
+
+    private String loginSeenIpTypeKey(String userId, String deviceType, String ipKey) {
+        return LOGIN_SEEN_PREFIX + "iptype:" + userId + ":" + deviceType + ":" + shortHash(ipKey);
+    }
+
+    private String normalizeLoginIp(String clientIp) {
+        if (!StringUtils.hasText(clientIp)) return null;
+        String normalized = clientIp.trim().toLowerCase();
+        if (!StringUtils.hasText(normalized) || "unknown".equals(normalized)) return null;
+        return normalized;
+    }
+
+    private String shortHash(String value) {
+        String source = StringUtils.hasText(value) ? value : "-";
+        return hashToken(source).substring(0, 16);
     }
 
     private LoginResponse buildTwoFactorChallenge(User user, boolean rememberMe, String deviceId, String clientIp) {
@@ -567,6 +658,11 @@ public class AuthServiceImpl implements AuthService {
         user.setPassword(passwordEncoder.encode(newPassword));
         userService.updateById(user);
         clearAllSessionsByUserId(user.getId());
+        try {
+            notificationService.sendPasswordResetNotification(user.getId(), null);
+        } catch (Exception ex) {
+            log.warn("密码重置通知发送失败: userId={}, err={}", user.getId(), ex.getMessage());
+        }
     }
 
     private void ensureUserCanLogin(User user) {

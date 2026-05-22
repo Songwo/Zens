@@ -20,14 +20,8 @@ public interface SectionService {
      */
     List<SectionResp> getActiveSections();
 
-    /**
-     * Song：说明
-     */
     Section getSectionById(Long id);
 
-    /**
-     * Song：说明
-     */
     SectionResp getSectionRespById(Long id);
 
     /**

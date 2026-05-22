@@ -23,14 +23,8 @@ public class Follow {
     @TableId(type = IdType.AUTO)
     private Long id;
 
-    /**
-     * Song：说明
-     */
     private String followerId;
 
-    /**
-     * Song：说明
-     */
     private String followeeId;
 
     /**

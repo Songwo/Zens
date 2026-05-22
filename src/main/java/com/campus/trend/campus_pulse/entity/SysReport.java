@@ -20,14 +20,8 @@ public class SysReport implements Serializable {
     @TableId(value = "id", type = IdType.ASSIGN_ID)
     private String id;
 
-    /**
-     * Song：说明
-     */
     private String targetType;
 
-    /**
-     * Song：说明
-     */
     private String targetId;
 
     /**
@@ -40,9 +34,6 @@ public class SysReport implements Serializable {
      */
     private String details;
 
-    /**
-     * Song：说明
-     */
     private String reporterId;
 
     /**

@@ -28,9 +28,9 @@ export const reportApi = {
     },
 
     /* Song：说明 */
-    getList(current = 1, size = 10, status?: number) {
+    getList(current = 1, size = 10, status?: number, sectionId?: number) {
         return api.get<any, Result<{ records: ReportManageItem[]; total: number }>>('/report/list', {
-            params: { current, size, status }
+            params: { current, size, status, sectionId }
         })
     },
 

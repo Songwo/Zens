@@ -23,9 +23,6 @@ public class Post implements Serializable {
 
     private String userId;
 
-    /**
-     * Song：说明
-     */
     private Long sectionId;
 
     private String title;
@@ -44,16 +41,10 @@ public class Post implements Serializable {
 
     /**
      * Song：图片列表
-     * Song：说明
-     * Song：说明
      */
     @TableField(typeHandler = JacksonTypeHandler.class)
     private List<String> images;
 
-    /**
-     * Song：说明
-     * Song：说明
-     */
     private String tags;
 
     /**
@@ -74,13 +65,11 @@ public class Post implements Serializable {
     private Integer status;
 
     /**
-     * Song：说明
+     * 审核/治理状态：DRAFT/APPROVED/REJECTED/DELETED。
+     * DELETED 复用现有字段表示软删除，不额外改表。
      */
     private String auditStatus;
 
-    /**
-     * Song：说明
-     */
     @Deprecated
     private Integer isPinned;
 
@@ -99,9 +88,6 @@ public class Post implements Serializable {
      */
     private Integer pinOrder;
 
-    /**
-     * Song：说明
-     */
     private LocalDateTime pinExpireAt;
 
     /**
@@ -122,7 +108,6 @@ public class Post implements Serializable {
     private LocalDateTime lastReplyAt;
 
     /**
-     * Song：说明
      * Song：用于列表排序
      */
     private LocalDateTime lastActivityAt;

@@ -32,7 +32,7 @@ public interface PostMapper extends BaseMapper<Post> {
             """)
     int batchUpdateHeatScores(@Param("updates") List<PostHeatUpdateItem> updates);
 
-    @Select("SELECT COUNT(*) FROM sys_post WHERE status = 1 AND (FIND_IN_SET(#{tagName}, tags) > 0 OR FIND_IN_SET(#{tagNameSpaced}, tags) > 0 OR tags = #{tagName})")
+    @Select("SELECT COUNT(*) FROM sys_post WHERE status = 1 AND (audit_status IS NULL OR audit_status = '' OR audit_status = 'PENDING' OR audit_status = 'APPROVED') AND (FIND_IN_SET(#{tagName}, tags) > 0 OR FIND_IN_SET(#{tagNameSpaced}, tags) > 0 OR tags = #{tagName})")
     int countByTagName(@Param("tagName") String tagName, @Param("tagNameSpaced") String tagNameSpaced);
 
     @Select("""
@@ -44,6 +44,7 @@ public interface PostMapper extends BaseMapper<Post> {
                 COALESCE(ROUND(SUM(COALESCE(heat_score, 0))), 0) AS heatScore
             FROM sys_post
             WHERE status = 1
+              AND (audit_status IS NULL OR audit_status = '' OR audit_status = 'PENDING' OR audit_status = 'APPROVED')
               AND section_id IN
               <foreach collection="sectionIds" item="sectionId" open="(" separator="," close=")">
                   #{sectionId}

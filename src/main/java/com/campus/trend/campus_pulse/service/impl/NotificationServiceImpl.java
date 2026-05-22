@@ -3,6 +3,7 @@ package com.campus.trend.campus_pulse.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.campus.trend.campus_pulse.common.notification.NotificationType;
 import com.campus.trend.campus_pulse.dto.response.NotificationResp;
 import com.campus.trend.campus_pulse.entity.Notification;
 import com.campus.trend.campus_pulse.entity.User;
@@ -84,7 +85,6 @@ public class NotificationServiceImpl implements NotificationService {
         notificationMapper.insert(notification);
         log.info("创建通知: userId={}, type={}", userId, type);
 
-        // Song：说明
         try {
             NotificationResp resp = convertToResp(notification, loadRelatedUserMap(List.of(notification)));
             messagingTemplate.convertAndSendToUser(userId, "/queue/notifications", resp);
@@ -102,7 +102,6 @@ public class NotificationServiceImpl implements NotificationService {
             String senderName, String senderAvatar,
             String title, String content,
             int typeCode, String relatedPostId) {
-        // Song：说明
         String type;
         switch (typeCode) {
             case 1:
@@ -143,6 +142,16 @@ public class NotificationServiceImpl implements NotificationService {
     @Override
     public long getUnreadCount(String userId) {
         return notificationMapper.countUnreadByUserId(userId);
+    }
+
+    @Override
+    public long countByUserId(String userId) {
+        if (!StringUtils.hasText(userId)) {
+            return 0L;
+        }
+        Long count = notificationMapper.selectCount(
+                new LambdaQueryWrapper<Notification>().eq(Notification::getUserId, userId));
+        return count == null ? 0L : count;
     }
 
     @Override
@@ -337,8 +346,8 @@ public class NotificationServiceImpl implements NotificationService {
     private NotificationResp convertToResp(Notification notification, Map<String, User> relatedUserMap) {
         NotificationResp resp = new NotificationResp();
         BeanUtils.copyProperties(notification, resp);
+        resp.setCategory(NotificationType.categoryOf(notification.getType()).name());
 
-        // Song：获取关联用户信息
         if (notification.getRelatedUserId() != null) {
             User relatedUser = relatedUserMap.get(notification.getRelatedUserId());
             if (relatedUser != null) {
@@ -380,13 +389,14 @@ public class NotificationServiceImpl implements NotificationService {
         String fingerprintSource = String.join("|",
                 normalizeDedupeValue(type),
                 normalizeDedupeValue(title),
-                normalizeDedupeValue(content),
+                normalizeDedupeValue(fingerprintContent(type, content)),
                 normalizeDedupeValue(relatedId),
                 normalizeDedupeValue(relatedUserId));
         String fingerprint = DigestUtils.md5DigestAsHex(fingerprintSource.getBytes(StandardCharsets.UTF_8));
         try {
             Long added = stringRedisTemplate.opsForSet().add(bucketKey, fingerprint);
-            stringRedisTemplate.expire(bucketKey, Duration.ofSeconds(Math.max(30L, notificationDedupeWindowSeconds)));
+            long windowSeconds = dedupeWindowFor(type);
+            stringRedisTemplate.expire(bucketKey, Duration.ofSeconds(windowSeconds));
             return added == null || added == 0L;
         } catch (Exception e) {
             log.debug("通知去重失败，继续投递: userId={}, err={}", userId, e.getMessage());
@@ -394,8 +404,28 @@ public class NotificationServiceImpl implements NotificationService {
         }
     }
 
+    /** 登录/会话类安全提醒使用更长窗口，避免同一登录事件生成多条站内信。 */
+    private long dedupeWindowFor(String type) {
+        long base = Math.max(30L, notificationDedupeWindowSeconds);
+        if (NotificationType.NEW_DEVICE_LOGIN.getCode().equals(type)
+                || NotificationType.SESSION_TERMINATED.getCode().equals(type)
+                || NotificationType.LOGIN_FAILED_BURST.getCode().equals(type)) {
+            return Math.max(base, 3600L);
+        }
+        return NotificationType.categoryOf(type) == NotificationType.NotificationCategory.SECURITY
+                ? Math.max(base, 300L)
+                : base;
+    }
+
     private String normalizeDedupeValue(String value) {
         return StringUtils.hasText(value) ? value.trim() : "-";
+    }
+
+    private String fingerprintContent(String type, String content) {
+        if (NotificationType.categoryOf(type) == NotificationType.NotificationCategory.SECURITY) {
+            return "-";
+        }
+        return content;
     }
 
     private void syncNotificationEmail(String userId, String title, String content) {
@@ -428,5 +458,92 @@ public class NotificationServiceImpl implements NotificationService {
             return postId;
         }
         return postId + "#comment-" + commentId;
+    }
+
+    // ==================== 安全事件实现 ====================
+
+    @Override
+    public void sendNewDeviceLoginNotification(String userId, String deviceType, String clientIp, String userAgent) {
+        if (!StringUtils.hasText(userId)) return;
+        String title = "新设备登录提醒";
+        String content = String.format(
+                "你的账号刚在新的%s设备上登录，IP：%s，时间：%s。如非本人操作，请立即修改密码并开启二步验证。",
+                describeDeviceType(deviceType),
+                defaultString(clientIp, "未知"),
+                LocalDateTime.now().format(SECURITY_TIME_FMT));
+        if (StringUtils.hasText(userAgent)) {
+            content += "\n浏览器：" + userAgent;
+        }
+        createNotification(userId, NotificationType.NEW_DEVICE_LOGIN, title, content, null, null);
+    }
+
+    @Override
+    public void sendSessionTerminatedNotification(String userId, String deviceType, String clientIp) {
+        if (!StringUtils.hasText(userId)) return;
+        String content = String.format(
+                "你的账号已在另一%s设备登录，此设备已被自动登出。IP：%s，时间：%s。",
+                describeDeviceType(deviceType),
+                defaultString(clientIp, "未知"),
+                LocalDateTime.now().format(SECURITY_TIME_FMT));
+        createNotification(userId, NotificationType.SESSION_TERMINATED, "会话已被强制下线", content, null, null);
+    }
+
+    @Override
+    public void sendPasswordChangedNotification(String userId, String clientIp) {
+        if (!StringUtils.hasText(userId)) return;
+        String content = String.format(
+                "你的登录密码已修改成功。IP：%s，时间：%s。如非本人操作，请立即联系管理员并使用找回密码功能重置。",
+                defaultString(clientIp, "未知"),
+                LocalDateTime.now().format(SECURITY_TIME_FMT));
+        createNotification(userId, NotificationType.PASSWORD_CHANGED, "密码修改成功", content, null, null);
+    }
+
+    @Override
+    public void sendPasswordResetNotification(String userId, String clientIp) {
+        if (!StringUtils.hasText(userId)) return;
+        String content = String.format(
+                "你的账号已通过邮箱验证码重置密码。IP：%s，时间：%s。如非本人操作，请立即联系管理员。",
+                defaultString(clientIp, "未知"),
+                LocalDateTime.now().format(SECURITY_TIME_FMT));
+        createNotification(userId, NotificationType.PASSWORD_RESET, "密码已重置", content, null, null);
+    }
+
+    @Override
+    public void sendTwoFactorToggleNotification(String userId, boolean enabled) {
+        if (!StringUtils.hasText(userId)) return;
+        String title = enabled ? "二步验证已开启" : "二步验证已关闭";
+        String content = enabled
+                ? "你已成功为账号开启二步验证，后续登录需要输入验证器 APP 中的动态码。时间：" + LocalDateTime.now().format(SECURITY_TIME_FMT)
+                : "你已关闭账号的二步验证，账号安全性下降。时间：" + LocalDateTime.now().format(SECURITY_TIME_FMT) + "。如非本人操作，请立即修改密码并重新开启。";
+        createNotification(userId,
+                enabled ? NotificationType.TWO_FACTOR_ENABLED : NotificationType.TWO_FACTOR_DISABLED,
+                title, content, null, null);
+    }
+
+    @Override
+    public void sendLoginFailedBurstNotification(String userId, int failedAttempts, String clientIp) {
+        if (!StringUtils.hasText(userId)) return;
+        String content = String.format(
+                "过去 10 分钟内检测到 %d 次登录失败尝试，IP：%s，时间：%s。如非本人操作，建议立即修改密码并开启二步验证。",
+                failedAttempts,
+                defaultString(clientIp, "未知"),
+                LocalDateTime.now().format(SECURITY_TIME_FMT));
+        createNotification(userId, NotificationType.LOGIN_FAILED_BURST, "登录失败次数异常", content, null, null);
+    }
+
+    private static final java.time.format.DateTimeFormatter SECURITY_TIME_FMT =
+            java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+
+    private static String describeDeviceType(String deviceType) {
+        if (!StringUtils.hasText(deviceType)) return "未知";
+        return switch (deviceType.toLowerCase()) {
+            case "pc", "desktop" -> "电脑";
+            case "mobile", "mob" -> "移动";
+            default -> deviceType;
+        };
+    }
+
+    private static String defaultString(String value, String fallback) {
+        return StringUtils.hasText(value) ? value : fallback;
     }
 }

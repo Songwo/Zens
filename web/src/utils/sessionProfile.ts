@@ -44,7 +44,8 @@ export function hasModeratorCapability(profile?: Pick<UserProfile, 'moderatedSec
 }
 
 export function hasBackofficeAccess(profile?: Pick<UserProfile, 'roles' | 'moderatedSectionIds'> | null) {
-  return hasAdminRole(profile) || hasModeratorCapability(profile)
+  const roles = profile?.roles || []
+  return hasAdminRole(profile) || roles.includes('ROLE_MODERATOR') || hasModeratorCapability(profile)
 }
 
 export async function ensureCurrentUserProfile(options: { force?: boolean } = {}) {

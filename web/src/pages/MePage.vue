@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, watch, computed } from 'vue'
+import { ref, onMounted, watch, computed, onBeforeUnmount } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useUserStore } from '@/store/user'
 import MainLayout from '@/layouts/MainLayout.vue'
@@ -20,10 +20,10 @@ import { clearRequestCache } from '@/utils/requestCache'
 import { emitNotificationUnreadSync } from '@/utils/notificationSync'
 import { getCardThemePalette } from '@/utils/cardTheme'
 import { resolveNotificationRoute } from '@/utils/notificationRoute'
+import { timeAgo } from '@/utils/timeAgo'
 import {
   Document,
   Star,
-  StarFilled,
   Connection,
   Notification,
   Clock,
@@ -65,7 +65,7 @@ const followingLoading = ref(false)
 const notifications = ref<NotificationType[]>([])
 const notifLoading = ref(false)
 const notifUnread = ref(0)
-const notifTypeFilter = ref<'all' | 'reply' | 'mention' | 'like' | 'favorite' | 'follow' | 'system'>('all')
+const notifTypeFilter = ref<'all' | 'reply' | 'mention' | 'like' | 'favorite' | 'follow' | 'security' | 'system'>('all')
 const notifOnlyUnread = ref(false)
 const notifSelectedIds = ref<string[]>([])
 const viewHistory = ref<ViewHistoryItem[]>([])
@@ -76,6 +76,7 @@ const historyPagination = ref({
   total: 0,
   pages: 0
 })
+let profileRequestId = 0
 
 const levelInfo = ref<LevelInfo | null>(null)
 
@@ -105,7 +106,15 @@ const notifTypeLabelMap: Record<string, string> = {
   like: '点赞',
   favorite: '收藏',
   follow: '关注',
-  system: '系统'
+  system: '系统',
+  security_alert: '账号安全',
+  new_device_login: '新设备登录',
+  session_terminated: '会话下线',
+  password_changed: '密码修改',
+  password_reset: '密码重置',
+  two_factor_enabled: '二步验证开启',
+  two_factor_disabled: '二步验证关闭',
+  login_failed_burst: '登录失败告警',
 }
 
 const notificationTypeOptions = [
@@ -115,12 +124,15 @@ const notificationTypeOptions = [
   { label: '点赞', value: 'like' },
   { label: '收藏', value: 'favorite' },
   { label: '关注', value: 'follow' },
+  { label: '账号安全', value: 'security' },
   { label: '系统', value: 'system' },
 ] as const
 
 const filteredNotifications = computed(() => {
   return notifications.value.filter(item => {
-    const typeMatched = notifTypeFilter.value === 'all' || item.type === notifTypeFilter.value
+    const typeMatched = notifTypeFilter.value === 'all'
+      || item.type === notifTypeFilter.value
+      || (notifTypeFilter.value === 'security' && item.category === 'SECURITY')
     const unreadMatched = !notifOnlyUnread.value || Number(item.isRead) === 0
     return typeMatched && unreadMatched
   })
@@ -130,18 +142,18 @@ const groupedNotifications = computed(() => {
   const groups: Array<{ type: string; label: string; items: NotificationType[] }> = []
   const bucket = new Map<string, NotificationType[]>()
   filteredNotifications.value.forEach(item => {
-    const key = item.type || 'system'
+    const key = item.category === 'SECURITY' ? 'security' : (item.type || 'system')
     if (!bucket.has(key)) {
       bucket.set(key, [])
     }
     bucket.get(key)!.push(item)
   })
-  ;['reply', 'mention', 'like', 'favorite', 'follow', 'system'].forEach(type => {
+  ;['reply', 'mention', 'like', 'favorite', 'follow', 'security', 'system'].forEach(type => {
     const items = bucket.get(type) || []
     if (items.length > 0) {
       groups.push({
         type,
-        label: notifTypeLabelMap[type] || '其他',
+        label: type === 'security' ? '账号安全' : (notifTypeLabelMap[type] || '其他'),
         items,
       })
       bucket.delete(type)
@@ -170,8 +182,13 @@ const allFilteredSelected = computed(() => {
 })
 
 const fetchUserProfile = async () => {
+  if (!userStore.accessToken) return
+  const requestId = ++profileRequestId
   try {
     const res = await userApi.getProfileStats()
+    if (requestId !== profileRequestId) {
+      return
+    }
     const data = res.data
     if (data) {
       userProfile.value = {
@@ -184,7 +201,9 @@ const fetchUserProfile = async () => {
       }
     }
   } catch (error) {
-    ElMessage.error('获取用户信息失败')
+    if (requestId === profileRequestId) {
+      ElMessage.error('获取用户信息失败')
+    }
   }
 }
 
@@ -200,7 +219,7 @@ const fetchPosts = async (reset = false) => {
   loading.value = true
   try {
     let res
-    const userId = userStore.userId ?? ''
+    const userId = userStore.userId || userStore.userInfo?.id || ''
     if (activeTab.value === 'posts') {
       res = await postApi.searchList({
         page: page.value,
@@ -226,6 +245,14 @@ const fetchPosts = async (reset = false) => {
         userId: userId,
         status: 0,
         auditStatus: 'REJECTED'
+      })
+    } else if (activeTab.value === 'trash') {
+      res = await postApi.searchList({
+        page: page.value,
+        pageSize: 10,
+        needTotal: false,
+        userId: userId,
+        auditStatus: 'DELETED'
       })
     } else if (activeTab.value === 'favorites') {
       res = await postApi.searchList({
@@ -527,6 +554,10 @@ const goToCompose = () => {
   composerStore.open()
 }
 
+const removePostFromList = (postId: string) => {
+  posts.value = posts.value.filter(post => post.id !== postId)
+}
+
 onMounted(() => {
   if (!userStore.accessToken) {
     ElMessage.error('请先登录')
@@ -555,6 +586,10 @@ onMounted(() => {
   } else {
     fetchPosts(true)
   }
+})
+
+onBeforeUnmount(() => {
+  profileRequestId++
 })
 </script>
 
@@ -637,7 +672,13 @@ onMounted(() => {
           </template>
           
           <div class="posts-list">
-            <PostCard v-for="post in posts" :key="post.id" :post="post" />
+            <PostCard
+              v-for="post in posts"
+              :key="post.id"
+              :post="post"
+              @deleted="removePostFromList"
+              @restored="removePostFromList"
+            />
             
             <div v-if="loading" class="loading-state">
               <el-icon class="is-loading"><Loading /></el-icon> 正在加载...
@@ -668,7 +709,13 @@ onMounted(() => {
           </template>
 
           <div class="posts-list">
-            <PostCard v-for="post in posts" :key="post.id" :post="post" />
+            <PostCard
+              v-for="post in posts"
+              :key="post.id"
+              :post="post"
+              @deleted="removePostFromList"
+              @restored="removePostFromList"
+            />
 
             <div v-if="loading" class="loading-state">
               <el-icon class="is-loading"><Loading /></el-icon> 正在加载...
@@ -699,7 +746,13 @@ onMounted(() => {
           </template>
 
           <div class="posts-list">
-            <PostCard v-for="post in posts" :key="post.id" :post="post" />
+            <PostCard
+              v-for="post in posts"
+              :key="post.id"
+              :post="post"
+              @deleted="removePostFromList"
+              @restored="removePostFromList"
+            />
 
             <div v-if="loading" class="loading-state">
               <el-icon class="is-loading"><Loading /></el-icon> 正在加载...
@@ -722,13 +775,54 @@ onMounted(() => {
           </div>
         </el-tab-pane>
 
+        <el-tab-pane name="trash">
+          <template #label>
+            <span class="tab-label"><el-icon><Delete /></el-icon> 我的回收站</span>
+          </template>
+
+          <div class="posts-list">
+            <PostCard
+              v-for="post in posts"
+              :key="post.id"
+              :post="post"
+              @deleted="removePostFromList"
+              @restored="removePostFromList"
+            />
+
+            <div v-if="loading" class="loading-state">
+              <el-icon class="is-loading"><Loading /></el-icon> 正在加载...
+            </div>
+
+            <EmptyState
+              v-if="!loading && posts.length === 0"
+              :icon="Delete"
+              title="回收站为空"
+              description="你删除的帖子会在这里保留 7 天，可在期限内恢复"
+            />
+
+            <div v-if="!loading && hasMore && posts.length > 0" class="load-more">
+              <el-button plain @click="fetchPosts(false)">加载更多</el-button>
+            </div>
+
+            <div v-if="!hasMore && posts.length > 0" class="no-more">
+              <span>回收站内容已全部展示</span>
+            </div>
+          </div>
+        </el-tab-pane>
+
         <el-tab-pane name="favorites">
           <template #label>
             <span class="tab-label"><el-icon><Star /></el-icon> 我的收藏</span>
           </template>
           
           <div class="posts-list">
-            <PostCard v-for="post in posts" :key="post.id" :post="post" />
+            <PostCard
+              v-for="post in posts"
+              :key="post.id"
+              :post="post"
+              @deleted="removePostFromList"
+              @restored="removePostFromList"
+            />
             <EmptyState
               v-if="!loading && posts.length === 0"
               :icon="Star"
@@ -927,7 +1021,7 @@ onMounted(() => {
                     <div class="notif-body">
                       <span class="notif-title">{{ n.title }}</span>
                       <span class="notif-content">{{ n.content }}</span>
-                      <span class="notif-time">{{ n.createdAt || n.createTime }}</span>
+                      <span class="notif-time">{{ timeAgo(n.createdAt || n.createTime) }}</span>
                     </div>
                     <div class="notif-extra">
                       <el-tag v-if="n.isRead === 0" size="small" type="danger" effect="dark">未读</el-tag>

@@ -14,7 +14,7 @@
 [![Redis](https://img.shields.io/badge/Redis-6%2B-dc382d?logo=redis&logoColor=white)](https://redis.io/)
 [![License](https://img.shields.io/badge/License-MIT-blue)](LICENSE)
 
-[在线演示 Demo](https://zenslt.allinsong.top) · [后端 API 文档](#api-overview) · [快速开始](#quick-start) · [部署指南](#deployment)
+[在线演示 Demo](https://allinsong.top) · [后端 API 文档](#api-overview) · [快速开始](#quick-start) · [部署指南](#deployment)
 
 </div>
 
@@ -57,6 +57,8 @@ Campus Pulse 不是一个普通的论坛系统。它以**行为驱动洞察**为
 
 ## 🏗️ 系统架构
 
+Campus Pulse 采用 **Java 主应用 + Go 媒体服务** 双后端拆分，Java 专注业务编排，Go 专注高并发媒体上传与治理；两端通过 Upload JWT / Service Token 解耦通信。
+
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │                      Browser / Client                        │
@@ -66,27 +68,30 @@ Campus Pulse 不是一个普通的论坛系统。它以**行为驱动洞察**为
                           ▼
 ┌──────────────────────────────────────────────────────────────┐
 │                    Nginx (反向代理)                           │
-│  /api/*  →  Spring Boot :7800                                │
-│  /*      →  Vue dist 静态资源                                 │
-└─────────────────────────┬────────────────────────────────────┘
-                          │
-              ┌───────────▼───────────┐
-              │   Spring Boot 3.5     │
-              │  ┌─────────────────┐  │
-              │  │  Security Layer │  │  JWT Filter + Device ID
-              │  │  Controller     │  │  REST API + WS Endpoint
-              │  │  Service        │  │  Business Logic + AI
-              │  │  MyBatis-Plus   │  │  ORM + 动态 SQL
-              │  │  Scheduled      │  │  热度衰减 + 趋势统计
-              │  └─────────────────┘  │
-              └───────┬───────┬───────┘
-                      │       │
-             ┌────────▼──┐ ┌──▼────────┐
-             │  MySQL 8  │ │  Redis 6  │
-             │  17 张表  │ │  Token    │
-             │  全文索引 │ │  Cache    │
-             └───────────┘ └───────────┘
+│  /api/*              →  Spring Boot :7800                    │
+│  /api/media/* · /file→  Go media service :8090               │
+│  /*                  →  Vue dist 静态资源                     │
+└─────────┬─────────────────────────────┬──────────────────────┘
+          │                             │
+┌─────────▼───────────┐       ┌─────────▼──────────────────────┐
+│   Spring Boot 3.5   │       │   Go Media Service (Gin 1.10)  │
+│  ┌───────────────┐  │       │  ┌───────────────────────────┐ │
+│  │ Security      │  │       │  │ Upload / Chunk / Merge    │ │
+│  │ Controller    │  │ HTTP  │  │ File access · Admin API   │ │
+│  │ Service       │──┼──────►│  │ Panel (HTML)              │ │
+│  │ MyBatis-Plus  │  │       │  │ Prometheus · pprof        │ │
+│  │ Scheduled     │  │       │  └───────────────────────────┘ │
+│  └───────────────┘  │       │   SQLite(WAL) + 本地磁盘存储    │
+└──────┬──────┬───────┘       │   可切 OSS / COS / S3           │
+       │      │               └────────────────────────────────┘
+┌──────▼──┐ ┌─▼────────┐
+│ MySQL 8 │ │ Redis 6  │
+│ 17 张表 │ │ Token    │
+│ 全文索引│ │ Cache    │
+└─────────┘ └──────────┘
 ```
+
+> 📎 媒体子系统的详细文档见 [`go-media-service/README.md`](go-media-service/README.md)。
 
 ---
 
@@ -113,9 +118,9 @@ Campus Pulse 不是一个普通的论坛系统。它以**行为驱动洞察**为
 
 ### 🔐 认证与安全
 - 密码登录 / 邮箱 OTP 登录 / GitHub OAuth2 登录
-- JWT access token（7h）+ refresh token（30d），Redis 令牌绑定
-- 设备 ID（X-Device-Id）绑定，换设备自动失效
-- 变更操作 SHA-256 请求签名防重放
+- JWT access token（默认 2h）+ refresh token（默认 14d），Redis 令牌绑定，可通过环境变量覆盖
+- 设备 ID（X-Device-Id）绑定，默认允许多设备并存，可通过 `AUTH_SESSION_SINGLE_DEVICE` 切换成单设备策略
+- 变更操作 SHA-256 请求签名防重放，前端在 token 刷新后会自动重签名重试
 - TOTP 二步验证（Google Authenticator 兼容）
 - 慢 SQL 拦截器、请求耗时 Filter
 
@@ -170,6 +175,19 @@ Campus Pulse 不是一个普通的论坛系统。它以**行为驱动洞察**为
 | Actuator + Prometheus | — | 监控指标暴露 |
 | HikariCP | — | 连接池 |
 
+### 媒体子系统（Go）
+
+| 依赖 | 版本 | 用途 |
+|------|------|------|
+| Go | 1.22 | 运行时 |
+| Gin | 1.10 | HTTP 框架 |
+| modernc.org/sqlite | 1.35 | 纯 Go SQLite 驱动（无 CGO） |
+| zerolog | 1.33 | 结构化日志 |
+| golang-jwt/jwt v5 | 5.2 | Upload / Admin JWT |
+| prometheus/client_golang | 1.20 | `/metrics` 暴露 |
+| gopsutil | 4.25 | 系统资源监控 |
+| golang.org/x/time | 0.10 | 令牌桶限流 |
+
 ### 前端
 
 | 依赖 | 版本 | 用途 |
@@ -205,7 +223,7 @@ campus-pulse/
 │   │   │   └── impl/        # 业务实现
 │   │   └── utils/           # JWT、权限、IP、时间范围工具
 │   ├── main/resources/
-│   │   ├── application.yml          # 开发环境配置
+│   │   ├── application.yml          # 基础配置 / 本地开发默认配置
 │   │   ├── application-prod.yml     # 生产环境配置
 │   │   └── sql/
 │   │       └── campus_pulse_schema.sql  # 唯一数据库初始化脚本
@@ -223,6 +241,17 @@ campus-pulse/
 │   │   ├── types/           # TypeScript 类型定义
 │   │   └── utils/           # 工具函数（richLink、notificationRoute、cardTheme...）
 │   └── vite.config.ts
+├── go-media-service/                 # 独立 Go 媒体服务（见子目录 README）
+│   ├── cmd/media-service/            # 进程入口
+│   ├── internal/
+│   │   ├── api/                      # upload · file · admin · health
+│   │   ├── service/                  # 上传 / 合并 / 秒传 / 配置 / 审计
+│   │   ├── repository/sqlite.go      # SQLite(WAL) 元数据 CRUD
+│   │   ├── storage/                  # 存储驱动（local → OSS/COS/S3）
+│   │   └── middleware/ · metrics/ · panel/
+│   ├── web/ (templates + static)     # 内嵌管理面板
+│   ├── deployments/ (nginx · systemd)
+│   └── config.yaml · Dockerfile · docker-compose.yml
 └── scripts/
     ├── deploy.sh            # 一键部署脚本
     ├── rollback.sh          # 回滚脚本
@@ -260,19 +289,19 @@ mysql -u root -p < src/main/resources/sql/campus_pulse_schema.sql
 
 ### 3. 配置环境变量
 
-复制示例配置：
+复制本地开发示例配置：
 
 ```bash
-cp .env.example .env
+cp .env.example .env.local
 ```
 
-编辑 `.env`，填入以下必填项：
+编辑 `.env.local`，填入以下必填项：
 
 ```env
 # 数据库
 DB_URL=jdbc:mysql://localhost:3306/campus_pulse?useUnicode=true&characterEncoding=utf8mb4
 DB_USERNAME=root
-DB_PASSWORD=your_password
+DB_PASSWORD=123456
 
 # Redis
 REDIS_HOST=localhost
@@ -292,7 +321,15 @@ MAIL_PASSWORD=your_mail_password
 # GitHub OAuth（第三方登录，可选）
 GITHUB_CLIENT_ID=your_github_client_id
 GITHUB_CLIENT_SECRET=your_github_client_secret
+
+# Cloudflare Turnstile（登录人机验证，生产建议启用）
+TURNSTILE_ENABLED=false
+TURNSTILE_SITE_KEY=REPLACE_WITH_TURNSTILE_SITE_KEY
+TURNSTILE_SECRET_KEY=REPLACE_WITH_TURNSTILE_SECRET_KEY
+TURNSTILE_ALLOW_LOCAL_PREVIEW_SKIP=false
 ```
+
+生产环境请单独使用 `.env.production`。`application-prod.yml` 现在只会读取 `.env.prod` / `.env.production`，本地默认不会再误吃生产数据库账号。
 
 ### 4. 启动后端
 
@@ -316,6 +353,16 @@ npm run dev
 ```
 
 前端开发服务运行在：**http://localhost:5173**（已配置 `/api` 代理至后端 7800 端口）
+
+### 6. 启动媒体服务（Go）
+
+```bash
+cd go-media-service
+go mod tidy
+go run ./cmd/media-service
+```
+
+媒体服务运行在：**http://localhost:8090**，管理面板 `/panel/login`（默认 `admin` / `admin123456`）。配置与 API 参考：[`go-media-service/README.md`](go-media-service/README.md)。
 
 ---
 
@@ -410,7 +457,8 @@ bash scripts/backup.sh
 | 趋势 | `/trend-stat` | 发帖趋势、板块分布、热词云、预测 |
 | 热榜 | `/heat-rank` | Top N 热帖，支持时间维度 |
 | 版主申请 | `/moderator-application` | 申请、审核 |
-| 上传 | `/upload` | 图片/视频上传，MIME 白名单校验 |
+| 上传（兼容） | `/common/upload/*` | Java 代理层：图片 / 视频 / 分片，透传 Go |
+| 媒体（Go 直达） | `/api/upload/*` · `/api/file/:id` · `/api/admin/*` | 走 `go-media-service` :8090（见子 README） |
 | 统计 | `/stats` | 站点总览数据 |
 | WebSocket | `/ws` | STOMP 实时通知 |
 
@@ -458,6 +506,41 @@ server:
 - Refresh Token 有效期：30 天
 - 滑动续期：access token 剩余时间 < 2 分钟时自动在响应头续期
 - 响应头：`Authorization`、`X-Access-Token`、`X-Access-Token-Expires-In`
+
+### Cloudflare Turnstile 人机验证
+
+登录接口 `POST /api/auth/login` 会强制走 Cloudflare Turnstile 校验，防御撞库与机器人注册。实现链路：前端 `LoginWizard` 挂载 Turnstile widget → 提交时携带 `cfTurnstileResponse` → 后端 `TurnstileServiceImpl` 调用 `siteverify` 校验 → 通过后再走正常登录逻辑。
+
+**后端配置（`application.yml` 下的 `cloudflare.turnstile`）**
+
+| 键 | 环境变量 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `enabled` | `TURNSTILE_ENABLED` | `true` | 关掉则直接跳过校验，仅建议本地调试使用 |
+| `site-key` | `TURNSTILE_SITE_KEY` | 占位示例 | 公钥，给前端 widget 用 |
+| `secret-key` | `TURNSTILE_SECRET_KEY` | 占位示例 | 私钥，后端调 `siteverify` 用；⚠️ 不要泄漏 |
+| `allow-local-preview-skip` | `TURNSTILE_ALLOW_LOCAL_PREVIEW_SKIP` | `true` | 允许本地预览（localhost / 127.0.0.1 / 内网 Referer）跳过校验，便于联调；生产必须关 |
+| `verify-url` | `TURNSTILE_VERIFY_URL` | `https://challenges.cloudflare.com/turnstile/v0/siteverify` | 官方校验地址，一般不改 |
+| `connect-timeout-seconds` / `read-timeout-seconds` | 同名变量 | `5` / `8` | 调 `siteverify` 超时 |
+| `proxy-host` / `proxy-port` | 同名变量 | 空 | 出网需要代理时配置 |
+
+**前端配置（`web/.env.*`）**
+
+```env
+VITE_TURNSTILE_ENABLED=true
+VITE_TURNSTILE_SITE_KEY=0x4AAAA...   # 与后端 site-key 对应，可以不同环境配不同 key
+```
+
+`VITE_TURNSTILE_ENABLED` 为假值时前端不会渲染 widget；为真但未填 `VITE_TURNSTILE_SITE_KEY` 时，登录按钮会提示"人机验证暂不可用"。
+
+**快速获取 Key**：登录 Cloudflare Dashboard → Turnstile → Add site → 选 Managed / Invisible → 填入部署域名（生产域 + 预览域），拿到 Site Key 与 Secret Key。本地调试域建议选 Invisible 以减少 UI 干扰。
+
+**常见失败码**（`TurnstileServiceImpl.resolveFailureMessage`）：
+
+- `invalid-input-secret` / `missing-input-secret`：Secret Key 没配或配错 → 提示"人机验证配置错误"
+- `timeout-or-duplicate`：token 已使用或超过 5 分钟 → 提示"人机验证已过期"
+- `missing-input-response` / `invalid-input-response`：前端没拿到或传错了 token → 提示"人机验证无效"
+
+**临时关闭**：生产临时排障时把 `TURNSTILE_ENABLED=false` 即可放行所有登录请求，恢复后记得改回。
 
 ---
 

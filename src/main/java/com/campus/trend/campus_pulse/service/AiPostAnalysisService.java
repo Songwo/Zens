@@ -13,8 +13,6 @@ public interface AiPostAnalysisService {
     /**
      * Song：提取帖子标签和摘要
      *
-     * Song：说明
-     * Song：说明
      */
     Map<String, Object> extractTagsAndSummary(TagsExtractReq request);
 }
