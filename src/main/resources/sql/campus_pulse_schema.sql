@@ -259,13 +259,16 @@ CREATE TABLE `sys_comment` (
   `reply_user_id` varchar(64)    DEFAULT NULL COMMENT '被回复用户ID',
   `is_anonymous`  tinyint(1)     DEFAULT 0 COMMENT '是否匿名',
   `like_count`    int            DEFAULT 0 COMMENT '点赞数',
+  `audit_status`  varchar(16)    NOT NULL DEFAULT 'APPROVED' COMMENT '审核/删除状态: APPROVED|DELETED',
   `create_time`   datetime       DEFAULT CURRENT_TIMESTAMP,
+  `update_time`   datetime       DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '最后更新时间(软删 3 天倒计时基准)',
   PRIMARY KEY (`id`),
   KEY `idx_comment_post_time` (`post_id`, `create_time`),
   KEY `idx_comment_parent` (`parent_id`),
   KEY `idx_comment_post_parent_time` (`post_id`, `parent_id`, `create_time`),
   KEY `idx_comment_user_time` (`user_id`, `create_time`),
-  KEY `idx_comment_reply_user_time` (`reply_user_id`, `create_time`)
+  KEY `idx_comment_reply_user_time` (`reply_user_id`, `create_time`),
+  KEY `idx_comment_audit_update` (`audit_status`, `update_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='评论表';
 
 -- ============================================================
