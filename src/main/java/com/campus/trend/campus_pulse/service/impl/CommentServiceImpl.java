@@ -202,10 +202,12 @@ public class CommentServiceImpl extends ServiceImpl<CommentMapper, Comment> impl
             return new Page<CommentResp>(pageNo, pageSize).setRecords(Collections.emptyList());
         }
 
+        // 分页只查"未删根评论"
         Page<Comment> page = new Page<>(pageNo, pageSize);
         Page<Comment> rootPage = this.page(page, Wrappers.<Comment>lambdaQuery()
                 .eq(Comment::getPostId, postId)
                 .eq(Comment::getParentId, "0")
+                .ne(Comment::getAuditStatus, "DELETED")
                 .orderByDesc(Comment::getCreateTime));
 
         List<Comment> roots = rootPage.getRecords();
@@ -213,15 +215,40 @@ public class CommentServiceImpl extends ServiceImpl<CommentMapper, Comment> impl
             return new Page<CommentResp>(pageNo, pageSize).setRecords(Collections.emptyList());
         }
 
-        // Song：一次性拉取当前帖子的全部评论，避免递归查询导致 N+1
+        // Song：一次性拉取该帖所有评论(含已删)，用于构建子树和判断占位
         List<Comment> allComments = this.list(Wrappers.<Comment>lambdaQuery()
                 .eq(Comment::getPostId, postId)
                 .orderByAsc(Comment::getCreateTime));
 
-        Map<String, List<Comment>> childrenByParentId = new HashMap<>();
+        // Song：被作为父引用过的 id 集合 —— 这些已删评论需要保留为占位
+        Set<String> parentIdsThatHaveChildren = new HashSet<>();
         for (Comment item : allComments) {
+            String pid = item.getParentId();
+            if (pid != null && !pid.isBlank() && !"0".equals(pid)) {
+                parentIdsThatHaveChildren.add(pid);
+            }
+        }
+
+        // Song：过滤可见集合 + 已删评论的 content 抹掉
+        Map<String, Comment> visibleById = new HashMap<>();
+        for (Comment item : allComments) {
+            boolean isDeleted = "DELETED".equalsIgnoreCase(item.getAuditStatus());
+            if (!isDeleted || parentIdsThatHaveChildren.contains(item.getId())) {
+                if (isDeleted) {
+                    item.setContent(null);
+                }
+                visibleById.put(item.getId(), item);
+            }
+        }
+
+        // Song：仅在 visible 集合内构建 children
+        Map<String, List<Comment>> childrenByParentId = new HashMap<>();
+        for (Comment item : visibleById.values()) {
             String parentId = item.getParentId();
             if (parentId == null || parentId.isBlank() || "0".equals(parentId)) {
+                continue;
+            }
+            if (!visibleById.containsKey(parentId)) {
                 continue;
             }
             childrenByParentId.computeIfAbsent(parentId, key -> new ArrayList<>()).add(item);
