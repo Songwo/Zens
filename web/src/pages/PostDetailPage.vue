@@ -1,22 +1,25 @@
 <script setup lang="ts">
-import { ref, onMounted, computed, watch, nextTick } from 'vue'
+import { ref, onMounted, computed, watch, nextTick, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import MainLayout from '@/layouts/MainLayout.vue'
 import PageBackButton from '@/components/common/PageBackButton.vue'
 import ScrollEdgeBar from '@/components/ui/ScrollEdgeBar.vue'
 import { postApi } from '@/api/post'
 import { commentApi } from '@/api/comment'
+import { reportApi } from '@/api/report'
 import { recommendApi } from '@/api/recommend'
 import { viewLogApi } from '@/api/viewLog'
 import type { Post, Comment, RecommendPost } from '@/types'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import MarkdownIt from 'markdown-it'
+import { pulseNotification } from '@/utils/pulseNotification'
+import { TOC_MARKDOWN_TAG, renderMarkdownWithToc, renderMarkdownWithTocResult, renderMarkdownWithTocAsync, type MarkdownTocRenderResult } from '@/utils/markdownToc'
 import DOMPurify from 'dompurify'
 import { timeAgo } from '@/utils/timeAgo'
-import { renderMarkdownWithTocResult } from '@/utils/markdownToc'
+import { decodePostId, encodePostId } from '@/utils/shortId'
 import { generateSummary } from '@/utils/markdown'
 import { renderGithubRichCards, mergeConsecutiveBlockquotes } from '@/utils/richLink'
 import { cachedRequest } from '@/utils/requestCache'
+import { md } from '@/utils/markdownRenderer'
 import { 
   View, 
   CaretTop, 
@@ -42,11 +45,6 @@ const route = useRoute()
 const router = useRouter()
 const userStore = useUserStore()
 const composerStore = usePostComposerStore()
-const md = new MarkdownIt({
-  html: true,
-  linkify: true,
-  typographer: true
-})
 
 const post = ref<Post | null>(null)
 const comments = ref<Comment[]>([])
@@ -60,7 +58,21 @@ const activeCommentId = ref('')
 const RELATED_POST_CACHE_TTL = 60 * 1000
 const POST_METRICS_UPDATED_EVENT = 'cp:post-metrics-updated'
 
-const postId = computed(() => String(route.params.id || ''))
+const postId = computed(() => {
+  const rawId = String(route.params.id || '')
+  return rawId.startsWith('p') ? decodePostId(rawId) : rawId
+})
+
+watch(
+  () => route.params.id,
+  (rawId) => {
+    if (rawId && String(rawId).startsWith('POST_')) {
+      const shortId = encodePostId(String(rawId))
+      router.replace(`/t/${shortId}`)
+    }
+  },
+  { immediate: true }
+)
 
 const toFiniteMetric = (value: unknown): number | null => {
   if (typeof value === 'number') {
@@ -165,27 +177,98 @@ const renderedContent = computed(() => {
       'a','img','strong','em','del','s','mark','kbd',
       'sup','sub','details','summary','input',
       'div','span','video','source',
-      'svg','path'
+      'svg','path',
+      'button'
     ],
     ALLOWED_ATTR: [
       'href','src','alt','title','class','id','target','rel',
       'type','checked','disabled','loading','decoding',
       'controls','preload','poster','playsinline','muted','loop','autoplay',
-      'viewBox','width','height','aria-hidden','fill','d'
+      'viewBox','width','height','aria-hidden','aria-label','fill','d',
+      'style',
+      'data-lang','data-raw','data-line','data-highlighted-chars','data-highlighted-chars-id'
     ],
     FORCE_BODY: true,
     ALLOW_DATA_ATTR: false,
   })
 })
 
-const tocRenderResult = computed(() =>
-  renderMarkdownWithTocResult(md, post.value?.content ?? '', { inlineToc: false })
+const tocRenderResult = ref<MarkdownTocRenderResult>({ html: '', headings: [], hasTocTag: false })
+let _renderToken = 0
+watch(
+  () => post.value?.content ?? '',
+  async (content) => {
+    const token = ++_renderToken
+    if (!content) {
+      _renderToken === token && (tocRenderResult.value = { html: '', headings: [], hasTocTag: false })
+      return
+    }
+    // 先用同步渲染保证首屏立刻可见（代码块此时可能仍是纯文本）
+    tocRenderResult.value = renderMarkdownWithTocResult(md, content, { inlineToc: false })
+    // 再异步预热 Shiki + 加载语言后用同一 API 重渲染，第二次出彩
+    const result = await renderMarkdownWithTocAsync(md, content, { inlineToc: false })
+    if (token === _renderToken) {
+      tocRenderResult.value = result
+    }
+  },
+  { immediate: true }
 )
+
+const handleMarkdownClick = (e: MouseEvent) => {
+  const target = e.target as HTMLElement
+  if (target.classList.contains('copy-btn')) {
+    const code = target.parentElement?.parentElement?.querySelector('code')?.innerText
+    if (code) {
+      navigator.clipboard.writeText(code)
+      const originalText = target.innerText
+      target.innerText = '已复制!'
+      setTimeout(() => { target.innerText = originalText }, 2000)
+    }
+  }
+}
 
 const aiSummaryText = computed(() => {
   if (!post.value) return ''
   if (post.value.summary && post.value.summary.trim()) return post.value.summary.trim()
   return generateSummary(post.value.content || '', 180)
+})
+
+const displayedSummaryText = ref('')
+let typistTimer: any = null
+
+const startTypingEffect = (fullText: string) => {
+  if (typistTimer) {
+    clearInterval(typistTimer)
+    typistTimer = null
+  }
+  displayedSummaryText.value = ''
+  if (!fullText) return
+
+  let i = 0
+  typistTimer = setInterval(() => {
+    if (i < fullText.length) {
+      displayedSummaryText.value += fullText.charAt(i)
+      i++
+    } else {
+      if (typistTimer) {
+        clearInterval(typistTimer)
+        typistTimer = null
+      }
+    }
+  }, 16) // 16ms delivers an incredibly smooth, lively streaming feel (around 60 characters/sec)
+}
+
+watch(aiSummaryText, (newVal) => {
+  if (newVal) {
+    startTypingEffect(newVal)
+  }
+}, { immediate: true })
+
+onUnmounted(() => {
+  if (typistTimer) {
+    clearInterval(typistTimer)
+    typistTimer = null
+  }
 })
 
 const canRegenerateSummary = computed(() => {
@@ -302,9 +385,14 @@ const handleLike = async () => {
     await postApi.like(post.value.id)
     post.value.isLiked = !post.value.isLiked
     post.value.likeCount += post.value.isLiked ? 1 : -1
-    ElMessage.success(post.value.isLiked ? '点赞成功' : '取消点赞')
+    
+    if (post.value.isLiked) {
+      pulseNotification.like(`你点赞了「${post.value.title}」！已为该帖子注入一次共鸣脉冲。`)
+    } else {
+      pulseNotification.info(`已取消对帖子的点赞`)
+    }
   } catch (error) {
-    ElMessage.error('操作失败')
+    pulseNotification.error('点赞操作失败，请重试')
   }
 }
 
@@ -314,9 +402,14 @@ const handleCollect = async () => {
     await postApi.collect(post.value.id)
     post.value.isCollected = !post.value.isCollected
     post.value.collectCount += post.value.isCollected ? 1 : -1
-    ElMessage.success(post.value.isCollected ? '收藏成功' : '取消收藏')
+    
+    if (post.value.isCollected) {
+      pulseNotification.success(`成功收纳「${post.value.title}」至你的灵感库`, '收藏成功')
+    } else {
+      pulseNotification.info(`已将该帖子移出你的灵感库`)
+    }
   } catch (error) {
-    ElMessage.error('操作失败')
+    pulseNotification.error('收藏操作失败，请重试')
   }
 }
 
@@ -325,8 +418,14 @@ const handleCommentLike = async (comment: any) => {
     await commentApi.like(comment.id)
     comment.isLiked = !comment.isLiked
     comment.likeCount = (comment.likeCount || 0) + (comment.isLiked ? 1 : -1)
+    
+    if (comment.isLiked) {
+      pulseNotification.like(`你对 @${comment.nickname || '用户'} 的评论产生了共鸣`)
+    } else {
+      pulseNotification.info(`已取消对该评论的点赞`)
+    }
   } catch (error) {
-    ElMessage.error('操作失败')
+    pulseNotification.error('点赞评论失败，请重试')
   }
 }
 
@@ -344,6 +443,33 @@ const cancelReply = () => {
   replyingToName.value = null
 }
 
+const handleCommentDelete = async (comment: any) => {
+  try {
+    await commentApi.delete(comment.id)
+    comment.auditStatus = 'DELETED'
+    comment.content = null
+    if (post.value) {
+      const cur = toFiniteMetric(post.value.commentCount) ?? comments.value.length
+      post.value.commentCount = Math.max(0, cur - 1)
+      syncPostMetricsToLists()
+    }
+    pulseNotification.info('评论已删除')
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '删除失败')
+  }
+}
+
+const handleCommentReport = (comment: any) => {
+  if (!userStore.accessToken) {
+    ElMessage.warning('请先登录后再进行举报')
+    return
+  }
+  reportTarget.value = { type: 'comment', id: comment.id }
+  reportForm.value.reason = ''
+  reportForm.value.details = ''
+  reportVisible.value = true
+}
+
 const submitComment = async (content: string) => {
   commentLoading.value = true
   try {
@@ -353,7 +479,7 @@ const submitComment = async (content: string) => {
       parentId: replyingTo.value || undefined
     })
 
-    ElMessage.success('评论成功')
+    pulseNotification.comment('你的想法已完美传递到主题讨论中，激荡智慧火花！', '回复评论成功')
     cancelReply()
     if (post.value) {
       const currentCount = toFiniteMetric(post.value.commentCount) ?? comments.value.length
@@ -367,7 +493,7 @@ const submitComment = async (content: string) => {
     comments.value = commentRes.data.records || []
     scrollToRouteComment()
   } catch (error) {
-    ElMessage.error('评论失败')
+    pulseNotification.error('发送评论失败，请重试')
   } finally {
     commentLoading.value = false
   }
@@ -379,6 +505,7 @@ const reportForm = ref({
   reason: '',
   details: ''
 })
+const reportTarget = ref<{ type: 'post' | 'comment'; id: string }>({ type: 'post', id: '' })
 
 const ensureMetaByName = (name: string, content: string) => {
   let el = document.querySelector(`meta[name="${name}"]`) as HTMLMetaElement | null
@@ -431,6 +558,7 @@ const handleCommand = async (command: string) => {
       ElMessage.warning('请先登录后再进行举报')
       return
     }
+    reportTarget.value = { type: 'post', id: postId.value }
     reportForm.value.reason = ''
     reportForm.value.details = ''
     reportVisible.value = true
@@ -506,11 +634,15 @@ const submitReport = async () => {
     ElMessage.warning('请选择举报理由')
     return
   }
+  if (!reportTarget.value.id) {
+    ElMessage.warning('举报对象缺失')
+    return
+  }
   isReporting.value = true
   try {
-    await postApi.report({
-      targetType: 'post',
-      targetId: postId.value,
+    await reportApi.create({
+      targetType: reportTarget.value.type,
+      targetId: reportTarget.value.id,
       reason: reportForm.value.reason,
       details: reportForm.value.details
     })
@@ -752,72 +884,111 @@ onMounted(() => {
             </div>
           </div>
 
-          <!-- Cover Image -->
-          <div v-if="post.coverImage" class="post-cover">
-            <el-image :src="post.coverImage" fit="contain" lazy />
-          </div>
+          <!-- Cover Image & Article Body (Hidden if deleted) -->
+          <template v-if="!isDeletedPost">
+            <!-- Cover Image -->
+            <div v-if="post.coverImage" class="post-cover">
+              <el-image :src="post.coverImage" fit="contain" lazy />
+            </div>
 
-          <!-- AI Summary -->
-          <div v-if="aiSummaryText" class="ai-summary-card">
-            <div class="summary-header">
-              <span class="summary-badge">AI 摘要</span>
-              <span class="summary-tip">基于正文自动提炼</span>
-              <el-button
-                v-if="canRegenerateSummary"
-                link
-                type="primary"
-                :loading="regeneratingSummary"
-                class="summary-refresh-btn"
-                @click="handleRegenerateSummary"
+            <!-- AI Summary -->
+            <div v-if="aiSummaryText" class="ai-summary-card-premium">
+              <div class="summary-header">
+                <div class="summary-title-group">
+                  <span class="summary-icon">✨</span>
+                  <span class="summary-badge-premium">AI 智能摘要</span>
+                </div>
+                <span class="summary-tip">DeepSeek-Chat 自动提炼</span>
+                <el-button
+                  v-if="canRegenerateSummary"
+                  link
+                  type="primary"
+                  :loading="regeneratingSummary"
+                  class="summary-refresh-btn-premium"
+                  @click="handleRegenerateSummary"
+                >
+                  <el-icon style="margin-right: 4px;"><RefreshRight /></el-icon>重新生成
+                </el-button>
+              </div>
+              <p class="summary-text">
+                {{ displayedSummaryText }}<span class="summary-cursor" v-if="displayedSummaryText.length < aiSummaryText.length"></span>
+              </p>
+              <div class="summary-footer">
+                <span class="footer-meta">⚡ 深度上下文理解</span>
+                <span class="footer-meta">• 已过滤垃圾信息</span>
+                <span class="footer-meta">• 内容准确率 98%</span>
+              </div>
+            </div>
+
+            <!-- Article Content -->
+            <div class="content-body markdown-body" v-html="renderedContent" ref="contentRef" @click="handleMarkdownClick"></div>
+
+            <!-- Tags -->
+            <div v-if="post.tags" class="post-tags">
+              <template v-for="tag in (typeof post.tags === 'string' ? post.tags.split(',') : post.tags)" :key="tag">
+                 <el-tag 
+                   v-if="tag && tag.trim()"
+                   size="small"
+                   class="tag-item"
+                   @click="$router.push(`/tag/${tag.trim()}`)"
+                   style="cursor: pointer;"
+                 >
+                   # {{ tag.trim() }}
+                 </el-tag>
+              </template>
+            </div>
+
+            <!-- Actions -->
+            <div class="post-actions">
+              <el-button-group>
+                <el-button 
+                  :type="post.isLiked ? 'primary' : 'default'" 
+                  :icon="CaretTop"
+                  @click="handleLike"
+                >
+                  赞 {{ post.likeCount }}
+                </el-button>
+                <el-button 
+                  :type="post.isCollected ? 'warning' : 'default'" 
+                  :icon="Star"
+                  @click="handleCollect"
+                >
+                  收藏
+                </el-button>
+                <el-button :icon="Share" @click="handleShare">分享</el-button>
+              </el-button-group>
+            </div>
+          </template>
+
+          <!-- Deleted Post Premium Placeholder -->
+          <div v-else class="deleted-post-placeholder">
+            <div class="placeholder-icon-wrapper">
+              <el-icon class="placeholder-icon"><Delete /></el-icon>
+            </div>
+            <h3 class="placeholder-title">该帖子已被移入回收站</h3>
+            <p class="placeholder-tip">
+              {{ canManageCurrentPost 
+                ? '此话题已被软删除并移入回收站保护。在 7 天冷静期内，身为作者或社区管理人员的您可以随时点击下方恢复按钮快捷恢复。' 
+                : '抱歉，该内容已被作者或管理员移入回收站。在恢复发布之前，普通用户将无法查阅其详细文本和多媒体正文。' 
+              }}
+            </p>
+            <div v-if="canManageCurrentPost" class="placeholder-actions">
+              <el-button 
+                type="success" 
+                size="large" 
+                round
+                :icon="RefreshRight" 
+                @click="restorePost" 
+                class="premium-restore-btn"
               >
-                重新生成
+                快捷恢复帖子
               </el-button>
             </div>
-            <p class="summary-text">{{ aiSummaryText }}</p>
-          </div>
-
-          <!-- Article Content -->
-          <div class="post-body markdown-body" v-html="renderedContent"></div>
-
-          <!-- Tags -->
-          <div v-if="post.tags" class="post-tags">
-            <template v-for="tag in (typeof post.tags === 'string' ? post.tags.split(',') : post.tags)" :key="tag">
-               <el-tag 
-                 v-if="tag && tag.trim()"
-                 size="small"
-                 class="tag-item"
-                 @click="$router.push(`/tag/${tag.trim()}`)"
-                 style="cursor: pointer;"
-               >
-                 # {{ tag.trim() }}
-               </el-tag>
-            </template>
-          </div>
-
-          <!-- Actions -->
-          <div class="post-actions">
-            <el-button-group>
-              <el-button 
-                :type="post.isLiked ? 'primary' : 'default'" 
-                :icon="CaretTop"
-                @click="handleLike"
-              >
-                赞 {{ post.likeCount }}
-              </el-button>
-              <el-button 
-                :type="post.isCollected ? 'warning' : 'default'" 
-                :icon="Star"
-                @click="handleCollect"
-              >
-                收藏
-              </el-button>
-              <el-button :icon="Share" @click="handleShare">分享</el-button>
-            </el-button-group>
           </div>
         </el-card>
 
-        <!-- Comment Section -->
-        <div class="comment-section">
+        <!-- Comment Section (Hidden if deleted) -->
+        <div v-if="!isDeletedPost" class="comment-section">
           <div class="section-title">
             <h3>评论区</h3>
             <span class="comment-count">{{ visibleCommentCount }} 条评论</span>
@@ -831,11 +1002,19 @@ onMounted(() => {
             @cancel="cancelReply"
           />
           
-          <CommentList 
+          <CommentList
             :comments="(comments as any)"
             :active-comment-id="activeCommentId"
+            :post-id="postId"
+            :post-short-id="encodePostId(postId)"
+            :post-author-id="post?.userId"
+            :current-user-id="userStore.userId"
+            :is-admin="isAdmin || isGlobalModerator"
+            :can-moderate-section="canModerateCurrentSection"
             @like="handleCommentLike"
             @reply="handleReply"
+            @delete="handleCommentDelete"
+            @report="handleCommentReport"
           />
         </div>
         </div>
@@ -953,6 +1132,12 @@ onMounted(() => {
 </template>
 
 <style scoped>
+.post-detail-page {
+  min-height: 100vh;
+  flex-direction: column;
+  gap: 16px;
+}
+
 .post-skeleton {
   display: flex;
   flex-direction: column;
@@ -1106,12 +1291,26 @@ onMounted(() => {
   margin-bottom: 32px;
 }
 
-.ai-summary-card {
+.ai-summary-card-premium {
   margin-bottom: 24px;
-  padding: 14px 16px;
-  border: 1px solid var(--el-color-primary-light-7);
-  border-radius: 12px;
-  background: linear-gradient(180deg, var(--el-color-primary-light-9), var(--el-fill-color-blank));
+  padding: 16px 20px;
+  border: 1px solid rgba(245, 158, 11, 0.22);
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(254, 243, 199, 0.2) 0%, rgba(255, 255, 255, 0.6) 100%);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 4px 20px -2px rgba(245, 158, 11, 0.04);
+  position: relative;
+  overflow: hidden;
+}
+
+.ai-summary-card-premium::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 4px;
+  height: 100%;
+  background: linear-gradient(180deg, #F59E0B 0%, #EF4444 100%);
 }
 
 .summary-header {
@@ -1121,16 +1320,26 @@ onMounted(() => {
   margin-bottom: 8px;
 }
 
-.summary-badge {
-  display: inline-flex;
+.summary-title-group {
+  display: flex;
   align-items: center;
-  justify-content: center;
-  padding: 2px 8px;
-  border-radius: 20px;
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--el-color-primary-dark-2);
-  background: var(--el-color-primary-light-8);
+  gap: 6px;
+}
+
+.summary-icon {
+  font-size: 15px;
+  animation: pulseSparkle 2s infinite alternate;
+}
+
+@keyframes pulseSparkle {
+  0% { transform: scale(0.92) rotate(0deg); opacity: 0.8; }
+  100% { transform: scale(1.08) rotate(10deg); opacity: 1; }
+}
+
+.summary-badge-premium {
+  font-size: 13px;
+  font-weight: 800;
+  color: #B45309;
 }
 
 .summary-tip {
@@ -1138,17 +1347,54 @@ onMounted(() => {
   color: var(--el-text-color-secondary);
 }
 
-.summary-refresh-btn {
+.summary-refresh-btn-premium {
   margin-left: auto;
   padding: 0;
   font-size: 12px;
+  font-weight: 600;
+  color: #D97706 !important;
+}
+
+.summary-refresh-btn-premium:hover {
+  color: #B45309 !important;
 }
 
 .summary-text {
-  margin: 0;
+  margin: 10px 0 12px 0;
   font-size: 14px;
-  line-height: 1.75;
-  color: var(--el-text-color-primary);
+  line-height: 1.8;
+  color: var(--el-text-color-regular);
+  text-align: justify;
+}
+
+.summary-cursor {
+  display: inline-block;
+  vertical-align: middle;
+  width: 2px;
+  height: 15px;
+  background-color: #F59E0B;
+  box-shadow: 0 0 6px #F59E0B;
+  margin-left: 3px;
+  animation: summary-cursor-blink 0.8s infinite;
+}
+
+@keyframes summary-cursor-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+.summary-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--el-text-color-placeholder);
+  border-top: 1px dashed rgba(245, 158, 11, 0.12);
+  padding-top: 8px;
+}
+
+.footer-meta {
+  white-space: nowrap;
 }
 
 .post-tags {
@@ -1565,5 +1811,77 @@ onMounted(() => {
   font-size: 16px;
   color: var(--el-text-color-placeholder);
   flex-shrink: 0;
+}
+
+/* Deleted Post Placeholder premium styling */
+.deleted-post-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+  text-align: center;
+  background: radial-gradient(circle at top, rgba(245, 108, 108, 0.05), transparent 70%);
+  border-radius: 12px;
+  border: 1px dashed var(--el-border-color-lighter);
+  margin: 20px 0;
+}
+
+.placeholder-icon-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 68px;
+  height: 68px;
+  background: var(--el-color-danger-light-9);
+  color: var(--el-color-danger);
+  border-radius: 50%;
+  font-size: 28px;
+  margin-bottom: 20px;
+  box-shadow: 0 4px 12px rgba(245, 108, 108, 0.2);
+  animation: float-deleted-icon 3s ease-in-out infinite;
+}
+
+@keyframes float-deleted-icon {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+.placeholder-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--el-text-color-primary);
+  margin: 0 0 12px 0;
+  letter-spacing: 0.5px;
+}
+
+.placeholder-tip {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--el-text-color-secondary);
+  max-width: 480px;
+  margin: 0 0 28px 0;
+}
+
+.placeholder-actions {
+  display: flex;
+  justify-content: center;
+}
+
+.premium-restore-btn {
+  font-weight: 600;
+  padding: 12px 28px;
+  font-size: 14px;
+  box-shadow: 0 4px 14px rgba(103, 194, 58, 0.25);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.premium-restore-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(103, 194, 58, 0.35);
+}
+
+.premium-restore-btn:active {
+  transform: translateY(0);
 }
 </style>
