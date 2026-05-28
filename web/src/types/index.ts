@@ -162,6 +162,7 @@ export interface Comment {
     replyUserId?: string
     replyUserNickname?: string
     isAnonymous?: number
+    auditStatus?: string
 }
 
 export interface CreateCommentRequest {
