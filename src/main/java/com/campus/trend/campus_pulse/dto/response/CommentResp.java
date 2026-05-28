@@ -18,6 +18,7 @@ public class CommentResp {
     private Integer isAnonymous;
     private List<String> roles; // Song：用户角色列表
     private Integer likeCount;
+    private String auditStatus;
     private LocalDateTime createTime;
     private Boolean isLiked; // Song：说明
     private List<CommentResp> children;

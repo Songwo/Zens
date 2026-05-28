@@ -44,5 +44,15 @@ public class Comment implements Serializable {
 
     private Integer likeCount;
 
+    /**
+     * 审核/删除状态: APPROVED | DELETED
+     */
+    private String auditStatus;
+
     private LocalDateTime createTime;
+
+    /**
+     * 最后更新时间(软删 3 天倒计时基准)
+     */
+    private LocalDateTime updateTime;
 }
