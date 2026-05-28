@@ -147,18 +147,50 @@ public class CommentServiceImpl extends ServiceImpl<CommentMapper, Comment> impl
             throw new BusinessException(ResultCode.FAILED, "评论不存在");
         }
 
-        if (!comment.getUserId().equals(userId)) {
+        // 幂等：已软删直接返回，避免重复减 comment_count
+        if ("DELETED".equalsIgnoreCase(comment.getAuditStatus())) {
+            return;
+        }
+
+        Post post = sysPostMapper.selectById(comment.getPostId());
+        if (!canManageComment(comment, post, userId)) {
             throw new BusinessException(ResultCode.NO_PERMISSION, "无权删除该评论");
         }
 
-        removeById(commentId);
+        // 软删：仅更新状态与时间戳
+        LocalDateTime now = LocalDateTime.now();
+        lambdaUpdate()
+                .set(Comment::getAuditStatus, "DELETED")
+                .set(Comment::getUpdateTime, now)
+                .eq(Comment::getId, commentId)
+                .update();
 
-        Post post = sysPostMapper.selectById(comment.getPostId());
+        // 评论数 -1 + 刷新 Redis 版本
         if (post != null) {
             post.setCommentCount(Math.max(0, post.getCommentCount() - 1));
             sysPostMapper.updateById(post);
             invalidatePostFeedCache(post.getSectionId(), post.getId());
         }
+    }
+
+    private boolean canManageComment(Comment comment, Post post, String userId) {
+        if (comment == null || userId == null || userId.isBlank()) {
+            return false;
+        }
+        if (userId.equals(comment.getUserId())) {
+            return true;
+        }
+        if (post != null && userId.equals(post.getUserId())) {
+            return true;
+        }
+        if (com.campus.trend.campus_pulse.utils.PermissionUtils.isUserAdminOrModerator(userId)) {
+            return true;
+        }
+        if (post != null && post.getSectionId() != null
+                && sectionModeratorService.canModerateSection(userId, post.getSectionId())) {
+            return true;
+        }
+        return false;
     }
 
     @Override
