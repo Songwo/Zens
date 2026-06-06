@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.campus.trend.campus_pulse.common.api.Result;
 import com.campus.trend.campus_pulse.config.properties.SupportContactProperties;
 import com.campus.trend.campus_pulse.dto.request.AvatarUpdateReq;
+import com.campus.trend.campus_pulse.dto.request.CoverConfigUpdateReq;
 import com.campus.trend.campus_pulse.dto.request.NotificationPreferenceReq;
 import com.campus.trend.campus_pulse.dto.request.UserDetailUpdateReq;
 import com.campus.trend.campus_pulse.dto.request.UserModeratedSectionsUpdateReq;
@@ -204,6 +205,32 @@ public class UserController {
         long followerCount = safeCount(followMapper.selectCount(
                 new LambdaQueryWrapper<Follow>().eq(Follow::getFolloweeId, userId)));
         return Result.success(new UserStatsResp(postCount, followingCount, followerCount));
+    }
+
+    @PutMapping("/cover")
+    public Result<?> updateCover(@Valid @RequestBody CoverConfigUpdateReq req) {
+        String userId = SecurityUtils.getCurrentUserId();
+        if (userId == null) {
+            return Result.failed("请先登录");
+        }
+        String fit = "contain".equals(req.getFit()) ? "contain" : "cover";
+        int x = clampInt(req.getX(), 0, 100, 50);
+        int y = clampInt(req.getY(), 0, 100, 50);
+        int height = clampInt(req.getHeight(), 120, 600, 320);
+        String json = String.format("{\"fit\":\"%s\",\"x\":%d,\"y\":%d,\"height\":%d}", fit, x, y, height);
+
+        User update = new User();
+        update.setId(userId);
+        update.setCoverConfig(json);
+        userService.updateById(update);
+        return Result.success(json);
+    }
+
+    private static int clampInt(Integer value, int min, int max, int fallback) {
+        if (value == null) {
+            return fallback;
+        }
+        return Math.max(min, Math.min(max, value));
     }
 
     @GetMapping("/support-contact")
