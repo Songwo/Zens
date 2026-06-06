@@ -84,7 +84,9 @@ public class UserController {
                 StringUtils.hasText(user.getProfileCardTheme()) ? user.getProfileCardTheme() : "sunset",
                 StringUtils.hasText(user.getQuickCardTheme()) ? user.getQuickCardTheme() : "ocean",
                 normalizeCardBgUrl(user.getProfileCardBgUrl()),
-                normalizeCardBgUrl(user.getQuickCardBgUrl())
+                normalizeCardBgUrl(user.getQuickCardBgUrl()),
+                user.getEnrollmentYear(),
+                user.getInterestTags()
         );
         return Result.success(resp);
     }
