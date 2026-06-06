@@ -25,6 +25,7 @@ export interface UserProfile {
     quickCardTheme?: string
     profileCardBgUrl?: string
     quickCardBgUrl?: string
+    coverConfig?: string
     moderatedSectionIds?: number[]
 }
 
@@ -51,6 +52,7 @@ export interface UserPublicProfile {
     quickCardTheme?: string
     profileCardBgUrl?: string
     quickCardBgUrl?: string
+    coverConfig?: string
     postCount: number
     followingCount: number
     followerCount: number
@@ -64,6 +66,8 @@ export const userApi = {
         return api.put<any, Result<string>>('/user/avatar', { avatarUrl: url })
     },
     updateUserDetails: (data: any) => api.post('/user/update-udetail', data),
+    updateCover: (payload: { fit: 'cover' | 'contain'; x: number; y: number; height: number }) =>
+        api.put<any, Result<string>>('/user/cover', payload),
     updatePwd: (data: any) => api.post('/user/update-pwd', data),
 
     /**
