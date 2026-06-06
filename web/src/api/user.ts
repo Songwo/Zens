@@ -45,6 +45,8 @@ export interface UserPublicProfile {
     major?: string
     level?: number
     roles?: string[]
+    enrollmentYear?: number
+    interestTags?: string
     profileCardTheme?: string
     quickCardTheme?: string
     profileCardBgUrl?: string
