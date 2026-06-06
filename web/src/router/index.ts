@@ -35,6 +35,11 @@ const router = createRouter({
       component: () => import('@/pages/PostDetailPage.vue'),
     },
     {
+      path: '/r/:code',
+      name: 'short-link-detail',
+      component: () => import('@/pages/PostDetailPage.vue'),
+    },
+    {
       path: '/tag/:name',
       name: 'tag',
       component: () => import('@/pages/TagPage.vue'),
@@ -68,6 +73,12 @@ const router = createRouter({
       name: 'messages',
       component: () => import('@/pages/MessagesPage.vue'),
       meta: { requiresAuth: true, title: '私信', description: '与社区成员进行私信沟通' },
+    },
+    {
+      path: '/notifications',
+      name: 'notifications',
+      component: () => import('@/pages/NotificationsPage.vue'),
+      meta: { requiresAuth: true, title: '消息通知', description: '查看评论、点赞、关注与系统通知' },
     },
     {
       path: '/guide',

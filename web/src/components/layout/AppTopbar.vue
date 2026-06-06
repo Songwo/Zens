@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch, h } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Bell, ChatDotRound, Check, Delete, EditPen, Search } from '@element-plus/icons-vue'
 import { ElNotification } from 'element-plus'
@@ -208,7 +208,7 @@ const handleNotifDelete = async (event: MouseEvent, notif: Notification) => {
 
 const goNotificationCenter = async () => {
   notifPopoverVisible.value = false
-  await router.push({ path: '/me', query: { tab: 'notifications' } })
+  await router.push('/notifications')
 }
 
 const getNotifTime = (item: Notification) => {
@@ -233,14 +233,46 @@ const handleWebSocketNotification = (event: NotificationEvent) => {
   })
   notifications.value = notifications.value.slice(0, 20)
 
-  const isLoginAlert = ['system', 'security_alert', 'new_device_login', 'login_failed_burst'].includes(event.type)
-    && Boolean(event.title?.includes('登录') || event.title?.includes('安全'))
+  // 1. 根据不同类型定制图标与发光色彩样式
+  const getNotifDetails = (type: string) => {
+    switch (type) {
+      case 'like':
+        return { icon: '❤️', class: 'notif-like' }
+      case 'reply':
+        return { icon: '💬', class: 'notif-reply' }
+      case 'favorite':
+        return { icon: '⭐', class: 'notif-favorite' }
+      case 'follow':
+        return { icon: '👤', class: 'notif-follow' }
+      case 'mention':
+        return { icon: '🏷️', class: 'notif-mention' }
+      case 'security_alert':
+      case 'new_device_login':
+      case 'login_failed_burst':
+        return { icon: '🛡️', class: 'notif-security' }
+      default:
+        return { icon: '📢', class: 'notif-system' }
+    }
+  }
+
+  const details = getNotifDetails(event.type)
+  const isSecurity = ['security_alert', 'new_device_login', 'login_failed_burst'].includes(event.type)
+    || Boolean(event.title?.includes('登录') || event.title?.includes('安全'))
+
+  // 2. 触发极致奢华的定制发光弹窗
   ElNotification({
-    title: event.title,
-    message: event.content,
-    type: isLoginAlert ? 'warning' : 'info',
-    duration: isLoginAlert ? 8000 : 4000,
+    customClass: `zens-premium-notif ${details.class}`,
+    duration: isSecurity ? 8000 : 4500,
     position: 'bottom-right',
+    message: h('div', { style: 'display: flex; align-items: center; gap: 12px; cursor: pointer;' }, [
+      h('div', {
+        style: 'font-size: 22px; padding: 8px; background: rgba(255, 255, 255, 0.08); border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 10px rgba(0,0,0,0.08); flex-shrink: 0;'
+      }, details.icon),
+      h('div', { style: 'flex: 1; min-width: 0;' }, [
+        h('div', { style: 'font-size: 13px; font-weight: 700; color: var(--el-text-color-primary); margin-bottom: 2px;' }, event.title),
+        h('div', { style: 'font-size: 11px; color: var(--el-text-color-regular); line-height: 1.4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;' }, event.content)
+      ])
+    ]),
     onClick: () => {
       const targetRoute = resolveNotificationRoute(event.relatedId, { type: event.type, relatedUserId: event.relatedUserId })
       if (targetRoute) {
