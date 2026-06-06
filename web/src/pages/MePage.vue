@@ -13,6 +13,7 @@ import { levelApi, type LevelInfo } from '@/api/level'
 import { usePostComposerStore } from '@/store/postComposer'
 import { ElMessage } from 'element-plus'
 import type { Post } from '@/types'
+import type { CoverConfig } from '@/utils/coverConfig'
 
 const router = useRouter(); const route = useRoute()
 const userStore = useUserStore(); const composerStore = usePostComposerStore()
@@ -39,6 +40,7 @@ const headerProfile = computed(() => ({
   level: levelInfo.value?.level ?? userStore.userInfo?.level,
   roles: userStore.userInfo?.roles,
   profileCardBgUrl: userStore.userInfo?.profileCardBgUrl,
+  coverConfig: userStore.userInfo?.coverConfig,
   postCount: stats.value.postCount,
   followingCount: stats.value.followingCount,
   followerCount: stats.value.followerCount,
@@ -60,6 +62,19 @@ const onStatClick = (type: 'following' | 'followers') => {
 const fetchStats = async () => { try { const r = await userApi.getProfileStats(); if (r.data) stats.value = { postCount: r.data.postCount ?? 0, followingCount: r.data.followingCount ?? 0, followerCount: r.data.followerCount ?? 0 } } catch { ElMessage.error('获取统计失败') } }
 const fetchLevel = async () => { try { levelInfo.value = (await levelApi.getInfo()).data } catch { /* ignore */ } }
 
+const handleSaveCover = async (cfg: CoverConfig) => {
+  try {
+    const res = await userApi.updateCover(cfg)
+    if (userStore.userInfo) {
+      userStore.userInfo.coverConfig = res.data ?? JSON.stringify(cfg)
+    }
+    ElMessage.success('封面已更新')
+  } catch (e) {
+    ElMessage.error('封面保存失败')
+    throw e
+  }
+}
+
 onMounted(() => {
   if (!userStore.accessToken) { ElMessage.error('请先登录'); router.push('/auth/login'); return }
   fetchStats(); fetchLevel()
@@ -75,6 +90,8 @@ watch(() => route.query.tab, t => { if (t && typeof t === 'string') activeTab.va
         variant="self"
         :level-progress="levelInfo?.progress ?? null"
         :level-hint="levelHint"
+        :editable="true"
+        :on-save-cover="handleSaveCover"
         @edit="router.push('/settings')"
         @compose="composerStore.open()"
         @stat-click="onStatClick"
