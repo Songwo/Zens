@@ -130,7 +130,7 @@ const clickableStats = computed(() => isSelf.value)
 
 <style scoped>
 .profile-header { background: var(--el-bg-color); }
-.ph-cover { height: 96px; border-radius: 10px 10px 0 0; }
+.ph-cover { height: 200px; border-radius: 10px 10px 0 0; }
 .ph-body { padding: 0 8px; }
 .ph-avatar { margin-top: -36px; border: 4px solid var(--el-bg-color); border-radius: 50%; }
 .ph-namerow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
@@ -153,5 +153,5 @@ const clickableStats = computed(() => isSelf.value)
 .ph-tag { font-size: 12px; color: var(--el-text-color-secondary); border: 1px solid var(--el-border-color); border-radius: 14px; padding: 3px 10px; }
 .ph-tag-add { cursor: pointer; border-style: dashed; }
 .ph-actions { display: flex; gap: 10px; margin-bottom: 16px; }
-@media (max-width: 640px) { .ph-cover { border-radius: 0; } }
+@media (max-width: 640px) { .ph-cover { height: 150px; border-radius: 0; } }
 </style>
