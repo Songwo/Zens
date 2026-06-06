@@ -49,7 +49,7 @@ const coverStyle = computed(() => {
   const url = String(props.profile.profileCardBgUrl || '').trim()
   const ok = /^https?:\/\/[^"'\s]+$/.test(url) || /^\/uploads\/[^"'\s]+$/.test(url)
   return ok
-    ? { background: `url("${url}") center/cover no-repeat` }
+    ? { background: `url("${url}") center/contain no-repeat var(--el-fill-color-light)` }
     : { background: SUNSET }
 })
 
