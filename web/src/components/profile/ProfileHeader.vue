@@ -45,13 +45,15 @@ const emit = defineEmits<{
 }>()
 
 const SUNSET = 'linear-gradient(135deg, #fff2db 0%, #ffe3b2 48%, #ffd39a 100%)'
-const coverStyle = computed(() => {
+const coverUrl = computed(() => {
   const url = String(props.profile.profileCardBgUrl || '').trim()
   const ok = /^https?:\/\/[^"'\s]+$/.test(url) || /^\/uploads\/[^"'\s]+$/.test(url)
-  return ok
-    ? { background: `url("${url}") center/contain no-repeat var(--el-fill-color-light)` }
-    : { background: SUNSET }
+  return ok ? url : ''
 })
+const coverBaseStyle = computed(() =>
+  coverUrl.value ? { background: 'var(--el-fill-color-light)' } : { background: SUNSET }
+)
+const coverImageStyle = computed(() => ({ backgroundImage: `url("${coverUrl.value}")` }))
 
 const tags = computed(() =>
   String(props.profile.interestTags || '')
@@ -69,7 +71,12 @@ const clickableStats = computed(() => isSelf.value)
 
 <template>
   <header class="profile-header">
-    <div class="ph-cover" :style="coverStyle"></div>
+    <div class="ph-cover" :style="coverBaseStyle">
+      <template v-if="coverUrl">
+        <div class="ph-cover-blur" :style="coverImageStyle"></div>
+        <div class="ph-cover-photo" :style="coverImageStyle"></div>
+      </template>
+    </div>
 
     <div class="ph-body">
       <Avatar :src="profile.avatar ?? undefined" :size="72" class="ph-avatar" />
@@ -130,7 +137,10 @@ const clickableStats = computed(() => isSelf.value)
 
 <style scoped>
 .profile-header { background: var(--el-bg-color); }
-.ph-cover { height: 320px; border-radius: 10px 10px 0 0; }
+.ph-cover { position: relative; height: 320px; border-radius: 10px 10px 0 0; overflow: hidden; }
+.ph-cover-blur, .ph-cover-photo { position: absolute; inset: 0; background-position: center; background-repeat: no-repeat; }
+.ph-cover-blur { background-size: cover; filter: blur(22px) brightness(0.92); transform: scale(1.12); }
+.ph-cover-photo { background-size: contain; }
 .ph-body { padding: 0 8px; }
 .ph-avatar { margin-top: -36px; border: 4px solid var(--el-bg-color); border-radius: 50%; }
 .ph-namerow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
