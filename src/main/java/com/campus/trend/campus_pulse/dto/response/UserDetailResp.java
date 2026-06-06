@@ -28,6 +28,7 @@ public class UserDetailResp {
     private String quickCardTheme;
     private String profileCardBgUrl;
     private String quickCardBgUrl;
+    private String coverConfig;
     private List<Long> moderatedSectionIds;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;

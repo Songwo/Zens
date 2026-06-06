@@ -99,6 +99,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         proFileResponse.setQuickCardTheme(resolveCardTheme(sysUser.getQuickCardTheme(), "ocean"));
         proFileResponse.setProfileCardBgUrl(resolveCardBgUrl(sysUser.getProfileCardBgUrl(), null));
         proFileResponse.setQuickCardBgUrl(resolveCardBgUrl(sysUser.getQuickCardBgUrl(), null));
+        proFileResponse.setCoverConfig(sysUser.getCoverConfig());
         proFileResponse.setModeratedSectionIds(sectionModeratorService.getModeratedSectionIds(sysUser.getId()).stream().toList());
         proFileResponse.setRoles(roleCodes);
 

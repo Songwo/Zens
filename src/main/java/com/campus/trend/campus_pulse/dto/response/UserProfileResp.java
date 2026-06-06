@@ -24,6 +24,7 @@ public record UserProfileResp(
         String profileCardBgUrl,
         String quickCardBgUrl,
         Integer enrollmentYear,
-        String interestTags
+        String interestTags,
+        String coverConfig
 ) {
 }

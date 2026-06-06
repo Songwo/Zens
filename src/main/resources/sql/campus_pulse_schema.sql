@@ -2,7 +2,7 @@
 -- Campus Pulse 数据库初始化脚本（单文件版）
 -- 说明：
 --   1) 仅用于全新初始化（建库 + 建表 + 索引 + 基础种子数据）
---   2) 不包含任何迁移、增量、兼容补丁语句
+--   2) 已合并 migrations 与独立 SQL 脚本中的当前有效结构
 --   3) 直接执行本文件即可完成初始化
 -- ============================================================
 
@@ -31,9 +31,12 @@ CREATE TABLE `sys_user` (
   `major`                varchar(50)   DEFAULT NULL COMMENT '专业',
   `enrollment_year`      int           DEFAULT NULL COMMENT '入学年份',
   `level`                int           DEFAULT 1 COMMENT '等级',
+  `points`               int           DEFAULT 0 COMMENT '积分',
+  `experience`           int           DEFAULT 0 COMMENT '经验值',
   `status`               tinyint       DEFAULT 1 COMMENT '状态 1正常 2封禁',
   `interest_tags`        text          DEFAULT NULL COMMENT '兴趣标签(JSON字符串)',
   `role`                 varchar(50)   DEFAULT 'ROLE_USER' COMMENT '角色',
+  `reputation`           int           DEFAULT 0 COMMENT '声望值',
   `contribution_val`     int           DEFAULT 0 COMMENT '社区贡献值',
   `active_region`        varchar(100)  DEFAULT NULL COMMENT '常活跃地点',
   `preferred_cate_json`  json          DEFAULT NULL COMMENT '偏好分类权重',
@@ -49,6 +52,7 @@ CREATE TABLE `sys_user` (
   `quick_card_theme`     varchar(32)   DEFAULT 'ocean' COMMENT '头像预览卡片主题',
   `profile_card_bg_url`  varchar(500)  DEFAULT NULL COMMENT '个人资料卡片背景图URL',
   `quick_card_bg_url`    varchar(500)  DEFAULT NULL COMMENT '头像预览卡片背景图URL',
+  `cover_config`         varchar(255)  DEFAULT NULL COMMENT '封面展示配置(JSON: fit/x/y/height)',
   `create_time`          datetime      DEFAULT CURRENT_TIMESTAMP,
   `update_time`          datetime      DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
@@ -74,7 +78,22 @@ CREATE TABLE `sys_tag` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='标签表';
 
 -- ============================================================
--- 3) 板块表
+-- 3) 用户标签关系表
+-- ============================================================
+CREATE TABLE `sys_user_tag_relation` (
+  `id`          bigint         NOT NULL AUTO_INCREMENT,
+  `user_id`     varchar(64)    NOT NULL COMMENT '用户ID',
+  `tag_id`      bigint         NOT NULL COMMENT '标签ID',
+  `score`       decimal(3,1)   DEFAULT 3.0 COMMENT '兴趣权重(1.0-5.0)',
+  `create_time` datetime       DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_user_tag_relation` (`user_id`, `tag_id`),
+  KEY `idx_user_tag_user_score` (`user_id`, `score`, `create_time`),
+  KEY `idx_user_tag_tag` (`tag_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户标签关系表';
+
+-- ============================================================
+-- 4) 板块表
 -- ============================================================
 CREATE TABLE `sections` (
   `id`          bigint        NOT NULL AUTO_INCREMENT,
@@ -91,7 +110,7 @@ CREATE TABLE `sections` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='板块表';
 
 -- ============================================================
--- 4) 帖子表
+-- 5) 帖子表
 -- ============================================================
 CREATE TABLE `sys_post` (
   `id`               varchar(64)   NOT NULL,
@@ -107,8 +126,9 @@ CREATE TABLE `sys_post` (
   `location_name`    varchar(100)  DEFAULT NULL COMMENT '位置名称',
   `sentiment_score`  decimal(5,2)  DEFAULT 0.00 COMMENT '情感分数',
   `status`           tinyint       DEFAULT 1 COMMENT '状态 1正常 0草稿',
-  `audit_status`     varchar(20)   DEFAULT 'PENDING' COMMENT '审核状态 PENDING/APPROVED/REJECTED/DRAFT',
+  `audit_status`     varchar(20)   DEFAULT 'PENDING' COMMENT '审核/治理状态 DRAFT/PENDING/APPROVED/REJECTED/DELETED',
   `reject_reason`    varchar(500)  DEFAULT NULL COMMENT '审核打回原因',
+  `is_pinned`        tinyint(1)    DEFAULT 0 COMMENT '旧版置顶兼容字段',
   `global_pin`       tinyint(1)    DEFAULT 0 COMMENT '全局置顶',
   `category_pin`     tinyint(1)    DEFAULT 0 COMMENT '板块置顶',
   `pin_order`        int           DEFAULT 0 COMMENT '置顶排序',
@@ -134,14 +154,15 @@ CREATE TABLE `sys_post` (
   KEY `idx_post_status_heat` (`status`, `heat_score`, `id`),
   KEY `idx_post_feed_pin` (`status`, `global_pin`, `category_pin`, `pin_order`, `pin_expire_at`),
   KEY `idx_post_audit_query` (`status`, `audit_status`, `create_time`),
+  KEY `idx_post_audit_update` (`audit_status`, `update_time`),
   KEY `idx_post_section_activity` (`section_id`, `status`, `last_activity_at`, `id`),
   FULLTEXT KEY `ft_post_search` (`title`, `content`, `summary`, `tags`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='帖子表';
 
 -- ============================================================
--- 4.1) 帖子媒体表（配合 Go 媒体服务，覆盖式写入）
+-- 6) 帖子媒体表（配合 Go 媒体服务，覆盖式写入）
 -- ============================================================
-CREATE TABLE IF NOT EXISTS `sys_post_media` (
+CREATE TABLE `sys_post_media` (
   `id`               bigint         NOT NULL,
   `post_id`          varchar(64)    NOT NULL COMMENT '所属帖子ID',
   `file_id`          varchar(64)    DEFAULT NULL COMMENT 'Go 侧文件ID',
@@ -164,9 +185,9 @@ CREATE TABLE IF NOT EXISTS `sys_post_media` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='帖子媒体关系表';
 
 -- ============================================================
--- 4.2) 媒体文件元数据表（Cloudflare R2）
+-- 7) 媒体文件元数据表（Cloudflare R2）
 -- ============================================================
-CREATE TABLE IF NOT EXISTS `sys_media_file` (
+CREATE TABLE `sys_media_file` (
   `id`               varchar(64)   NOT NULL,
   `file_key`         varchar(500)  NOT NULL COMMENT 'R2 object key',
   `original_name`    varchar(255)  DEFAULT NULL,
@@ -193,36 +214,7 @@ CREATE TABLE IF NOT EXISTS `sys_media_file` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='媒体文件元数据(R2)';
 
 -- ============================================================
--- 4.2) 媒体文件元数据表（Cloudflare R2）
--- ============================================================
-CREATE TABLE IF NOT EXISTS `sys_media_file` (
-  `id`               varchar(64)   NOT NULL,
-  `file_key`         varchar(500)  NOT NULL COMMENT 'R2 object key',
-  `original_name`    varchar(255)  DEFAULT NULL,
-  `mime_type`        varchar(128)  DEFAULT NULL,
-  `media_type`       varchar(16)   NOT NULL COMMENT 'image/video',
-  `size_bytes`       bigint        NOT NULL,
-  `sha256`           varchar(64)   DEFAULT NULL,
-  `width`            int           DEFAULT NULL,
-  `height`           int           DEFAULT NULL,
-  `duration_seconds` int           DEFAULT NULL,
-  `access_url`       varchar(500)  NOT NULL,
-  `cover_url`        varchar(500)  DEFAULT NULL,
-  `uploader_id`      varchar(64)   DEFAULT NULL,
-  `biz_type`         varchar(32)   DEFAULT NULL,
-  `biz_id`           varchar(64)   DEFAULT NULL,
-  `status`           tinyint       NOT NULL DEFAULT 1 COMMENT '1=有效 0=已删',
-  `create_time`      datetime      DEFAULT CURRENT_TIMESTAMP,
-  `update_time`      datetime      DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_file_key` (`file_key`),
-  KEY `idx_sha256` (`sha256`),
-  KEY `idx_uploader_time` (`uploader_id`, `create_time`),
-  KEY `idx_biz` (`biz_type`, `biz_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='媒体文件元数据(R2)';
-
--- ============================================================
--- 5) 帖子点赞表
+-- 8) 帖子点赞表
 -- ============================================================
 CREATE TABLE `sys_post_like` (
   `id`          varchar(64)   NOT NULL,
@@ -235,7 +227,7 @@ CREATE TABLE `sys_post_like` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='帖子点赞表';
 
 -- ============================================================
--- 6) 帖子收藏表
+-- 9) 帖子收藏表
 -- ============================================================
 CREATE TABLE `sys_post_collect` (
   `id`          varchar(64)   NOT NULL,
@@ -248,20 +240,23 @@ CREATE TABLE `sys_post_collect` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='帖子收藏表';
 
 -- ============================================================
--- 7) 评论表
+-- 10) 评论表
 -- ============================================================
 CREATE TABLE `sys_comment` (
-  `id`            varchar(64)    NOT NULL,
-  `post_id`       varchar(64)    NOT NULL COMMENT '帖子ID',
-  `user_id`       varchar(64)    NOT NULL COMMENT '评论用户ID',
-  `content`       varchar(1000)  NOT NULL COMMENT '评论内容',
-  `parent_id`     varchar(64)    DEFAULT '0' COMMENT '父评论ID，0表示顶层评论',
-  `reply_user_id` varchar(64)    DEFAULT NULL COMMENT '被回复用户ID',
-  `is_anonymous`  tinyint(1)     DEFAULT 0 COMMENT '是否匿名',
-  `like_count`    int            DEFAULT 0 COMMENT '点赞数',
-  `audit_status`  varchar(16)    NOT NULL DEFAULT 'APPROVED' COMMENT '审核/删除状态: APPROVED|DELETED',
-  `create_time`   datetime       DEFAULT CURRENT_TIMESTAMP,
-  `update_time`   datetime       DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '最后更新时间(软删 3 天倒计时基准)',
+  `id`               varchar(64)    NOT NULL,
+  `post_id`          varchar(64)    NOT NULL COMMENT '帖子ID',
+  `user_id`          varchar(64)    NOT NULL COMMENT '评论用户ID',
+  `content`          varchar(1000)  NOT NULL COMMENT '评论内容',
+  `parent_id`        varchar(64)    DEFAULT '0' COMMENT '父评论ID，0表示顶层评论',
+  `reply_to_user_id` varchar(64)    DEFAULT NULL COMMENT '被回复用户ID(兼容字段)',
+  `reply_user_id`    varchar(64)    DEFAULT NULL COMMENT '被回复用户ID',
+  `is_anonymous`     tinyint(1)     DEFAULT 0 COMMENT '是否匿名',
+  `like_count`       int            DEFAULT 0 COMMENT '点赞数',
+  `collect_count`    int            DEFAULT 0 COMMENT '收藏数',
+  `audit_status`     varchar(16)    NOT NULL DEFAULT 'APPROVED' COMMENT '审核/删除状态 APPROVED/DELETED',
+  `create_time`      datetime       DEFAULT CURRENT_TIMESTAMP,
+  `update_time`      datetime       DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '最后更新时间(软删 3 天倒计时基准)',
+  `edit_time`        datetime       DEFAULT NULL COMMENT '最后编辑时间(为空表示未编辑过;与软删倒计时无关)',
   PRIMARY KEY (`id`),
   KEY `idx_comment_post_time` (`post_id`, `create_time`),
   KEY `idx_comment_parent` (`parent_id`),
@@ -272,7 +267,49 @@ CREATE TABLE `sys_comment` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='评论表';
 
 -- ============================================================
--- 8) 浏览日志表
+-- 11) 评论点赞表
+-- ============================================================
+CREATE TABLE `comment_likes` (
+  `id`          bigint        NOT NULL AUTO_INCREMENT,
+  `comment_id`  varchar(64)   NOT NULL,
+  `user_id`     varchar(64)   NOT NULL,
+  `created_at`  datetime      DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_comment_like_user_comment` (`user_id`, `comment_id`),
+  KEY `idx_comment_like_comment` (`comment_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='评论点赞表';
+
+-- ============================================================
+-- 12) 评论收藏表
+-- ============================================================
+CREATE TABLE `comment_collects` (
+  `id`          bigint        NOT NULL AUTO_INCREMENT,
+  `comment_id`  varchar(64)   NOT NULL,
+  `user_id`     varchar(64)   NOT NULL,
+  `created_at`  datetime      DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_comment_collect_user_comment` (`user_id`, `comment_id`),
+  KEY `idx_comment_collect_comment` (`comment_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='评论收藏表';
+
+-- ============================================================
+-- 13) 短链接映射表
+-- ============================================================
+CREATE TABLE `short_links` (
+  `code`        varchar(24)   NOT NULL COMMENT '短链接随机码',
+  `target_type` varchar(20)   NOT NULL COMMENT 'comment/post',
+  `post_id`     varchar(64)   DEFAULT NULL COMMENT '内部帖子ID',
+  `comment_id`  varchar(64)   DEFAULT NULL COMMENT '内部评论ID',
+  `creator_id`  varchar(64)   DEFAULT NULL COMMENT '创建人ID',
+  `create_time` datetime      DEFAULT CURRENT_TIMESTAMP,
+  `update_time` datetime      DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`code`),
+  KEY `idx_short_link_target` (`target_type`, `post_id`, `comment_id`),
+  KEY `idx_short_link_creator_time` (`creator_id`, `create_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='短链接映射表';
+
+-- ============================================================
+-- 14) 浏览日志表
 -- ============================================================
 CREATE TABLE `sys_view_log` (
   `id`          bigint        NOT NULL AUTO_INCREMENT,
@@ -290,7 +327,7 @@ CREATE TABLE `sys_view_log` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='浏览日志表';
 
 -- ============================================================
--- 9) 等级经验日志表
+-- 15) 等级经验日志表
 -- ============================================================
 CREATE TABLE `sys_level_exp_log` (
   `id`          bigint        NOT NULL AUTO_INCREMENT,
@@ -304,7 +341,7 @@ CREATE TABLE `sys_level_exp_log` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='等级经验日志表';
 
 -- ============================================================
--- 10) 通知表
+-- 16) 通知表
 -- ============================================================
 CREATE TABLE `notifications` (
   `id`              bigint        NOT NULL AUTO_INCREMENT,
@@ -324,7 +361,7 @@ CREATE TABLE `notifications` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='通知表';
 
 -- ============================================================
--- 11) 私信表
+-- 17) 私信表
 -- ============================================================
 CREATE TABLE `direct_messages` (
   `id`              bigint         NOT NULL AUTO_INCREMENT,
@@ -343,7 +380,7 @@ CREATE TABLE `direct_messages` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='私信消息表';
 
 -- ============================================================
--- 12) 举报表
+-- 18) 举报表
 -- ============================================================
 CREATE TABLE `sys_report` (
   `id`          varchar(64)   NOT NULL,
@@ -361,19 +398,17 @@ CREATE TABLE `sys_report` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='举报表';
 
 -- ============================================================
--- 13) 版主申请表
+-- 19) 版主申请表
 -- ============================================================
 CREATE TABLE `moderator_applications` (
-  `id`           bigint        NOT NULL AUTO_INCREMENT,
-  `user_id`      varchar(64)   NOT NULL COMMENT '申请人ID',
-  `section_id`   bigint        NOT NULL COMMENT '申请板块ID',
-  `reason`       varchar(500)  DEFAULT NULL COMMENT '申请理由',
-  `status`       tinyint       DEFAULT 0 COMMENT '0待审核 1通过 2拒绝',
-  `review_note`  varchar(500)  DEFAULT NULL COMMENT '审核备注',
-  `reviewed_by`  varchar(64)   DEFAULT NULL COMMENT '审核人ID',
-  `reviewed_at`  datetime      DEFAULT NULL COMMENT '审核时间',
-  `created_at`   datetime      DEFAULT CURRENT_TIMESTAMP,
-  `updated_at`   datetime      DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `id`          bigint        NOT NULL AUTO_INCREMENT,
+  `user_id`     varchar(64)   NOT NULL COMMENT '申请人ID',
+  `section_id`  bigint        NOT NULL COMMENT '申请板块ID',
+  `reason`      varchar(500)  DEFAULT NULL COMMENT '申请理由',
+  `status`      tinyint       DEFAULT 0 COMMENT '0待审核 1通过 2拒绝',
+  `review_note` varchar(500)  DEFAULT NULL COMMENT '审核备注',
+  `created_at`  datetime      DEFAULT CURRENT_TIMESTAMP,
+  `reviewed_at` datetime      DEFAULT NULL COMMENT '审核时间',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_moderator_user_section` (`user_id`, `section_id`),
   KEY `idx_moderator_status` (`status`),
@@ -381,35 +416,22 @@ CREATE TABLE `moderator_applications` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='版主申请表';
 
 -- ============================================================
--- 14) 用户关注表
+-- 20) 用户关注表
 -- ============================================================
-CREATE TABLE `user_follows` (
-  `id`           bigint        NOT NULL AUTO_INCREMENT,
-  `follower_id`  varchar(64)   NOT NULL COMMENT '关注者ID',
-  `following_id` varchar(64)   NOT NULL COMMENT '被关注者ID',
-  `created_at`   datetime      DEFAULT CURRENT_TIMESTAMP,
+CREATE TABLE `follows` (
+  `id`          bigint        NOT NULL AUTO_INCREMENT,
+  `follower_id` varchar(64)   NOT NULL COMMENT '关注者ID',
+  `followee_id` varchar(64)   NOT NULL COMMENT '被关注者ID',
+  `created_at`  datetime      DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_follow_pair` (`follower_id`, `following_id`),
-  KEY `idx_follow_following` (`following_id`),
+  UNIQUE KEY `uk_follow_pair` (`follower_id`, `followee_id`),
+  KEY `idx_follow_followee` (`followee_id`),
   KEY `idx_follow_follower_time` (`follower_id`, `created_at`),
-  KEY `idx_follow_following_time` (`following_id`, `created_at`)
+  KEY `idx_follow_followee_time` (`followee_id`, `created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户关注表';
 
 -- ============================================================
--- 15) 评论点赞表
--- ============================================================
-CREATE TABLE `comment_likes` (
-  `id`          bigint        NOT NULL AUTO_INCREMENT,
-  `comment_id`  varchar(64)   NOT NULL,
-  `user_id`     varchar(64)   NOT NULL,
-  `created_at`  datetime      DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_comment_like_user_comment` (`user_id`, `comment_id`),
-  KEY `idx_comment_like_comment` (`comment_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='评论点赞表';
-
--- ============================================================
--- 16) 热度快照表
+-- 21) 热度快照表
 -- ============================================================
 CREATE TABLE `post_heat_snapshots` (
   `id`         bigint       NOT NULL AUTO_INCREMENT,
@@ -422,26 +444,83 @@ CREATE TABLE `post_heat_snapshots` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='帖子热度快照表';
 
 -- ============================================================
--- 17) 趋势统计表
+-- 22) 趋势统计表
 -- ============================================================
 CREATE TABLE `trend_stats` (
-  `id`           bigint        NOT NULL AUTO_INCREMENT,
-  `stat_type`    varchar(20)   NOT NULL COMMENT '统计维度 section/tag/keyword',
-  `stat_key`     varchar(100)  NOT NULL COMMENT '维度值',
-  `section_id`   bigint        DEFAULT NULL COMMENT '关联板块ID',
-  `post_count`   int           DEFAULT 0,
-  `view_count`   int           DEFAULT 0,
-  `like_count`   int           DEFAULT 0,
-  `comment_count` int          DEFAULT 0,
-  `heat_score`   double        DEFAULT 0,
-  `stat_date`    date          NOT NULL COMMENT '统计日期',
-  `created_at`   datetime      DEFAULT CURRENT_TIMESTAMP,
+  `id`            bigint        NOT NULL AUTO_INCREMENT,
+  `stat_type`     varchar(20)   NOT NULL COMMENT '统计维度 section/tag/keyword',
+  `stat_key`      varchar(100)  NOT NULL COMMENT '维度值',
+  `section_id`    bigint        DEFAULT NULL COMMENT '关联板块ID',
+  `post_count`    int           DEFAULT 0,
+  `view_count`    int           DEFAULT 0,
+  `like_count`    int           DEFAULT 0,
+  `comment_count` int           DEFAULT 0,
+  `heat_score`    double        DEFAULT 0,
+  `stat_date`     date          NOT NULL COMMENT '统计日期',
+  `created_at`    datetime      DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_trend_type_key_date` (`stat_type`, `stat_key`, `stat_date`),
   KEY `idx_trend_date` (`stat_date`),
   KEY `idx_trend_section_date` (`section_id`, `stat_date`),
   KEY `idx_trend_heat` (`heat_score`, `stat_date`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='趋势统计表';
+
+-- ============================================================
+-- 23) 邀请码表
+-- ============================================================
+CREATE TABLE `invite_codes` (
+  `id`              varchar(64)   NOT NULL COMMENT '主键',
+  `code`            varchar(32)   NOT NULL COMMENT '邀请码',
+  `creator_id`      varchar(64)   DEFAULT NULL COMMENT '创建人ID',
+  `used_by_user_id` varchar(64)   DEFAULT NULL COMMENT '使用者ID',
+  `status`          tinyint       DEFAULT 0 COMMENT '0=未用 1=已用 2=禁用',
+  `max_uses`        int           DEFAULT 1 COMMENT '最大使用次数(0=不限)',
+  `used_count`      int           DEFAULT 0 COMMENT '已使用次数',
+  `expire_time`     datetime      DEFAULT NULL COMMENT '过期时间(null=永不过期)',
+  `remark`          varchar(200)  DEFAULT NULL COMMENT '备注',
+  `create_time`     datetime      DEFAULT CURRENT_TIMESTAMP,
+  `update_time`     datetime      DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `deleted`         tinyint       DEFAULT 0,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_invite_code` (`code`),
+  KEY `idx_invite_status` (`status`, `expire_time`),
+  KEY `idx_invite_creator` (`creator_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='邀请码表';
+
+-- ============================================================
+-- 24) SSO 应用注册表
+-- ============================================================
+CREATE TABLE `sys_sso_client` (
+  `id`            varchar(64)   NOT NULL,
+  `client_id`     varchar(100)  NOT NULL COMMENT '应用标识（唯一）',
+  `client_name`   varchar(200)  NOT NULL COMMENT '应用名称',
+  `client_secret` varchar(200)  NOT NULL COMMENT '应用密钥',
+  `redirect_uri`  varchar(500)  NOT NULL COMMENT '回调地址',
+  `description`   varchar(500)  DEFAULT NULL COMMENT '应用描述',
+  `logo_url`      varchar(500)  DEFAULT NULL COMMENT '应用Logo URL',
+  `enabled`       tinyint(1)    DEFAULT 1 COMMENT '是否启用 1:是 0:否',
+  `create_time`   datetime      DEFAULT CURRENT_TIMESTAMP,
+  `update_time`   datetime      DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_client_id` (`client_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='SSO 应用注册表';
+
+-- ============================================================
+-- 25) 发展历程 / 版本日志表
+-- ============================================================
+CREATE TABLE `sys_changelog` (
+  `id`         bigint        NOT NULL AUTO_INCREMENT,
+  `version`    varchar(50)   DEFAULT NULL COMMENT '版本号',
+  `title`      varchar(100)  NOT NULL COMMENT '标题',
+  `content`    text          DEFAULT NULL COMMENT '内容',
+  `timestamp`  varchar(32)   DEFAULT NULL COMMENT '时间标签',
+  `status`     tinyint       DEFAULT 1 COMMENT '状态 1发布 0隐藏',
+  `sort_order` int           DEFAULT 0 COMMENT '排序',
+  `created_at` datetime      DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime      DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_changelog_status_sort` (`status`, `sort_order`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='发展历程/版本日志表';
 
 -- ============================================================
 -- 基础种子数据
@@ -459,43 +538,3 @@ INSERT INTO `sections` (`id`, `name`, `description`, `icon`, `sort_order`, `stat
 (10, '考研专区',   '考研备考、经验交流',               'psychology',   10, 1);
 
 SET FOREIGN_KEY_CHECKS = 1;
-
--- ============================================================
--- 邀请码表（增量DDL，已有数据库执行此段即可）
--- ============================================================
-CREATE TABLE IF NOT EXISTS `invite_codes` (
-  `id`             varchar(64)   NOT NULL COMMENT '主键',
-  `code`           varchar(32)   NOT NULL COMMENT '邀请码',
-  `creator_id`     varchar(64)   DEFAULT NULL COMMENT '创建人ID',
-  `used_by_user_id` varchar(64)  DEFAULT NULL COMMENT '使用者ID',
-  `status`         tinyint       DEFAULT 0 COMMENT '0=未用 1=已用 2=禁用',
-  `max_uses`       int           DEFAULT 1 COMMENT '最大使用次数(0=不限)',
-  `used_count`     int           DEFAULT 0 COMMENT '已使用次数',
-  `expire_time`    datetime      DEFAULT NULL COMMENT '过期时间(null=永不过期)',
-  `remark`         varchar(200)  DEFAULT NULL COMMENT '备注',
-  `create_time`    datetime      DEFAULT CURRENT_TIMESTAMP,
-  `update_time`    datetime      DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  `deleted`        tinyint       DEFAULT 0,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_invite_code` (`code`),
-  KEY `idx_invite_status` (`status`, `expire_time`),
-  KEY `idx_invite_creator` (`creator_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='邀请码表';
-
--- ============================================================
--- SSO 应用注册表（增量DDL）
--- ============================================================
-CREATE TABLE IF NOT EXISTS `sys_sso_client` (
-  `id`            VARCHAR(64)   NOT NULL,
-  `client_id`     VARCHAR(100)  NOT NULL COMMENT '应用标识（唯一）',
-  `client_name`   VARCHAR(200)  NOT NULL COMMENT '应用名称',
-  `client_secret` VARCHAR(200)  NOT NULL COMMENT '应用密钥',
-  `redirect_uri`  VARCHAR(500)  NOT NULL COMMENT '回调地址',
-  `description`   VARCHAR(500)  DEFAULT NULL COMMENT '应用描述',
-  `logo_url`      VARCHAR(500)  DEFAULT NULL COMMENT '应用Logo URL',
-  `enabled`       TINYINT(1)    DEFAULT 1 COMMENT '是否启用 1:是 0:否',
-  `create_time`   DATETIME      DEFAULT CURRENT_TIMESTAMP,
-  `update_time`   DATETIME      DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_client_id` (`client_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='SSO 应用注册表';

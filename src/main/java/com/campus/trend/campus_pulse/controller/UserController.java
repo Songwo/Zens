@@ -86,7 +86,8 @@ public class UserController {
                 normalizeCardBgUrl(user.getProfileCardBgUrl()),
                 normalizeCardBgUrl(user.getQuickCardBgUrl()),
                 user.getEnrollmentYear(),
-                user.getInterestTags()
+                user.getInterestTags(),
+                user.getCoverConfig()
         );
         return Result.success(resp);
     }

@@ -101,6 +101,11 @@ public class User implements Serializable {
     private String profileCardBgUrl;
     private String quickCardBgUrl;
 
+    /**
+     * 封面展示配置 (JSON: fit/x/y/height)
+     */
+    private String coverConfig;
+
     private LocalDateTime createTime;
     private LocalDateTime updateTime;
 
