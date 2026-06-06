@@ -330,8 +330,7 @@ onMounted(() => {
 
 <style scoped>
 .notifications-page {
-  max-width: min(100%, 720px);
-  margin: 0 auto;
+  width: 100%;
 }
 
 .notif-page-header {

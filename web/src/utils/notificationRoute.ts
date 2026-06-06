@@ -1,4 +1,5 @@
 import type { RouteLocationRaw } from 'vue-router'
+import { encodeCommentId, encodePostId, encodeUserId } from '@/utils/shortId'
 
 type RelatedIdLike = string | number | null | undefined
 
@@ -16,12 +17,12 @@ export const resolveNotificationRoute = (
   // follow notifications → go to the follower's profile page
   if (ctx?.type === 'follow') {
     const uid = ctx.relatedUserId
-    if (uid) return { path: `/user/${uid}` }
+    if (uid) return { path: `/user/${encodeUserId(uid)}` }
     return null
   }
 
   if (ctx?.type && ['system', 'security_alert', 'new_device_login', 'session_terminated', 'password_changed', 'password_reset', 'two_factor_enabled', 'two_factor_disabled', 'login_failed_burst'].includes(ctx.type)) {
-    return { path: '/me', query: { tab: 'notifications' } }
+    return { path: '/notifications' }
   }
 
   if (relatedId === null || relatedId === undefined) {
@@ -38,8 +39,8 @@ export const resolveNotificationRoute = (
     const commentId = raw.slice(hashIndex + COMMENT_HASH_PREFIX.length).trim()
     if (postId && commentId) {
       return {
-        path: `/t/${postId}`,
-        query: { commentId },
+        path: `/t/${encodePostId(postId)}`,
+        query: { c: encodeCommentId(commentId) },
       }
     }
   }
@@ -50,20 +51,22 @@ export const resolveNotificationRoute = (
     const commentId = raw.slice(barIndex + 1).trim()
     if (postId && commentId) {
       return {
-        path: `/t/${postId}`,
-        query: { commentId },
+        path: `/t/${encodePostId(postId)}`,
+        query: { c: encodeCommentId(commentId) },
       }
     }
   }
 
   if (raw.startsWith('/t/')) {
-    return { path: raw }
+    const id = raw.replace('/t/', '').trim()
+    return { path: `/t/${encodePostId(id)}` }
   }
   if (raw.startsWith('/p/')) {
-    return { path: raw.replace('/p/', '/t/') }
+    const id = raw.replace('/p/', '').trim()
+    return { path: `/t/${encodePostId(id)}` }
   }
   if (raw.startsWith('/')) {
     return { path: raw }
   }
-  return { path: `/t/${raw}` }
+  return { path: `/t/${encodePostId(raw)}` }
 }

@@ -99,7 +99,7 @@ watch(() => route.query.tab, t => { if (t && typeof t === 'string') activeTab.va
 </template>
 
 <style scoped>
-.me-container { max-width: min(100%, var(--cp-profile-page-width, 1080px)); margin: 0 auto; }
+.me-container { width: 100%; }
 .me-tabs { margin-top: 8px; }
 .me-tabs :deep(.el-tabs__active-bar) { background-color: var(--el-color-primary); }
 @media (max-width: 640px) {
