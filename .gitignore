@@ -6,6 +6,19 @@ target/
 /data
 /log
 ./log
+
+# Redis 快照 / 运行时生成物
+dump.rdb
+*.rdb
+
+# Superpowers 头脑风暴可视化 mockup(本地临时产物)
+.superpowers/
+
+# 根目录截图（构建/文档无关）
+/campus-pulse-home-desktop.png
+/campus-pulse-home-mobile.png
+/zens-vplus-preview.png
+/zens-vplus-products.png
 ./data
 
 .env

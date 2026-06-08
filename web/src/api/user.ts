@@ -26,6 +26,9 @@ export interface UserProfile {
     profileCardBgUrl?: string
     quickCardBgUrl?: string
     coverConfig?: string
+    badgeText?: string
+    badgeColor?: string
+    badgeStyle?: string
     moderatedSectionIds?: number[]
 }
 
@@ -53,6 +56,9 @@ export interface UserPublicProfile {
     profileCardBgUrl?: string
     quickCardBgUrl?: string
     coverConfig?: string
+    badgeText?: string
+    badgeColor?: string
+    badgeStyle?: string
     postCount: number
     followingCount: number
     followerCount: number
@@ -119,5 +125,9 @@ export const userApi = {
 
     /* 设置用户负责的板块版主范围 (管理员) */
     updateModeratedSections: (id: string, sectionIds: number[]) =>
-        api.put<any, Result<void>>(`/user/${id}/moderated-sections`, { sectionIds })
+        api.put<any, Result<void>>(`/user/${id}/moderated-sections`, { sectionIds }),
+
+    /* 设置用户徽章 (管理员)；badgeText 为空表示清除 */
+    updateBadge: (id: string, payload: { badgeText: string; badgeColor?: string; badgeStyle?: string }) =>
+        api.put<any, Result<string>>(`/user/${id}/badge`, payload)
 }

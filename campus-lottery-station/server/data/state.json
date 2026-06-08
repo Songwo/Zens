@@ -1,0 +1,121 @@
+{
+  "draws": [
+    {
+      "id": "lot-202605-lab-pass",
+      "title": "校园实验室开放日优先名额",
+      "summary": "面向社区活跃成员开放 12 个参观名额，获奖后可在主站帖子中确认时间段。",
+      "prizeName": "实验室开放日名额",
+      "prizeType": "activity-pass",
+      "prizeCount": 12,
+      "sponsor": "Campus Pulse 社区运营组",
+      "status": "open",
+      "startsAt": "2026-05-29T11:31:37.2113355Z",
+      "endsAt": "2026-05-31T14:31:37.2113355Z",
+      "minLevel": 1,
+      "costPoints": 10,
+      "participantLimit": 300,
+      "discussionUrl": "http://localhost:8080/posts/lab-open-day",
+      "rules": [
+        "每个主站账号只能参与一次。",
+        "开奖前可在主站讨论帖补充报名理由。",
+        "获奖名单会保存在本站，并可同步到社区公告帖。"
+      ],
+      "participants": [],
+      "winners": [],
+      "createdAt": "2026-05-29T10:31:37.2113355Z",
+      "updatedAt": "2026-05-29T10:31:37.2113355Z"
+    },
+    {
+      "id": "lot-202605-cdk-pack",
+      "title": "开发工具 CDK 福利包",
+      "summary": "给近期参与问答、教程共建的同学准备的轻量福利，可和 CDK 空投台联动发码。",
+      "prizeName": "开发工具 CDK",
+      "prizeType": "cdk",
+      "prizeCount": 20,
+      "sponsor": "Campus Pulse 福利站",
+      "status": "open",
+      "startsAt": "2026-05-28T14:31:37.2113355Z",
+      "endsAt": "2026-05-30T14:31:37.2113355Z",
+      "minLevel": 2,
+      "costPoints": 30,
+      "participantLimit": 200,
+      "discussionUrl": "http://localhost:8080/posts/cdk-pack",
+      "rules": [
+        "等级达到 2 级且积分足够即可参与。",
+        "获奖后可跳转 CDK 空投台查看兑换码。",
+        "异常账号、重复注册账号可由管理员取消资格。"
+      ],
+      "participants": [
+        {
+          "id": "p-seed-1",
+          "userId": "u-demo",
+          "username": "demo",
+          "displayName": "校园体验用户",
+          "level": 3,
+          "note": "想把福利用于课程项目环境。",
+          "joinedAt": "2026-05-29T12:31:37.2113355Z"
+        }
+      ],
+      "winners": [],
+      "createdAt": "2026-05-28T12:31:37.2113355Z",
+      "updatedAt": "2026-05-29T12:31:37.2113355Z"
+    },
+    {
+      "id": "lot-202605-book-club",
+      "title": "技术图书漂流计划",
+      "summary": "抽取 8 位同学加入图书漂流首批名单，阅读完成后在社区发布短评即可返还积分。",
+      "prizeName": "技术图书借阅资格",
+      "prizeType": "book",
+      "prizeCount": 8,
+      "sponsor": "学习资料共建小组",
+      "status": "scheduled",
+      "startsAt": "2026-05-30T02:31:37.2113355Z",
+      "endsAt": "2026-06-02T14:31:37.2113355Z",
+      "minLevel": 1,
+      "costPoints": 0,
+      "participantLimit": 120,
+      "discussionUrl": "http://localhost:8080/posts/book-club",
+      "rules": [
+        "无需消耗积分。",
+        "获奖后 7 天内完成领取确认。",
+        "逾期未确认会释放名额给候补用户。"
+      ],
+      "participants": [],
+      "winners": [],
+      "createdAt": "2026-05-29T13:31:37.2113355Z",
+      "updatedAt": "2026-05-29T13:31:37.2113355Z"
+    }
+  ],
+  "users": {
+    "u-admin": {
+      "id": "u-admin",
+      "username": "admin",
+      "displayName": "社区运营管理员",
+      "avatar": "A",
+      "level": 6,
+      "points": 860,
+      "role": "admin",
+      "provider": "dev",
+      "lastLoginAt": "2026-05-29T14:36:44.9699872Z"
+    },
+    "u-demo": {
+      "id": "u-demo",
+      "username": "demo",
+      "displayName": "校园体验用户",
+      "avatar": "D",
+      "level": 3,
+      "points": 320,
+      "role": "user",
+      "provider": "seed",
+      "lastLoginAt": "2026-05-29T14:31:37.2113355Z"
+    }
+  },
+  "audit": [
+    {
+      "id": "audit-seed",
+      "type": "system.seed",
+      "message": "初始化校园抽奖福利站演示数据",
+      "createdAt": "2026-05-29T14:31:37.2113355Z"
+    }
+  ]
+}

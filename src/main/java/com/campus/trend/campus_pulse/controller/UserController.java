@@ -6,6 +6,7 @@ import com.campus.trend.campus_pulse.config.properties.SupportContactProperties;
 import com.campus.trend.campus_pulse.dto.request.AvatarUpdateReq;
 import com.campus.trend.campus_pulse.dto.request.CoverConfigUpdateReq;
 import com.campus.trend.campus_pulse.dto.request.NotificationPreferenceReq;
+import com.campus.trend.campus_pulse.dto.request.UserBadgeUpdateReq;
 import com.campus.trend.campus_pulse.dto.request.UserDetailUpdateReq;
 import com.campus.trend.campus_pulse.dto.request.UserModeratedSectionsUpdateReq;
 import com.campus.trend.campus_pulse.dto.request.UserPasswordUpdateReq;
@@ -88,7 +89,10 @@ public class UserController {
                 normalizeCardBgUrl(user.getQuickCardBgUrl()),
                 user.getEnrollmentYear(),
                 user.getInterestTags(),
-                user.getCoverConfig()
+                user.getCoverConfig(),
+                user.getBadgeText(),
+                user.getBadgeColor(),
+                user.getBadgeStyle()
         );
         return Result.success(resp);
     }
@@ -291,6 +295,50 @@ public class UserController {
         }
         userService.assignRole(userId, roleCode);
         return Result.success();
+    }
+
+    @PutMapping("/{userId}/badge")
+    public Result<?> updateBadge(@PathVariable String userId,
+                                 @Valid @RequestBody(required = false) UserBadgeUpdateReq req) {
+        if (!PermissionUtils.isAdmin()) {
+            return Result.failed("无权执行此操作");
+        }
+        User user = userService.getById(userId);
+        if (user == null) {
+            return Result.failed("用户不存在");
+        }
+        if (!canManage(user)) {
+            return Result.failed("无权设置该用户徽章：对方角色等级不低于您");
+        }
+        String badge = req != null ? req.getBadgeText() : null;
+        if (badge != null) {
+            badge = badge.trim();
+            if (badge.length() > 20) {
+                badge = badge.substring(0, 20);
+            }
+            if (badge.isEmpty()) {
+                badge = null;
+            }
+        }
+        String style = req != null ? req.getBadgeStyle() : null;
+        style = "rainbow".equals(style) ? "rainbow" : "solid";
+        String color = req != null ? req.getBadgeColor() : null;
+        if (color != null) {
+            color = color.trim();
+            // 只接受 #RGB / #RRGGBB / #RRGGBBAA，否则按默认色(null)处理
+            if (!color.matches("^#[0-9a-fA-F]{3,8}$")) {
+                color = null;
+            }
+        }
+        // 用 lambdaUpdate().set() 而非 updateById：后者会忽略 null，无法清除徽章
+        boolean ok = userService.lambdaUpdate()
+                .set(User::getBadgeText, badge)
+                .set(User::getBadgeColor, color)
+                .set(User::getBadgeStyle, style)
+                .set(User::getUpdateTime, LocalDateTime.now())
+                .eq(User::getId, userId)
+                .update();
+        return ok ? Result.success(badge) : Result.failed("徽章设置失败");
     }
 
     @PutMapping("/{userId}/moderated-sections")

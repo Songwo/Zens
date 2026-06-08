@@ -106,6 +106,21 @@ public class User implements Serializable {
      */
     private String coverConfig;
 
+    /**
+     * 用户徽章文字（管理员授予的纯文字 flair，如「你可以访问L站」），空表示无徽章
+     */
+    private String badgeText;
+
+    /**
+     * 徽章颜色（纯色样式用，hex 如 #a855f7），空表示用默认色
+     */
+    private String badgeColor;
+
+    /**
+     * 徽章样式：solid=纯色 / rainbow=七彩跑马动效
+     */
+    private String badgeStyle;
+
     private LocalDateTime createTime;
     private LocalDateTime updateTime;
 

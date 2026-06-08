@@ -2,6 +2,7 @@ package com.campus.trend.campus_pulse.service.impl;
 
 import com.campus.trend.campus_pulse.entity.Post;
 import com.campus.trend.campus_pulse.entity.UserTagRelation;
+import com.campus.trend.campus_pulse.mapper.UserMapper;
 import com.campus.trend.campus_pulse.service.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -23,6 +24,8 @@ public class AsyncTaskServiceImpl implements AsyncTaskService {
     private final NotificationService notificationService;
     private final PostEventService postEventService;
     private final UserTagRelationService userTagRelationService;
+    private final UserMapper userMapper;
+    private final MailService mailService;
 
     @Override
     @Async("taskExecutor")
@@ -138,5 +141,29 @@ public class AsyncTaskServiceImpl implements AsyncTaskService {
     public void updateActiveRegionAsync(String userId, String region) {
         try { userService.updateActiveRegion(userId, region); }
         catch (Exception e) { log.warn("updateActiveRegionAsync uid={} err={}", userId, e.getMessage()); }
+    }
+
+    @Override
+    @Async("notifyExecutor")
+    public void syncNotificationEmailAsync(String userId, String title, String content) {
+        try {
+            com.campus.trend.campus_pulse.entity.User targetUser = userMapper.selectById(userId);
+            if (targetUser == null) {
+                return;
+            }
+            if (targetUser.getEmailNotifyEnabled() != null && targetUser.getEmailNotifyEnabled() == 0) {
+                return;
+            }
+            if (!StringUtils.hasText(targetUser.getEmail())) {
+                return;
+            }
+            String nickname = StringUtils.hasText(targetUser.getNickname()) ? targetUser.getNickname() : targetUser.getUsername();
+            mailService.sendSimpleMail(
+                    targetUser.getEmail(),
+                    "【Zens社区】" + (StringUtils.hasText(title) ? title : "你有一条新通知"),
+                    "Hi " + nickname + "，你收到一条新通知：\n\n" + content + "\n\n请前往站内查看完整内容。");
+        } catch (Exception e) {
+            log.warn("异步通知邮件同步失败: userId={}, err={}", userId, e.getMessage());
+        }
     }
 }

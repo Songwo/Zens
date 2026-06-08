@@ -60,8 +60,10 @@ func New(cfg config.Config, stateStore *store.Store, logger *slog.Logger) *http.
 
 	// 用户与认证 API
 	mux.HandleFunc("/api/me", handler.GetMe)
+	mux.HandleFunc("/api/me/claims", handler.GetMyClaims)
 	mux.HandleFunc("/api/auth/login", handler.AuthLogin)
 	mux.HandleFunc("/api/auth/register", handler.AuthRegister)
+	mux.HandleFunc("/api/auth/dev-login", handler.AuthDevLogin)
 	mux.HandleFunc("/api/auth/community-shortcut", handler.AuthCommunityShortcut)
 	mux.HandleFunc("/api/auth/community-login", handler.AuthCommunityLogin)
 	mux.HandleFunc("/api/auth/community-config", handler.AuthCommunityConfig)

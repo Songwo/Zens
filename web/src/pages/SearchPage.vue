@@ -5,6 +5,7 @@ import MainLayout from '@/layouts/MainLayout.vue'
 import PostCard from '@/components/PostCard.vue'
 import PageBackButton from '@/components/common/PageBackButton.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
+import PostListSkeleton from '@/components/common/PostListSkeleton.vue'
 import { postApi } from '@/api/post'
 import { publicDataApi } from '@/api/publicData'
 import { tagApi } from '@/api/tag'
@@ -13,6 +14,8 @@ import type { Post } from '@/types'
 import { ElMessage } from 'element-plus'
 import { Search, Filter, Close, Loading } from '@element-plus/icons-vue'
 import { cachedRequest } from '@/utils/requestCache'
+import { encodeUserId } from '@/utils/shortId'
+import { useInfiniteScroll } from '@/composables/useInfiniteScroll'
 
 const route = useRoute()
 const router = useRouter()
@@ -257,7 +260,6 @@ const fetchPosts = async (reset = false) => {
   }
 
   if (!hasMore.value || (loading.value && !reset)) return
-
   loading.value = true
   const controller = new AbortController()
   searchAbortController = controller
@@ -318,6 +320,12 @@ const fetchPosts = async (reset = false) => {
     }
   }
 }
+
+// Song：帖子结果无限滚动（仅在帖子 tab 生效）
+const { sentinel } = useInfiniteScroll(() => fetchPosts(false), {
+  canLoadMore: () =>
+    searchTab.value === 'post' && hasMore.value && !loading.value && posts.value.length > 0,
+})
 
 const fetchUsers = async () => {
   const keyword = normalizedQuery.value
@@ -630,7 +638,9 @@ onUnmounted(() => {
           :highlight-keyword="normalizedQuery"
         />
 
-        <div v-if="loading" class="loading-state">
+        <PostListSkeleton v-if="loading && posts.length === 0" :count="4" />
+
+        <div v-else-if="loading" class="loading-state">
           <el-icon class="is-loading"><Loading /></el-icon> 正在为您搜寻...
         </div>
 
@@ -661,6 +671,9 @@ onUnmounted(() => {
           <el-button plain @click="fetchPosts(false)">加载更多结果</el-button>
         </div>
 
+        <!-- Song：无限滚动哨兵 -->
+        <div ref="sentinel" class="infinite-sentinel" aria-hidden="true"></div>
+
         <div v-if="!hasMore && posts.length > 0" class="pagination-footer">
           <span class="end-marker">已显示全部搜索结果</span>
         </div>
@@ -677,7 +690,7 @@ onUnmounted(() => {
             v-for="user in userResults"
             :key="user.id"
             class="user-card"
-            @click="router.push(`/user/${user.id}`)"
+            @click="router.push(`/user/${encodeUserId(user.id)}`)"
           >
             <el-avatar :size="48" :src="user.avatar" class="user-card-avatar">
               {{ user.nickname?.charAt(0) || '?' }}
@@ -890,6 +903,11 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+.infinite-sentinel {
+  height: 1px;
+  width: 100%;
 }
 
 .loading-state {

@@ -26,6 +26,12 @@ public interface NotificationService {
             String title, String content,
             int typeCode, String relatedPostId);
 
+    /**
+     * 实际处理通知入库与推送（供 MQ 消费者调用）
+     */
+    void processNotification(String userId, String type, String title, String content,
+                             String relatedId, String relatedUserId);
+
     List<NotificationResp> getNotificationList(String userId, int page, int size);
 
     /** 用户全部未读通知数量。 */

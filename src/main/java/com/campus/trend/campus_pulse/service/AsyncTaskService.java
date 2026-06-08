@@ -21,6 +21,9 @@ public interface AsyncTaskService {
     /** 异步发送系统通知 */
     void sendSystemNotificationAsync(String userId, String title, String content, Object relatedId);
 
+    /** 异步同步通知邮件 */
+    void syncNotificationEmailAsync(String userId, String title, String content);
+
 
     /** 异步推送 WS 帖子事件（回复） */
     void pushPostRepliedAsync(String postId, Long sectionId, Integer commentCount);

@@ -16,6 +16,7 @@ public class PostRecommendResp {
     private Integer commentCount;
     private String authorName;
     private String authorAvatar;
+    private String authorBadgeText;
     private String createTime;
     
     private String recommendReason;

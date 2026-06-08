@@ -10,10 +10,10 @@ const NAV_GROUPS = [
     minRole: "user",
     items: [
       { path: "/admin/dashboard", label: "运营总览", icon: "◎", minRole: "user" },
-      { path: "/admin/campaigns", label: "活动管理", icon: "▦", minRole: "user" },
-      { path: "/admin/cdks", label: "CDK 库存", icon: "◇", minRole: "user" },
-      { path: "/admin/nodes", label: "分发网络", icon: "⎈", minRole: "user" },
-      { path: "/admin/projects", label: "项目管理", icon: "◫", minRole: "user" },
+      { path: "/admin/campaigns", label: "活动管理", icon: "活", minRole: "user" },
+      { path: "/admin/cdks", label: "CDK 库存", icon: "码", minRole: "user" },
+      { path: "/admin/nodes", label: "分发网络", icon: "链", minRole: "user" },
+      { path: "/admin/projects", label: "项目管理", icon: "项", minRole: "user" },
     ],
   },
   {
@@ -21,9 +21,9 @@ const NAV_GROUPS = [
     id: "data",
     minRole: "user",
     items: [
-      { path: "/admin/claims", label: "领取记录", icon: "◷", minRole: "user" },
-      { path: "/admin/analytics", label: "数据分析", icon: "↗", minRole: "user" },
-      { path: "/admin/logs", label: "系统日志", icon: "☰", minRole: "admin" },
+      { path: "/admin/claims", label: "领取记录", icon: "领", minRole: "user" },
+      { path: "/admin/analytics", label: "数据分析", icon: "数", minRole: "user" },
+      { path: "/admin/logs", label: "系统日志", icon: "志", minRole: "admin" },
     ],
   },
   {
@@ -31,8 +31,8 @@ const NAV_GROUPS = [
     id: "security",
     minRole: "admin",
     items: [
-      { path: "/admin/risk", label: "风控中心", icon: "◈", minRole: "admin" },
-      { path: "/admin/captcha", label: "验证码配置", icon: "▣", minRole: "admin" },
+      { path: "/admin/risk", label: "风控中心", icon: "控", minRole: "admin" },
+      { path: "/admin/captcha", label: "验证码配置", icon: "验", minRole: "admin" },
     ],
   },
   {
@@ -40,7 +40,7 @@ const NAV_GROUPS = [
     id: "system",
     minRole: "admin",
     items: [
-      { path: "/admin/settings", label: "系统设置", icon: "⚙", minRole: "admin" },
+      { path: "/admin/settings", label: "系统设置", icon: "设", minRole: "admin" },
     ],
   },
 ];
@@ -330,7 +330,7 @@ export default function AdminLayout() {
 
             <nav className="admin-breadcrumb" aria-label="面包屑导航">
               <span className="admin-breadcrumb__home" onClick={() => navigate("/admin/dashboard")}>
-                ⌂
+                首页
               </span>
               {breadcrumbs.map((crumb, index) => (
                 <span key={index} className="admin-breadcrumb__item">
@@ -349,7 +349,7 @@ export default function AdminLayout() {
               onClick={() => setSearchOpen(true)}
               title="搜索导航 (Ctrl+K)"
             >
-              <span className="admin-topbar__search-icon">⌕</span>
+              <span className="admin-topbar__search-icon">搜</span>
               <span className="admin-topbar__search-text">搜索...</span>
               <kbd className="admin-topbar__search-kbd">⌘K</kbd>
             </button>
@@ -360,7 +360,7 @@ export default function AdminLayout() {
               title={`${alertCount} 条异常提醒`}
               aria-label={`${alertCount} 条异常提醒`}
             >
-              <span className="admin-topbar__bell">🔔</span>
+              <span className="admin-topbar__bell">警</span>
               {alertCount > 0 && (
                 <span className="admin-topbar__notification-badge">
                   {alertCount > 9 ? "9+" : alertCount}
@@ -391,7 +391,7 @@ export default function AdminLayout() {
         <div className="admin-search-overlay" onClick={() => setSearchOpen(false)}>
           <div className="admin-search-modal" onClick={(e) => e.stopPropagation()}>
             <div className="admin-search-modal__header">
-              <span className="admin-search-modal__icon">⌕</span>
+              <span className="admin-search-modal__icon">搜</span>
               <input
                 ref={searchRef}
                 className="admin-search-modal__input"

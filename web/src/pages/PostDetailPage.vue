@@ -6,6 +6,7 @@ import PageBackButton from '@/components/common/PageBackButton.vue'
 import ScrollEdgeBar from '@/components/ui/ScrollEdgeBar.vue'
 import { postApi } from '@/api/post'
 import { commentApi } from '@/api/comment'
+import type { ShortLinkResolveResult } from '@/api/comment'
 import { reportApi } from '@/api/report'
 import { recommendApi } from '@/api/recommend'
 import { viewLogApi } from '@/api/viewLog'
@@ -15,7 +16,7 @@ import { pulseNotification } from '@/utils/pulseNotification'
 import { TOC_MARKDOWN_TAG, renderMarkdownWithToc, renderMarkdownWithTocResult, renderMarkdownWithTocAsync, type MarkdownTocRenderResult } from '@/utils/markdownToc'
 import DOMPurify from 'dompurify'
 import { timeAgo } from '@/utils/timeAgo'
-import { decodePostId, encodePostId } from '@/utils/shortId'
+import { decodeCommentId, decodePostId, encodePostId } from '@/utils/shortId'
 import { generateSummary } from '@/utils/markdown'
 import { renderGithubRichCards, mergeConsecutiveBlockquotes } from '@/utils/richLink'
 import { cachedRequest } from '@/utils/requestCache'
@@ -34,6 +35,7 @@ import {
   RefreshRight
 } from '@element-plus/icons-vue'
 import UserRoleBadge from '@/components/common/UserRoleBadge.vue'
+import UserBadge from '@/components/common/UserBadge.vue'
 import UserQuickCard from '@/components/common/UserQuickCard.vue'
 import CommentList from '@/components/comment/CommentList.vue'
 import CommentEditor from '@/components/comment/CommentEditor.vue'
@@ -55,10 +57,14 @@ const replyingTo = ref<string | null>(null)
 const replyingToName = ref<string | null>(null)
 const regeneratingSummary = ref(false)
 const activeCommentId = ref('')
+const shortLinkTarget = ref<ShortLinkResolveResult | null>(null)
 const RELATED_POST_CACHE_TTL = 60 * 1000
 const POST_METRICS_UPDATED_EVENT = 'cp:post-metrics-updated'
 
 const postId = computed(() => {
+  if (shortLinkTarget.value?.postId) {
+    return shortLinkTarget.value.postId
+  }
   const rawId = String(route.params.id || '')
   return rawId.startsWith('p') ? decodePostId(rawId) : rawId
 })
@@ -66,6 +72,9 @@ const postId = computed(() => {
 watch(
   () => route.params.id,
   (rawId) => {
+    if (route.name === 'short-link-detail') {
+      return
+    }
     if (rawId && String(rawId).startsWith('POST_')) {
       const shortId = encodePostId(String(rawId))
       router.replace(`/t/${shortId}`)
@@ -106,11 +115,6 @@ const isAdmin = computed(() => {
   return roles.some((role: string) => role === 'ROLE_ADMIN' || role === 'ROLE_SUPER_ADMIN')
 })
 
-const isGlobalModerator = computed(() => {
-  const roles = userStore.userInfo?.roles || []
-  return roles.includes('ROLE_MODERATOR')
-})
-
 const moderatedSectionIds = computed(() => {
   const rawIds = userStore.userInfo?.moderatedSectionIds || []
   return new Set(rawIds.map((id: number | string) => Number(id)).filter((id: number) => Number.isFinite(id) && id > 0))
@@ -119,8 +123,8 @@ const moderatedSectionIds = computed(() => {
 const isDeletedPost = computed(() => post.value?.auditStatus === 'DELETED')
 
 const canModerateCurrentSection = computed(() => {
-  if (!post.value?.sectionId) return isAdmin.value || isGlobalModerator.value
-  return isAdmin.value || isGlobalModerator.value || moderatedSectionIds.value.has(Number(post.value.sectionId))
+  if (!post.value?.sectionId) return isAdmin.value
+  return isAdmin.value || moderatedSectionIds.value.has(Number(post.value.sectionId))
 })
 
 const canManageCurrentPost = computed(() => {
@@ -447,7 +451,6 @@ const handleCommentDelete = async (comment: any) => {
   try {
     await commentApi.delete(comment.id)
     comment.auditStatus = 'DELETED'
-    comment.content = null
     if (post.value) {
       const cur = toFiniteMetric(post.value.commentCount) ?? comments.value.length
       post.value.commentCount = Math.max(0, cur - 1)
@@ -456,6 +459,44 @@ const handleCommentDelete = async (comment: any) => {
     pulseNotification.info('评论已删除')
   } catch (e: any) {
     ElMessage.error(e?.response?.data?.message || '删除失败')
+  }
+}
+
+const handleCommentCollect = async (comment: any) => {
+  try {
+    const res = await commentApi.collect(comment.id)
+    const nextCollected = typeof res.data?.isCollected === 'boolean'
+      ? res.data.isCollected
+      : !comment.isCollected
+    const currentCount = Math.max(0, Number(comment.collectCount || 0))
+    comment.isCollected = nextCollected
+    comment.collectCount = Math.max(0, currentCount + (nextCollected ? 1 : -1))
+
+    if (comment.isCollected) {
+      pulseNotification.success(`已收藏 @${comment.nickname || '用户'} 的评论`, '收藏评论成功')
+    } else {
+      pulseNotification.info('已取消收藏该评论')
+    }
+  } catch (error: any) {
+    pulseNotification.error(error?.response?.data?.message || '收藏评论失败，请重试')
+  }
+}
+
+const handleCommentRestore = async (comment: any) => {
+  try {
+    await commentApi.restore(comment.id)
+    if (post.value) {
+      const cur = toFiniteMetric(post.value.commentCount) ?? comments.value.length
+      post.value.commentCount = cur + 1
+      syncPostMetricsToLists()
+    }
+    const commentRes = await commentApi.getByPostId(postId.value, 1, 120)
+    comments.value = commentRes.data.records || []
+    activeCommentId.value = String(comment.id || '')
+    await scrollToComment(String(comment.id || ''))
+    pulseNotification.success('评论已恢复，内容重新回到讨论区。', '恢复评论成功')
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '恢复失败')
   }
 }
 
@@ -539,7 +580,7 @@ const ensureCanonical = (path: string) => {
 
 const applyPostSeo = () => {
   if (!post.value) return
-  const canonicalPath = `/t/${post.value.id}`
+  const canonicalPath = `/t/${encodePostId(post.value.id)}`
   const title = `${post.value.title} - Zens`
   const description = (aiSummaryText.value || generateSummary(post.value.content || '', 160) || '校园社区帖子详情').slice(0, 160)
 
@@ -549,6 +590,10 @@ const applyPostSeo = () => {
   ensureMetaByProperty('og:description', description)
   ensureMetaByProperty('og:type', 'article')
   ensureMetaByProperty('og:url', `${window.location.origin}${canonicalPath}`)
+  // Song：分享卡片配图（有封面时）
+  if (post.value.coverImage) {
+    ensureMetaByProperty('og:image', String(post.value.coverImage))
+  }
   ensureCanonical(canonicalPath)
 }
 
@@ -701,21 +746,72 @@ const formatDate = (dateStr: string) => {
 }
 
 const getRouteCommentId = () => {
+  if (shortLinkTarget.value?.targetType === 'comment' && shortLinkTarget.value.commentId) {
+    return shortLinkTarget.value.commentId
+  }
+  const queryCommentCode = route.query.c
+  if (typeof queryCommentCode === 'string' && queryCommentCode.trim()) {
+    return decodeCommentId(queryCommentCode.trim())
+  }
   const queryCommentId = route.query.commentId
   if (typeof queryCommentId === 'string' && queryCommentId.trim()) {
-    return queryCommentId.trim()
+    return decodeCommentId(queryCommentId.trim())
   }
   if (route.hash?.startsWith('#comment-')) {
     const hashCommentId = route.hash.replace('#comment-', '').trim()
     if (hashCommentId) {
-      return hashCommentId
+      return decodeCommentId(hashCommentId)
     }
   }
   return ''
 }
 
-const scrollToRouteComment = async (retry = 0) => {
-  const commentId = getRouteCommentId()
+const hasCommentInTree = (list: Comment[], targetId: string): boolean => {
+  for (const item of list || []) {
+    if (String(item?.id || '') === targetId) {
+      return true
+    }
+    if (item.children?.length && hasCommentInTree(item.children, targetId)) {
+      return true
+    }
+  }
+  return false
+}
+
+const ensureCommentLoadedForAnchor = async (commentId: string) => {
+  if (!commentId || hasCommentInTree(comments.value, commentId)) {
+    return true
+  }
+
+  const pageSize = 100
+  const collected: Comment[] = []
+  let total = 0
+  let page = 1
+
+  while (page <= 20) {
+    const res = await commentApi.getByPostId(postId.value, page, pageSize)
+    const records = (res.data.records || []) as Comment[]
+    total = Number(res.data.total || 0)
+    collected.push(...records)
+
+    if (hasCommentInTree(collected, commentId)) {
+      comments.value = collected
+      return true
+    }
+
+    if (records.length === 0 || collected.length >= total) {
+      break
+    }
+    page++
+  }
+
+  if (collected.length > comments.value.length) {
+    comments.value = collected
+  }
+  return hasCommentInTree(comments.value, commentId)
+}
+
+const scrollToComment = async (commentId: string, retry = 0, triedLoading = false) => {
   activeCommentId.value = commentId
   if (!commentId) {
     return
@@ -728,14 +824,31 @@ const scrollToRouteComment = async (retry = 0) => {
   }
   if (retry < 4) {
     window.setTimeout(() => {
-      scrollToRouteComment(retry + 1)
+      scrollToComment(commentId, retry + 1, triedLoading)
     }, 180)
+    return
   }
+
+  if (!triedLoading) {
+    const loaded = await ensureCommentLoadedForAnchor(commentId)
+    if (loaded) {
+      window.setTimeout(() => {
+        scrollToComment(commentId, 0, true)
+      }, 80)
+    }
+  }
+}
+
+const scrollToRouteComment = async (retry = 0) => {
+  await scrollToComment(getRouteCommentId(), retry)
 }
 
 watch(
   () => postId.value,
   (newId, oldId) => {
+    if (route.name === 'short-link-detail') {
+      return
+    }
     if (!newId || newId === oldId) {
       return
     }
@@ -745,7 +858,37 @@ watch(
 )
 
 watch(
-  () => [route.query.commentId, route.hash],
+  () => route.params.code,
+  async (code) => {
+    if (route.name !== 'short-link-detail') {
+      shortLinkTarget.value = null
+      return
+    }
+    const codeValue = String(code || '').trim()
+    if (!codeValue) {
+      shortLinkTarget.value = null
+      return
+    }
+    loading.value = true
+    try {
+      const res = await commentApi.resolveShortLink(codeValue)
+      shortLinkTarget.value = res.data || null
+      activeCommentId.value = getRouteCommentId()
+      await fetchPost()
+    } catch (e: any) {
+      shortLinkTarget.value = null
+      post.value = null
+      comments.value = []
+      ElMessage.error(e?.response?.data?.message || e?.message || '短链接不存在或已失效')
+    } finally {
+      loading.value = false
+    }
+  },
+  { immediate: true }
+)
+
+watch(
+  () => [route.query.c, route.query.commentId, route.hash],
   () => {
     scrollToRouteComment()
   }
@@ -753,6 +896,9 @@ watch(
 
 onMounted(() => {
   activeCommentId.value = getRouteCommentId()
+  if (route.name === 'short-link-detail') {
+    return
+  }
   fetchPost()
 })
 </script>
@@ -821,6 +967,7 @@ onMounted(() => {
                     <span class="author-name">{{ post.authorName }}</span>
                   </UserQuickCard>
                   <UserRoleBadge :roles="post.authorRoles" />
+                  <UserBadge :text="post.authorBadgeText || ''" :color="post.authorBadgeColor" :effect="post.authorBadgeStyle" />
                 </span>
                 <div class="post-stats">
                   <span class="stat-item"><el-icon><View /></el-icon> {{ post.viewCount }}</span>
@@ -1007,13 +1154,14 @@ onMounted(() => {
             :active-comment-id="activeCommentId"
             :post-id="postId"
             :post-short-id="encodePostId(postId)"
-            :post-author-id="post?.userId"
             :current-user-id="userStore.userId"
-            :is-admin="isAdmin || isGlobalModerator"
+            :is-admin="isAdmin"
             :can-moderate-section="canModerateCurrentSection"
             @like="handleCommentLike"
+            @collect="handleCommentCollect"
             @reply="handleReply"
             @delete="handleCommentDelete"
+            @restore="handleCommentRestore"
             @report="handleCommentReport"
           />
         </div>

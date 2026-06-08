@@ -45,9 +45,9 @@ const go = (path: string) => {
     <div class="sidebar-footer">
       <div class="footer-title">热门标签</div>
       <div class="footer-tags">
-        <el-tag size="small" type="info" class="quick-tag" @click="go('/t/技术')"># 技术</el-tag>
-        <el-tag size="small" type="info" class="quick-tag" @click="go('/t/生活')"># 生活</el-tag>
-        <el-tag size="small" type="info" class="quick-tag" @click="go('/t/求职')"># 求职</el-tag>
+        <el-tag size="small" type="info" class="quick-tag" @click="go('/tag/技术')"># 技术</el-tag>
+        <el-tag size="small" type="info" class="quick-tag" @click="go('/tag/生活')"># 生活</el-tag>
+        <el-tag size="small" type="info" class="quick-tag" @click="go('/tag/求职')"># 求职</el-tag>
       </div>
     </div>
   </div>

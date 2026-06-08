@@ -418,9 +418,7 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
             throw new BusinessException(ResultCode.POST_NOT_FOUND);
         }
 
-        boolean isOwner = post.getUserId() != null && post.getUserId().equals(userId);
-        boolean canModerateSection = sectionModeratorService.canModerateSection(userId, post.getSectionId());
-        if (!isOwner && !canModerateSection) {
+        if (!canManagePost(post, userId)) {
             throw new BusinessException(ResultCode.NO_PERMISSION, "无权重新生成该帖子摘要");
         }
 
@@ -494,11 +492,7 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
         }
         Long oldSectionId = post.getSectionId();
 
-        boolean isAdmin = com.campus.trend.campus_pulse.utils.PermissionUtils.isUserAdmin(userId);
-        boolean canModerateSection = post.getSectionId() != null
-                && sectionModeratorService.canModerateSection(userId, post.getSectionId());
-
-        if (!post.getUserId().equals(userId) && !isAdmin && !canModerateSection) {
+        if (!canManagePost(post, userId)) {
             throw new BusinessException(ResultCode.NO_PERMISSION, "无权修改该帖子");
         }
 
@@ -667,8 +661,7 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
             throw new BusinessException(ResultCode.NO_PERMISSION, "帖子已删除，请先恢复后再操作");
         }
 
-        boolean canModerateSection = sectionModeratorService.canModerateSection(userId, post.getSectionId());
-        if (!canModerateSection) {
+        if (!canAdminOrModerateAssignedSection(userId, post.getSectionId())) {
             throw new BusinessException(ResultCode.NO_PERMISSION, "无权操作精华");
         }
 
@@ -1316,6 +1309,9 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
 
                 String role = author.getRole() != null ? author.getRole() : "ROLE_USER";
                 response.setAuthorRoles(java.util.Collections.singletonList(role));
+                response.setAuthorBadgeText(author.getBadgeText());
+                response.setAuthorBadgeColor(author.getBadgeColor());
+                response.setAuthorBadgeStyle(author.getBadgeStyle());
             } else {
                 response.setAuthorName("未知用户");
                 response.setAuthorAvatar(null);
@@ -1979,8 +1975,7 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
             throw new BusinessException(ResultCode.NO_PERMISSION, "帖子已删除，请先恢复后再操作");
         }
 
-        boolean canModerateSection = sectionModeratorService.canModerateSection(userId, post.getSectionId());
-        if (!canModerateSection) {
+        if (!canAdminOrModerateAssignedSection(userId, post.getSectionId())) {
             throw new BusinessException(ResultCode.NO_PERMISSION, "无权操作板块置顶");
         }
 
@@ -2081,10 +2076,7 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
         if (isDeletedPost(post)) {
             throw new BusinessException(ResultCode.NO_PERMISSION, "帖子已删除，请先恢复后再操作");
         }
-        boolean isAdmin = com.campus.trend.campus_pulse.utils.PermissionUtils.isUserAdmin(operatorId);
-        boolean canModerateSection = post.getSectionId() != null
-                && sectionModeratorService.canModerateSection(operatorId, post.getSectionId());
-        if (!isAdmin && !canModerateSection) {
+        if (!canAdminOrModerateAssignedSection(operatorId, post.getSectionId())) {
             throw new BusinessException(ResultCode.NO_PERMISSION, "无权审核该帖子");
         }
     }
@@ -2144,13 +2136,27 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
     }
 
     private boolean canDeleteOrRestorePost(Post post, String userId) {
+        return canManagePost(post, userId);
+    }
+
+    private boolean canManagePost(Post post, String userId) {
         if (post == null || !StringUtils.hasText(userId)) {
             return false;
         }
         if (userId.equals(post.getUserId())) {
             return true;
         }
-        return post.getSectionId() != null && sectionModeratorService.canModerateSection(userId, post.getSectionId());
+        return canAdminOrModerateAssignedSection(userId, post.getSectionId());
+    }
+
+    private boolean canAdminOrModerateAssignedSection(String userId, Long sectionId) {
+        if (!StringUtils.hasText(userId)) {
+            return false;
+        }
+        if (com.campus.trend.campus_pulse.utils.PermissionUtils.isUserAdmin(userId)) {
+            return true;
+        }
+        return sectionId != null && sectionModeratorService.isSectionModerator(userId, sectionId);
     }
 
 }

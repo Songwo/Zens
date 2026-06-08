@@ -6,6 +6,9 @@ export interface DirectConversation {
   peerId: string
   peerName: string
   peerAvatar?: string
+  peerBadgeText?: string
+  peerBadgeColor?: string
+  peerBadgeStyle?: string
   lastMessage: string
   lastTime: string
   unreadCount: number

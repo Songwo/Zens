@@ -2,6 +2,7 @@
 import { Pointer } from '@element-plus/icons-vue'
 import type { Comment } from '@/types'
 import UserRoleBadge from '@/components/common/UserRoleBadge.vue'
+import UserBadge from '@/components/common/UserBadge.vue'
 import UserQuickCard from '@/components/common/UserQuickCard.vue'
 
 const props = defineProps<{
@@ -55,6 +56,7 @@ const formatDate = (dateStr: string) => {
               <span class="user-name">{{ comment.nickname }}</span>
             </UserQuickCard>
             <UserRoleBadge :roles="comment.roles || []" />
+            <UserBadge :text="comment.userBadgeText || ''" :color="comment.userBadgeColor" :effect="comment.userBadgeStyle" />
           </span>
           <span class="comment-time">{{ formatDate(comment.createTime) }}</span>
         </div>

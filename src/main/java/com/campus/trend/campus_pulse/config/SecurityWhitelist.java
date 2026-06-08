@@ -42,6 +42,7 @@ public class SecurityWhitelist {
                         "/follow/stats/**",
                         "/level/thresholds",
                         "/changelog/list",
+                        "/short-link/**",
                         "/sso/clients/public/**",
                         "/actuator/health",
                         "/actuator/info",
@@ -52,5 +53,6 @@ public class SecurityWhitelist {
                         "/post/search-lists",
                         "/documents/list",
                         "/comment/create",
+                        "/short-link/comment",
         };
 }

@@ -139,6 +139,9 @@ export interface Post {
     authorName: string
     authorAvatar?: string
     authorRoles?: string[]
+    authorBadgeText?: string
+    authorBadgeColor?: string
+    authorBadgeStyle?: string
 
     sentimentScore?: number
     sentimentLabel?: string
@@ -155,9 +158,15 @@ export interface Comment {
     nickname: string
     roles?: string[]
     userAvatar?: string
+    userBadgeText?: string
+    userBadgeColor?: string
+    userBadgeStyle?: string
     likeCount: number
+    collectCount?: number
     createTime: string
+    editTime?: string | null
     isLiked?: boolean
+    isCollected?: boolean
     children?: Comment[]
     replyUserId?: string
     replyUserNickname?: string

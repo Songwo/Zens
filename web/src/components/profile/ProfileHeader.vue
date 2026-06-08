@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import Avatar from '@/components/common/Avatar.vue'
 import UserRoleBadge from '@/components/common/UserRoleBadge.vue'
+import UserBadge from '@/components/common/UserBadge.vue'
 import ProfileCover from '@/components/profile/ProfileCover.vue'
 import { parseCoverConfig, type CoverConfig } from '@/utils/coverConfig'
 import { EditPen, Connection, ChatDotRound } from '@element-plus/icons-vue'
@@ -19,6 +20,9 @@ export interface ProfileHeaderData {
   interestTags?: string
   level?: number
   roles?: string[]
+  badgeText?: string
+  badgeColor?: string
+  badgeStyle?: string
   profileCardBgUrl?: string
   coverConfig?: string
   postCount?: number
@@ -89,6 +93,7 @@ const clickableStats = computed(() => isSelf.value)
       <div class="ph-namerow">
         <h1 class="ph-name">{{ profile.nickname || profile.username }}</h1>
         <UserRoleBadge :roles="profile.roles || []" />
+        <UserBadge :text="profile.badgeText || ''" :color="profile.badgeColor" :effect="profile.badgeStyle" />
         <span v-if="profile.level != null" class="ph-level-pill">Lv.{{ profile.level }}</span>
       </div>
       <div class="ph-handle">@{{ profile.username }}</div>

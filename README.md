@@ -86,7 +86,7 @@ Campus Pulse 采用 **Java 主应用 + Go 媒体服务** 双后端拆分，Java 
        │      │               └────────────────────────────────┘
 ┌──────▼──┐ ┌─▼────────┐
 │ MySQL 8 │ │ Redis 6  │
-│ 17 张表 │ │ Token    │
+│ 25 张表 │ │ Token    │
 │ 全文索引│ │ Cache    │
 └─────────┘ └──────────┘
 ```
@@ -133,27 +133,35 @@ Campus Pulse 采用 **Java 主应用 + Go 媒体服务** 双后端拆分，Java 
 
 ## 🗄️ 数据库设计
 
-共 **17 张核心表**，结构文件：[`src/main/resources/sql/campus_pulse_schema.sql`](src/main/resources/sql/campus_pulse_schema.sql)
+共 **25 张核心表**，结构文件：[`src/main/resources/sql/campus_pulse_schema.sql`](src/main/resources/sql/campus_pulse_schema.sql)
 
 | 表名 | 说明 |
 |------|------|
 | `sys_user` | 用户表，含 GitHub 登录、2FA、卡片主题 |
+| `sys_tag` | 标签表 |
+| `sys_user_tag_relation` | 用户标签兴趣关系表 |
+| `sections` | 板块表 |
 | `sys_post` | 帖子表，全文索引 `ft_post_search`，审核状态，置顶字段 |
-| `sys_comment` | 评论表，支持嵌套回复 |
+| `sys_post_media` | 帖子媒体关系表 |
+| `sys_media_file` | 媒体文件元数据表 |
 | `sys_post_like` | 点赞表 |
 | `sys_post_collect` | 收藏表 |
+| `sys_comment` | 评论表，支持嵌套回复、软删除 |
+| `comment_likes` | 评论点赞表 |
+| `comment_collects` | 评论收藏表 |
+| `short_links` | 短链接映射表 |
 | `sys_view_log` | 浏览日志，用于热度计算 |
-| `sys_tag` | 标签表 |
-| `sys_report` | 举报表，异步工作流状态机 |
 | `sys_level_exp_log` | 等级经验日志 |
 | `notifications` | 通知表 |
 | `direct_messages` | 私信表 |
-| `sections` | 板块表 |
+| `sys_report` | 举报表，异步工作流状态机 |
 | `moderator_applications` | 版主申请表 |
-| `user_follows` | 关注关系表 |
-| `comment_likes` | 评论点赞表 |
+| `follows` | 用户关注关系表 |
 | `post_heat_snapshots` | 热度快照表 |
 | `trend_stats` | 趋势统计表 |
+| `invite_codes` | 邀请码表 |
+| `sys_sso_client` | SSO 应用注册表 |
+| `sys_changelog` | 发展历程 / 版本日志表 |
 
 ---
 

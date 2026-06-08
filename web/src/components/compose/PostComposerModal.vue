@@ -5,45 +5,34 @@ import { useUserStore } from '@/store/user'
 import { postApi } from '@/api/post'
 import { publicDataApi } from '@/api/publicData'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { 
-  Close, 
-  View, 
-  EditPen,
-  Picture,
+import { pulseNotification } from '@/utils/pulseNotification'
+import {
+  Close,
   VideoPlay,
-  Promotion, 
+  Promotion,
   MagicStick,
   FullScreen,
   Crop
 } from '@element-plus/icons-vue'
-import MarkdownIt from 'markdown-it'
 import ImageUploader from '@/components/ImageUploader.vue'
+import MarkdownTutorial from './MarkdownTutorial.vue'
+import MarkdownEditor from '@/components/markdown/MarkdownEditor.vue'
 import { uploadApi } from '@/api/upload'
 import {
-  UPLOAD_IMAGE_MAX_SIZE_BYTES,
-  UPLOAD_IMAGE_MAX_SIZE_MB,
   UPLOAD_VIDEO_MAX_SIZE_BYTES,
   UPLOAD_VIDEO_MAX_SIZE_MB
 } from '@/constants/upload'
 import { usePostComposerStore } from '@/store/postComposer'
 import { usePostDraft } from '@/composables/usePostDraft'
-import { useMarkdownImagePaste } from '@/composables/useMarkdownImagePaste'
-import { TOC_MARKDOWN_TAG, renderMarkdownWithToc } from '@/utils/markdownToc'
-import { renderGithubRichCards } from '@/utils/richLink'
 
 const router = useRouter()
 const userStore = useUserStore()
 const composerStore = usePostComposerStore()
 const draft = usePostDraft()
 
-const md = new MarkdownIt({
-  html: true,
-  linkify: true,
-  typographer: true
-})
-
 // Song：说明
 const isMaximized = ref(false)
+const tutorialRef = ref<any>(null)
 const titleInputRef = ref<any>(null)
 const tagInput = ref('')
 const categories = ref<any[]>([])
@@ -53,38 +42,15 @@ const isEditing = ref(false)
 const editId = ref('')
 const editStatus = ref(1)
 const editAuditStatus = ref('')
-const contentInputRef = ref<any>(null)
-const contentImageInputRef = ref<HTMLInputElement | null>(null)
-const contentImageUploading = ref(false)
+const editorRef = ref<InstanceType<typeof MarkdownEditor> | null>(null)
 const contentVideoInputRef = ref<HTMLInputElement | null>(null)
 const contentVideoUploading = ref(false)
-const {
-  isPastingImage,
-  bindPasteListener,
-  unbindPasteListener
-} = useMarkdownImagePaste({
-  getTextarea: () => contentInputRef.value?.textarea as HTMLTextAreaElement | undefined,
-  getContent: () => draft.form.content,
-  setContent: value => {
-    draft.form.content = value
-  },
-  module: 'post',
-  maxImageSizeMb: UPLOAD_IMAGE_MAX_SIZE_MB
-})
 
-const renderedContent = computed(() => {
-  const html = renderMarkdownWithToc(md, draft.form.content || '暂无内容')
-  return renderGithubRichCards(html)
-})
 const titleCharCount = computed(() => draft.form.title.trim().length)
 const contentCharCount = computed(() => draft.form.content.trim().length)
 const isDraftLikeEditing = computed(() => {
   return isEditing.value && (editStatus.value === 0 || editAuditStatus.value === 'REJECTED' || editAuditStatus.value === 'DRAFT')
 })
-const editorHeight = ref(620)
-const editorLayoutStyle = computed(() => ({
-  height: `${editorHeight.value}px`
-}))
 
 const categoriesLoading = ref(false)
 
@@ -220,7 +186,7 @@ const publish = async () => {
       })
       editStatus.value = 1
       editAuditStatus.value = 'PENDING'
-      ElMessage.success(wasDraftLikeEditing ? '已重新提交审核' : '更新成功')
+      pulseNotification.success(wasDraftLikeEditing ? '已重新提交至人工审核，请静候佳音' : '话题内容更新成功，已完美同步', '内容更新完毕')
     } else {
       await postApi.create({
         title,
@@ -230,7 +196,7 @@ const publish = async () => {
         coverImage: draft.form.coverImage || undefined,
         status: 1
       })
-      ElMessage.success('发布成功')
+      pulseNotification.post(`「${title}」已成功广播至校园大厅，激荡你的校园回声！`, '发布话题成功')
     }
 
     draft.clearDraft() // Song：重要: 成功后清空草稿
@@ -346,67 +312,6 @@ const toggleMaximize = () => {
   isMaximized.value = !isMaximized.value
 }
 
-const insertContentAtCursor = async (text: string) => {
-  const textarea = contentInputRef.value?.textarea as HTMLTextAreaElement | undefined
-  if (!textarea) {
-    draft.form.content = draft.form.content
-      ? `${draft.form.content}\n${text}\n`
-      : `${text}\n`
-    return
-  }
-
-  const start = textarea.selectionStart ?? draft.form.content.length
-  const end = textarea.selectionEnd ?? draft.form.content.length
-  const prefix = draft.form.content.slice(0, start)
-  const suffix = draft.form.content.slice(end)
-  const needsLeadingBreak = prefix.length > 0 && !prefix.endsWith('\n') ? '\n' : ''
-  const needsTrailingBreak = suffix.length > 0 && !suffix.startsWith('\n') ? '\n' : ''
-  const inserted = `${needsLeadingBreak}${text}${needsTrailingBreak}`
-  draft.form.content = `${prefix}${inserted}${suffix}`
-
-  await nextTick()
-  const nextPosition = (prefix + inserted).length
-  textarea.focus()
-  textarea.setSelectionRange(nextPosition, nextPosition)
-}
-
-const handleUploadContentImage = () => {
-  if (contentImageUploading.value) return
-  contentImageInputRef.value?.click()
-}
-
-const handleContentImageChange = async (event: Event) => {
-  const input = event.target as HTMLInputElement
-  const file = input.files?.[0]
-  input.value = ''
-  if (!file) return
-
-  if (!file.type.startsWith('image/')) {
-    ElMessage.warning('请选择图片文件')
-    return
-  }
-
-  if (file.size > UPLOAD_IMAGE_MAX_SIZE_BYTES) {
-    ElMessage.warning(`图片不能超过 ${UPLOAD_IMAGE_MAX_SIZE_MB}MB`)
-    return
-  }
-
-  contentImageUploading.value = true
-  try {
-    const imageUrl = await uploadApi.uploadImage(file, 'post')
-    if (!imageUrl) {
-      throw new Error('图片上传失败')
-    }
-    await insertContentAtCursor(`![${file.name || 'image'}](${imageUrl})`)
-    ElMessage.success('图片已插入正文')
-  } catch (error: any) {
-    if (error?.response) return
-    ElMessage.error(error?.message || '图片上传失败')
-  } finally {
-    contentImageUploading.value = false
-  }
-}
-
 const handleUploadContentVideo = () => {
   if (contentVideoUploading.value) return
   contentVideoInputRef.value?.click()
@@ -434,7 +339,10 @@ const handleContentVideoChange = async (event: Event) => {
     if (!videoUrl) {
       throw new Error('视频上传失败')
     }
-    await insertContentAtCursor(`<video controls preload="metadata" src="${videoUrl}"></video>`)
+    editorRef.value?.insertAtCursor(
+      `<video controls preload="metadata" src="${videoUrl}"></video>`,
+      { ensureBlankLineBefore: true, ensureBlankLineAfter: true }
+    )
     ElMessage.success('视频已插入正文')
   } catch (error: any) {
     if (error?.response) return
@@ -442,36 +350,6 @@ const handleContentVideoChange = async (event: Event) => {
   } finally {
     contentVideoUploading.value = false
   }
-}
-
-const insertTocTag = async () => {
-  if (draft.form.content.includes(TOC_MARKDOWN_TAG)) {
-    ElMessage.info('目录标签已存在')
-    return
-  }
-
-  const textarea = contentInputRef.value?.textarea as HTMLTextAreaElement | undefined
-  if (!textarea) {
-    draft.form.content = draft.form.content
-      ? `${TOC_MARKDOWN_TAG}\n\n${draft.form.content}`
-      : `${TOC_MARKDOWN_TAG}\n`
-    return
-  }
-
-  const start = textarea.selectionStart ?? draft.form.content.length
-  const end = textarea.selectionEnd ?? draft.form.content.length
-  const prefix = draft.form.content.slice(0, start)
-  const suffix = draft.form.content.slice(end)
-  const needsLeadingBreak = prefix.length > 0 && !prefix.endsWith('\n') ? '\n' : ''
-  const needsTrailingBreak = suffix.length > 0 && !suffix.startsWith('\n') ? '\n' : ''
-  const inserted = `${needsLeadingBreak}${TOC_MARKDOWN_TAG}${needsTrailingBreak}`
-
-  draft.form.content = `${prefix}${inserted}${suffix}`
-
-  await nextTick()
-  const nextPosition = (prefix + inserted).length
-  textarea.focus()
-  textarea.setSelectionRange(nextPosition, nextPosition)
 }
 
 const handleClose = (force = false) => {
@@ -583,9 +461,6 @@ watch(() => composerStore.isOpen, async (newVal) => {
     if (titleInputRef.value) {
       titleInputRef.value.focus()
     }
-    bindPasteListener()
-  } else {
-    unbindPasteListener()
   }
 })
 
@@ -624,7 +499,6 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeydown)
-  unbindPasteListener()
 })
 </script>
 
@@ -633,9 +507,12 @@ onUnmounted(() => {
     <Transition name="composer-fade">
       <div v-if="composerStore.isOpen" class="composer-overlay" @mousedown.self="handleClose(false)">
         <div class="composer-scroll-shell" :class="{ 'is-maximized': isMaximized }">
-          <div 
-            class="composer-modal" 
+          <div
+            class="composer-modal"
             :class="{'is-maximized': isMaximized}"
+            role="dialog"
+            aria-modal="true"
+            :aria-label="isEditing ? '编辑话题' : '创建话题'"
           >
           <!-- HEADER -->
           <div class="composer-header">
@@ -725,15 +602,8 @@ onUnmounted(() => {
               <el-form-item class="editor-form-item">
                 <template #label>
                   <div class="editor-label">
-                    <span>正文内容 (支持 Markdown)</span>
+                    <span>正文内容 (Markdown · Shiki 多彩高亮)</span>
                     <div class="editor-actions">
-                      <input
-                        ref="contentImageInputRef"
-                        class="content-image-input"
-                        type="file"
-                        accept="image/*"
-                        @change="handleContentImageChange"
-                      />
                       <input
                         ref="contentVideoInputRef"
                         class="content-video-input"
@@ -744,62 +614,38 @@ onUnmounted(() => {
                       <el-button
                         link
                         type="primary"
-                        :icon="Picture"
-                        :loading="contentImageUploading"
-                        @click="handleUploadContentImage"
-                      >
-                        上传图片
-                      </el-button>
-                      <el-button
-                        link
-                        type="primary"
                         :icon="VideoPlay"
                         :loading="contentVideoUploading"
                         @click="handleUploadContentVideo"
                       >
                         上传视频
                       </el-button>
-                      <el-button link type="primary" @click="insertTocTag">
-                        插入目录标签
-                      </el-button>
-                      <span v-if="isPastingImage" class="paste-status">正在上传剪贴板图片...</span>
-                      <el-button 
+                      <el-button
                         v-if="draft.form.content.length > 10"
-                        link 
-                        type="primary" 
+                        link
+                        type="primary"
                         :icon="MagicStick"
                         :loading="extracting"
                         @click="handleAIAnalysis"
                       >
                         AI 提取标签
                       </el-button>
+                      <el-button link type="success" @click="tutorialRef?.open()">
+                        📝 Markdown 教程
+                      </el-button>
                     </div>
                   </div>
                 </template>
 
-                <div class="editor-height-control">
-                  <span class="height-label">编辑区高度</span>
-                  <el-slider v-model="editorHeight" :min="500" :max="900" :step="20" class="height-slider" />
-                  <span class="height-value">{{ editorHeight }}px</span>
-                </div>
-
-                <div class="editor-scroll-frame">
-                  <div class="editor-wrapper split-view" :style="editorLayoutStyle">
-                    <div class="editor-pane">
-                      <div class="pane-header"><el-icon><EditPen /></el-icon> 编辑</div>
-                      <el-input
-                        ref="contentInputRef"
-                        v-model="draft.form.content"
-                        type="textarea"
-                        placeholder="使用 Markdown 编写你的内容... 输入 [TOC] 可自动生成目录，支持 Ctrl/Cmd + V 粘贴图片"
-                        class="markdown-editor"
-                      />
-                    </div>
-                    <div class="preview-pane">
-                      <div class="pane-header"><el-icon><View /></el-icon> 预览</div>
-                      <div class="markdown-preview markdown-body" v-html="renderedContent"></div>
-                    </div>
-                  </div>
+                <div class="post-md-editor-wrap">
+                  <MarkdownEditor
+                    ref="editorRef"
+                    v-model="draft.form.content"
+                    mode="full"
+                    module="post"
+                    placeholder="使用 Markdown 编写内容…  Ctrl/Cmd+B 加粗、Ctrl+K 链接、Ctrl+Shift+K 代码块，粘贴图片自动上传"
+                    height="100%"
+                  />
                 </div>
               </el-form-item>
             </el-form>
@@ -826,6 +672,7 @@ onUnmounted(() => {
         </div>
       </div>
     </Transition>
+    <MarkdownTutorial ref="tutorialRef" />
   </Teleport>
 </template>
 
@@ -1038,17 +885,8 @@ html.dark .title-input :deep(.el-input__inner) {
   gap: 8px;
 }
 
-.content-image-input {
-  display: none;
-}
-
 .content-video-input {
   display: none;
-}
-
-.paste-status {
-  font-size: 12px;
-  color: var(--el-color-primary);
 }
 
 .cover-hint {
@@ -1074,170 +912,18 @@ html.dark .title-input :deep(.el-input__inner) {
   flex-direction: column;
 }
 
-.editor-height-control {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 8px 12px;
-  border-radius: 8px;
-  border: 1px solid var(--cp-border);
-  background-color: var(--el-fill-color-extra-light);
-  margin-bottom: 10px;
-}
-
-.height-label {
-  font-size: 12px;
-  color: var(--cp-text-muted);
-  white-space: nowrap;
-}
-
-.height-slider {
+.post-md-editor-wrap {
   flex: 1;
-  min-width: 120px;
-}
-
-.height-value {
-  font-size: 12px;
-  color: var(--cp-text-muted);
-  width: 56px;
-  text-align: right;
-}
-
-.editor-scroll-frame {
-  flex: 1;
-  min-height: 0;
-  width: 100%;
-  max-width: 100%;
-  box-sizing: border-box;
-  overflow: auto;
-  border: 1px solid var(--cp-border);
-  border-radius: 10px;
-  padding: 10px;
-}
-
-.editor-wrapper {
-  border-radius: var(--el-border-radius-base);
-  overflow: hidden;
-  border: 1px solid var(--cp-border);
-  flex: 1 0 auto;
-  min-height: 0;
+  min-height: 540px;
   display: flex;
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
 }
-
-html.dark .editor-wrapper {
-  border-color: var(--el-border-color-dark);
-}
-
-.editor-wrapper.split-view {
-  background-color: var(--cp-bg-surface);
-  width: 100%;
-  display: grid;
-  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
-}
-
-.editor-pane, .preview-pane {
-  display: flex;
-  flex-direction: column;
-  width: auto;
+.post-md-editor-wrap > * {
+  flex: 1;
   min-height: 0;
   min-width: 0;
-}
-.editor-pane {
-  border-right: 1px solid var(--cp-border);
-}
-html.dark .editor-pane {
-  border-color: var(--el-border-color-dark);
-}
-.pane-header {
-  padding: 8px 16px;
-  font-size: 13px;
-  font-weight: 700;
-  background-color: var(--cp-bg-card);
-  border-bottom: 1px solid var(--cp-border);
-  color: var(--cp-text-muted);
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-html.dark .pane-header {
-  border-color: var(--el-border-color-dark);
-}
-
-.markdown-editor {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-.markdown-editor :deep(.el-textarea) {
-  flex: 1;
-  min-height: 0;
-}
-
-.markdown-editor :deep(.el-textarea__inner) {
-  border: none;
-  border-radius: 0;
-  font-family: var(--el-font-family-mono);
-  font-size: 14px;
-  line-height: 1.6;
-  padding: 16px;
-  background-color: transparent;
-  color: var(--cp-text);
-  resize: none;
-  height: 100%;
-  min-height: 400px;
-  overflow-y: auto !important;
-}
-
-.markdown-editor :deep(.el-textarea__inner)::-webkit-scrollbar {
-  width: 8px;
-}
-
-.markdown-editor :deep(.el-textarea__inner)::-webkit-scrollbar-track {
-  background: var(--el-fill-color-lighter);
-  border-radius: 4px;
-}
-
-.markdown-editor :deep(.el-textarea__inner)::-webkit-scrollbar-thumb {
-  background: var(--el-border-color);
-  border-radius: 4px;
-}
-
-.markdown-editor :deep(.el-textarea__inner)::-webkit-scrollbar-thumb:hover {
-  background: var(--el-border-color-dark);
-}
-
-.markdown-preview {
-  flex: 1;
-  min-height: 400px;
-  overflow-y: auto;
-  padding: 16px;
-  background-color: transparent;
-  color: var(--cp-text);
-  line-height: 1.8;
-}
-
-.markdown-preview::-webkit-scrollbar {
-  width: 8px;
-}
-
-.markdown-preview::-webkit-scrollbar-track {
-  background: var(--el-fill-color-lighter);
-  border-radius: 4px;
-}
-
-.markdown-preview::-webkit-scrollbar-thumb {
-  background: var(--el-border-color);
-  border-radius: 4px;
-}
-
-.markdown-preview::-webkit-scrollbar-thumb:hover {
-  background: var(--el-border-color-dark);
 }
 
 /* Song：说明 */
@@ -1336,104 +1022,9 @@ html.dark .composer-footer {
     grid-template-columns: 1fr;
     gap: 16px;
   }
-
-  .editor-height-control {
-    flex-wrap: wrap;
-    row-gap: 6px;
-  }
-
-  .height-value {
-    width: auto;
-  }
-
-  .editor-wrapper.split-view {
-    grid-template-columns: 1fr;
-  }
-
-  .editor-pane {
-    border-right: none;
-    border-bottom: 1px solid var(--cp-border);
-  }
 }
 
-/* Song：说明 */
-:deep(.markdown-body) {
-  font-size: 15px;
-  line-height: 1.7;
-}
-
-:deep(.markdown-body h1),
-:deep(.markdown-body h2),
-:deep(.markdown-body h3) {
-  font-weight: 700;
-  margin-top: 1.5em;
-  margin-bottom: 0.5em;
-  color: var(--cp-text);
-  border-bottom: 1px solid var(--cp-border);
-  padding-bottom: 0.3em;
-}
-
-html.dark :deep(.markdown-body h1),
-html.dark :deep(.markdown-body h2),
-html.dark :deep(.markdown-body h3) {
-  border-bottom-color: var(--el-border-color-dark);
-}
-
-:deep(.markdown-body p) {
-  margin-bottom: 1em;
-}
-
-:deep(.markdown-body code) {
-  background: var(--cp-bg-card);
-  color: var(--el-color-danger);
-  padding: 0.2em 0.4em;
-  border-radius: 4px;
-  font-size: 0.9em;
-  border: 1px solid var(--cp-border);
-}
-
-html.dark :deep(.markdown-body code) {
-  background: #2a2a2b;
-  color: #f56c6c;
-  border-color: #414243;
-}
-
-:deep(.markdown-body pre) {
-  background: var(--cp-bg-card);
-  padding: 1em;
-  border-radius: 8px;
-  overflow-x: auto;
-  margin: 1.5em 0;
-  border: 1px solid var(--cp-border);
-}
-
-html.dark :deep(.markdown-body pre) {
-  background: #1d1e1f;
-  border-color: #414243;
-}
-
-:deep(.markdown-body pre code) {
-  background: transparent;
-  padding: 0;
-  border: none;
-  color: var(--cp-text);
-}
-
-:deep(.markdown-body a) {
-  color: var(--el-color-primary);
-  text-decoration: none;
-}
-:deep(.markdown-body a:hover) {
-  text-decoration: underline;
-}
-
-:deep(.markdown-body blockquote) {
-  border-left: 4px solid var(--el-color-info-light-5);
-  padding-left: 1em;
-  margin: 1em 0;
-  color: var(--cp-text-muted);
-}
-
+/* Song：项目特有覆盖（视频 / GitHub 链接卡片） */
 :deep(.markdown-body video) {
   width: 100%;
   max-width: 100%;

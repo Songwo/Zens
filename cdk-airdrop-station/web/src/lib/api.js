@@ -176,6 +176,11 @@ export const claimApi = {
 
 export const userApi = {
   getMe: () => request("/api/me"),
+  claims: (params) => request(`/api/me/claims${qs(params)}`),
+};
+
+export const devApi = {
+  login: (body) => post("/api/auth/dev-login", body),
 };
 
 // ─── 社区 SSO 接口 ─────────────────────────────────────

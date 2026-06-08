@@ -420,17 +420,16 @@ func (h *Handler) PublicClaimRouter(w http.ResponseWriter, r *http.Request) {
 		respond(w, res, err)
 		return
 	}
-	// 强制登录才能领取
 	userID, _ := h.parseJWTUser(r)
-	if userID == "" {
-		writeError(w, model.ErrLoginRequired)
-		return
-	}
 	switch r.Method {
 	case http.MethodGet:
 		res, err := h.store.GetPublicNodeClaim(slug, userID, r.URL.Query().Get("fingerprint"))
 		respond(w, res, err)
 	case http.MethodPost:
+		if userID == "" {
+			writeError(w, model.ErrLoginRequired)
+			return
+		}
 		var req model.PublicClaimRequest
 		if err := decodeJSON(r, &req); err != nil {
 			writeError(w, err)
@@ -811,6 +810,19 @@ func (h *Handler) GetMe(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]interface{}{"loggedIn": true, "user": info, "username": username, "role": info.Role})
 }
 
+func (h *Handler) GetMyClaims(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, methodErr())
+		return
+	}
+	userID, _ := h.parseJWTUser(r)
+	if userID == "" {
+		writeError(w, model.NewAppError(http.StatusUnauthorized, "UNAUTHORIZED", "请先登录"))
+		return
+	}
+	writeJSON(w, http.StatusOK, h.store.ListClaimsByUser(userID, queryMap(r)))
+}
+
 type LoginRequest struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
@@ -824,6 +836,57 @@ func (h *Handler) AuthLogin(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) AuthRegister(w http.ResponseWriter, r *http.Request) {
 	// 本地注册已禁用，仅支持社区 SSO 登录
 	writeError(w, model.NewAppError(http.StatusForbidden, "LOCAL_REGISTER_DISABLED", "本地注册已禁用，请使用社区账号登录"))
+}
+
+func (h *Handler) AuthDevLogin(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, methodErr())
+		return
+	}
+	if !devLoginAllowed(r) {
+		writeError(w, model.NewAppError(http.StatusForbidden, "DEV_LOGIN_DISABLED", "本地测试登录仅允许在开发环境的本机访问"))
+		return
+	}
+	var req struct {
+		Username string `json:"username"`
+		Nickname string `json:"nickname"`
+	}
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, err)
+		return
+	}
+	username := sanitizeDevUsername(req.Username)
+	if username == "" {
+		writeError(w, model.NewAppError(http.StatusBadRequest, "MISSING_USERNAME", "请输入测试账号"))
+		return
+	}
+	nickname := strings.TrimSpace(req.Nickname)
+	if nickname == "" {
+		nickname = username
+	}
+	communityUserID := "dev:" + strings.ToLower(username)
+	user, err := h.store.CreateOrUpdateCommunityUser(communityUserID, username, "", nickname, username+"@local.test", "user")
+	if err != nil {
+		writeError(w, model.NewAppError(http.StatusInternalServerError, "USER_SYNC_FAILED", "本地测试账号创建失败"))
+		return
+	}
+	cdkToken, err := h.generateJWT(user.ID, user.Username)
+	if err != nil {
+		writeError(w, model.NewAppError(http.StatusInternalServerError, "TOKEN_CREATE_FAILED", "测试登录凭证生成失败"))
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"token": cdkToken,
+		"user": model.UserInfo{
+			UserID:          user.ID,
+			Username:        user.Username,
+			Role:            user.Role,
+			Avatar:          user.Avatar,
+			Nickname:        user.Nickname,
+			Email:           user.Email,
+			CommunityUserID: user.CommunityUserID,
+		},
+	})
 }
 
 func (h *Handler) AuthCommunityShortcut(w http.ResponseWriter, r *http.Request) {
@@ -992,6 +1055,56 @@ func (h *Handler) generateJWT(userID, username string) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{"sub": userID, "username": username, "exp": time.Now().Add(24 * time.Hour).Unix()})
 	secret := []byte("zf3sg4ikVorzR1S/cel4+o/VkQH+4LZxU8RkX0c0Ne6BFPf9NnPL09AoHSK9Zg95")
 	return token.SignedString(secret)
+}
+
+func devLoginAllowed(r *http.Request) bool {
+	if strings.EqualFold(strings.TrimSpace(os.Getenv("CDK_AIRDROP_DEV_LOGIN")), "false") {
+		return false
+	}
+	env := strings.ToLower(strings.TrimSpace(firstNonEmpty(os.Getenv("CDK_AIRDROP_ENV"), os.Getenv("APP_ENV"), os.Getenv("NODE_ENV"), os.Getenv("GO_ENV"))))
+	if env == "prod" || env == "production" {
+		return false
+	}
+	host, _, err := net.SplitHostPort(r.Host)
+	if err != nil {
+		host = r.Host
+	}
+	host = strings.Trim(strings.ToLower(host), "[]")
+	if host != "localhost" && host != "127.0.0.1" && host != "::1" {
+		return false
+	}
+	remoteHost, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		remoteHost = r.RemoteAddr
+	}
+	ip := net.ParseIP(strings.Trim(remoteHost, "[]"))
+	return ip != nil && ip.IsLoopback()
+}
+
+func sanitizeDevUsername(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	var b strings.Builder
+	for _, r := range value {
+		switch {
+		case r >= 'a' && r <= 'z':
+			b.WriteRune(r)
+		case r >= 'A' && r <= 'Z':
+			b.WriteRune(r)
+		case r >= '0' && r <= '9':
+			b.WriteRune(r)
+		case r == '_' || r == '-' || r == '.':
+			b.WriteRune(r)
+		case r == '@':
+			b.WriteRune('_')
+		}
+		if b.Len() >= 40 {
+			break
+		}
+	}
+	return strings.Trim(b.String(), "._-")
 }
 
 func decodeJSON(r *http.Request, target interface{}) error {

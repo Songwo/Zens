@@ -256,6 +256,7 @@ public class PostRecommendServiceImpl implements PostRecommendService {
             if (author != null) {
                 dto.setAuthorName(author.getNickname());
                 dto.setAuthorAvatar(author.getAvatar());
+                dto.setAuthorBadgeText(author.getBadgeText());
             } else {
                 dto.setAuthorName("未知用户");
             }

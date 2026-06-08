@@ -100,6 +100,9 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         proFileResponse.setProfileCardBgUrl(resolveCardBgUrl(sysUser.getProfileCardBgUrl(), null));
         proFileResponse.setQuickCardBgUrl(resolveCardBgUrl(sysUser.getQuickCardBgUrl(), null));
         proFileResponse.setCoverConfig(sysUser.getCoverConfig());
+        proFileResponse.setBadgeText(sysUser.getBadgeText());
+        proFileResponse.setBadgeColor(sysUser.getBadgeColor());
+        proFileResponse.setBadgeStyle(sysUser.getBadgeStyle());
         proFileResponse.setModeratedSectionIds(sectionModeratorService.getModeratedSectionIds(sysUser.getId()).stream().toList());
         proFileResponse.setRoles(roleCodes);
 

@@ -1,13 +1,9 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { ref, watch } from 'vue'
 import { Edit, Share, Star, Warning } from '@element-plus/icons-vue'
-import MarkdownIt from 'markdown-it'
-
-const md = new MarkdownIt({
-  html: true,
-  linkify: true,
-  typographer: true
-})
+import { md } from '@/utils/markdownRenderer'
+import { renderMarkdownWithTocAsync } from '@/utils/markdownToc'
+import { renderGithubRichCards } from '@/utils/richLink'
 
 const props = defineProps<{
   topic: {
@@ -19,9 +15,39 @@ const props = defineProps<{
   }
 }>()
 
-const renderedContent = computed(() => {
-  return md.render(props.topic.content || '')
-})
+const renderedContent = ref('')
+let _renderToken = 0
+watch(
+  () => props.topic?.content ?? '',
+  async (content) => {
+    const token = ++_renderToken
+    if (!content) {
+      renderedContent.value = ''
+      return
+    }
+    // 同步渲染优先出框（代码块此时可能未上色）
+    renderedContent.value = renderGithubRichCards(md.render(content))
+    // 异步 Shiki 加载完成后再上色
+    const { html } = await renderMarkdownWithTocAsync(md, content)
+    if (token === _renderToken) {
+      renderedContent.value = renderGithubRichCards(html)
+    }
+  },
+  { immediate: true }
+)
+
+const handleMarkdownClick = (e: MouseEvent) => {
+  const target = e.target as HTMLElement
+  if (target.classList.contains('copy-btn')) {
+    const code = target.parentElement?.parentElement?.querySelector('code')?.innerText
+    if (code) {
+      navigator.clipboard.writeText(code)
+      const originalText = target.innerText
+      target.innerText = '已复制!'
+      setTimeout(() => { target.innerText = originalText }, 2000)
+    }
+  }
+}
 </script>
 
 <template>
@@ -53,7 +79,7 @@ const renderedContent = computed(() => {
     </header>
 
     <!-- Markdown Body -->
-    <article class="topic-body markdown-body" v-html="renderedContent"></article>
+    <article class="topic-body markdown-body" v-html="renderedContent" @click="handleMarkdownClick"></article>
 
     <!-- Action Bar -->
     <div class="topic-actions">

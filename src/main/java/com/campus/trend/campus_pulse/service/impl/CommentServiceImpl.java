@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.campus.trend.campus_pulse.dto.request.CommentCreateReq;
 import com.campus.trend.campus_pulse.dto.response.CommentResp;
 import com.campus.trend.campus_pulse.entity.Comment;
+import com.campus.trend.campus_pulse.entity.CommentCollect;
 import com.campus.trend.campus_pulse.entity.Post;
 import com.campus.trend.campus_pulse.entity.User;
 import com.campus.trend.campus_pulse.mapper.CommentMapper;
@@ -40,6 +41,7 @@ public class CommentServiceImpl extends ServiceImpl<CommentMapper, Comment> impl
     private static final String POST_FEED_CACHE_SECTION_VERSION_KEY_PREFIX = "post:feed:version:section:";
     private static final String POST_DETAIL_CACHE_VERSION_KEY_PREFIX = "post:detail:version:";
     private static final String POST_HEAT_RANK_VERSION_KEY = "post:heat:version";
+    private static final long COMMENT_RESTORE_GRACE_DAYS = 3L;
     private static final Pattern MENTION_PATTERN = Pattern.compile("@([\\p{IsHan}A-Za-z0-9_.-]{2,32})");
 
     private final PostMapper sysPostMapper;
@@ -51,6 +53,7 @@ public class CommentServiceImpl extends ServiceImpl<CommentMapper, Comment> impl
     private final com.campus.trend.campus_pulse.service.LevelService levelService;
     private final com.campus.trend.campus_pulse.service.AsyncTaskService asyncTaskService;
     private final SectionModeratorService sectionModeratorService;
+    private final CommentCollectService commentCollectService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -82,6 +85,7 @@ public class CommentServiceImpl extends ServiceImpl<CommentMapper, Comment> impl
         comment.setIsAnonymous(request.getIsAnonymous());
         comment.setCreateTime(LocalDateTime.now());
         comment.setLikeCount(0);
+        comment.setCollectCount(0);
         this.save(comment);
 
         Set<String> alreadyMentionedUserIds = new HashSet<>();
@@ -173,6 +177,87 @@ public class CommentServiceImpl extends ServiceImpl<CommentMapper, Comment> impl
         }
     }
 
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void restoreComment(String commentId, String userId) {
+        Comment comment = getById(commentId);
+        if (comment == null) {
+            throw new BusinessException(ResultCode.FAILED, "评论不存在");
+        }
+        if (!AUDIT_STATUS_DELETED.equalsIgnoreCase(comment.getAuditStatus())) {
+            throw new BusinessException(ResultCode.PARAM_ERROR, "该评论不在回收站中");
+        }
+
+        Post post = sysPostMapper.selectById(comment.getPostId());
+        if (!canManageComment(comment, post, userId)) {
+            throw new BusinessException(ResultCode.NO_PERMISSION, "无权恢复该评论");
+        }
+        if (comment.getUpdateTime() == null
+                || comment.getUpdateTime().plusDays(COMMENT_RESTORE_GRACE_DAYS).isBefore(LocalDateTime.now())) {
+            throw new BusinessException(ResultCode.NO_PERMISSION, "已超过3天冷静期，无法恢复");
+        }
+        if (!isCommentablePost(post)) {
+            throw new BusinessException(ResultCode.NO_PERMISSION, "该帖子当前不可恢复评论");
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        lambdaUpdate()
+                .set(Comment::getAuditStatus, AUDIT_STATUS_APPROVED)
+                .set(Comment::getUpdateTime, now)
+                .eq(Comment::getId, commentId)
+                .update();
+
+        if (post != null) {
+            post.setCommentCount(post.getCommentCount() == null ? 1 : post.getCommentCount() + 1);
+            post.setLastActivityAt(now);
+            sysPostMapper.updateById(post);
+            invalidatePostFeedCache(post.getSectionId(), post.getId());
+            asyncTaskService.pushPostRepliedAsync(post.getId(), post.getSectionId(), post.getCommentCount());
+        }
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void editComment(String commentId, String content, String userId) {
+        if (!StringUtils.hasText(content) || content.trim().isEmpty()) {
+            throw new BusinessException(ResultCode.PARAM_ERROR, "评论内容不能为空");
+        }
+        if (content.length() > 2000) {
+            throw new BusinessException(ResultCode.PARAM_ERROR, "评论内容过长");
+        }
+        Comment comment = getById(commentId);
+        if (comment == null) {
+            throw new BusinessException(ResultCode.FAILED, "评论不存在");
+        }
+        if (AUDIT_STATUS_DELETED.equalsIgnoreCase(comment.getAuditStatus())) {
+            throw new BusinessException(ResultCode.NO_PERMISSION, "该评论已删除，无法编辑");
+        }
+
+        Post post = sysPostMapper.selectById(comment.getPostId());
+        if (!canManageComment(comment, post, userId)) {
+            throw new BusinessException(ResultCode.NO_PERMISSION, "无权编辑该评论");
+        }
+
+        // Song：与发表评论一致地做敏感词过滤 + HTML 转义，防止存入可执行脚本
+        String processed = content;
+        if (contentSecurityService.containsSensitiveWords(processed)) {
+            processed = contentSecurityService.filterSensitiveWords(processed);
+        }
+        processed = HtmlUtils.htmlEscape(processed);
+
+        // Song：只更新内容与 editTime，绝不动 updateTime（其为软删 3 天倒计时基准）
+        lambdaUpdate()
+                .set(Comment::getContent, processed)
+                .set(Comment::getEditTime, LocalDateTime.now())
+                .eq(Comment::getId, commentId)
+                .update();
+
+        // Song：刷新缓存版本，使帖子详情/列表中的评论内容及时更新
+        if (post != null) {
+            invalidatePostFeedCache(post.getSectionId(), post.getId());
+        }
+    }
+
     private boolean canManageComment(Comment comment, Post post, String userId) {
         if (comment == null || userId == null || userId.isBlank()) {
             return false;
@@ -180,14 +265,11 @@ public class CommentServiceImpl extends ServiceImpl<CommentMapper, Comment> impl
         if (userId.equals(comment.getUserId())) {
             return true;
         }
-        if (post != null && userId.equals(post.getUserId())) {
-            return true;
-        }
-        if (com.campus.trend.campus_pulse.utils.PermissionUtils.isUserAdminOrModerator(userId)) {
+        if (com.campus.trend.campus_pulse.utils.PermissionUtils.isUserAdmin(userId)) {
             return true;
         }
         if (post != null && post.getSectionId() != null
-                && sectionModeratorService.canModerateSection(userId, post.getSectionId())) {
+                && sectionModeratorService.isSectionModerator(userId, post.getSectionId())) {
             return true;
         }
         return false;
@@ -202,13 +284,32 @@ public class CommentServiceImpl extends ServiceImpl<CommentMapper, Comment> impl
             return new Page<CommentResp>(pageNo, pageSize).setRecords(Collections.emptyList());
         }
 
-        // 分页只查"未删根评论"
+        boolean canModerateDeletedComments = StringUtils.hasText(currentUserId)
+                && (currentUserId.equals(post.getUserId())
+                || com.campus.trend.campus_pulse.utils.PermissionUtils.isUserAdminOrModerator(currentUserId)
+                || (post.getSectionId() != null
+                && sectionModeratorService.canModerateSection(currentUserId, post.getSectionId())));
+
+        // 可恢复人员需要看到删除占位；普通用户仍只看未删根评论。
         Page<Comment> page = new Page<>(pageNo, pageSize);
-        Page<Comment> rootPage = this.page(page, Wrappers.<Comment>lambdaQuery()
-                .eq(Comment::getPostId, postId)
-                .eq(Comment::getParentId, "0")
-                .ne(Comment::getAuditStatus, "DELETED")
-                .orderByDesc(Comment::getCreateTime));
+        var rootQuery = Wrappers.<Comment>lambdaQuery()
+                .eq(Comment::getPostId, postId);
+        rootQuery.and(wrapper -> wrapper.eq(Comment::getParentId, "0")
+                .or()
+                .isNull(Comment::getParentId)
+                .or()
+                .eq(Comment::getParentId, ""));
+        if (canModerateDeletedComments) {
+            // 楼主/版主/管理员可看到该帖所有已删根评论占位。
+        } else if (StringUtils.hasText(currentUserId)) {
+            rootQuery.and(wrapper -> wrapper.ne(Comment::getAuditStatus, AUDIT_STATUS_DELETED)
+                    .or(child -> child.eq(Comment::getAuditStatus, AUDIT_STATUS_DELETED)
+                            .eq(Comment::getUserId, currentUserId)));
+        } else {
+            rootQuery.ne(Comment::getAuditStatus, AUDIT_STATUS_DELETED);
+        }
+        rootQuery.orderByDesc(Comment::getCreateTime);
+        Page<Comment> rootPage = this.page(page, rootQuery);
 
         List<Comment> roots = rootPage.getRecords();
         if (roots.isEmpty()) {
@@ -233,7 +334,10 @@ public class CommentServiceImpl extends ServiceImpl<CommentMapper, Comment> impl
         Map<String, Comment> visibleById = new HashMap<>();
         for (Comment item : allComments) {
             boolean isDeleted = "DELETED".equalsIgnoreCase(item.getAuditStatus());
-            if (!isDeleted || parentIdsThatHaveChildren.contains(item.getId())) {
+            boolean canSeeDeletedPlaceholder = parentIdsThatHaveChildren.contains(item.getId())
+                    || canModerateDeletedComments
+                    || (StringUtils.hasText(currentUserId) && currentUserId.equals(item.getUserId()));
+            if (!isDeleted || canSeeDeletedPlaceholder) {
                 if (isDeleted) {
                     item.setContent(null);
                 }
@@ -255,8 +359,13 @@ public class CommentServiceImpl extends ServiceImpl<CommentMapper, Comment> impl
         }
 
         List<CommentResp> responseList = roots.stream().map(root -> {
-            attachChildrenTree(root, childrenByParentId, new HashSet<>());
-            return mapToResponse(root);
+            Comment visibleRoot = visibleById.get(root.getId());
+            Comment rootForResponse = visibleRoot != null ? visibleRoot : root;
+            if (AUDIT_STATUS_DELETED.equalsIgnoreCase(rootForResponse.getAuditStatus())) {
+                rootForResponse.setContent(null);
+            }
+            attachChildrenTree(rootForResponse, childrenByParentId, new HashSet<>());
+            return mapToResponse(rootForResponse);
         }).collect(Collectors.toList());
 
         fillUserInfo(responseList);
@@ -270,8 +379,9 @@ public class CommentServiceImpl extends ServiceImpl<CommentMapper, Comment> impl
         try {
             AuthUser authUser = SecurityUtils.getAuthenticatedUser();
             if (authUser != null) {
-                String likeStatusUserId = authUser.getUser().getId();
-                fillLikeStatus(responseList, likeStatusUserId);
+                String statusUserId = authUser.getUser().getId();
+                fillLikeStatus(responseList, statusUserId);
+                fillCollectStatus(responseList, statusUserId);
             }
         } catch (Exception ignored) {
         }
@@ -285,6 +395,13 @@ public class CommentServiceImpl extends ServiceImpl<CommentMapper, Comment> impl
         Comment comment = getById(commentId);
         if (comment == null) {
             throw new BusinessException(ResultCode.FAILED, "评论不存在");
+        }
+        if (AUDIT_STATUS_DELETED.equalsIgnoreCase(comment.getAuditStatus())) {
+            throw new BusinessException(ResultCode.NO_PERMISSION, "该评论已删除，无法点赞");
+        }
+        Post post = sysPostMapper.selectById(comment.getPostId());
+        if (!isCommentablePost(post)) {
+            throw new BusinessException(ResultCode.NO_PERMISSION, "该帖子当前不可点赞评论");
         }
 
         String key = "comment:like:" + commentId + ":" + userId;
@@ -300,6 +417,23 @@ public class CommentServiceImpl extends ServiceImpl<CommentMapper, Comment> impl
             userService.incrementLikesReceived(comment.getUserId());
         }
         updateById(comment);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public boolean toggleCollect(String commentId, String userId) {
+        Comment comment = getById(commentId);
+        if (comment == null) {
+            throw new BusinessException(ResultCode.FAILED, "评论不存在");
+        }
+        if (AUDIT_STATUS_DELETED.equalsIgnoreCase(comment.getAuditStatus())) {
+            throw new BusinessException(ResultCode.NO_PERMISSION, "该评论已删除，无法收藏");
+        }
+        Post post = sysPostMapper.selectById(comment.getPostId());
+        if (!isCommentablePost(post)) {
+            throw new BusinessException(ResultCode.NO_PERMISSION, "该帖子当前不可收藏评论");
+        }
+        return commentCollectService.toggleCollect(commentId, userId);
     }
 
     private boolean isCommentablePost(Post post) {
@@ -407,6 +541,9 @@ public class CommentServiceImpl extends ServiceImpl<CommentMapper, Comment> impl
 
                     String role = user.getRole() != null ? user.getRole() : "ROLE_USER";
                     c.setRoles(List.of(role));
+                    c.setUserBadgeText(user.getBadgeText());
+                    c.setUserBadgeColor(user.getBadgeColor());
+                    c.setUserBadgeStyle(user.getBadgeStyle());
                 }
             }
 
@@ -429,6 +566,43 @@ public class CommentServiceImpl extends ServiceImpl<CommentMapper, Comment> impl
             c.setIsLiked(stringRedisTemplate.hasKey(key));
             if (c.getChildren() != null) {
                 fillLikeStatus(c.getChildren(), currentUserId);
+            }
+        }
+    }
+
+    private void fillCollectStatus(List<CommentResp> responses, String currentUserId) {
+        Set<String> commentIds = new HashSet<>();
+        collectCommentIds(responses, commentIds);
+        if (commentIds.isEmpty()) {
+            return;
+        }
+
+        Set<String> collectedIds = commentCollectService.lambdaQuery()
+                .eq(CommentCollect::getUserId, currentUserId)
+                .in(CommentCollect::getCommentId, commentIds)
+                .list()
+                .stream()
+                .map(CommentCollect::getCommentId)
+                .collect(Collectors.toSet());
+        applyCollectStatus(responses, collectedIds);
+    }
+
+    private void collectCommentIds(List<CommentResp> responses, Set<String> commentIds) {
+        for (CommentResp c : responses) {
+            if (StringUtils.hasText(c.getId())) {
+                commentIds.add(c.getId());
+            }
+            if (c.getChildren() != null) {
+                collectCommentIds(c.getChildren(), commentIds);
+            }
+        }
+    }
+
+    private void applyCollectStatus(List<CommentResp> responses, Set<String> collectedIds) {
+        for (CommentResp c : responses) {
+            c.setIsCollected(collectedIds.contains(c.getId()));
+            if (c.getChildren() != null) {
+                applyCollectStatus(c.getChildren(), collectedIds);
             }
         }
     }

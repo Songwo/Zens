@@ -32,6 +32,22 @@ function campaignStatusLabel(status) {
   return status;
 }
 
+function percent(part, total) {
+  if (!total) return 0;
+  return Math.min(100, Math.round((Number(part || 0) / Number(total || 0)) * 100));
+}
+
+function getOpsInsight(stats = {}) {
+  const totalStock = Number(stats.totalStock || 0);
+  const remaining = Number(stats.remainingCount || 0);
+  const successRate = Number(stats.successRate || 0);
+  const lowStock = totalStock > 0 && remaining / totalStock < 0.15;
+  if (remaining <= 0 && totalStock > 0) return { tone: "danger", title: "库存已耗尽", text: "优先补充 CDK 或归档已结束活动，避免社区用户继续进入空通道。" };
+  if (lowStock) return { tone: "warning", title: "库存进入低水位", text: "建议先检查高转化节点，再决定补货、暂停入口或延长活动周期。" };
+  if (successRate < 60 && Number(stats.claimedCount || 0) > 0) return { tone: "warning", title: "领取成功率偏低", text: "重点查看失败原因、验证码配置和风控命中记录。" };
+  return { tone: "success", title: "活动分发稳定", text: "当前库存和领取表现正常，可以继续观察节点转化和社区反馈。" };
+}
+
 export default function DashboardPage() {
   const navigate = useNavigate();
   const [data, setData] = useState(null);
@@ -75,40 +91,59 @@ export default function DashboardPage() {
   const nodes = data?.nodes || [];
   const captchaRequired = nodes.some((node) => node.requireCaptcha);
   const captchaConfigured = Boolean(import.meta.env.VITE_HCAPTCHA_SITE_KEY);
+  const opsInsight = getOpsInsight(stats);
+  const stockUsage = percent(stats.claimedCount, stats.totalStock);
+  const activeNodes = nodes.filter((node) => node.status === "active").length;
+  const topNode = [...nodes].sort((a, b) => Number(b.claims || 0) - Number(a.claims || 0))[0];
 
   const coreStats = [
     ["活跃活动", stats.activeCampaigns, `共 ${fmt(stats.totalCampaigns)} 个活动`, "success"],
-    ["总 CDK 库存", stats.totalStock, "所有活动累计库存", "default"],
-    ["已领取", stats.claimedCount, "累计成功发放", "gold"],
+    ["库存消耗", `${stockUsage}%`, `${fmt(stats.claimedCount)} / ${fmt(stats.totalStock)}`, "gold"],
+    ["今日领取", stats.todayClaims, "今日成功发放", "default"],
     ["剩余库存", stats.remainingCount, "可继续分发", Number(stats.remainingCount) === 0 ? "danger" : "default"],
   ];
   const miniStats = [
-    ["总节点", stats.totalNodes, "分发入口数量", "default"],
+    ["活跃节点", activeNodes, `共 ${fmt(stats.totalNodes)} 个入口`, "success"],
     ["异常节点", stats.abnormalNodes, "暂停或异常节点", Number(stats.abnormalNodes) ? "danger" : "success"],
-    ["今日领取", stats.todayClaims, "今日成功领取", "gold"],
+    ["最佳节点", topNode?.name || "--", topNode ? `${fmt(topNode.claims)} 次领取` : "暂无数据", "default"],
     ["领取成功率", `${(stats.successRate || 0).toFixed(1)}%`, "已领取 / 总库存", "success"],
   ];
 
   const quickActions = [
-    { label: "新建活动", icon: "▦", onClick: () => navigate("/admin/campaigns?open=create") },
-    { label: "导入 CDK", icon: "⇪", onClick: () => navigate("/admin/cdks/import") },
-    { label: "创建节点", icon: "⎈", onClick: () => navigate("/admin/nodes/create") },
-    { label: "领取记录", icon: "◷", onClick: () => navigate("/admin/claims") },
-    { label: "验证码", icon: "▣", onClick: () => navigate("/admin/captcha") },
-    { label: "系统日志", icon: "☰", onClick: () => navigate("/admin/logs") },
+    { label: "新建活动", icon: "活", onClick: () => navigate("/admin/campaigns?open=create") },
+    { label: "导入 CDK", icon: "码", onClick: () => navigate("/admin/cdks/import") },
+    { label: "创建节点", icon: "链", onClick: () => navigate("/admin/nodes/create") },
+    { label: "领取记录", icon: "录", onClick: () => navigate("/admin/claims") },
+    { label: "验证码", icon: "验", onClick: () => navigate("/admin/captcha") },
+    { label: "系统日志", icon: "志", onClick: () => navigate("/admin/logs") },
   ];
 
   return (
     <div className="admin-page dashboard-page">
       <PageHeader
         eyebrow="Operations"
-        title="运营总览"
-        description="集中观察活动、分发节点、库存、领取记录和异常提醒。"
+        title="社区福利运营台"
+        description="把活动创建、CDK 库存、领取入口、风控和社区反馈放在同一张工作台里。"
         actions={<div className="btn-group"><button className="btn btn--primary" onClick={() => navigate("/admin/campaigns?open=create")}>新建活动</button><button className="btn btn--secondary" onClick={() => navigate("/admin/nodes/create")}>创建节点</button></div>}
       />
 
+      <section className={`ops-hero ops-hero--${opsInsight.tone}`}>
+        <div>
+          <span className="ops-hero__eyebrow">当前运营判断</span>
+          <h2>{opsInsight.title}</h2>
+          <p>{opsInsight.text}</p>
+        </div>
+        <div className="ops-hero__steps" aria-label="活动发布闭环">
+          <button onClick={() => navigate("/admin/projects")}>项目归属</button>
+          <button onClick={() => navigate("/admin/campaigns?open=create")}>配置活动</button>
+          <button onClick={() => navigate("/admin/cdks/import")}>导入库存</button>
+          <button onClick={() => navigate("/admin/nodes/create")}>发布入口</button>
+          <button onClick={() => navigate("/admin/analytics")}>复盘数据</button>
+        </div>
+      </section>
+
       <section className="stats-grid stats-grid--core">
-        {coreStats.map(([label, value, hint, tone]) => <StatCard key={label} label={label} value={fmt(value)} hint={hint} tone={tone} />)}
+        {coreStats.map(([label, value, hint, tone]) => <StatCard key={label} label={label} value={typeof value === "number" ? fmt(value) : value} hint={hint} tone={tone} />)}
       </section>
 
       <DistributionGuideCard stats={stats} nodes={nodes} captchaConfigured={captchaConfigured} />

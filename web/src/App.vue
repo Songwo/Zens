@@ -4,6 +4,7 @@ import { useUserStore } from '@/store/user'
 import { useUiStore } from '@/store/ui'
 import { usePostComposerStore } from '@/store/postComposer'
 import AppearanceDock from '@/components/ui/AppearanceDock.vue'
+import PulseNotification from '@/components/common/PulseNotification.vue'
 import { initSessionResilience } from '@/utils/sessionResilience'
 import { ensureCurrentUserProfile } from '@/utils/sessionProfile'
 import { publicDataApi } from '@/api/publicData'
@@ -170,6 +171,8 @@ onUnmounted(() => {
 
     <!-- Global Appearance Dock -->
     <AppearanceDock />
+
+    <PulseNotification />
 
     <AsyncPostComposerModal v-if="showComposer" />
   </div>

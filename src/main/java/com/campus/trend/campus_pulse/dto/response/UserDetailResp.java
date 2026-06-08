@@ -29,6 +29,9 @@ public class UserDetailResp {
     private String profileCardBgUrl;
     private String quickCardBgUrl;
     private String coverConfig;
+    private String badgeText;
+    private String badgeColor;
+    private String badgeStyle;
     private List<Long> moderatedSectionIds;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;

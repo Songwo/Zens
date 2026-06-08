@@ -1,10 +1,16 @@
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import router from './router'
-import ElementPlus from 'element-plus'
-
-// Song：说明
-import 'element-plus/dist/index.css'
+// Song：Element Plus 按需引入——组件由 unplugin-vue-components 自动按需 import；
+// 这里只显式引入命令式服务(ElMessage/ElMessageBox/ElNotification/ElLoading)所需样式，
+// 并全局注册 v-loading 指令。
+import { ElLoading } from 'element-plus'
+import 'element-plus/theme-chalk/base.css'
+import 'element-plus/theme-chalk/el-overlay.css'
+import 'element-plus/theme-chalk/el-loading.css'
+import 'element-plus/theme-chalk/el-message.css'
+import 'element-plus/theme-chalk/el-message-box.css'
+import 'element-plus/theme-chalk/el-notification.css'
 // Song：说明
 import './styles/ep-theme.scss'
 // Song：说明
@@ -17,6 +23,7 @@ import './styles/prose.css'
 
 // Song：说明
 import App from './App.vue'
+import { installCodeBlockCopy } from './utils/codeBlockCopy'
 
 const app = createApp(App)
 const pinia = createPinia()
@@ -38,6 +45,9 @@ app.directive('click-away', {
 
 app.use(pinia)
 app.use(router)
-app.use(ElementPlus)
+// Song：注册 v-loading 指令 + ElLoading 服务（按需模式下需手动注册）
+app.use(ElLoading)
+
+installCodeBlockCopy()
 
 app.mount('#app')

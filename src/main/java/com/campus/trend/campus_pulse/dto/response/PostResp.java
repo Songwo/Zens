@@ -105,6 +105,13 @@ public class PostResp implements Serializable {
      */
     private List<String> authorRoles;
 
+    /**
+     * 作者徽章文字（管理员授予的纯文字 flair），空表示无
+     */
+    private String authorBadgeText;
+    private String authorBadgeColor;
+    private String authorBadgeStyle;
+
     // Song：=================== 智能分析数据 (新增) ===================
     /**
      * Song：情感分数 (0-1)

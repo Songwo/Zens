@@ -25,6 +25,9 @@ public record UserProfileResp(
         String quickCardBgUrl,
         Integer enrollmentYear,
         String interestTags,
-        String coverConfig
+        String coverConfig,
+        String badgeText,
+        String badgeColor,
+        String badgeStyle
 ) {
 }

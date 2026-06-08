@@ -101,14 +101,36 @@ public class CollaborativeFilteringServiceImpl implements CollaborativeFiltering
                 .map(Map.Entry::getKey)
                 .collect(Collectors.toList());
 
-        if (recommendationIds.isEmpty()) {
-            log.debug("[协同过滤-ItemBased] 帖子 {} 无候选推荐", postId);
-            return Collections.emptyList();
+        List<Post> result = new ArrayList<>();
+        if (!recommendationIds.isEmpty()) {
+            result.addAll(postMapper.selectBatchIds(recommendationIds));
         }
 
-        // 5. 查询完整的帖子信息
-        List<Post> result = postMapper.selectBatchIds(recommendationIds);
-        log.debug("[协同过滤-ItemBased] 帖子 {} 推荐 {} 篇", postId, result.size());
+        // 如果推荐数量不足，启用内容分版块和热度排行混合推荐进行冷启动兜底
+        if (result.size() < limit) {
+            int need = limit - result.size();
+            Post currentPost = postMapper.selectById(postId);
+            if (currentPost != null) {
+                Set<String> existingIds = result.stream().map(Post::getId).collect(Collectors.toSet());
+                existingIds.add(postId); // 排除自身
+
+                List<Post> fallbackPosts = postMapper.selectList(
+                        new LambdaQueryWrapper<Post>()
+                                .eq(Post::getSectionId, currentPost.getSectionId())
+                                .eq(Post::getStatus, 1)
+                                .and(w -> w.isNull(Post::getAuditStatus)
+                                        .or().eq(Post::getAuditStatus, "")
+                                        .or().eq(Post::getAuditStatus, "APPROVED")
+                                        .or().eq(Post::getAuditStatus, "PENDING"))
+                                .notIn(!existingIds.isEmpty(), Post::getId, existingIds)
+                                .orderByDesc(Post::getHeatScore)
+                                .last("LIMIT " + need)
+                );
+                result.addAll(fallbackPosts);
+            }
+        }
+
+        log.debug("[协同过滤-ItemBased] 帖子 {} 推荐 {} 篇 (包含冷启动兜底数据)", postId, result.size());
         return result;
     }
 
@@ -120,8 +142,8 @@ public class CollaborativeFilteringServiceImpl implements CollaborativeFiltering
     @Override
     public List<Post> recommendByUserBased(String userId, int limit) {
         if (userId == null || userId.isBlank()) {
-            log.debug("[协同过滤-UserBased] userId 为空，跳过推荐");
-            return Collections.emptyList();
+            log.debug("[协同过滤-UserBased] userId 为空，使用全局热门推荐兜底");
+            return getGlobalTrendingFallback(Collections.emptySet(), limit);
         }
 
         // 1. 获取当前用户点赞/收藏的帖子 ID
@@ -144,8 +166,8 @@ public class CollaborativeFilteringServiceImpl implements CollaborativeFiltering
         myInteractedPostIds.addAll(myCollectedPostIds);
 
         if (myInteractedPostIds.isEmpty()) {
-            log.debug("[协同过滤-UserBased] 用户 {} 无交互记录，跳过推荐", userId);
-            return Collections.emptyList();
+            log.debug("[协同过滤-UserBased] 用户 {} 无交互记录，使用全局热门推荐兜底", userId);
+            return getGlobalTrendingFallback(Collections.emptySet(), limit);
         }
 
         // 2. 找出对相同帖子有过点赞/收藏的相似用户
@@ -166,8 +188,8 @@ public class CollaborativeFilteringServiceImpl implements CollaborativeFiltering
                 .forEach(c -> similarUserIds.add(c.getUserId()));
 
         if (similarUserIds.isEmpty()) {
-            log.debug("[协同过滤-UserBased] 用户 {} 无相似用户，跳过推荐", userId);
-            return Collections.emptyList();
+            log.debug("[协同过滤-UserBased] 用户 {} 无相似用户，排除已交互内容后使用热门话题兜底", userId);
+            return getGlobalTrendingFallback(myInteractedPostIds, limit);
         }
 
         // 3. 收集相似用户的交互帖子，加权评分，排除当前用户已看过的
@@ -207,13 +229,42 @@ public class CollaborativeFilteringServiceImpl implements CollaborativeFiltering
                 .map(Map.Entry::getKey)
                 .collect(Collectors.toList());
 
-        if (recommendIds.isEmpty()) {
-            log.debug("[协同过滤-UserBased] 用户 {} 无候选推荐帖子", userId);
-            return Collections.emptyList();
+        List<Post> result = new ArrayList<>();
+        if (!recommendIds.isEmpty()) {
+            result.addAll(postMapper.selectBatchIds(recommendIds));
         }
 
-        List<Post> result = postMapper.selectBatchIds(recommendIds);
-        log.debug("[协同过滤-UserBased] 用户 {} 推荐 {} 篇帖子", userId, result.size());
+        // 如果协同过滤返回结果不足限制，使用全局热门话题进行冷启动兜底填充
+        if (result.size() < limit) {
+            int need = limit - result.size();
+            Set<String> excludeIds = result.stream().map(Post::getId).collect(Collectors.toSet());
+            excludeIds.addAll(myInteractedPostIds); // 同时排除该用户自己交互过的帖子
+
+            List<Post> fallbackPosts = getGlobalTrendingFallback(excludeIds, need);
+            result.addAll(fallbackPosts);
+        }
+
+        log.debug("[协同过滤-UserBased] 用户 {} 推荐 {} 篇帖子 (包含冷启动兜底数据)", userId, result.size());
         return result;
+    }
+
+    /**
+     * 获取全局热门话题兜底列表
+     */
+    private List<Post> getGlobalTrendingFallback(Set<String> excludeIds, int limit) {
+        if (limit <= 0) {
+            return Collections.emptyList();
+        }
+        return postMapper.selectList(
+                new LambdaQueryWrapper<Post>()
+                        .eq(Post::getStatus, 1)
+                        .and(w -> w.isNull(Post::getAuditStatus)
+                                .or().eq(Post::getAuditStatus, "")
+                                .or().eq(Post::getAuditStatus, "APPROVED")
+                                .or().eq(Post::getAuditStatus, "PENDING"))
+                        .notIn(excludeIds != null && !excludeIds.isEmpty(), Post::getId, excludeIds)
+                        .orderByDesc(Post::getHeatScore)
+                        .last("LIMIT " + limit)
+        );
     }
 }

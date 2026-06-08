@@ -2,7 +2,9 @@
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { timeAgo } from '@/utils/timeAgo'
+import { encodePostId } from '@/utils/shortId'
 import UserRoleBadge from '@/components/common/UserRoleBadge.vue'
+import UserBadge from '@/components/common/UserBadge.vue'
 import UserQuickCard from '@/components/common/UserQuickCard.vue'
 
 type TopicItem = {
@@ -11,7 +13,7 @@ type TopicItem = {
   excerpt: string
   category: { name: string; color: string }
   tags: string[]
-  author: { id?: string; username?: string; name: string; avatar: string; roles?: string[] }
+  author: { id?: string; username?: string; name: string; avatar: string; roles?: string[]; badgeText?: string; badgeColor?: string; badgeStyle?: string }
   createdAt: string
   lastActive: string
   replies: number
@@ -30,7 +32,7 @@ const props = defineProps<{
 }>()
 
 const goTopic = () => {
-  router.push(`/t/${props.topic.id}`)
+  router.push(`/t/${encodePostId(props.topic.id)}`)
 }
 
 const maxVisibleTags = 3
@@ -45,24 +47,42 @@ const isNew = computed(() => {
   return Date.now() - created <= 24 * 60 * 60 * 1000
 })
 
+const isShortPost = computed(() => {
+  const len = (props.topic.excerpt || '').length
+  return len > 0 && len < 60 && !props.topic.isPinned && !props.topic.isFeatured
+})
+
 const sentimentMap: Record<string, string> = {
   POSITIVE: '情绪正向',
   NEGATIVE: '情绪偏负',
   NEUTRAL: '情绪中性',
 }
 
-const aiHint = computed(() => {
+const aiBadgeText = computed(() => {
   const pieces: string[] = []
   const trend = props.topic.trendLevel?.toLowerCase()
   const sentiment = props.topic.sentimentLabel?.toUpperCase()
 
-  if (trend === 'hot') pieces.push('热度持续上升')
-  if (trend === 'warm') pieces.push('热度稳定')
-  if (sentiment && sentimentMap[sentiment]) pieces.push(sentimentMap[sentiment])
-  if (!pieces.length && (props.topic.heatScore ?? 0) >= 60) pieces.push('互动价值高')
+  if (trend === 'hot') pieces.push('热度上升')
+  else if (trend === 'warm') pieces.push('稳定')
+  
+  if (sentiment && sentimentMap[sentiment]) {
+    pieces.push(sentimentMap[sentiment].replace('情绪', ''))
+  } else if (!pieces.length && (props.topic.heatScore ?? 0) >= 60) {
+    pieces.push('高价值')
+  }
 
-  return pieces.length ? `AI洞察: ${pieces.join(' · ')}` : ''
+  return pieces.join(' · ')
 })
+
+const aiBadgeClass = computed(() => {
+  const sentiment = props.topic.sentimentLabel?.toUpperCase()
+  if (sentiment === 'POSITIVE') return 'positive'
+  if (sentiment === 'NEGATIVE') return 'negative'
+  return 'neutral'
+})
+
+const aiBadge = computed(() => !!aiBadgeText.value)
 
 const formatMetric = (value: number) => {
   if (!Number.isFinite(value)) return '0'
@@ -73,62 +93,145 @@ const formatMetric = (value: number) => {
 </script>
 
 <template>
-  <article class="topic-row" role="button" tabindex="0" @click="goTopic" @keyup.enter="goTopic">
-    <div class="headline">
-      <div class="state-tags">
-        <span v-if="topic.isPinned" class="state-tag pin">置顶</span>
-        <span v-if="topic.isFeatured" class="state-tag feature">精华</span>
-        <span v-if="isNew" class="state-tag fresh">NEW</span>
+  <article 
+    class="topic-row" 
+    :class="{ 'is-short-post-card': isShortPost }"
+    role="button" 
+    tabindex="0" 
+    @click="goTopic" 
+    @keyup.enter="goTopic"
+  >
+    <!-- 1. SHORT POST (微动态 / 说说) STYLE -->
+    <div v-if="isShortPost" class="short-post-container">
+      <div class="sp-header">
+        <div class="sp-author-info">
+          <UserQuickCard
+            :user-id="topic.author.id"
+            :username="topic.author.username"
+            :nickname="topic.author.name"
+            :avatar="topic.author.avatar"
+            :roles="topic.author.roles"
+            @click.stop
+          >
+            <el-avatar :size="36" :src="topic.author.avatar" class="sp-avatar">
+              {{ topic.author.name.charAt(0) }}
+            </el-avatar>
+          </UserQuickCard>
+          <div class="sp-meta-text">
+            <div class="sp-name-row">
+              <UserQuickCard
+                :user-id="topic.author.id"
+                :username="topic.author.username"
+                :nickname="topic.author.name"
+                :avatar="topic.author.avatar"
+                :roles="topic.author.roles"
+                @click.stop
+              >
+                <span class="sp-author-name">{{ topic.author.name }}</span>
+              </UserQuickCard>
+              <UserRoleBadge :roles="topic.author.roles" />
+              <UserBadge :text="topic.author.badgeText || ''" :color="topic.author.badgeColor" :effect="topic.author.badgeStyle" />
+            </div>
+            <div class="sp-time-row">
+              <span class="sp-time">{{ timeAgo(topic.lastActive || topic.createdAt) }}</span>
+            </div>
+          </div>
+        </div>
+        <div class="sp-header-right">
+          <span class="sp-category-pill" :style="{ '--cat-color': topic.category.color || '#409EFF' }">
+            {{ topic.category.name }}
+          </span>
+        </div>
+      </div>
+
+      <div class="sp-content-body">
+        <div class="sp-content-card">
+          <span class="sp-micro-tag">💬 微动态</span>
+          <span class="sp-text">{{ topic.excerpt }}</span>
+        </div>
+      </div>
+
+      <div class="sp-footer">
+        <div class="sp-tags" v-if="visibleTags.length">
+          <span v-for="tag in visibleTags" :key="tag" class="sp-tag-chip">#{{ tag }}</span>
+        </div>
+        
+        <div class="sp-actions-metrics">
+          <span v-if="aiBadge" class="sp-ai-badge" :class="aiBadgeClass">
+            🤖 {{ aiBadgeText }}
+          </span>
+          <span class="sp-metric">💬 {{ formatMetric(topic.replies) }} 回应</span>
+          <span class="sp-metric">👁️ {{ formatMetric(topic.views) }} 浏览</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. REGULAR POST STYLE -->
+    <div v-else class="regular-post-container">
+      <!-- 作者头部：头像左上 -->
+      <div class="author-header">
+        <UserQuickCard
+          :user-id="topic.author.id"
+          :username="topic.author.username"
+          :nickname="topic.author.name"
+          :avatar="topic.author.avatar"
+          :roles="topic.author.roles"
+          @click.stop
+        >
+          <el-avatar :size="38" :src="topic.author.avatar" class="rp-avatar">{{ topic.author.name.charAt(0) }}</el-avatar>
+        </UserQuickCard>
+        <div class="author-header-meta">
+          <div class="author-name-row">
+            <UserQuickCard
+              :user-id="topic.author.id"
+              :username="topic.author.username"
+              :nickname="topic.author.name"
+              :avatar="topic.author.avatar"
+              :roles="topic.author.roles"
+              @click.stop
+            >
+              <span class="author-name">{{ topic.author.name }}</span>
+            </UserQuickCard>
+            <UserRoleBadge :roles="topic.author.roles" />
+            <UserBadge :text="topic.author.badgeText || ''" :color="topic.author.badgeColor" :effect="topic.author.badgeStyle" />
+          </div>
+          <span class="rp-time">{{ timeAgo(topic.lastActive || topic.createdAt) }}</span>
+        </div>
+        <div class="state-tags">
+          <span v-if="topic.isPinned" class="state-tag pin">置顶</span>
+          <span v-if="topic.isFeatured" class="state-tag feature">精华</span>
+          <span v-if="isNew" class="state-tag fresh">NEW</span>
+        </div>
       </div>
 
       <h3 class="topic-title">{{ topic.title }}</h3>
-    </div>
+      <p class="topic-excerpt">{{ topic.excerpt }}</p>
 
-    <p class="topic-excerpt">{{ topic.excerpt }}</p>
+      <div class="meta-line">
+        <span class="category-pill">
+          <span class="cat-dot" :style="{ backgroundColor: topic.category.color || '#409EFF' }"></span>
+          {{ topic.category.name }}
+        </span>
 
-    <div class="meta-line">
-      <span class="category-pill">
-        <span class="cat-dot" :style="{ backgroundColor: topic.category.color || '#409EFF' }"></span>
-        {{ topic.category.name }}
-      </span>
+        <div v-if="visibleTags.length" class="tags-line">
+          <span v-for="tag in visibleTags" :key="tag" class="tag-chip">#{{ tag }}</span>
+          <span v-if="hiddenTagCount > 0" class="tag-chip muted">+{{ hiddenTagCount }}</span>
+        </div>
 
-      <div v-if="visibleTags.length" class="tags-line">
-        <span v-for="tag in visibleTags" :key="tag" class="tag-chip">#{{ tag }}</span>
-        <span v-if="hiddenTagCount > 0" class="tag-chip muted">+{{ hiddenTagCount }}</span>
-      </div>
-    </div>
-
-    <div class="foot-line">
-      <div class="author-line">
-        <UserQuickCard
-          :user-id="topic.author.id"
-          :username="topic.author.username"
-          :nickname="topic.author.name"
-          :avatar="topic.author.avatar"
-          :roles="topic.author.roles"
-        >
-          <el-avatar :size="26" :src="topic.author.avatar">{{ topic.author.name.charAt(0) }}</el-avatar>
-        </UserQuickCard>
-        <UserQuickCard
-          :user-id="topic.author.id"
-          :username="topic.author.username"
-          :nickname="topic.author.name"
-          :avatar="topic.author.avatar"
-          :roles="topic.author.roles"
-        >
-          <span class="author-name">{{ topic.author.name }}</span>
-        </UserQuickCard>
-        <UserRoleBadge :roles="topic.author.roles" />
+        <!-- AI Insight Premium Badge -->
+        <span v-if="aiBadge" class="ai-badge" :class="aiBadgeClass">
+          <span class="ai-badge-icon">🤖</span>
+          <span class="ai-badge-text">{{ aiBadgeText }}</span>
+        </span>
       </div>
 
-      <div class="stats-line">
-        <span class="metric">{{ formatMetric(topic.replies) }} 回应</span>
-        <span class="metric">{{ formatMetric(topic.views) }} 浏览</span>
-        <span class="time">{{ timeAgo(topic.lastActive || topic.createdAt) }}</span>
+      <div class="foot-line">
+        <div class="stats-line">
+          <span class="metric">{{ formatMetric(topic.replies) }} 回应</span>
+          <span class="metric">{{ formatMetric(topic.views) }} 浏览</span>
+        </div>
       </div>
     </div>
-
-    <div v-if="aiHint" class="ai-hint">{{ aiHint }}</div>
   </article>
 </template>
 
@@ -136,7 +239,7 @@ const formatMetric = (value: number) => {
 .topic-row {
   display: grid;
   gap: 10px;
-  padding: 14px 16px;
+  padding: 16px 18px;
   border-bottom: 1px solid var(--el-border-color-lighter);
   background: var(--el-bg-color-overlay);
   cursor: pointer;
@@ -312,6 +415,48 @@ const formatMetric = (value: number) => {
   color: var(--el-text-color-primary);
 }
 
+/* 常规帖：头像左上的作者头部 */
+.regular-post-container {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.author-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.rp-avatar {
+  flex: none;
+}
+
+.author-header-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  flex: 1;
+}
+
+.author-name-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.rp-time {
+  font-size: 12px;
+  color: var(--el-text-color-placeholder);
+}
+
+.author-header .state-tags {
+  margin-left: auto;
+}
+
 .stats-line {
   display: flex;
   align-items: center;
@@ -331,19 +476,224 @@ const formatMetric = (value: number) => {
   white-space: nowrap;
 }
 
-.ai-hint {
-  font-size: 12px;
+.ai-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 3px 9px;
+  margin-left: auto;
+  transition: all 0.24s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+}
+
+.ai-badge.neutral {
   color: #0b57d0;
   background: #f2f7ff;
   border: 1px solid #d8e6ff;
-  border-radius: 8px;
-  padding: 6px 10px;
-  transition: transform 0.22s ease, box-shadow 0.22s ease;
 }
 
-.topic-row:hover .ai-hint {
-  transform: translate3d(0, -1px, 0);
-  box-shadow: 0 10px 18px rgba(11, 87, 208, 0.08);
+.ai-badge.positive {
+  color: #0f766e;
+  background: #dff8f4;
+  border: 1px solid #b2f5ea;
+}
+
+.ai-badge.negative {
+  color: #b91c1c;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+}
+
+.topic-row:hover .ai-badge {
+  transform: scale(1.03);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+}
+
+.topic-row.is-short-post-card {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.02) 0%, var(--el-bg-color-overlay) 100%);
+  border-left-color: rgba(245, 158, 11, 0.4);
+}
+
+.topic-row.is-short-post-card:hover {
+  border-left-color: #f59e0b;
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.05) 0%, var(--cp-hover) 100%);
+  box-shadow: 0 16px 32px rgba(245, 158, 11, 0.05);
+}
+
+.short-post-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sp-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.sp-author-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sp-avatar {
+  border: 1.5px solid rgba(245, 158, 11, 0.25);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  transition: transform 0.2s ease;
+}
+
+.topic-row:hover .sp-avatar {
+  transform: scale(1.05);
+}
+
+.sp-meta-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.sp-name-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sp-author-name {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+  transition: color 0.2s;
+}
+
+.sp-author-name:hover {
+  color: var(--el-color-primary);
+}
+
+.sp-time {
+  font-size: 11px;
+  color: var(--el-text-color-placeholder);
+}
+
+.sp-category-pill {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--sp-cat-color, #409EFF) 9%, transparent);
+  color: var(--sp-cat-color, #409EFF);
+  border: 1px solid color-mix(in srgb, var(--sp-cat-color, #409EFF) 20%, transparent);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+}
+
+.sp-content-body {
+  padding: 2px 0;
+}
+
+.sp-content-card {
+  background: var(--el-fill-color-extra-light);
+  border-left: 3.5px solid #f59e0b;
+  border-radius: 8px;
+  padding: 12px 16px;
+  font-size: 14.5px;
+  line-height: 1.6;
+  color: var(--el-text-color-primary);
+  transition: all 0.24s ease;
+}
+
+.topic-row:hover .sp-content-card {
+  background: color-mix(in srgb, #f59e0b 4%, var(--el-fill-color-extra-light));
+  border-left-color: #d97706;
+}
+
+.sp-micro-tag {
+  font-size: 10px;
+  font-weight: 700;
+  color: #B45309;
+  background: #FEF3C7;
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-right: 8px;
+  display: inline-block;
+  vertical-align: middle;
+  line-height: 1.2;
+  box-shadow: 0 1px 2px rgba(180, 83, 9, 0.06);
+}
+
+.sp-text {
+  vertical-align: middle;
+  word-break: break-word;
+}
+
+.sp-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.sp-tags {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.sp-tag-chip {
+  font-size: 11.5px;
+  color: var(--el-text-color-secondary);
+  background: var(--el-fill-color-light);
+  border-radius: 6px;
+  padding: 2px 8px;
+  transition: all 0.2s;
+}
+
+.sp-tag-chip:hover {
+  background: var(--el-color-primary-light-9);
+  color: var(--el-color-primary);
+}
+
+.sp-actions-metrics {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-left: auto;
+}
+
+.sp-metric {
+  font-size: 12px;
+  color: var(--el-text-color-placeholder);
+  white-space: nowrap;
+}
+
+.sp-ai-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 6px;
+}
+
+.sp-ai-badge.neutral {
+  color: #0b57d0;
+  background: #f2f7ff;
+  border: 1px solid #d8e6ff;
+}
+
+.sp-ai-badge.positive {
+  color: #0f766e;
+  background: #dff8f4;
+  border: 1px solid #b2f5ea;
+}
+
+.sp-ai-badge.negative {
+  color: #b91c1c;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
 }
 
 @media (max-width: 768px) {
@@ -377,6 +727,18 @@ const formatMetric = (value: number) => {
   }
 
   .stats-line {
+    justify-content: flex-start;
+  }
+
+  .sp-footer {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .sp-actions-metrics {
+    margin-left: 0;
+    width: 100%;
     justify-content: flex-start;
   }
 }
