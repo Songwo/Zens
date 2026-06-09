@@ -49,6 +49,11 @@ public class Section {
     private Integer status;
 
     /**
+     * Song：是否支持答案采纳 0=否 1=是（如"答疑解惑"板块）
+     */
+    private Integer allowAdoption;
+
+    /**
      * Song：创建时间
      */
     private LocalDateTime createdAt;

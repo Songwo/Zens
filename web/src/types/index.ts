@@ -120,6 +120,8 @@ export interface Post {
     likeCount: number
     collectCount: number
     commentCount: number
+    hasAdoptedAnswer?: number | boolean | string
+    allowAdoption?: number | boolean | string
 
     createTime: string
     updateTime: string
@@ -163,6 +165,7 @@ export interface Comment {
     userBadgeStyle?: string
     likeCount: number
     collectCount?: number
+    isAdopted?: number | boolean | string
     createTime: string
     editTime?: string | null
     isLiked?: boolean

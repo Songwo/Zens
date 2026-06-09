@@ -8,6 +8,7 @@ import TopicRow from './TopicRow.vue'
 import { postApi } from '@/api/post'
 import type { PostSearchRequest } from '@/types'
 import { wsClient, type PostEvent } from '@/utils/websocket'
+import { isTruthyFlag } from '@/utils/flags'
 
 // ECharts for interactive AI Data Pulse
 import { use } from 'echarts/core'
@@ -23,6 +24,7 @@ type PostMetricsUpdate = {
   viewCount?: number | string | null
   commentCount?: number | string | null
   lastActivityAt?: string | null
+  hasAdoptedAnswer?: number | string | boolean | null
 }
 
 const props = defineProps<{
@@ -124,6 +126,9 @@ const applyTopicMetrics = (postId: string, data?: PostMetricsUpdate | PostEvent[
     topic.replies = Math.max(0, toFiniteMetric(topic.replies) ?? 0) + 1
   }
   if (data?.lastActivityAt) topic.lastActive = data.lastActivityAt
+  if ('hasAdoptedAnswer' in (data || {})) {
+    topic.isSolved = isTruthyFlag(data?.hasAdoptedAnswer)
+  }
 }
 
 const buildSearchReq = (): PostSearchRequest => {
@@ -175,6 +180,7 @@ const mapPost = (p: any) => ({
   heatScore: p.heatScore,
   isPinned: p.isPinned === 1,
   isFeatured: p.isFeatured === 1,
+  isSolved: isTruthyFlag(p.hasAdoptedAnswer),
   trendLevel: p.trendLevel,
   sentimentLabel: p.sentimentLabel,
 })

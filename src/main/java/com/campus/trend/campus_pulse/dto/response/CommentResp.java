@@ -22,6 +22,7 @@ public class CommentResp {
     private List<String> roles; // Song：用户角色列表
     private Integer likeCount;
     private Integer collectCount;
+    private Integer isAdopted;
     private String auditStatus;
     private LocalDateTime createTime;
     private LocalDateTime editTime; // Song：最后编辑时间(为空表示未编辑过)

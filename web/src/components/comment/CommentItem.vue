@@ -1,16 +1,22 @@
 <script setup lang="ts">
-import { Pointer } from '@element-plus/icons-vue'
+import { Pointer, CircleCheck } from '@element-plus/icons-vue'
 import type { Comment } from '@/types'
 import UserRoleBadge from '@/components/common/UserRoleBadge.vue'
 import UserBadge from '@/components/common/UserBadge.vue'
 import UserQuickCard from '@/components/common/UserQuickCard.vue'
+import AdoptAnswerAction from '@/components/comment/AdoptAnswerAction.vue'
+import { isTruthyFlag } from '@/utils/flags'
 
 const props = defineProps<{
   comment: Comment
   isChild?: boolean
+  postId?: string
+  postAuthorId?: string
+  hasAdoption?: boolean
+  allowAdoption?: boolean
 }>()
 
-const emit = defineEmits(['like', 'reply'])
+const emit = defineEmits(['like', 'reply', 'adopted', 'canceled'])
 
 const formatDate = (dateStr: string) => {
   const date = new Date(dateStr)
@@ -29,7 +35,7 @@ const formatDate = (dateStr: string) => {
 </script>
 
 <template>
-  <div class="comment-item" :class="{ 'is-child': isChild }">
+  <div class="comment-item" :class="{ 'is-child': isChild, 'is-adopted': isTruthyFlag(comment.isAdopted) }">
     <div class="comment-avatar">
       <UserQuickCard
         :user-id="comment.userId"
@@ -42,8 +48,14 @@ const formatDate = (dateStr: string) => {
         </el-avatar>
       </UserQuickCard>
     </div>
-    
+
     <div class="comment-main">
+      <!-- 最佳答案标记 -->
+      <div v-if="isTruthyFlag(comment.isAdopted) && !isChild" class="accepted-badge">
+        <el-icon class="check-icon"><CircleCheck /></el-icon>
+        <span>最佳答案</span>
+      </div>
+
       <div class="comment-bubble">
         <div class="comment-header">
           <span style="display: flex; align-items: center;">
@@ -66,8 +78,8 @@ const formatDate = (dateStr: string) => {
       </div>
       
       <div class="comment-actions">
-        <span 
-          class="action-btn" 
+        <span
+          class="action-btn"
           :class="{ 'is-liked': comment.isLiked }"
           @click="$emit('like', comment)"
         >
@@ -77,6 +89,19 @@ const formatDate = (dateStr: string) => {
           回复
         </span>
       </div>
+
+      <!-- 答案采纳功能 -->
+      <AdoptAnswerAction
+        v-if="!isChild && postId && postAuthorId && allowAdoption"
+        :post-id="postId"
+        :post-author-id="postAuthorId"
+        :comment-id="comment.id"
+        :comment-author-id="comment.userId"
+        :is-adopted="isTruthyFlag(comment.isAdopted)"
+        :has-adoption="hasAdoption || false"
+        @adopted="$emit('adopted')"
+        @canceled="$emit('canceled')"
+      />
 
       <!-- Nested Children -->
       <div v-if="comment.children && comment.children.length > 0" class="nested-comments">
@@ -98,11 +123,38 @@ const formatDate = (dateStr: string) => {
   display: flex;
   gap: 12px;
   margin-bottom: 20px;
+  position: relative;
 }
 
 .comment-item.is-child {
   margin-bottom: 12px;
   gap: 8px;
+}
+
+.comment-item.is-adopted {
+  padding: 16px;
+  background: var(--accept-bg-soft);
+  border: 1px solid var(--accept-border);
+  border-radius: 12px;
+  margin: 20px 0;
+}
+
+.accepted-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+  padding: 0 12px;
+  margin-bottom: 10px;
+  background: var(--accept-primary);
+  color: #fff;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.accepted-badge .check-icon {
+  font-size: 15px;
 }
 
 .comment-avatar {

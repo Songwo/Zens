@@ -47,6 +47,11 @@ public class Comment implements Serializable {
     private Integer collectCount;
 
     /**
+     * Song：是否被采纳为最佳答案
+     */
+    private Integer isAdopted;
+
+    /**
      * 审核/删除状态: APPROVED | DELETED
      */
     private String auditStatus;

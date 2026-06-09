@@ -5,10 +5,12 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.campus.trend.campus_pulse.dto.request.CommentCreateReq;
 import com.campus.trend.campus_pulse.dto.response.CommentResp;
+import com.campus.trend.campus_pulse.entity.AnswerAdoption;
 import com.campus.trend.campus_pulse.entity.Comment;
 import com.campus.trend.campus_pulse.entity.CommentCollect;
 import com.campus.trend.campus_pulse.entity.Post;
 import com.campus.trend.campus_pulse.entity.User;
+import com.campus.trend.campus_pulse.mapper.AnswerAdoptionMapper;
 import com.campus.trend.campus_pulse.mapper.CommentMapper;
 import com.campus.trend.campus_pulse.mapper.PostMapper;
 import com.campus.trend.campus_pulse.security.AuthUser;
@@ -54,6 +56,7 @@ public class CommentServiceImpl extends ServiceImpl<CommentMapper, Comment> impl
     private final com.campus.trend.campus_pulse.service.AsyncTaskService asyncTaskService;
     private final SectionModeratorService sectionModeratorService;
     private final CommentCollectService commentCollectService;
+    private final AnswerAdoptionMapper answerAdoptionMapper;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -368,6 +371,7 @@ public class CommentServiceImpl extends ServiceImpl<CommentMapper, Comment> impl
             return mapToResponse(rootForResponse);
         }).collect(Collectors.toList());
 
+        applyAnswerAdoptionStatus(responseList, postId);
         fillUserInfo(responseList);
 
         Page<CommentResp> resultPage = new Page<>(pageNo, pageSize);
@@ -497,6 +501,33 @@ public class CommentServiceImpl extends ServiceImpl<CommentMapper, Comment> impl
             response.setChildren(childrenDtos);
         }
         return response;
+    }
+
+    private void applyAnswerAdoptionStatus(List<CommentResp> responses, String postId) {
+        if (responses == null || responses.isEmpty() || !StringUtils.hasText(postId)) {
+            return;
+        }
+        try {
+            AnswerAdoption adoption = answerAdoptionMapper.selectOne(
+                    Wrappers.<AnswerAdoption>lambdaQuery()
+                            .eq(AnswerAdoption::getPostId, postId)
+                            .last("LIMIT 1")
+            );
+            String adoptedCommentId = adoption != null ? adoption.getCommentId() : null;
+            markAdoptedComment(responses, adoptedCommentId);
+        } catch (Exception ignored) {
+            // 反查失败时保留 sys_comment.is_adopted 的旧字段结果。
+        }
+    }
+
+    private void markAdoptedComment(List<CommentResp> responses, String adoptedCommentId) {
+        for (CommentResp response : responses) {
+            response.setIsAdopted(StringUtils.hasText(adoptedCommentId)
+                    && adoptedCommentId.equals(response.getId()) ? 1 : 0);
+            if (response.getChildren() != null) {
+                markAdoptedComment(response.getChildren(), adoptedCommentId);
+            }
+        }
     }
 
     private void fillUserInfo(List<CommentResp> responses) {

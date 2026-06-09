@@ -1,0 +1,324 @@
+<!--
+  答案采纳按钮调试工具
+  在浏览器中打开此文件，按照步骤操作
+-->
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>答案采纳按钮 - 快速调试</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        .header h1 {
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+        .content {
+            padding: 30px;
+        }
+        .step {
+            background: #f0fdf4;
+            border-left: 4px solid #10b981;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+        }
+        .step h2 {
+            color: #059669;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .step-number {
+            background: #10b981;
+            color: white;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+        }
+        .checklist {
+            list-style: none;
+            padding: 0;
+        }
+        .checklist li {
+            padding: 12px 0;
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+        }
+        .checklist li:before {
+            content: "☐";
+            font-size: 24px;
+            color: #10b981;
+            flex-shrink: 0;
+        }
+        .warning {
+            background: #fef3c7;
+            border: 2px solid #f59e0b;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        .warning-title {
+            color: #f59e0b;
+            font-weight: bold;
+            font-size: 18px;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .button-demo {
+            background: white;
+            border: 2px dashed #10b981;
+            padding: 30px;
+            border-radius: 8px;
+            text-align: center;
+            margin: 20px 0;
+        }
+        .demo-button {
+            background: #10b981;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+            transition: all 0.2s;
+        }
+        .demo-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(16, 185, 129, 0.4);
+        }
+        .code-block {
+            background: #1e293b;
+            color: #e2e8f0;
+            padding: 20px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 15px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.6;
+        }
+        .important {
+            background: #fee2e2;
+            border-left: 4px solid #ef4444;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔍 答案采纳按钮调试工具</h1>
+            <p>按照下面的步骤，找出按钮不显示的原因</p>
+        </div>
+
+        <div class="content">
+            <div class="warning">
+                <div class="warning-title">⚠️ 超级重要提示</div>
+                <p><strong>只有帖子作者才能看到"采纳为最佳答案"按钮！</strong></p>
+                <p style="margin-top:10px;">如果你用回复的账号登录，是<strong>绝对看不到</strong>按钮的！</p>
+            </div>
+
+            <div class="button-demo">
+                <h3 style="margin-bottom:20px; color:#059669;">按钮应该长这样 ↓</h3>
+                <button class="demo-button">
+                    <span>✓</span>
+                    采纳为最佳答案
+                </button>
+                <p style="margin-top:15px; color:#6b7280; font-size:14px;">
+                    位置：在每条评论的"点赞/收藏/回复"按钮下方
+                </p>
+            </div>
+
+            <div class="step">
+                <h2>
+                    <span class="step-number">1</span>
+                    检查基本条件
+                </h2>
+                <ul class="checklist">
+                    <li>必须在 <strong>"答疑解惑"</strong> 板块发帖（其他板块不支持）</li>
+                    <li>必须用 <strong>发帖的账号</strong> 登录（不是回复者的账号）</li>
+                    <li>帖子必须有 <strong>至少1条回复</strong></li>
+                    <li>回复必须是 <strong>其他人的账号</strong>（不能采纳自己）</li>
+                    <li>帖子 <strong>还没有采纳</strong> 其他答案</li>
+                </ul>
+            </div>
+
+            <div class="step">
+                <h2>
+                    <span class="step-number">2</span>
+                    打开浏览器开发者工具
+                </h2>
+                <p>按 <kbd style="background:#e5e7eb; padding:4px 8px; border-radius:4px; font-family:monospace;">F12</kbd> 打开开发者工具，切换到 <strong>Console（控制台）</strong> 标签</p>
+            </div>
+
+            <div class="step">
+                <h2>
+                    <span class="step-number">3</span>
+                    运行调试代码
+                </h2>
+                <p>复制以下代码，粘贴到控制台，按回车执行：</p>
+                <div class="code-block">// 答案采纳调试工具
+console.clear();
+console.log('%c===== 答案采纳调试信息 =====', 'color: #10b981; font-size: 16px; font-weight: bold;');
+
+// 获取帖子数据
+const post = window.__VUE_DEVTOOLS_GLOBAL_HOOK__?.apps[0]?._instance?.proxy?.$root?.$children[0]?.post;
+const postSectionId = post?.sectionId;
+const postAuthorId = post?.userId;
+const hasAdoptedAnswer = post?.hasAdoptedAnswer;
+
+// 获取当前用户
+const currentUserId = localStorage.getItem('userId');
+const currentUserStr = localStorage.getItem('user');
+let currentUser = null;
+try { currentUser = JSON.parse(currentUserStr); } catch(e) {}
+
+// 检查条件
+const isInQASection = postSectionId === 11;
+const isAuthor = postAuthorId === currentUserId;
+const allowAdoption = isInQASection;
+const hasAdoption = hasAdoptedAnswer === 1;
+
+console.log('');
+console.log('%c1. 板块信息', 'color: #059669; font-weight: bold;');
+console.log('   当前板块ID:', postSectionId);
+console.log('   是否答疑解惑板块:', isInQASection ? '✅ 是（板块ID=11）' : '❌ 否（需要板块ID=11）');
+
+console.log('');
+console.log('%c2. 用户信息', 'color: #059669; font-weight: bold;');
+console.log('   帖子作者ID:', postAuthorId);
+console.log('   当前登录用户ID:', currentUserId);
+console.log('   当前登录用户名:', currentUser?.nickname || '未知');
+console.log('   是否作者本人:', isAuthor ? '✅ 是（可以采纳）' : '❌ 否（不能采纳）');
+
+console.log('');
+console.log('%c3. 采纳状态', 'color: #059669; font-weight: bold;');
+console.log('   是否已有采纳答案:', hasAdoption ? '❌ 是（不能再采纳）' : '✅ 否（可以采纳）');
+
+console.log('');
+console.log('%c4. 评论数量', 'color: #059669; font-weight: bold;');
+const commentCount = document.querySelectorAll('.comment-item').length;
+console.log('   页面上的评论数:', commentCount);
+
+console.log('');
+console.log('%c===== 结论 =====', 'color: #10b981; font-size: 16px; font-weight: bold;');
+
+if (!isInQASection) {
+    console.log('%c❌ 原因1: 不在答疑解惑板块', 'color: #ef4444; font-weight: bold;');
+    console.log('   当前板块ID是', postSectionId, '，需要在板块ID=11（答疑解惑）的帖子才有采纳功能');
+}
+if (!isAuthor) {
+    console.log('%c❌ 原因2: 不是帖子作者', 'color: #ef4444; font-weight: bold;');
+    console.log('   帖子作者ID:', postAuthorId);
+    console.log('   当前用户ID:', currentUserId);
+    console.log('   请切换到发帖的账号登录！');
+}
+if (hasAdoption) {
+    console.log('%c❌ 原因3: 已经采纳了答案', 'color: #ef4444; font-weight: bold;');
+    console.log('   这个帖子已经采纳了最佳答案，不能再采纳其他答案');
+}
+if (commentCount === 0) {
+    console.log('%c❌ 原因4: 没有评论', 'color: #ef4444; font-weight: bold;');
+    console.log('   需要先有回复才能采纳');
+}
+
+if (isInQASection && isAuthor && !hasAdoption && commentCount > 0) {
+    console.log('%c✅ 所有条件都满足！按钮应该显示！', 'color: #10b981; font-size: 14px; font-weight: bold;');
+    console.log('   如果还是看不到按钮，请检查AdoptAnswerAction组件是否正确加载');
+
+    // 检查组件
+    const adoptButtons = document.querySelectorAll('.adopt-action');
+    console.log('   页面上的采纳按钮数量:', adoptButtons.length);
+    if (adoptButtons.length === 0) {
+        console.log('%c⚠️ AdoptAnswerAction组件未渲染！', 'color: #f59e0b; font-weight: bold;');
+        console.log('   可能的原因：');
+        console.log('   1. CommentList没有正确传递props');
+        console.log('   2. AdoptAnswerAction组件的v-if条件不满足');
+        console.log('   3. 组件引入失败');
+    }
+} else {
+    console.log('%c⚠️ 有条件不满足，所以看不到按钮', 'color: #f59e0b; font-size: 14px; font-weight: bold;');
+}
+
+console.log('');
+console.log('%c===========================', 'color: #10b981; font-size: 16px;');
+</div>
+            </div>
+
+            <div class="step">
+                <h2>
+                    <span class="step-number">4</span>
+                    查看调试结果
+                </h2>
+                <p>控制台会显示详细的检查结果，告诉你：</p>
+                <ul style="margin-top:10px; padding-left:20px;">
+                    <li>✅ 绿色对号：条件满足</li>
+                    <li>❌ 红色叉号：条件不满足（这就是按钮不显示的原因）</li>
+                </ul>
+            </div>
+
+            <div class="important">
+                <h3 style="color:#ef4444; margin-bottom:10px;">🚨 90%的问题是因为：</h3>
+                <ol style="padding-left:20px;">
+                    <li><strong>不是帖子作者登录</strong> - 用发帖的账号登录！</li>
+                    <li><strong>不在答疑解惑板块</strong> - 只有这个板块支持采纳！</li>
+                </ol>
+            </div>
+
+            <div class="step">
+                <h2>
+                    <span class="step-number">5</span>
+                    标准测试流程
+                </h2>
+                <ol style="padding-left:20px; line-height:2;">
+                    <li>用 <strong>账号A</strong> 在"答疑解惑"板块发帖</li>
+                    <li>退出，用 <strong>账号B</strong> 登录并回复</li>
+                    <li>退出，用 <strong>账号A</strong> 重新登录</li>
+                    <li>打开刚才的帖子，在账号B的回复下方就能看到绿色按钮</li>
+                </ol>
+            </div>
+
+            <div style="text-align:center; margin-top:40px; padding-top:20px; border-top:2px solid #e5e7eb; color:#6b7280;">
+                <p>Campus Pulse - 答案采纳功能</p>
+                <p style="margin-top:5px; font-size:14px;">如果按照以上步骤还是有问题，请将控制台截图发送给我</p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

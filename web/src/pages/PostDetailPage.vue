@@ -17,10 +17,11 @@ import { TOC_MARKDOWN_TAG, renderMarkdownWithToc, renderMarkdownWithTocResult, r
 import DOMPurify from 'dompurify'
 import { timeAgo } from '@/utils/timeAgo'
 import { decodeCommentId, decodePostId, encodePostId } from '@/utils/shortId'
-import { generateSummary } from '@/utils/markdown'
+import { generateSummary, stripMarkdown } from '@/utils/markdown'
 import { renderGithubRichCards, mergeConsecutiveBlockquotes } from '@/utils/richLink'
 import { cachedRequest } from '@/utils/requestCache'
 import { md } from '@/utils/markdownRenderer'
+import { isTruthyFlag } from '@/utils/flags'
 import { 
   View, 
   CaretTop, 
@@ -32,12 +33,15 @@ import {
   EditPen,
   Medal,
   Delete,
-  RefreshRight
+  RefreshRight,
+  CircleCheck
 } from '@element-plus/icons-vue'
 import UserRoleBadge from '@/components/common/UserRoleBadge.vue'
 import UserBadge from '@/components/common/UserBadge.vue'
 import UserQuickCard from '@/components/common/UserQuickCard.vue'
 import CommentList from '@/components/comment/CommentList.vue'
+import ReactionBar from '@/components/reaction/ReactionBar.vue'
+import { reactionApi, type ReactionResp } from '@/api/reaction'
 import CommentEditor from '@/components/comment/CommentEditor.vue'
 import { useUserStore } from '@/store/user'
 import { usePostComposerStore } from '@/store/postComposer'
@@ -106,6 +110,7 @@ const syncPostMetricsToLists = () => {
       viewCount: post.value.viewCount,
       commentCount: post.value.commentCount,
       lastActivityAt: post.value.lastActivityAt,
+      hasAdoptedAnswer: post.value.hasAdoptedAnswer,
     },
   }))
 }
@@ -360,6 +365,7 @@ const fetchPost = async () => {
   post.value = null
   comments.value = []
   relatedPosts.value = []
+  acceptedAnswerExpanded.value = false
   cancelReply()
   activeCommentId.value = getRouteCommentId()
   try {
@@ -843,6 +849,84 @@ const scrollToRouteComment = async (retry = 0) => {
   await scrollToComment(getRouteCommentId(), retry)
 }
 
+// 从已加载的评论树中找出被采纳的回复（后端按真实采纳记录标记 comment.isAdopted）
+const acceptedAnswer = computed<Comment | null>(() => {
+  const find = (list: Comment[]): Comment | null => {
+    for (const item of list || []) {
+      if (isTruthyFlag(item.isAdopted)) {
+        return item
+      }
+      const child = find(item.children || [])
+      if (child) return child
+    }
+    return null
+  }
+  return find(comments.value)
+})
+
+const acceptedAnswerId = computed(() => String(acceptedAnswer.value?.id || ''))
+
+// 帖子下方最佳答案预览：去除 markdown 后截断的纯文本
+const acceptedAnswerPreview = computed(() =>
+  generateSummary(acceptedAnswer.value?.content || '', 220)
+)
+
+// 展开后的完整纯文本，以及是否需要“展开全文”
+const acceptedAnswerFullText = computed(() =>
+  stripMarkdown(acceptedAnswer.value?.content || '')
+)
+const acceptedAnswerTruncated = computed(() => acceptedAnswerFullText.value.length > 220)
+const acceptedAnswerExpanded = ref(false)
+
+// 被采纳回复在顶层评论中的楼层（后端无楼层字段，按顺序推导；嵌套回复返回 0 不展示）
+const acceptedAnswerFloor = computed(() => {
+  const id = acceptedAnswerId.value
+  if (!id) return 0
+  const idx = comments.value.findIndex((c) => String(c.id) === id)
+  return idx >= 0 ? idx + 1 : 0
+})
+
+// 点击帖子下方“最佳答案入口”：平滑滚动到被采纳回复并短暂高亮
+const scrollToAcceptedAnswer = () => {
+  const id = acceptedAnswerId.value
+  const el = id ? document.getElementById(`comment-${id}`) : null
+  if (!el) {
+    ElMessage.warning('最佳答案暂未加载，请稍后再试')
+    return
+  }
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  el.classList.add('accepted-answer-highlight')
+  window.setTimeout(() => {
+    el.classList.remove('accepted-answer-highlight')
+  }, 1600)
+}
+
+// 评论表情：批量拉取已加载评论(含楼中楼)的反应，避免每条单独请求
+const commentReactions = ref<Record<string, ReactionResp>>({})
+
+const collectCommentIds = (list: Comment[], acc: string[] = []): string[] => {
+  for (const c of list || []) {
+    if (c?.id != null) acc.push(String(c.id))
+    if (c.children?.length) collectCommentIds(c.children, acc)
+  }
+  return acc
+}
+
+const loadCommentReactions = async () => {
+  const ids = collectCommentIds(comments.value)
+  if (ids.length === 0) {
+    commentReactions.value = {}
+    return
+  }
+  try {
+    commentReactions.value = (await reactionApi.batch('comment', ids)).data || {}
+  } catch {
+    /* 静默：表情不阻塞评论区 */
+  }
+}
+
+watch(comments, () => { loadCommentReactions() })
+
 watch(
   () => postId.value,
   (newId, oldId) => {
@@ -932,7 +1016,16 @@ onMounted(() => {
               <span class="post-date">{{ formatDate(post.createTime) }}</span>
             </div>
             
-            <h1 class="post-title">{{ post.title }}</h1>
+            <div class="post-title-row">
+              <span
+                v-if="isTruthyFlag(post.hasAdoptedAnswer)"
+                class="solved-badge"
+              >
+                <el-icon class="solved-badge-icon"><CircleCheck /></el-icon>
+                已解决
+              </span>
+              <h1 class="post-title">{{ post.title }}</h1>
+            </div>
 
             <el-alert
               v-if="isDeletedPost"
@@ -1085,6 +1178,56 @@ onMounted(() => {
               </template>
             </div>
 
+            <!-- 最佳答案快捷入口：已采纳时显示作者与内容预览，点击平滑滚动到被采纳的回复 -->
+            <div
+              v-if="isTruthyFlag(post.hasAdoptedAnswer)"
+              class="accepted-answer-card"
+              role="button"
+              tabindex="0"
+              @click="scrollToAcceptedAnswer"
+              @keyup.enter="scrollToAcceptedAnswer"
+            >
+              <div class="accepted-card-head">
+                <span class="accepted-entry-icon"><el-icon><CircleCheck /></el-icon></span>
+                <span class="accepted-entry-title">已采纳最佳答案</span>
+                <span class="accepted-card-action">查看完整回答 →</span>
+              </div>
+
+              <template v-if="acceptedAnswer">
+                <div class="accepted-answer-author">
+                  <el-avatar :size="22" :src="acceptedAnswer.userAvatar">
+                    {{ (acceptedAnswer.nickname || 'U').charAt(0) }}
+                  </el-avatar>
+                  <span class="accepted-answer-name">{{ acceptedAnswer.nickname || '匿名用户' }}</span>
+                  <UserRoleBadge :roles="acceptedAnswer.roles || []" />
+                  <UserBadge
+                    :text="acceptedAnswer.userBadgeText || ''"
+                    :color="acceptedAnswer.userBadgeColor"
+                    :effect="acceptedAnswer.userBadgeStyle"
+                  />
+                </div>
+                <p class="accepted-answer-snippet" :class="{ expanded: acceptedAnswerExpanded }">
+                  {{ acceptedAnswerExpanded ? acceptedAnswerFullText : acceptedAnswerPreview }}
+                </p>
+                <button
+                  v-if="acceptedAnswerTruncated"
+                  type="button"
+                  class="accepted-answer-toggle"
+                  @click.stop="acceptedAnswerExpanded = !acceptedAnswerExpanded"
+                >
+                  {{ acceptedAnswerExpanded ? '收起' : '展开全文' }}
+                </button>
+                <div class="accepted-answer-meta">
+                  <span v-if="acceptedAnswerFloor" class="accepted-meta-item">#{{ acceptedAnswerFloor }} 楼</span>
+                  <span v-if="acceptedAnswerFloor" class="accepted-meta-dot">·</span>
+                  <span class="accepted-meta-item"><el-icon><CaretTop /></el-icon>{{ acceptedAnswer.likeCount || 0 }} 赞</span>
+                  <span class="accepted-meta-dot">·</span>
+                  <span class="accepted-meta-item">{{ formatDate(acceptedAnswer.createTime) }}</span>
+                </div>
+              </template>
+              <p v-else class="accepted-entry-desc">点击查看被采纳的回复</p>
+            </div>
+
             <!-- Actions -->
             <div class="post-actions">
               <el-button-group>
@@ -1104,6 +1247,11 @@ onMounted(() => {
                 </el-button>
                 <el-button :icon="Share" @click="handleShare">分享</el-button>
               </el-button-group>
+            </div>
+
+            <!-- Reactions -->
+            <div class="post-reactions">
+              <ReactionBar target-type="post" :target-id="post.id" />
             </div>
           </template>
 
@@ -1157,12 +1305,18 @@ onMounted(() => {
             :current-user-id="userStore.userId"
             :is-admin="isAdmin"
             :can-moderate-section="canModerateCurrentSection"
+            :post-author-id="post?.userId"
+            :reaction-map="commentReactions"
+            :has-adoption="isTruthyFlag(post?.hasAdoptedAnswer)"
+            :allow-adoption="isTruthyFlag(post?.allowAdoption)"
             @like="handleCommentLike"
             @collect="handleCommentCollect"
             @reply="handleReply"
             @delete="handleCommentDelete"
             @restore="handleCommentRestore"
             @report="handleCommentReport"
+            @adopted="fetchPost"
+            @canceled="fetchPost"
           />
         </div>
         </div>
@@ -1362,6 +1516,165 @@ onMounted(() => {
   color: var(--el-text-color-primary);
   line-height: 1.3;
   margin: 0 0 20px 0;
+}
+
+.post-title-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0 0 20px 0;
+}
+
+.post-title-row .post-title {
+  min-width: 0;
+  margin: 0;
+}
+
+.solved-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  margin-top: 6px;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 7px;
+  background: var(--accept-bg);
+  border: 1px solid var(--accept-border);
+  color: var(--accept-text);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.solved-badge-icon {
+  font-size: 14px;
+}
+
+/* 帖子正文下方：最佳答案预览卡片 */
+.accepted-answer-card {
+  margin-top: 18px;
+  padding: 14px 16px;
+  border-radius: 10px;
+  background: linear-gradient(90deg, var(--accept-bg) 0%, var(--accept-bg-soft) 100%);
+  border: 1px solid var(--accept-border);
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.accepted-answer-card:hover {
+  background: var(--accept-bg-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(246, 184, 0, 0.15);
+}
+
+.accepted-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.accepted-entry-icon {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--accept-primary);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: bold;
+  flex-shrink: 0;
+}
+
+.accepted-entry-title {
+  color: var(--accept-text);
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.accepted-card-action {
+  margin-left: auto;
+  color: var(--accept-action);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.accepted-answer-author {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.accepted-answer-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accept-text);
+}
+
+.accepted-answer-snippet {
+  margin: 6px 0 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--el-text-color-regular);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-word;
+}
+
+.accepted-answer-snippet.expanded {
+  display: block;
+  -webkit-line-clamp: unset;
+  overflow: visible;
+}
+
+.accepted-answer-toggle {
+  margin-top: 6px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--accept-action);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.accepted-answer-toggle:hover {
+  color: var(--accept-primary-hover);
+  text-decoration: underline;
+}
+
+.accepted-answer-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--accept-text-soft);
+}
+
+.accepted-meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.accepted-meta-dot {
+  opacity: 0.55;
+}
+
+.accepted-entry-desc {
+  margin: 8px 0 0;
+  color: var(--accept-text-soft);
+  font-size: 13px;
 }
 
 .deleted-alert {
@@ -1566,6 +1879,12 @@ onMounted(() => {
   justify-content: center;
   padding-top: 24px;
   border-top: 1px solid var(--el-border-color-lighter);
+}
+
+.post-reactions {
+  display: flex;
+  justify-content: center;
+  margin-top: 14px;
 }
 
 .comment-section {

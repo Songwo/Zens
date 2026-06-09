@@ -15,6 +15,8 @@ import com.campus.trend.campus_pulse.entity.Post;
 import com.campus.trend.campus_pulse.entity.PostCollect;
 import com.campus.trend.campus_pulse.entity.PostLike;
 import com.campus.trend.campus_pulse.entity.Tag;
+import com.campus.trend.campus_pulse.entity.AnswerAdoption;
+import com.campus.trend.campus_pulse.mapper.AnswerAdoptionMapper;
 import com.campus.trend.campus_pulse.mapper.PostMapper;
 import com.campus.trend.campus_pulse.mapper.SectionMapper;
 import com.campus.trend.campus_pulse.service.*;
@@ -120,6 +122,7 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
     private final ObjectMapper objectMapper;
     private final AsyncTaskService asyncTaskService;
     private final PostMediaService postMediaService;
+    private final AnswerAdoptionMapper answerAdoptionMapper;
 
     @Value("${campus.cache.null-value-ttl-seconds:30}")
     private long nullValueTtlSeconds;
@@ -803,6 +806,7 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
                 Post::getLikeCount,
                 Post::getCollectCount,
                 Post::getCommentCount,
+                Post::getHasAdoptedAnswer,
                 Post::getHeatScore,
                 Post::getSentimentScore,
                 Post::getCreateTime,
@@ -1059,6 +1063,7 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
         if (!StringUtils.hasText(currentUserId)) {
             CachedDetailResult cachedDetail = readPostDetailCache(postId);
             if (cachedDetail.hit) {
+                hydratePostAdoptionStatus(cachedDetail.value);
                 return cachedDetail.value;
             }
         }
@@ -1087,6 +1092,7 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
     public IPage<PostResp> searchPostsWithAuthor(PostSearchReq postSearchRequest) {
         IPage<PostResp> cachedPage = readPostFeedCache(postSearchRequest);
         if (cachedPage != null) {
+            hydratePostFeedAdoptionStatus(cachedPage.getRecords());
             return cachedPage;
         }
 
@@ -1179,6 +1185,8 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
             }
         }
 
+        Set<String> adoptedPostIds = findAdoptedPostIds(postIds);
+
         List<PostResp> responseList = new ArrayList<>();
         for (Post post : posts) {
             post.setIsLiked(likedPostIds.contains(post.getId()));
@@ -1188,6 +1196,7 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
             if (postMedia != null && !postMedia.isEmpty()) {
                 resp.setMediaList(postMedia);
             }
+            resp.setHasAdoptedAnswer(adoptedPostIds.contains(post.getId()) ? 1 : 0);
             responseList.add(resp);
         }
 
@@ -1270,6 +1279,7 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
         response.setLikeCount(post.getLikeCount());
         response.setCollectCount(post.getCollectCount());
         response.setCommentCount(post.getCommentCount());
+        response.setHasAdoptedAnswer(post.getHasAdoptedAnswer() != null ? post.getHasAdoptedAnswer() : 0);
         response.setHeatScore(post.getHeatScore());
         response.setCreateTime(post.getCreateTime());
         response.setUpdateTime(post.getUpdateTime());
@@ -1328,6 +1338,8 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
                 }
                 if (section != null) {
                     response.setSectionName(section.getName());
+                    // Song：把板块的采纳开关透传给前端，前端据此显示采纳按钮（替代写死的 sectionId==11，跨环境/改名均不受影响）
+                    response.setAllowAdoption(section.getAllowAdoption());
                 }
             } catch (Exception ignored) {
             }
@@ -1367,6 +1379,7 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
 
     private PostResp convertToPostResp(Post post) {
         PostResp resp = convertToPostResp(post, null, null);
+        hydratePostAdoptionStatus(resp);
         if (resp != null && StringUtils.hasText(post.getId())) {
             try {
                 List<PostMedia> mediaRows = postMediaService.listByPostId(post.getId());
@@ -1383,6 +1396,81 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
             }
         }
         return resp;
+    }
+
+    private void hydratePostAdoptionStatus(PostResp resp) {
+        if (resp == null || !StringUtils.hasText(resp.getId())) {
+            return;
+        }
+        try {
+            resp.setHasAdoptedAnswer(hasAnswerAdoptionRecord(resp.getId()) ? 1 : 0);
+        } catch (Exception e) {
+            if (resp.getHasAdoptedAnswer() == null) {
+                resp.setHasAdoptedAnswer(0);
+            }
+            log.debug("反查帖子采纳状态失败 postId={}, err={}", resp.getId(), e.getMessage());
+        }
+    }
+
+    private void hydratePostFeedAdoptionStatus(List<PostResp> records) {
+        if (records == null || records.isEmpty()) {
+            return;
+        }
+        List<String> postIds = new ArrayList<>();
+        for (PostResp record : records) {
+            if (record != null && StringUtils.hasText(record.getId())) {
+                postIds.add(record.getId());
+            }
+        }
+        Set<String> adoptedPostIds = findAdoptedPostIds(postIds);
+        for (PostResp record : records) {
+            if (record != null && StringUtils.hasText(record.getId())) {
+                record.setHasAdoptedAnswer(adoptedPostIds.contains(record.getId()) ? 1 : 0);
+            }
+        }
+    }
+
+    private Set<String> findAdoptedPostIds(List<String> postIds) {
+        if (postIds == null || postIds.isEmpty()) {
+            return Collections.emptySet();
+        }
+        try {
+            List<AnswerAdoption> adoptions = answerAdoptionMapper.selectList(
+                    Wrappers.<AnswerAdoption>lambdaQuery()
+                            .select(AnswerAdoption::getPostId)
+                            .in(AnswerAdoption::getPostId, postIds)
+            );
+            Set<String> adoptedPostIds = new HashSet<>();
+            for (AnswerAdoption adoption : adoptions) {
+                if (adoption != null && StringUtils.hasText(adoption.getPostId())) {
+                    adoptedPostIds.add(adoption.getPostId());
+                }
+            }
+            return adoptedPostIds;
+        } catch (Exception e) {
+            log.debug("批量反查帖子采纳状态失败, err={}", e.getMessage());
+            return Collections.emptySet();
+        }
+    }
+
+    private boolean hasAnswerAdoptionRecord(String postId) {
+        if (!StringUtils.hasText(postId)) {
+            return false;
+        }
+        Long count = answerAdoptionMapper.selectCount(
+                Wrappers.<AnswerAdoption>lambdaQuery().eq(AnswerAdoption::getPostId, postId)
+        );
+        return count != null && count > 0;
+    }
+
+    @Override
+    public void refreshPostCaches(String postId) {
+        if (!StringUtils.hasText(postId)) {
+            return;
+        }
+        Long sectionId = getSectionIdByPostId(postId);
+        invalidatePostFeedCache(sectionId, sectionId);
+        bumpPostDetailCacheVersion(postId);
     }
 
     private void fillSummary(PostResp response, Post post) {

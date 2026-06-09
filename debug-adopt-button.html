@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>答案采纳功能 - 调试指南</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 900px;
+            margin: 40px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 { color: #10b981; border-bottom: 3px solid #10b981; padding-bottom: 10px; }
+        h2 { color: #059669; margin-top: 30px; }
+        .step {
+            background: #f0fdf4;
+            border-left: 4px solid #10b981;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 5px;
+        }
+        .warning {
+            background: #fef3c7;
+            border-left: 4px solid #f59e0b;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 5px;
+        }
+        .error {
+            background: #fee2e2;
+            border-left: 4px solid #ef4444;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 5px;
+        }
+        code {
+            background: #e5e7eb;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+        }
+        .checklist {
+            list-style: none;
+            padding-left: 0;
+        }
+        .checklist li {
+            padding: 8px 0;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .checklist li:before {
+            content: "☐ ";
+            font-size: 20px;
+            margin-right: 10px;
+        }
+        .screenshot {
+            background: #f9fafb;
+            border: 2px dashed #d1d5db;
+            padding: 30px;
+            text-align: center;
+            margin: 20px 0;
+            border-radius: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 答案采纳按钮不显示 - 完整调试指南</h1>
+
+        <div class="warning">
+            <strong>⚠️ 重要提示：</strong> 只有<strong>帖子作者</strong>才能看到"采纳为最佳答案"按钮！如果你不是用发帖的账号登录，是看不到按钮的。
+        </div>
+
+        <h2>第一步：确认基本条件</h2>
+        <div class="step">
+            <h3>✅ 必须同时满足以下所有条件：</h3>
+            <ul class="checklist">
+                <li>在 <strong>"答疑解惑"</strong> 板块发帖（板块ID=11）</li>
+                <li>用 <strong>发帖的账号</strong> 登录（不是回复的账号）</li>
+                <li>帖子有至少 <strong>1条回复</strong></li>
+                <li>回复不是 <strong>自己的账号</strong>（不能采纳自己）</li>
+                <li>该帖子 <strong>还没有采纳</strong> 其他答案</li>
+            </ul>
+        </div>
+
+        <h2>第二步：打开浏览器开发者工具</h2>
+        <div class="step">
+            <ol>
+                <li>按 <code>F12</code> 打开开发者工具</li>
+                <li>切换到 <strong>Console（控制台）</strong> 标签</li>
+                <li>复制以下代码并粘贴到控制台，按回车：</li>
+            </ol>
+            <pre style="background:#1e293b; color:#e2e8f0; padding:15px; border-radius:5px; overflow-x:auto;">
+// 检查答案采纳相关数据
+console.log('===== 答案采纳调试信息 =====');
+console.log('1. 帖子板块ID:', window.__POST_DETAIL__?.sectionId);
+console.log('2. 是否答疑解惑板块:', window.__POST_DETAIL__?.sectionId === 11);
+console.log('3. 帖子作者ID:', window.__POST_DETAIL__?.userId);
+console.log('4. 当前登录用户ID:', localStorage.getItem('userId'));
+console.log('5. 是否作者本人:', window.__POST_DETAIL__?.userId === localStorage.getItem('userId'));
+console.log('6. 是否有采纳答案:', window.__POST_DETAIL__?.hasAdoptedAnswer);
+console.log('===========================');
+            </pre>
+        </div>
+
+        <h2>第三步：检查CommentList组件</h2>
+        <div class="step">
+            <p>在控制台继续执行：</p>
+            <pre style="background:#1e293b; color:#e2e8f0; padding:15px; border-radius:5px; overflow-x:auto;">
+// 查找CommentList组件
+const commentList = document.querySelector('.comment-list');
+console.log('CommentList组件:', commentList);
+console.log('评论数量:', document.querySelectorAll('.comment-item').length);
+            </pre>
+        </div>
+
+        <h2>第四步：手动测试按钮显示条件</h2>
+        <div class="step">
+            <p>在控制台执行以下代码，看看哪个条件不满足：</p>
+            <pre style="background:#1e293b; color:#e2e8f0; padding:15px; border-radius:5px; overflow-x:auto;">
+// 检查按钮显示条件
+const postSectionId = window.__POST_DETAIL__?.sectionId;
+const postAuthorId = window.__POST_DETAIL__?.userId;
+const currentUserId = localStorage.getItem('userId');
+const allowAdoption = postSectionId === 11;
+const hasAdoption = window.__POST_DETAIL__?.hasAdoptedAnswer === 1;
+
+console.log('===== 按钮显示条件检查 =====');
+console.log('条件1 - 板块支持采纳:', allowAdoption, postSectionId === 11 ? '✅' : '❌');
+console.log('条件2 - 有帖子作者ID:', !!postAuthorId, postAuthorId ? '✅' : '❌');
+console.log('条件3 - 是作者本人:', postAuthorId === currentUserId, postAuthorId === currentUserId ? '✅' : '❌');
+console.log('条件4 - 还未采纳:', !hasAdoption, !hasAdoption ? '✅' : '❌');
+console.log('===========================');
+
+if (!allowAdoption) {
+    console.error('❌ 不在答疑解惑板块！当前板块ID:', postSectionId);
+}
+if (!postAuthorId) {
+    console.error('❌ 没有帖子作者ID！');
+}
+if (postAuthorId !== currentUserId) {
+    console.error('❌ 不是帖子作者！作者ID:', postAuthorId, '当前用户ID:', currentUserId);
+}
+if (hasAdoption) {
+    console.error('❌ 已经采纳了答案！');
+}
+            </pre>
+        </div>
+
+        <h2>第五步：按钮应该显示的位置</h2>
+        <div class="screenshot">
+            <h3>按钮位置示意图</h3>
+            <pre style="text-align:left; display:inline-block; background:#f9fafb; padding:20px;">
+┌─────────────────────────────────────┐
+│ 评论区                               │
+├─────────────────────────────────────┤
+│                                     │
+│ 👤 用户名 | 版主                     │
+│ 10分钟前 · #1                       │
+│                                     │
+│ 这是一条回复内容...                  │
+│                                     │
+│ 👍 点赞 | ⭐ 收藏 | 💬 回复         │
+│                                     │
+│ ┌───────────────────────────────┐  │
+│ │ ✓ 采纳为最佳答案               │  │ ← 按钮在这里！
+│ └───────────────────────────────┘  │
+│                                     │
+└─────────────────────────────────────┘
+            </pre>
+            <p>按钮在每条评论的 <strong>点赞/收藏/回复</strong> 按钮下方</p>
+        </div>
+
+        <h2>常见问题排查</h2>
+
+        <div class="error">
+            <h3>❌ 问题1：不是帖子作者</h3>
+            <p><strong>症状：</strong> 用回复的账号登录，看不到按钮</p>
+            <p><strong>解决：</strong> 切换到<strong>发帖的账号</strong>登录</p>
+        </div>
+
+        <div class="error">
+            <h3>❌ 问题2：不在答疑解惑板块</h3>
+            <p><strong>症状：</strong> 在"技术交流"、"学习资源"等其他板块</p>
+            <p><strong>解决：</strong> 只在<strong>"答疑解惑"板块</strong>发帖才有采纳功能</p>
+        </div>
+
+        <div class="error">
+            <h3>❌ 问题3：组件未加载</h3>
+            <p><strong>症状：</strong> 控制台有报错</p>
+            <p><strong>解决：</strong> 检查 <code>AdoptAnswerAction.vue</code> 组件是否存在</p>
+        </div>
+
+        <h2>最后的检查清单</h2>
+        <div class="step">
+            <ul class="checklist">
+                <li>我在<strong>"答疑解惑"</strong>板块发了帖</li>
+                <li>我用<strong>另一个账号</strong>回复了</li>
+                <li>我现在用<strong>发帖的账号</strong>登录</li>
+                <li>我按了<strong>Ctrl+F5</strong>强制刷新页面</li>
+                <li>我打开了<strong>浏览器开发者工具</strong>检查</li>
+                <li>控制台显示<strong>所有条件都是✅</strong></li>
+            </ul>
+        </div>
+
+        <h2>还是看不到？</h2>
+        <div class="warning">
+            <p>如果以上所有步骤都完成了，还是看不到按钮，请：</p>
+            <ol>
+                <li>截图控制台的输出</li>
+                <li>截图当前页面的评论区</li>
+                <li>告诉我：
+                    <ul>
+                        <li>当前登录的用户名</li>
+                        <li>发帖的用户名</li>
+                        <li>帖子所在板块名称</li>
+                        <li>控制台的调试输出结果</li>
+                    </ul>
+                </li>
+            </ol>
+        </div>
+
+        <div style="margin-top:40px; padding-top:20px; border-top:2px solid #e5e7eb; text-align:center; color:#6b7280;">
+            <p>Campus Pulse - 答案采纳功能调试指南</p>
+            <p>最后更新：2026-06-08</p>
+        </div>
+    </div>
+</body>
+</html>

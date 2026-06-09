@@ -64,6 +64,12 @@ const router = createRouter({
       meta: { title: '个人中心', description: '查看个人资料、帖子、收藏与通知' }
     },
     {
+      path: '/level',
+      name: 'level',
+      component: () => import('@/pages/LevelPage.vue'),
+      meta: { requiresAuth: true, title: '我的等级', description: '查看等级进度、经验来源与等级特权' }
+    },
+    {
       path: '/settings',
       name: 'settings',
       component: () => import('@/pages/SettingsPage.vue'),

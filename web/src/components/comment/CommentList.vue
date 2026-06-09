@@ -1,15 +1,18 @@
 <script setup lang="ts">
-import { ChatLineRound, Coordinate, More, Delete, Warning, Link, Star, StarFilled } from '@element-plus/icons-vue'
+import { ChatLineRound, Coordinate, More, Delete, Warning, Link, Star, StarFilled, CircleCheck } from '@element-plus/icons-vue'
 import { ref, watch, computed } from 'vue'
 import DOMPurify from 'dompurify'
 import { ElMessageBox } from 'element-plus'
 import { timeAgo } from '@/utils/timeAgo'
 import UserRoleBadge from '@/components/common/UserRoleBadge.vue'
 import UserBadge from '@/components/common/UserBadge.vue'
+import AdoptAnswerAction from '@/components/comment/AdoptAnswerAction.vue'
+import ReactionBar from '@/components/reaction/ReactionBar.vue'
 import { mdComment } from '@/utils/markdownRenderer'
 import { warmupHighlighter, preloadLanguages } from '@/utils/shiki'
 import { pulseNotification } from '@/utils/pulseNotification'
 import { commentApi } from '@/api/comment'
+import { isTruthyFlag } from '@/utils/flags'
 
 const props = defineProps<{
   comments: any[]
@@ -19,6 +22,10 @@ const props = defineProps<{
   currentUserId?: string | null
   isAdmin?: boolean
   canModerateSection?: boolean
+  postAuthorId?: string
+  hasAdoption?: boolean
+  allowAdoption?: boolean
+  reactionMap?: Record<string, any>
 }>()
 
 const emit = defineEmits<{
@@ -28,6 +35,8 @@ const emit = defineEmits<{
   (e: 'delete', comment: any): void
   (e: 'restore', comment: any): void
   (e: 'report', comment: any): void
+  (e: 'adopted'): void
+  (e: 'canceled'): void
 }>()
 
 const replySortMode = ref<'time' | 'hot'>('time')
@@ -343,7 +352,7 @@ const handleAction = async (cmd: string, comment: any) => {
       :key="comment.id"
       :id="toCommentDomId(comment.id)"
       class="comment-item"
-      :class="{ 'is-active': isCommentActive(comment.id) }"
+      :class="{ 'is-active': isCommentActive(comment.id), 'is-adopted': isTruthyFlag(comment.isAdopted) }"
     >
       <div class="comment-avatar">
         <el-avatar :size="40" :src="getAvatar(comment)">
@@ -352,6 +361,12 @@ const handleAction = async (cmd: string, comment: any) => {
       </div>
 
       <div class="comment-main">
+        <!-- 最佳答案徽章 -->
+        <div v-if="isTruthyFlag(comment.isAdopted)" class="accepted-badge">
+          <el-icon class="check-icon"><CircleCheck /></el-icon>
+          <span>最佳答案</span>
+        </div>
+
         <div class="comment-meta">
           <div class="meta-left">
             <span class="author-name">{{ getName(comment) }}</span>
@@ -420,6 +435,12 @@ const handleAction = async (cmd: string, comment: any) => {
             <el-button link type="info" size="small" :icon="ChatLineRound" @click.stop="emit('reply', comment)">
               回复
             </el-button>
+            <ReactionBar
+              target-type="comment"
+              :target-id="String(comment.id)"
+              :initial="props.reactionMap?.[String(comment.id)]"
+              :self-fetch="false"
+            />
           </div>
           <el-dropdown trigger="click" @command="(cmd: string) => handleAction(cmd, comment)">
             <el-button link size="small" :icon="More" class="action-trigger" @click.stop/>
@@ -438,6 +459,19 @@ const handleAction = async (cmd: string, comment: any) => {
             </template>
           </el-dropdown>
         </div>
+
+        <!-- 答案采纳组件 -->
+        <AdoptAnswerAction
+          v-if="props.allowAdoption && props.postAuthorId && !isDeletedComment(comment)"
+          :post-id="props.postId"
+          :post-author-id="props.postAuthorId"
+          :comment-id="comment.id"
+          :comment-author-id="comment.userId"
+          :is-adopted="isTruthyFlag(comment.isAdopted)"
+          :has-adoption="props.hasAdoption || false"
+          @adopted="emit('adopted')"
+          @canceled="emit('canceled')"
+        />
 
         <!-- Nested Replies (children) -->
         <div v-if="comment.children && comment.children.length > 0" class="replies-block">
@@ -509,6 +543,12 @@ const handleAction = async (cmd: string, comment: any) => {
                     <el-button link type="info" size="small" :icon="ChatLineRound" @click.stop="emit('reply', child)">
                       回复
                     </el-button>
+                    <ReactionBar
+                      target-type="comment"
+                      :target-id="String(child.id)"
+                      :initial="props.reactionMap?.[String(child.id)]"
+                      :self-fetch="false"
+                    />
                   </div>
                   <el-dropdown trigger="click" @command="(cmd: string) => handleAction(cmd, child)">
                     <el-button link size="small" :icon="More" class="action-trigger" @click.stop/>
@@ -599,6 +639,12 @@ const handleAction = async (cmd: string, comment: any) => {
                     <el-button link type="info" size="small" :icon="ChatLineRound" @click.stop="emit('reply', grandChild)">
                       回复
                     </el-button>
+                    <ReactionBar
+                      target-type="comment"
+                      :target-id="String(grandChild.id)"
+                      :initial="props.reactionMap?.[String(grandChild.id)]"
+                      :self-fetch="false"
+                    />
                   </div>
                   <el-dropdown trigger="click" @command="(cmd: string) => handleAction(cmd, grandChild)">
                     <el-button link size="small" :icon="More" class="action-trigger" @click.stop/>
@@ -833,7 +879,9 @@ const handleAction = async (cmd: string, comment: any) => {
 
 .actions-group {
   display: flex;
+  align-items: center;
   gap: 16px;
+  flex-wrap: wrap;
 }
 
 /* Song：说明 */
@@ -955,5 +1003,55 @@ const handleAction = async (cmd: string, comment: any) => {
 .comment-item:hover .action-trigger,
 .reply-item:hover .action-trigger {
   opacity: 1;
+}
+
+/* 最佳答案徽章（黄色主题小徽章，左上角，不抢版面） */
+.accepted-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+  padding: 0 12px;
+  background: var(--accept-primary);
+  color: #fff;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 10px;
+  box-shadow: 0 2px 8px rgba(246, 184, 0, 0.28);
+}
+
+.accepted-badge .check-icon {
+  font-size: 15px;
+  animation: checkBounce 0.6s ease;
+}
+
+@keyframes checkBounce {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.2); }
+}
+
+/* 被采纳的评论：轻量黄色突出，不使用大块绿色背景 */
+.comment-item.is-adopted {
+  background: var(--accept-bg-soft);
+  border: 1px solid var(--accept-border);
+  border-radius: 12px;
+}
+
+.comment-item.is-adopted:hover {
+  background: var(--accept-bg);
+}
+
+/* 从“最佳答案入口”跳转过来时的短暂高亮脉冲 */
+.comment-item.accepted-answer-highlight,
+.reply-item.accepted-answer-highlight {
+  animation: accepted-answer-pulse 1.6s ease;
+  border-radius: 12px;
+}
+
+@keyframes accepted-answer-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(246, 184, 0, 0.55); }
+  35% { box-shadow: 0 0 0 6px rgba(246, 184, 0, 0.18); }
+  100% { box-shadow: 0 0 0 0 rgba(246, 184, 0, 0); }
 }
 </style>

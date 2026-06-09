@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ChatDotRound, Pointer, View, MagicStick, Discount, More, EditPen, Star, StarFilled, Share, Delete, RefreshRight } from '@element-plus/icons-vue'
+import { ChatDotRound, Pointer, View, MagicStick, Discount, More, EditPen, Star, StarFilled, Share, Delete, RefreshRight, CircleCheck } from '@element-plus/icons-vue'
 import { postApi } from '@/api/post'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { pulseNotification } from '@/utils/pulseNotification'
@@ -11,6 +11,7 @@ import UserRoleBadge from '@/components/common/UserRoleBadge.vue'
 import UserBadge from '@/components/common/UserBadge.vue'
 import { stripMarkdown } from '@/utils/markdown'
 import { encodePostId, encodeUserId } from '@/utils/shortId'
+import { isTruthyFlag } from '@/utils/flags'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -387,6 +388,14 @@ const highlightedSummary = computed(() => highlightText(postSummary.value))
       <div class="card-body-content">
         <div class="text-content">
           <h2 class="post-title">
+            <!-- 已解决标记 -->
+            <span
+              v-if="isTruthyFlag(post.hasAdoptedAnswer)"
+              class="solved-tag"
+            >
+              <el-icon class="solved-tag-icon"><CircleCheck /></el-icon>
+              已解决
+            </span>
             <el-tag v-if="post.isPinned === 1" type="warning" size="small" effect="dark" class="hot-tag">
               置顶
             </el-tag>
@@ -637,6 +646,26 @@ const highlightedSummary = computed(() => highlightText(postSummary.value))
 
 .hot-tag {
   font-weight: bold;
+}
+
+.solved-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 6px;
+  background: var(--accept-bg);
+  border: 1px solid var(--accept-border);
+  color: var(--accept-text);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.solved-tag .solved-tag-icon {
+  font-size: 13px;
 }
 
 .title-text {

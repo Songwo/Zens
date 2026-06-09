@@ -7,11 +7,13 @@ import ProfileHeader from '@/components/profile/ProfileHeader.vue'
 import ProfilePostList from '@/components/profile/ProfilePostList.vue'
 import RelationsPanel from '@/components/profile/RelationsPanel.vue'
 import CreatorPanel from '@/components/profile/CreatorPanel.vue'
+import CheckInCard from '@/components/checkin/CheckInCard.vue'
 import { postApi } from '@/api/post'
 import { userApi } from '@/api/user'
 import { levelApi, type LevelInfo } from '@/api/level'
 import { usePostComposerStore } from '@/store/postComposer'
 import { ElMessage } from 'element-plus'
+import { TrophyBase } from '@element-plus/icons-vue'
 import type { Post } from '@/types'
 import type { CoverConfig } from '@/utils/coverConfig'
 
@@ -100,6 +102,17 @@ watch(() => route.query.tab, t => { if (t && typeof t === 'string') activeTab.va
         @stat-click="onStatClick"
       />
 
+      <CheckInCard />
+
+      <div class="level-entry" @click="router.push('/level')">
+        <span class="level-entry-text">
+          <el-icon><TrophyBase /></el-icon>
+          我的等级 Lv.{{ levelInfo?.level ?? headerProfile.level ?? 1 }}
+          <span class="level-entry-hint">· {{ levelHint || '查看升级特权' }}</span>
+        </span>
+        <span class="level-entry-arrow">查看特权 →</span>
+      </div>
+
       <el-tabs v-model="activeTab" class="me-tabs" @tab-change="onTab">
         <el-tab-pane name="posts" label="动态">
           <ProfilePostList :fetcher="postsFetcher" empty-title="还没有发布动态" empty-description="快去分享你的第一篇校园见闻吧！" />
@@ -120,6 +133,43 @@ watch(() => route.query.tab, t => { if (t && typeof t === 'string') activeTab.va
 
 <style scoped>
 .me-container { width: 100%; }
+.level-entry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  border-radius: 12px;
+  border: 1px solid var(--el-border-color-lighter);
+  background: var(--el-bg-color-overlay);
+  cursor: pointer;
+  transition: background 0.2s, transform 0.2s;
+}
+.level-entry:hover {
+  background: var(--el-fill-color-light);
+  transform: translateY(-1px);
+}
+.level-entry-text {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+  min-width: 0;
+}
+.level-entry-hint {
+  font-weight: 400;
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
+}
+.level-entry-arrow {
+  font-size: 13px;
+  color: var(--el-color-primary);
+  font-weight: 600;
+  white-space: nowrap;
+}
 .me-tabs { margin-top: 8px; }
 .me-tabs :deep(.el-tabs__active-bar) { background-color: var(--el-color-primary); }
 @media (max-width: 640px) {

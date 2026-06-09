@@ -21,6 +21,7 @@ type TopicItem = {
   heatScore?: number
   isPinned?: boolean
   isFeatured?: boolean
+  isSolved?: boolean
   trendLevel?: string
   sentimentLabel?: string
 }
@@ -138,6 +139,7 @@ const formatMetric = (value: number) => {
           </div>
         </div>
         <div class="sp-header-right">
+          <span v-if="topic.isSolved" class="state-tag solved">已解决</span>
           <span class="sp-category-pill" :style="{ '--cat-color': topic.category.color || '#409EFF' }">
             {{ topic.category.name }}
           </span>
@@ -200,6 +202,7 @@ const formatMetric = (value: number) => {
         <div class="state-tags">
           <span v-if="topic.isPinned" class="state-tag pin">置顶</span>
           <span v-if="topic.isFeatured" class="state-tag feature">精华</span>
+          <span v-if="topic.isSolved" class="state-tag solved">已解决</span>
           <span v-if="isNew" class="state-tag fresh">NEW</span>
         </div>
       </div>
@@ -315,6 +318,12 @@ const formatMetric = (value: number) => {
 .state-tag.feature {
   color: #0f766e;
   background: #dff8f4;
+}
+
+.state-tag.solved {
+  color: var(--accept-text);
+  background: var(--accept-bg);
+  border-color: var(--accept-border);
 }
 
 .state-tag.fresh {
