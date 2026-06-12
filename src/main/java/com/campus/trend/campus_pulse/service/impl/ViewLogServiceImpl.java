@@ -29,22 +29,21 @@ import java.util.stream.Collectors;
 public class ViewLogServiceImpl extends ServiceImpl<ViewLogMapper, ViewLog>
         implements ViewLogService {
 
-    private static final String POST_FEED_CACHE_GLOBAL_VERSION_KEY = "post:feed:version:global";
-    private static final String POST_FEED_CACHE_SECTION_VERSION_KEY_PREFIX = "post:feed:version:section:";
-    private static final String POST_DETAIL_CACHE_VERSION_KEY_PREFIX = "post:detail:version:";
-    private static final String POST_HEAT_RANK_VERSION_KEY = "post:heat:version";
 
     private final LevelService levelService;
     private final StringRedisTemplate stringRedisTemplate;
     private final PostMapper postMapper;
     private final PostEventService postEventService;
+    private final com.campus.trend.campus_pulse.service.post.PostCacheManager postCacheManager;
 
     public ViewLogServiceImpl(LevelService levelService, StringRedisTemplate stringRedisTemplate, PostMapper postMapper,
-            PostEventService postEventService) {
+            PostEventService postEventService,
+            com.campus.trend.campus_pulse.service.post.PostCacheManager postCacheManager) {
         this.levelService = levelService;
         this.stringRedisTemplate = stringRedisTemplate;
         this.postMapper = postMapper;
         this.postEventService = postEventService;
+        this.postCacheManager = postCacheManager;
     }
 
     @Override
@@ -211,18 +210,7 @@ public class ViewLogServiceImpl extends ServiceImpl<ViewLogMapper, ViewLog>
     }
 
     private void invalidatePostFeedCache(Long sectionId, String postId) {
-        try {
-            stringRedisTemplate.opsForValue().increment(POST_FEED_CACHE_GLOBAL_VERSION_KEY);
-            stringRedisTemplate.opsForValue().increment(POST_HEAT_RANK_VERSION_KEY);
-            if (sectionId != null) {
-                stringRedisTemplate.opsForValue().increment(POST_FEED_CACHE_SECTION_VERSION_KEY_PREFIX + sectionId);
-            }
-            if (postId != null && !postId.isBlank()) {
-                stringRedisTemplate.opsForValue().increment(POST_DETAIL_CACHE_VERSION_KEY_PREFIX + postId);
-            }
-        } catch (Exception ignored) {
-            // Song：不影响浏览主流程
-        }
+        postCacheManager.invalidatePostCaches(sectionId, postId);
     }
 
 }

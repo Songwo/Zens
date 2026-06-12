@@ -23,6 +23,20 @@ public final class PostSupport {
 
     public static final int SUMMARY_MAX_LEN = 150;
 
+    public static final int DEFAULT_PAGE_SIZE = 10;
+    public static final int MAX_PAGE_SIZE = 30;
+
+    /**
+     * 页大小钳制:空/非正取默认值,超上限取上限。
+     * feed 查询与缓存 Key 构建共用,保证两侧口径一致。
+     */
+    public static int clampPageSize(Integer requested) {
+        if (requested == null || requested <= 0) {
+            return DEFAULT_PAGE_SIZE;
+        }
+        return Math.min(requested, MAX_PAGE_SIZE);
+    }
+
     // 预编译正则，避免 stripMarkdown 每次调用重复编译
     private static final Pattern MD_HTML_TAG      = Pattern.compile("<[^>]*>");
     private static final Pattern MD_CODE_BLOCK     = Pattern.compile("```[\\s\\S]*?```");

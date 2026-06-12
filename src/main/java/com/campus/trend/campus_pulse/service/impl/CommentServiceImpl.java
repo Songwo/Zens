@@ -39,15 +39,12 @@ public class CommentServiceImpl extends ServiceImpl<CommentMapper, Comment> impl
     private static final String AUDIT_STATUS_PENDING = "PENDING";
     private static final String AUDIT_STATUS_APPROVED = "APPROVED";
     private static final String AUDIT_STATUS_DELETED = "DELETED";
-    private static final String POST_FEED_CACHE_GLOBAL_VERSION_KEY = "post:feed:version:global";
-    private static final String POST_FEED_CACHE_SECTION_VERSION_KEY_PREFIX = "post:feed:version:section:";
-    private static final String POST_DETAIL_CACHE_VERSION_KEY_PREFIX = "post:detail:version:";
-    private static final String POST_HEAT_RANK_VERSION_KEY = "post:heat:version";
     private static final long COMMENT_RESTORE_GRACE_DAYS = 3L;
     private static final Pattern MENTION_PATTERN = Pattern.compile("@([\\p{IsHan}A-Za-z0-9_.-]{2,32})");
 
     private final PostMapper sysPostMapper;
     private final ContentSecurityService contentSecurityService;
+    private final com.campus.trend.campus_pulse.service.post.PostCacheManager postCacheManager;
     private final org.springframework.data.redis.core.StringRedisTemplate stringRedisTemplate;
     private final UserService userService;
     private final NotificationService notificationService;
@@ -654,18 +651,7 @@ public class CommentServiceImpl extends ServiceImpl<CommentMapper, Comment> impl
     }
 
     private void invalidatePostFeedCache(Long sectionId, String postId) {
-        try {
-            stringRedisTemplate.opsForValue().increment(POST_FEED_CACHE_GLOBAL_VERSION_KEY);
-            stringRedisTemplate.opsForValue().increment(POST_HEAT_RANK_VERSION_KEY);
-            if (sectionId != null) {
-                stringRedisTemplate.opsForValue().increment(POST_FEED_CACHE_SECTION_VERSION_KEY_PREFIX + sectionId);
-            }
-            if (postId != null && !postId.isBlank()) {
-                stringRedisTemplate.opsForValue().increment(POST_DETAIL_CACHE_VERSION_KEY_PREFIX + postId);
-            }
-        } catch (Exception ignored) {
-            // Song：不影响评论主流程
-        }
+        postCacheManager.invalidatePostCaches(sectionId, postId);
     }
 
     private Set<String> resolveMentionUserIds(String content, String currentUserId) {

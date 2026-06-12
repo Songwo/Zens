@@ -25,15 +25,11 @@ public class AsyncReportWorkflowProcessor {
     private static final int STATUS_REJECTED = 3;
     private static final int STATUS_PROCESSING = 11;
 
-    private static final String POST_FEED_CACHE_GLOBAL_VERSION_KEY = "post:feed:version:global";
-    private static final String POST_FEED_CACHE_SECTION_VERSION_KEY_PREFIX = "post:feed:version:section:";
-    private static final String POST_DETAIL_CACHE_VERSION_KEY_PREFIX = "post:detail:version:";
-    private static final String POST_HEAT_RANK_VERSION_KEY = "post:heat:version";
 
     private final SysReportService sysReportService;
     private final PostMapper postMapper;
     private final NotificationService notificationService;
-    private final StringRedisTemplate stringRedisTemplate;
+    private final com.campus.trend.campus_pulse.service.post.PostCacheManager postCacheManager;
 
     @Async("taskExecutor")
     @Transactional(rollbackFor = Exception.class)
@@ -103,17 +99,6 @@ public class AsyncReportWorkflowProcessor {
     }
 
     private void invalidatePostCache(Long sectionId, String postId) {
-        try {
-            stringRedisTemplate.opsForValue().increment(POST_FEED_CACHE_GLOBAL_VERSION_KEY);
-            stringRedisTemplate.opsForValue().increment(POST_HEAT_RANK_VERSION_KEY);
-            if (sectionId != null) {
-                stringRedisTemplate.opsForValue().increment(POST_FEED_CACHE_SECTION_VERSION_KEY_PREFIX + sectionId);
-            }
-            if (StringUtils.hasText(postId)) {
-                stringRedisTemplate.opsForValue().increment(POST_DETAIL_CACHE_VERSION_KEY_PREFIX + postId);
-            }
-        } catch (Exception ignored) {
-            log.debug("举报打回后刷新缓存版本失败: postId={}", postId);
-        }
+        postCacheManager.invalidatePostCaches(sectionId, postId);
     }
 }

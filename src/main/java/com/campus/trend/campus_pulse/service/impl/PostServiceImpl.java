@@ -31,19 +31,15 @@ import com.campus.trend.campus_pulse.entity.User;
 import com.campus.trend.campus_pulse.entity.Section;
 import com.campus.trend.campus_pulse.utils.IdUtils;
 import com.campus.trend.campus_pulse.utils.TimeRangeUtils;
+import com.campus.trend.campus_pulse.service.post.PostCacheManager;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.DigestUtils;
 import org.springframework.util.StringUtils;
 
-import java.nio.charset.StandardCharsets;
-import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -53,11 +49,10 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.TreeMap;
-import java.util.concurrent.ThreadLocalRandom;
 
 import static com.campus.trend.campus_pulse.service.post.PostSupport.SUMMARY_MAX_LEN;
 import static com.campus.trend.campus_pulse.service.post.PostSupport.buildSummary;
+import static com.campus.trend.campus_pulse.service.post.PostSupport.clampPageSize;
 import static com.campus.trend.campus_pulse.service.post.PostSupport.extractAccessUrls;
 import static com.campus.trend.campus_pulse.service.post.PostSupport.firstAccessUrl;
 import static com.campus.trend.campus_pulse.service.post.PostSupport.mediaRowToDto;
@@ -77,20 +72,6 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
     private static final String AUDIT_STATUS_REJECTED = "REJECTED";
     private static final String AUDIT_STATUS_DELETED = "DELETED";
     private static final int RESTORE_GRACE_DAYS = 7;
-    private static final int DEFAULT_PAGE_SIZE = 10;
-    private static final int MAX_PAGE_SIZE = 30;
-    private static final Duration POST_FEED_CACHE_TTL = Duration.ofSeconds(120);
-    private static final Duration POST_FEED_EMPTY_CACHE_TTL = Duration.ofSeconds(30);
-    private static final Duration POST_DETAIL_CACHE_TTL = Duration.ofSeconds(300);
-    private static final Duration POST_DETAIL_NULL_CACHE_TTL = Duration.ofSeconds(30);
-    private static final String CACHE_NULL_MARKER = "__NULL__";
-
-    private static final String POST_FEED_CACHE_PREFIX = "post:feed:cache:";
-    private static final String POST_DETAIL_CACHE_PREFIX = "post:detail:cache:";
-    private static final String POST_FEED_CACHE_GLOBAL_VERSION_KEY = "post:feed:version:global";
-    private static final String POST_FEED_CACHE_SECTION_VERSION_KEY_PREFIX = "post:feed:version:section:";
-    private static final String POST_DETAIL_CACHE_VERSION_KEY_PREFIX = "post:detail:version:";
-    private static final String POST_HEAT_RANK_VERSION_KEY = "post:heat:version";
 
     private final PostLikeService postLikeService;
     private final PostCollectService postCollectService;
@@ -106,22 +87,13 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
     private final UserTagRelationService userTagRelationService;
     private final com.campus.trend.campus_pulse.service.LevelService levelService;
     private final com.campus.trend.campus_pulse.service.AiPostAnalysisService aiPostAnalysisService;
-    private final StringRedisTemplate stringRedisTemplate;
     private final ObjectMapper objectMapper;
     private final AsyncTaskService asyncTaskService;
     private final PostMediaService postMediaService;
     private final AnswerAdoptionMapper answerAdoptionMapper;
     private final PollService pollService;
     private final PostSubscriptionService postSubscriptionService;
-
-    @Value("${campus.cache.null-value-ttl-seconds:30}")
-    private long nullValueTtlSeconds;
-
-    @Value("${campus.cache.version-key-ttl-hours:168}")
-    private long versionKeyTtlHours;
-
-    @Value("${campus.cache.ttl-jitter-ratio:0.2}")
-    private double ttlJitterRatio;
+    private final PostCacheManager postCacheManager;
 
     @Override
     public Post searchByPostId(String postId) {
@@ -267,7 +239,7 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
             asyncTaskService.updateActiveRegionAsync(userId, createPostRequest.getLocationName());
         }
 
-        invalidatePostFeedCache(null, sysPost.getSectionId());
+        postCacheManager.invalidatePostFeedCache(null, sysPost.getSectionId());
     }
 
     @Override
@@ -336,8 +308,8 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
             postMediaService.saveForPost(post.getId(), draftRequest.getMediaList());
         }
 
-        invalidatePostFeedCache(oldSectionId, post.getSectionId());
-        bumpPostDetailCacheVersion(post.getId());
+        postCacheManager.invalidatePostFeedCache(oldSectionId, post.getSectionId());
+        postCacheManager.bumpPostDetailCacheVersion(post.getId());
         return convertToPostResp(post);
     }
 
@@ -449,8 +421,8 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
         post.setSummary(summary);
         post.setUpdateTime(LocalDateTime.now());
         updateById(post);
-        invalidatePostFeedCache(post.getSectionId(), post.getSectionId());
-        bumpPostDetailCacheVersion(postId);
+        postCacheManager.invalidatePostFeedCache(post.getSectionId(), post.getSectionId());
+        postCacheManager.bumpPostDetailCacheVersion(postId);
 
         return summary;
     }
@@ -466,8 +438,8 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
         }
         // Song：该方法会自动处理点赞状态切换并更新点赞数
         postLikeService.toggleLike(postId, userId);
-        invalidatePostFeedCache(post.getSectionId(), post.getSectionId());
-        bumpPostDetailCacheVersion(postId);
+        postCacheManager.invalidatePostFeedCache(post.getSectionId(), post.getSectionId());
+        postCacheManager.bumpPostDetailCacheVersion(postId);
     }
 
     @Override
@@ -481,8 +453,8 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
         }
         // Song：该方法会自动处理收藏状态切换并更新收藏数
         postCollectService.toggleCollect(postId, userId);
-        invalidatePostFeedCache(post.getSectionId(), post.getSectionId());
-        bumpPostDetailCacheVersion(postId);
+        postCacheManager.invalidatePostFeedCache(post.getSectionId(), post.getSectionId());
+        postCacheManager.bumpPostDetailCacheVersion(postId);
     }
 
     @Override
@@ -596,8 +568,8 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
             postMediaService.saveForPost(post.getId(), updateMediaList);
         }
 
-        invalidatePostFeedCache(oldSectionId, post.getSectionId());
-        bumpPostDetailCacheVersion(post.getId());
+        postCacheManager.invalidatePostFeedCache(oldSectionId, post.getSectionId());
+        postCacheManager.bumpPostDetailCacheVersion(post.getId());
     }
 
     @Override
@@ -623,8 +595,8 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
         clearModerationDisplayFlags(post);
         post.setUpdateTime(LocalDateTime.now());
         this.updateById(post);
-        invalidatePostFeedCache(oldSectionId, null);
-        bumpPostDetailCacheVersion(postId);
+        postCacheManager.invalidatePostFeedCache(oldSectionId, null);
+        postCacheManager.bumpPostDetailCacheVersion(postId);
     }
 
     @Override
@@ -651,8 +623,8 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
         post.setRejectReason(null);
         post.setUpdateTime(LocalDateTime.now());
         this.updateById(post);
-        invalidatePostFeedCache(null, post.getSectionId());
-        bumpPostDetailCacheVersion(postId);
+        postCacheManager.invalidatePostFeedCache(null, post.getSectionId());
+        postCacheManager.bumpPostDetailCacheVersion(postId);
 
     }
 
@@ -673,8 +645,8 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
         post.setIsFeatured(post.getIsFeatured() != null && post.getIsFeatured() == 1 ? 0 : 1);
         post.setUpdateTime(java.time.LocalDateTime.now());
         this.updateById(post);
-        invalidatePostFeedCache(post.getSectionId(), post.getSectionId());
-        bumpPostDetailCacheVersion(post.getId());
+        postCacheManager.invalidatePostFeedCache(post.getSectionId(), post.getSectionId());
+        postCacheManager.bumpPostDetailCacheVersion(post.getId());
     }
 
     @Override
@@ -684,8 +656,8 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
         ensureModerationPermission(post, operatorId);
         markPostRejected(post, reason);
         this.updateById(post);
-        invalidatePostFeedCache(post.getSectionId(), post.getSectionId());
-        bumpPostDetailCacheVersion(post.getId());
+        postCacheManager.invalidatePostFeedCache(post.getSectionId(), post.getSectionId());
+        postCacheManager.bumpPostDetailCacheVersion(post.getId());
         // 异步通知作者
         if (post.getUserId() != null) {
             String notifyTitle = "您的帖子被打回修改";
@@ -705,8 +677,8 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
         post.setRejectReason(null);
         post.setUpdateTime(java.time.LocalDateTime.now());
         this.updateById(post);
-        invalidatePostFeedCache(post.getSectionId(), post.getSectionId());
-        bumpPostDetailCacheVersion(post.getId());
+        postCacheManager.invalidatePostFeedCache(post.getSectionId(), post.getSectionId());
+        postCacheManager.bumpPostDetailCacheVersion(post.getId());
     }
 
     @Override
@@ -1063,36 +1035,36 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
     public PostResp getPostWithAuthor(String postId) {
         String currentUserId = com.campus.trend.campus_pulse.utils.SecurityUtils.getCurrentUserId();
         if (!StringUtils.hasText(currentUserId)) {
-            CachedDetailResult cachedDetail = readPostDetailCache(postId);
-            if (cachedDetail.hit) {
-                hydratePostAdoptionStatus(cachedDetail.value);
-                return cachedDetail.value;
+            PostCacheManager.CachedDetail cachedDetail = postCacheManager.readPostDetailCache(postId);
+            if (cachedDetail.isHit()) {
+                hydratePostAdoptionStatus(cachedDetail.getValue());
+                return cachedDetail.getValue();
             }
         }
 
         Post post = searchByPostId(postId);
         if (post == null) {
             if (!StringUtils.hasText(currentUserId)) {
-                writePostDetailCache(postId, null);
+                postCacheManager.writePostDetailCache(postId, null);
             }
             return null;
         }
         if (!canViewPostDetail(currentUserId, post)) {
             if (!StringUtils.hasText(currentUserId)) {
-                writePostDetailCache(postId, null);
+                postCacheManager.writePostDetailCache(postId, null);
             }
             return null;
         }
         PostResp result = convertToPostResp(post);
         if (!StringUtils.hasText(currentUserId)) {
-            writePostDetailCache(postId, result);
+            postCacheManager.writePostDetailCache(postId, result);
         }
         return result;
     }
 
     @Override
     public IPage<PostResp> searchPostsWithAuthor(PostSearchReq postSearchRequest) {
-        IPage<PostResp> cachedPage = readPostFeedCache(postSearchRequest);
+        IPage<PostResp> cachedPage = postCacheManager.readPostFeedCache(postSearchRequest);
         if (cachedPage != null) {
             hydratePostFeedAdoptionStatus(cachedPage.getRecords());
             return cachedPage;
@@ -1120,7 +1092,7 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
         if (posts.isEmpty()) {
             Page<PostResp> emptyPage = new Page<>(postPage.getCurrent(), postPage.getSize(), postPage.getTotal());
             emptyPage.setRecords(new ArrayList<>());
-            writePostFeedCache(postSearchRequest, emptyPage);
+            postCacheManager.writePostFeedCache(postSearchRequest, emptyPage);
             return emptyPage;
         }
 
@@ -1209,7 +1181,7 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
                 postPage.getTotal());
         responsePage.setRecords(responseList);
 
-        writePostFeedCache(postSearchRequest, responsePage);
+        postCacheManager.writePostFeedCache(postSearchRequest, responsePage);
         return responsePage;
     }
 
@@ -1471,8 +1443,8 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
             return;
         }
         Long sectionId = getSectionIdByPostId(postId);
-        invalidatePostFeedCache(sectionId, sectionId);
-        bumpPostDetailCacheVersion(postId);
+        postCacheManager.invalidatePostFeedCache(sectionId, sectionId);
+        postCacheManager.bumpPostDetailCacheVersion(postId);
     }
 
     private void fillSummary(PostResp response, Post post) {
@@ -1487,243 +1459,9 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
         response.setSummary(truncate(post.getTitle(), SUMMARY_MAX_LEN));
     }
 
-    private CachedDetailResult readPostDetailCache(String postId) {
-        if (!StringUtils.hasText(postId)) {
-            return CachedDetailResult.miss();
-        }
-        String cacheKey = buildPostDetailCacheKey(postId);
-        if (!StringUtils.hasText(cacheKey)) {
-            return CachedDetailResult.miss();
-        }
-        try {
-            String cachedJson = stringRedisTemplate.opsForValue().get(cacheKey);
-            if (!StringUtils.hasText(cachedJson)) {
-                return CachedDetailResult.miss();
-            }
-            if (CACHE_NULL_MARKER.equals(cachedJson)) {
-                return CachedDetailResult.hit(null);
-            }
-            return CachedDetailResult.hit(objectMapper.readValue(cachedJson, PostResp.class));
-        } catch (Exception e) {
-            log.debug("读取帖子详情缓存失败: postId={}, err={}", postId, e.getMessage());
-            return CachedDetailResult.miss();
-        }
-    }
-
-    private void writePostDetailCache(String postId, PostResp detail) {
-        if (!StringUtils.hasText(postId)) {
-            return;
-        }
-        String cacheKey = buildPostDetailCacheKey(postId);
-        if (!StringUtils.hasText(cacheKey)) {
-            return;
-        }
-        try {
-            if (detail == null) {
-                stringRedisTemplate.opsForValue().set(
-                        cacheKey,
-                        CACHE_NULL_MARKER,
-                        withCacheTtlJitter(resolveNullValueTtl()));
-                return;
-            }
-            String json = objectMapper.writeValueAsString(detail);
-            stringRedisTemplate.opsForValue().set(cacheKey, json, withCacheTtlJitter(POST_DETAIL_CACHE_TTL));
-        } catch (Exception e) {
-            log.debug("写入帖子详情缓存失败: postId={}, err={}", postId, e.getMessage());
-        }
-    }
-
-    private IPage<PostResp> readPostFeedCache(PostSearchReq request) {
-        if (!shouldUsePostFeedCache(request)) {
-            return null;
-        }
-
-        String cacheKey = buildPostFeedCacheKey(request);
-        if (!StringUtils.hasText(cacheKey)) {
-            return null;
-        }
-
-        try {
-            String cachedJson = stringRedisTemplate.opsForValue().get(cacheKey);
-            if (!StringUtils.hasText(cachedJson)) {
-                return null;
-            }
-
-            PostFeedCachePayload payload = objectMapper.readValue(cachedJson, PostFeedCachePayload.class);
-            Page<PostResp> page = new Page<>(payload.current, payload.size, payload.total);
-            page.setRecords(payload.records != null ? payload.records : new ArrayList<>());
-            return page;
-        } catch (Exception e) {
-            log.debug("读取帖子流缓存失败: {}", e.getMessage());
-            return null;
-        }
-    }
-
-    private void writePostFeedCache(PostSearchReq request, IPage<PostResp> page) {
-        if (!shouldUsePostFeedCache(request)) {
-            return;
-        }
-
-        String cacheKey = buildPostFeedCacheKey(request);
-        if (!StringUtils.hasText(cacheKey)) {
-            return;
-        }
-
-        try {
-            PostFeedCachePayload payload = new PostFeedCachePayload();
-            payload.current = page.getCurrent();
-            payload.size = page.getSize();
-            payload.total = page.getTotal();
-            payload.records = page.getRecords();
-
-            String json = objectMapper.writeValueAsString(payload);
-            Duration ttl = page.getRecords() == null || page.getRecords().isEmpty()
-                    ? POST_FEED_EMPTY_CACHE_TTL
-                    : POST_FEED_CACHE_TTL;
-            stringRedisTemplate.opsForValue().set(cacheKey, json, withCacheTtlJitter(ttl));
-        } catch (Exception e) {
-            log.debug("写入帖子流缓存失败: {}", e.getMessage());
-        }
-    }
-
-    private boolean shouldUsePostFeedCache(PostSearchReq request) {
-        if (request == null) {
-            return false;
-        }
-
-        if (Boolean.TRUE.equals(request.getModerationView())
-                || Boolean.TRUE.equals(request.getIncludeDeleted())
-                || StringUtils.hasText(request.getAuditStatus())) {
-            return false;
-        }
-
-        if (request.getSectionIds() != null && !request.getSectionIds().isEmpty()) {
-            return false;
-        }
-
-        // Song：个性化列表与搜索结果不进缓存，聚焦高并发公共帖子流
-        if (StringUtils.hasText(request.getKeyword())
-                || StringUtils.hasText(request.getUserId())
-                || StringUtils.hasText(request.getLikedBy())
-                || StringUtils.hasText(request.getCollectedBy())) {
-            return false;
-        }
-
-        if (request.getPage() != null && request.getPage() > 5 && request.getCursor() == null) {
-            return false;
-        }
-
-        return true;
-    }
-
-    private String buildPostFeedCacheKey(PostSearchReq request) {
-        try {
-            Map<String, Object> keyParts = new TreeMap<>();
-            keyParts.put("page", request.getPage() != null ? request.getPage() : 1);
-            keyParts.put("pageSize", clampPageSize(request.getPageSize()));
-            keyParts.put("navType", StringUtils.hasText(request.getNavType())
-                    ? request.getNavType().trim().toLowerCase()
-                    : "");
-            keyParts.put("category", StringUtils.hasText(request.getCategory())
-                    ? request.getCategory().trim()
-                    : "");
-            keyParts.put("orderBy", StringUtils.hasText(request.getOrderBy())
-                    ? request.getOrderBy().toLowerCase()
-                    : "new");
-            keyParts.put("timeRange", StringUtils.hasText(request.getTimeRange())
-                    ? request.getTimeRange().toUpperCase()
-                    : "");
-            keyParts.put("status", request.getStatus() != null ? request.getStatus() : -1);
-            keyParts.put("sectionId", request.getSectionId() != null ? request.getSectionId() : 0L);
-            keyParts.put("tag", StringUtils.hasText(request.getTag()) ? request.getTag().trim() : "");
-            keyParts.put("isFeatured", Boolean.TRUE.equals(request.getIsFeatured()) ? 1 : 0);
-            keyParts.put("pinnedOnly", Boolean.TRUE.equals(request.getPinnedOnly()) ? 1 : 0);
-            keyParts.put("cursor", request.getCursor() != null ? request.getCursor().toString() : "");
-            keyParts.put("cursorId", StringUtils.hasText(request.getCursorId()) ? request.getCursorId() : "");
-            keyParts.put("needTotal", Boolean.TRUE.equals(request.getNeedTotal()) ? 1 : 0);
-            keyParts.put("globalVer", getCacheVersion(POST_FEED_CACHE_GLOBAL_VERSION_KEY));
-            if (request.getSectionId() != null) {
-                keyParts.put("sectionVer", getCacheVersion(getSectionVersionKey(request.getSectionId())));
-            } else {
-                keyParts.put("sectionVer", 0L);
-            }
-
-            String rawKey = objectMapper.writeValueAsString(keyParts);
-            String digest = DigestUtils.md5DigestAsHex(rawKey.getBytes(StandardCharsets.UTF_8));
-            return POST_FEED_CACHE_PREFIX + digest;
-        } catch (Exception e) {
-            log.debug("构建帖子流缓存 Key 失败: {}", e.getMessage());
-            return null;
-        }
-    }
-
-    private long getCacheVersion(String versionKey) {
-        try {
-            String value = stringRedisTemplate.opsForValue().get(versionKey);
-            return StringUtils.hasText(value) ? Long.parseLong(value) : 0L;
-        } catch (Exception e) {
-            return 0L;
-        }
-    }
-
-    private void invalidatePostFeedCache(Long oldSectionId, Long newSectionId) {
-        bumpCacheVersion(POST_FEED_CACHE_GLOBAL_VERSION_KEY);
-        bumpCacheVersion(POST_HEAT_RANK_VERSION_KEY);
-        if (oldSectionId != null) {
-            bumpCacheVersion(getSectionVersionKey(oldSectionId));
-        }
-        if (newSectionId != null && !newSectionId.equals(oldSectionId)) {
-            bumpCacheVersion(getSectionVersionKey(newSectionId));
-        }
-    }
-
-    private void bumpCacheVersion(String versionKey) {
-        try {
-            stringRedisTemplate.opsForValue().increment(versionKey);
-            stringRedisTemplate.expire(versionKey, Duration.ofHours(Math.max(1L, versionKeyTtlHours)));
-        } catch (Exception e) {
-            log.debug("递增缓存版本失败: key={}, err={}", versionKey, e.getMessage());
-        }
-    }
-
-    private String getSectionVersionKey(Long sectionId) {
-        return POST_FEED_CACHE_SECTION_VERSION_KEY_PREFIX + sectionId;
-    }
-
-    private String getPostDetailVersionKey(String postId) {
-        return POST_DETAIL_CACHE_VERSION_KEY_PREFIX + postId;
-    }
-
-    private String buildPostDetailCacheKey(String postId) {
-        try {
-            Map<String, Object> keyParts = new TreeMap<>();
-            keyParts.put("postId", postId);
-            keyParts.put("ver", getCacheVersion(getPostDetailVersionKey(postId)));
-            String rawKey = objectMapper.writeValueAsString(keyParts);
-            String digest = DigestUtils.md5DigestAsHex(rawKey.getBytes(StandardCharsets.UTF_8));
-            return POST_DETAIL_CACHE_PREFIX + digest;
-        } catch (Exception e) {
-            return null;
-        }
-    }
-
-    private void bumpPostDetailCacheVersion(String postId) {
-        if (!StringUtils.hasText(postId)) {
-            return;
-        }
-        bumpCacheVersion(getPostDetailVersionKey(postId));
-    }
-
     private Long getSectionIdByPostId(String postId) {
         Post post = getById(postId);
         return post != null ? post.getSectionId() : null;
-    }
-
-    private int clampPageSize(Integer requested) {
-        if (requested == null || requested <= 0) {
-            return DEFAULT_PAGE_SIZE;
-        }
-        return Math.min(requested, MAX_PAGE_SIZE);
     }
 
     private Page<PostResp> buildEmptyPostRespPage(PostSearchReq request) {
@@ -1755,23 +1493,6 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
                 .filter(StringUtils::hasText)
                 .limit(5)
                 .toList();
-    }
-
-    private Duration withCacheTtlJitter(Duration baseTtl) {
-        if (baseTtl == null || baseTtl.isNegative() || baseTtl.isZero()) {
-            return baseTtl;
-        }
-        double safeRatio = Math.max(0.0d, Math.min(0.5d, ttlJitterRatio));
-        if (safeRatio <= 0.0d) {
-            return baseTtl;
-        }
-        long baseMillis = baseTtl.toMillis();
-        long jitterMillis = (long) (baseMillis * safeRatio * ThreadLocalRandom.current().nextDouble());
-        return Duration.ofMillis(baseMillis + jitterMillis);
-    }
-
-    private Duration resolveNullValueTtl() {
-        return withCacheTtlJitter(Duration.ofSeconds(Math.max(10L, nullValueTtlSeconds)));
     }
 
     private void fillPostDraftFields(Post post, PostDraftReq draftRequest) {
@@ -1841,30 +1562,6 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
         LIKE
     }
 
-    private static class CachedDetailResult {
-        private final boolean hit;
-        private final PostResp value;
-
-        private CachedDetailResult(boolean hit, PostResp value) {
-            this.hit = hit;
-            this.value = value;
-        }
-
-        private static CachedDetailResult hit(PostResp value) {
-            return new CachedDetailResult(true, value);
-        }
-
-        private static CachedDetailResult miss() {
-            return new CachedDetailResult(false, null);
-        }
-    }
-
-    private static class PostFeedCachePayload {
-        public long current;
-        public long size;
-        public long total;
-        public List<PostResp> records;
-    }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -1888,8 +1585,8 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
         post.setGlobalPin(newPinned); // Song：同步到新字段
         post.setUpdateTime(LocalDateTime.now());
         this.updateById(post);
-        invalidatePostFeedCache(post.getSectionId(), post.getSectionId());
-        bumpPostDetailCacheVersion(post.getId());
+        postCacheManager.invalidatePostFeedCache(post.getSectionId(), post.getSectionId());
+        postCacheManager.bumpPostDetailCacheVersion(post.getId());
     }
 
     @Override
@@ -1933,8 +1630,8 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
 
         post.setUpdateTime(java.time.LocalDateTime.now());
         this.updateById(post);
-        invalidatePostFeedCache(post.getSectionId(), post.getSectionId());
-        bumpPostDetailCacheVersion(post.getId());
+        postCacheManager.invalidatePostFeedCache(post.getSectionId(), post.getSectionId());
+        postCacheManager.bumpPostDetailCacheVersion(post.getId());
 
         // Song：推送置顶状态更新事件
         try {
@@ -1985,8 +1682,8 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
 
         post.setUpdateTime(java.time.LocalDateTime.now());
         this.updateById(post);
-        invalidatePostFeedCache(post.getSectionId(), post.getSectionId());
-        bumpPostDetailCacheVersion(post.getId());
+        postCacheManager.invalidatePostFeedCache(post.getSectionId(), post.getSectionId());
+        postCacheManager.bumpPostDetailCacheVersion(post.getId());
 
         // Song：推送置顶状态更新事件
         try {
