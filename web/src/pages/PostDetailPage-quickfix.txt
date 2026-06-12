@@ -1,7 +1,0 @@
-// 临时修复：直接使用板块ID判断
-// 在 PostDetailPage.vue 中找到 CommentList 组件，将：
-// :allow-adoption="post?.section?.allowAdoption === 1"
-// 改为：
-// :allow-adoption="post?.sectionId === 11"
-
-// 这样只要是在"答疑解惑"板块（id=11）的帖子，就会显示采纳按钮

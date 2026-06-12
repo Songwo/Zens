@@ -59,7 +59,6 @@ web/dist/
 web/node_modules/
 *.jar
 *.war
-docs/
 
 # Environment files
 .env
@@ -116,3 +115,16 @@ cdk-airdrop-station/bin/
 cdk-airdrop-station/server/bin/
 cdk-airdrop-station/server/data/
 cdk-airdrop-station/**/*.bak
+
+# campus-lottery-station subproject artifacts
+campus-lottery-station/node_modules/
+campus-lottery-station/dist/
+campus-lottery-station/.env
+campus-lottery-station/.env.*
+!campus-lottery-station/.env.example
+
+# Catch-all: never commit any nested app dependencies/build output
+**/node_modules/
+**/dist/
+zens-nav/node_modules/
+zens-nav/dist/
