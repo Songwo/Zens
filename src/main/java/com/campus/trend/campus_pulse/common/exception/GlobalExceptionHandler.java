@@ -2,7 +2,7 @@ package com.campus.trend.campus_pulse.common.exception;
 
 import com.campus.trend.campus_pulse.common.api.Result;
 import com.campus.trend.campus_pulse.common.api.ResultCode;
-import com.campus.trend.campus_pulse.exception.custom.*;
+import com.campus.trend.campus_pulse.common.exception.*;
 import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;

@@ -40,6 +40,74 @@ public class SysReportServiceImpl extends ServiceImpl<SysReportMapper, SysReport
     private final CommentMapper commentMapper;
     private final SectionMapper sectionMapper;
 
+    private static final String AUDIT_STATUS_DELETED = "DELETED";
+    private static final int POST_STATUS_PUBLISHED = 1;
+    private static final int REPORT_STATUS_PENDING = 0;
+    private static final int REPORT_STATUS_QUEUED = 10;
+    private static final int REPORT_STATUS_PROCESSING = 11;
+
+    @Override
+    public void createReport(SysReport report, String reporterId) {
+        if (report == null || !StringUtils.hasText(report.getTargetId())) {
+            throw new BusinessException(ResultCode.PARAM_ERROR, "举报对象不能为空");
+        }
+        String targetType = StringUtils.hasText(report.getTargetType())
+                ? report.getTargetType().trim().toLowerCase()
+                : "";
+        if (!"post".equals(targetType) && !"comment".equals(targetType)) {
+            throw new BusinessException(ResultCode.PARAM_ERROR, "举报对象类型非法");
+        }
+        validateReportTarget(targetType, report.getTargetId(), reporterId);
+        ensureNoPendingDuplicate(targetType, report.getTargetId(), reporterId);
+        report.setTargetType(targetType);
+        report.setReporterId(reporterId);
+        report.setStatus(REPORT_STATUS_PENDING);
+        report.setCreateTime(java.time.LocalDateTime.now());
+        report.setUpdateTime(java.time.LocalDateTime.now());
+        save(report);
+    }
+
+    private void validateReportTarget(String targetType, String targetId, String reporterId) {
+        if ("post".equals(targetType)) {
+            Post post = postMapper.selectById(targetId);
+            if (post == null || isDeletedPost(post) || !Integer.valueOf(POST_STATUS_PUBLISHED).equals(post.getStatus())) {
+                throw new BusinessException(ResultCode.PARAM_ERROR, "举报对象不存在或已不可见");
+            }
+            if (reporterId.equals(post.getUserId())) {
+                throw new BusinessException(ResultCode.PARAM_ERROR, "不能举报自己发布的内容");
+            }
+            return;
+        }
+
+        Comment comment = commentMapper.selectById(targetId);
+        if (comment == null || !StringUtils.hasText(comment.getPostId())) {
+            throw new BusinessException(ResultCode.PARAM_ERROR, "举报对象不存在");
+        }
+        if (reporterId.equals(comment.getUserId())) {
+            throw new BusinessException(ResultCode.PARAM_ERROR, "不能举报自己发布的内容");
+        }
+        Post post = postMapper.selectById(comment.getPostId());
+        if (post == null || isDeletedPost(post) || !Integer.valueOf(POST_STATUS_PUBLISHED).equals(post.getStatus())) {
+            throw new BusinessException(ResultCode.PARAM_ERROR, "评论所属帖子不存在或已不可见");
+        }
+    }
+
+    private void ensureNoPendingDuplicate(String targetType, String targetId, String reporterId) {
+        long pendingCount = lambdaQuery()
+                .eq(SysReport::getTargetType, targetType)
+                .eq(SysReport::getTargetId, targetId)
+                .eq(SysReport::getReporterId, reporterId)
+                .in(SysReport::getStatus, REPORT_STATUS_PENDING, REPORT_STATUS_QUEUED, REPORT_STATUS_PROCESSING)
+                .count();
+        if (pendingCount > 0) {
+            throw new BusinessException(ResultCode.PARAM_ERROR, "该举报正在处理中，请勿重复提交");
+        }
+    }
+
+    private boolean isDeletedPost(Post post) {
+        return post != null && AUDIT_STATUS_DELETED.equalsIgnoreCase(post.getAuditStatus());
+    }
+
     @Override
     public IPage<ReportManageResp> getManagePage(String userId, Integer current, Integer size, Integer status, Long sectionId) {
         if (!sectionModeratorService.hasModeratorCapability(userId)) {

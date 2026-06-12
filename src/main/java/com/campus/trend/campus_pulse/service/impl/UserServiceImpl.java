@@ -5,11 +5,18 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.campus.trend.campus_pulse.dto.request.UserPasswordUpdateReq;
 import com.campus.trend.campus_pulse.dto.request.UserDetailUpdateReq;
 import com.campus.trend.campus_pulse.dto.response.UserDetailResp;
+import com.campus.trend.campus_pulse.dto.response.UserProfileResp;
+import com.campus.trend.campus_pulse.dto.response.UserSearchItemResp;
 import com.campus.trend.campus_pulse.dto.response.UserSimpleResp;
+import com.campus.trend.campus_pulse.dto.response.UserStatsResp;
+import com.campus.trend.campus_pulse.entity.Follow;
 import com.campus.trend.campus_pulse.entity.ModeratorApplication;
+import com.campus.trend.campus_pulse.entity.Post;
 import com.campus.trend.campus_pulse.entity.Section;
 import com.campus.trend.campus_pulse.entity.User;
+import com.campus.trend.campus_pulse.mapper.FollowMapper;
 import com.campus.trend.campus_pulse.mapper.ModeratorApplicationMapper;
+import com.campus.trend.campus_pulse.mapper.PostMapper;
 import com.campus.trend.campus_pulse.mapper.SectionMapper;
 import com.campus.trend.campus_pulse.mapper.UserMapper;
 import com.campus.trend.campus_pulse.security.AuthUser;
@@ -48,6 +55,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     private final NotificationService notificationService;
     private final ModeratorApplicationMapper moderatorApplicationMapper;
     private final SectionMapper sectionMapper;
+    private final PostMapper postMapper;
+    private final FollowMapper followMapper;
 
     public UserServiceImpl(PasswordEncoder passwordEncoder,
             com.campus.trend.campus_pulse.service.ContentSecurityService contentSecurityService,
@@ -55,7 +64,9 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
             SectionModeratorService sectionModeratorService,
             NotificationService notificationService,
             ModeratorApplicationMapper moderatorApplicationMapper,
-            SectionMapper sectionMapper) {
+            SectionMapper sectionMapper,
+            PostMapper postMapper,
+            FollowMapper followMapper) {
         this.passwordEncoder = passwordEncoder;
         this.contentSecurityService = contentSecurityService;
         this.r2Properties = r2Properties;
@@ -63,6 +74,143 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         this.notificationService = notificationService;
         this.moderatorApplicationMapper = moderatorApplicationMapper;
         this.sectionMapper = sectionMapper;
+        this.postMapper = postMapper;
+        this.followMapper = followMapper;
+    }
+
+    private static final String AUDIT_STATUS_PENDING = "PENDING";
+    private static final String AUDIT_STATUS_APPROVED = "APPROVED";
+
+    @Override
+    public UserProfileResp getPublicProfile(String userId) {
+        User user = getById(userId);
+        if (user == null || (user.getStatus() != null && user.getStatus() != 1)) {
+            return null;
+        }
+
+        long postCount = safeCount(postMapper.selectCount(buildPublicVisibleUserPostWrapper(userId)));
+        long followingCount = safeCount(followMapper.selectCount(
+                new LambdaQueryWrapper<Follow>().eq(Follow::getFollowerId, userId)));
+        long followerCount = safeCount(followMapper.selectCount(
+                new LambdaQueryWrapper<Follow>().eq(Follow::getFolloweeId, userId)));
+
+        return new UserProfileResp(
+                user.getId(),
+                user.getUsername(),
+                StringUtils.hasText(user.getNickname()) ? user.getNickname() : user.getUsername(),
+                user.getAvatar(),
+                user.getBio(),
+                user.getSchool(),
+                user.getMajor(),
+                user.getLevel(),
+                List.of(StringUtils.hasText(user.getRole()) ? user.getRole() : "ROLE_USER"),
+                postCount,
+                followingCount,
+                followerCount,
+                StringUtils.hasText(user.getProfileCardTheme()) ? user.getProfileCardTheme() : "sunset",
+                StringUtils.hasText(user.getQuickCardTheme()) ? user.getQuickCardTheme() : "ocean",
+                normalizeCardBgUrl(user.getProfileCardBgUrl()),
+                normalizeCardBgUrl(user.getQuickCardBgUrl()),
+                user.getEnrollmentYear(),
+                user.getInterestTags(),
+                user.getCoverConfig(),
+                user.getBadgeText(),
+                user.getBadgeColor(),
+                user.getBadgeStyle()
+        );
+    }
+
+    @Override
+    public List<UserSearchItemResp> searchUsers(String keyword) {
+        List<User> users = lambdaQuery()
+                .and(!keyword.isBlank(), q -> q
+                        .like(User::getNickname, keyword)
+                        .or().like(User::getUsername, keyword))
+                .eq(User::getStatus, 1)
+                .last("LIMIT 10")
+                .list();
+
+        if (users.isEmpty()) {
+            return List.of();
+        }
+
+        List<String> userIds = users.stream().map(User::getId).toList();
+
+        Map<String, Long> postCountMap = new java.util.HashMap<>();
+        postMapper.selectList(new LambdaQueryWrapper<Post>()
+                        .select(Post::getUserId)
+                        .in(Post::getUserId, userIds)
+                        .eq(Post::getStatus, 1)
+                        .and(w -> w.isNull(Post::getAuditStatus)
+                                .or()
+                                .eq(Post::getAuditStatus, "")
+                                .or()
+                                .eq(Post::getAuditStatus, AUDIT_STATUS_PENDING)
+                                .or()
+                                .eq(Post::getAuditStatus, AUDIT_STATUS_APPROVED)))
+                .forEach(p -> postCountMap.merge(p.getUserId(), 1L, Long::sum));
+
+        Map<String, Long> followerCountMap = new java.util.HashMap<>();
+        followMapper.selectList(new LambdaQueryWrapper<Follow>()
+                        .select(Follow::getFolloweeId)
+                        .in(Follow::getFolloweeId, userIds))
+                .forEach(f -> followerCountMap.merge(f.getFolloweeId(), 1L, Long::sum));
+
+        return users.stream().map(u -> new UserSearchItemResp(
+                u.getId(),
+                u.getUsername(),
+                StringUtils.hasText(u.getNickname()) ? u.getNickname() : u.getUsername(),
+                u.getAvatar(),
+                u.getBio(),
+                u.getSchool(),
+                postCountMap.getOrDefault(u.getId(), 0L),
+                followerCountMap.getOrDefault(u.getId(), 0L)
+        )).toList();
+    }
+
+    @Override
+    public UserStatsResp getProfileStats(String userId) {
+        long postCount = safeCount(postMapper.selectCount(
+                new LambdaQueryWrapper<Post>().eq(Post::getUserId, userId).eq(Post::getStatus, 1)));
+        long followingCount = safeCount(followMapper.selectCount(
+                new LambdaQueryWrapper<Follow>().eq(Follow::getFollowerId, userId)));
+        long followerCount = safeCount(followMapper.selectCount(
+                new LambdaQueryWrapper<Follow>().eq(Follow::getFolloweeId, userId)));
+        return new UserStatsResp(postCount, followingCount, followerCount);
+    }
+
+    private LambdaQueryWrapper<Post> buildPublicVisibleUserPostWrapper(String userId) {
+        return new LambdaQueryWrapper<Post>()
+                .eq(Post::getUserId, userId)
+                .eq(Post::getStatus, 1)
+                .and(w -> w.isNull(Post::getAuditStatus)
+                        .or()
+                        .eq(Post::getAuditStatus, "")
+                        .or()
+                        .eq(Post::getAuditStatus, AUDIT_STATUS_PENDING)
+                        .or()
+                        .eq(Post::getAuditStatus, AUDIT_STATUS_APPROVED));
+    }
+
+    private static long safeCount(Long count) {
+        return count == null ? 0L : count;
+    }
+
+    private String normalizeCardBgUrl(String raw) {
+        if (!StringUtils.hasText(raw)) {
+            return null;
+        }
+        String value = raw.trim();
+        if (value.length() > 500) {
+            return null;
+        }
+        if (value.contains("\"") || value.contains("'") || value.contains(" ")) {
+            return null;
+        }
+        if (value.startsWith("http://") || value.startsWith("https://") || value.startsWith("/uploads/")) {
+            return value;
+        }
+        return null;
     }
 
     @Override
