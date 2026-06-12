@@ -1,6 +1,7 @@
 package com.campus.trend.campus_pulse.dto.request;
 
 import com.campus.trend.campus_pulse.dto.media.MediaObject;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -58,5 +59,11 @@ public class PostCreateReq {
     private Integer isAnonymous;
 
     private String locationName;
+
+    /**
+     * Song：可选的附带投票（一帖 0..1）。为空表示不带投票。
+     */
+    @Valid
+    private PollCreateReq poll;
 
 }

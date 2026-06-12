@@ -55,7 +55,14 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.ThreadLocalRandom;
-import java.util.regex.Pattern;
+
+import static com.campus.trend.campus_pulse.service.post.PostSupport.SUMMARY_MAX_LEN;
+import static com.campus.trend.campus_pulse.service.post.PostSupport.buildSummary;
+import static com.campus.trend.campus_pulse.service.post.PostSupport.extractAccessUrls;
+import static com.campus.trend.campus_pulse.service.post.PostSupport.firstAccessUrl;
+import static com.campus.trend.campus_pulse.service.post.PostSupport.mediaRowToDto;
+import static com.campus.trend.campus_pulse.service.post.PostSupport.normalizeTags;
+import static com.campus.trend.campus_pulse.service.post.PostSupport.truncate;
 
 @Service
 @RequiredArgsConstructor
@@ -72,31 +79,12 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
     private static final int RESTORE_GRACE_DAYS = 7;
     private static final int DEFAULT_PAGE_SIZE = 10;
     private static final int MAX_PAGE_SIZE = 30;
-    private static final int SUMMARY_MAX_LEN = 150;
     private static final Duration POST_FEED_CACHE_TTL = Duration.ofSeconds(120);
     private static final Duration POST_FEED_EMPTY_CACHE_TTL = Duration.ofSeconds(30);
     private static final Duration POST_DETAIL_CACHE_TTL = Duration.ofSeconds(300);
     private static final Duration POST_DETAIL_NULL_CACHE_TTL = Duration.ofSeconds(30);
     private static final String CACHE_NULL_MARKER = "__NULL__";
 
-    // 预编译正则，避免 stripMarkdown 每次调用重复编译
-    private static final Pattern MD_HTML_TAG      = Pattern.compile("<[^>]*>");
-    private static final Pattern MD_CODE_BLOCK     = Pattern.compile("```[\\s\\S]*?```");
-    private static final Pattern MD_CODE_BLOCK2    = Pattern.compile("```.*");
-    private static final Pattern MD_INLINE_CODE    = Pattern.compile("`[^`]+`");
-    private static final Pattern MD_HEADING_START  = Pattern.compile("^#{1,6}\\s+", Pattern.MULTILINE);
-    private static final Pattern MD_BOLD_STAR      = Pattern.compile("\\*\\*([^*]+)\\*\\*");
-    private static final Pattern MD_BOLD_UNDER     = Pattern.compile("__([^_]+)__");
-    private static final Pattern MD_ITALIC_STAR    = Pattern.compile("\\*([^*]+)\\*");
-    private static final Pattern MD_ITALIC_UNDER   = Pattern.compile("_([^_]+)_");
-    private static final Pattern MD_STRIKE         = Pattern.compile("~~([^~]+)~~");
-    private static final Pattern MD_HR_LINE        = Pattern.compile("^[-*]{3,}$", Pattern.MULTILINE);
-    private static final Pattern MD_BLOCKQUOTE     = Pattern.compile("^>\\s+", Pattern.MULTILINE);
-    private static final Pattern MD_LINK           = Pattern.compile("\\[([^\\]]+)\\]\\([^)]+\\)");
-    private static final Pattern MD_IMAGE          = Pattern.compile("!\\[([^\\]]*)\\]\\([^)]+\\)");
-    private static final Pattern MD_LIST_UNORDER   = Pattern.compile("^[\\-*+]\\s+", Pattern.MULTILINE);
-    private static final Pattern MD_LIST_ORDER     = Pattern.compile("^\\d+\\.\\s+", Pattern.MULTILINE);
-    private static final Pattern MD_WHITESPACE     = Pattern.compile("\\s+");
     private static final String POST_FEED_CACHE_PREFIX = "post:feed:cache:";
     private static final String POST_DETAIL_CACHE_PREFIX = "post:detail:cache:";
     private static final String POST_FEED_CACHE_GLOBAL_VERSION_KEY = "post:feed:version:global";
@@ -123,6 +111,8 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
     private final AsyncTaskService asyncTaskService;
     private final PostMediaService postMediaService;
     private final AnswerAdoptionMapper answerAdoptionMapper;
+    private final PollService pollService;
+    private final PostSubscriptionService postSubscriptionService;
 
     @Value("${campus.cache.null-value-ttl-seconds:30}")
     private long nullValueTtlSeconds;
@@ -244,6 +234,18 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
         // Song：3.1 覆盖式写入 sys_post_media
         if (mediaList != null) {
             postMediaService.saveForPost(sysPost.getId(), mediaList);
+        }
+
+        // Song：3.2 附带投票（可选）。同一事务内创建，投票建失败整帖回滚；投票数据独立读，不进帖子缓存。
+        if (createPostRequest.getPoll() != null) {
+            pollService.createForPost(sysPost.getId(), createPostRequest.getPoll(), userId);
+        }
+
+        // Song：3.3 主题追踪：发帖人自动订阅自己的帖（增强逻辑，失败不阻断发帖）
+        try {
+            postSubscriptionService.subscribe(userId, sysPost.getId(), "auto");
+        } catch (Exception e) {
+            log.warn("发帖自动订阅失败: postId={}, userId={}", sysPost.getId(), userId);
         }
 
         // 异步：推送新帖创建事件
@@ -1485,33 +1487,6 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
         response.setSummary(truncate(post.getTitle(), SUMMARY_MAX_LEN));
     }
 
-    private String stripMarkdown(String content) {
-        if (content == null || content.isEmpty()) {
-            return "";
-        }
-        String text = content;
-        text = MD_HTML_TAG.matcher(text).replaceAll("");
-        text = MD_CODE_BLOCK.matcher(text).replaceAll("");
-        text = MD_CODE_BLOCK2.matcher(text).replaceAll("");
-        text = MD_INLINE_CODE.matcher(text).replaceAll("");
-        text = text.replace("`", "");
-        text = MD_HEADING_START.matcher(text).replaceAll("");
-        text = MD_BOLD_STAR.matcher(text).replaceAll("$1");
-        text = MD_BOLD_UNDER.matcher(text).replaceAll("$1");
-        text = MD_ITALIC_STAR.matcher(text).replaceAll("$1");
-        text = MD_ITALIC_UNDER.matcher(text).replaceAll("$1");
-        text = MD_STRIKE.matcher(text).replaceAll("$1");
-        text = MD_HR_LINE.matcher(text).replaceAll("");
-        text = MD_BLOCKQUOTE.matcher(text).replaceAll("");
-        text = MD_IMAGE.matcher(text).replaceAll("");
-        text = MD_LINK.matcher(text).replaceAll("$1");
-        text = MD_LIST_UNORDER.matcher(text).replaceAll("");
-        text = MD_LIST_ORDER.matcher(text).replaceAll("");
-        text = text.replace("&nbsp;", " ").replace("&lt;", "<").replace("&gt;", ">").replace("&amp;", "&").replace("&quot;", "\"");
-        text = MD_WHITESPACE.matcher(text).replaceAll(" ");
-        return text.trim();
-    }
-
     private CachedDetailResult readPostDetailCache(String postId) {
         if (!StringUtils.hasText(postId)) {
             return CachedDetailResult.miss();
@@ -1799,41 +1774,6 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
         return withCacheTtlJitter(Duration.ofSeconds(Math.max(10L, nullValueTtlSeconds)));
     }
 
-    /**
-     * 规范化标签字符串：统一用英文逗号分隔，去除多余空格，避免 FIND_IN_SET 匹配失败
-     */
-    private String normalizeTags(String tags) {
-        if (!org.springframework.util.StringUtils.hasText(tags)) return null;
-        String[] parts = tags.split("[,，\\s#]+");
-        StringBuilder sb = new StringBuilder();
-        for (String p : parts) {
-            String t = p.trim();
-            if (!t.isEmpty()) {
-                if (sb.length() > 0) sb.append(',');
-                sb.append(t);
-            }
-        }
-        return sb.length() > 0 ? sb.toString() : null;
-    }
-
-    private String buildSummary(String content) {
-        if (!StringUtils.hasText(content)) {
-            return "";
-        }
-        return truncate(stripMarkdown(content), SUMMARY_MAX_LEN);
-    }
-
-    private String truncate(String text, int maxLen) {
-        if (!StringUtils.hasText(text)) {
-            return "";
-        }
-        String cleaned = text.trim();
-        if (cleaned.length() <= maxLen) {
-            return cleaned;
-        }
-        return cleaned.substring(0, maxLen) + "...";
-    }
-
     private void fillPostDraftFields(Post post, PostDraftReq draftRequest) {
         if (draftRequest.getSectionId() != null) {
             Section section = sectionService.getSectionById(draftRequest.getSectionId());
@@ -1868,54 +1808,6 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
                 post.setImages(images);
             }
         }
-    }
-
-    private static List<String> extractAccessUrls(List<MediaObject> mediaList) {
-        if (mediaList == null || mediaList.isEmpty()) {
-            return Collections.emptyList();
-        }
-        List<String> urls = new ArrayList<>(mediaList.size());
-        for (MediaObject media : mediaList) {
-            if (media != null && StringUtils.hasText(media.getAccessUrl())) {
-                urls.add(media.getAccessUrl());
-            }
-        }
-        return urls;
-    }
-
-    private static String firstAccessUrl(List<MediaObject> mediaList) {
-        if (mediaList == null) {
-            return null;
-        }
-        for (MediaObject media : mediaList) {
-            if (media != null) {
-                if (StringUtils.hasText(media.getCoverUrl())) {
-                    return media.getCoverUrl();
-                }
-                if (StringUtils.hasText(media.getAccessUrl())) {
-                    return media.getAccessUrl();
-                }
-            }
-        }
-        return null;
-    }
-
-    private static MediaObject mediaRowToDto(PostMedia row) {
-        if (row == null) {
-            return null;
-        }
-        return MediaObject.builder()
-                .fileId(row.getFileId())
-                .mediaType(row.getMediaType())
-                .accessUrl(row.getAccessUrl())
-                .coverUrl(row.getCoverUrl())
-                .mimeType(row.getMimeType())
-                .originalName(row.getOriginalName())
-                .sizeBytes(row.getSizeBytes())
-                .width(row.getWidth())
-                .height(row.getHeight())
-                .durationSeconds(row.getDurationSeconds())
-                .build();
     }
 
     private void validatePostForPublish(Post post) {

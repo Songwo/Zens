@@ -280,14 +280,20 @@ function triggerMentionSearch(keyword: string) {
   }, 200)
 }
 
+// 后端 MENTION_PATTERN = @([\p{IsHan}A-Za-z0-9_.-]{2,32})，token 内不含空格。
+// 昵称可能含空格/特殊字符，直接插入会导致后端只截到前半段、@通知发不出去（且前端高亮也断裂）。
+// 因此：昵称落在安全字符集内（且 ≥2 位）才用昵称，否则回退到 username（^[a-zA-Z0-9_]{4,20}$，必定安全）。
+const MENTION_SAFE_RE = /^[一-龥A-Za-z0-9_.-]{2,32}$/
+
 function selectMention(user: { id: string; username: string; nickname: string }) {
   if (!cmView || mentionAtStart < 0) {
     closeMention()
     return
   }
   const cursor = cmView.state.selection.main.head
-  const name = user.nickname || user.username
-  const insert = `@${name} `
+  const nick = (user.nickname || '').trim()
+  const token = MENTION_SAFE_RE.test(nick) ? nick : user.username
+  const insert = `@${token} `
   cmView.dispatch({
     changes: { from: mentionAtStart, to: cursor, insert },
     selection: EditorSelection.cursor(mentionAtStart + insert.length),

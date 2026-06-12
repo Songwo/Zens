@@ -57,6 +57,7 @@ public class CommentServiceImpl extends ServiceImpl<CommentMapper, Comment> impl
     private final SectionModeratorService sectionModeratorService;
     private final CommentCollectService commentCollectService;
     private final AnswerAdoptionMapper answerAdoptionMapper;
+    private final PostSubscriptionService postSubscriptionService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -138,6 +139,20 @@ public class CommentServiceImpl extends ServiceImpl<CommentMapper, Comment> impl
                     comment.getId(),
                     mentionSource
             );
+        }
+
+        // 主题追踪：通知订阅者（排除评论者/作者/本次已收到回复或@通知的人）；评论者自动订阅该帖。
+        // 两者都是增强逻辑，内部吞异常，不阻断评论主流程。
+        Set<String> subscriptionExcludes = new HashSet<>(alreadyMentionedUserIds);
+        subscriptionExcludes.addAll(mentionedUserIds);
+        postSubscriptionService.notifySubscribersOnComment(
+                post.getId(), post.getTitle(), post.getUserId(), actorUserId, subscriptionExcludes);
+        if (userId != null) {
+            try {
+                postSubscriptionService.subscribe(actorUserId, post.getId(), "auto");
+            } catch (Exception e) {
+                // 自动订阅失败不影响评论
+            }
         }
 
         if (userId != null) {

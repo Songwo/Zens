@@ -17,6 +17,8 @@ import {
 import ImageUploader from '@/components/ImageUploader.vue'
 import MarkdownTutorial from './MarkdownTutorial.vue'
 import MarkdownEditor from '@/components/markdown/MarkdownEditor.vue'
+import PollComposerPanel from '@/components/poll/PollComposerPanel.vue'
+import type { PollCreateRequest } from '@/api/poll'
 import { uploadApi } from '@/api/upload'
 import {
   UPLOAD_VIDEO_MAX_SIZE_BYTES,
@@ -42,6 +44,8 @@ const isEditing = ref(false)
 const editId = ref('')
 const editStatus = ref(1)
 const editAuditStatus = ref('')
+// 投票草稿：null=不附带投票。仅新发帖支持（v1），编辑态隐藏面板。不进本地草稿持久化。
+const pollPanelRef = ref<InstanceType<typeof PollComposerPanel> | null>(null)
 const editorRef = ref<InstanceType<typeof MarkdownEditor> | null>(null)
 const contentVideoInputRef = ref<HTMLInputElement | null>(null)
 const contentVideoUploading = ref(false)
@@ -170,6 +174,17 @@ const publish = async () => {
     return
   }
 
+  // Song：新发帖时校验投票面板（编辑态不支持附加投票，见 spec）
+  let pollPayload: PollCreateRequest | null = null
+  if (!isEditing.value && pollPanelRef.value) {
+    const built = pollPanelRef.value.buildPayload()
+    if (!built.ok) {
+      ElMessage.warning(built.message)
+      return
+    }
+    pollPayload = built.value
+  }
+
   loading.value = true
   try {
     if (isEditing.value) {
@@ -194,12 +209,14 @@ const publish = async () => {
         sectionId: draft.form.sectionId,
         tags: draft.form.tags.join(','),
         coverImage: draft.form.coverImage || undefined,
-        status: 1
+        status: 1,
+        poll: pollPayload || undefined
       })
       pulseNotification.post(`「${title}」已成功广播至校园大厅，激荡你的校园回声！`, '发布话题成功')
     }
 
     draft.clearDraft() // Song：重要: 成功后清空草稿
+    pollPanelRef.value?.reset() // 重置投票面板，避免下次发帖残留
     handleClose(true) // Song：无需二次确认直接关闭
     
     // Song：说明
@@ -596,6 +613,11 @@ onUnmounted(() => {
               <el-form-item label="封面图片 (可选)">
                 <ImageUploader v-model="draft.form.coverImage" />
                 <div class="cover-hint">封面仅为缩略展示，不会压缩或影响原图</div>
+              </el-form-item>
+
+              <!-- 附加投票（仅新发帖支持，编辑态不显示） -->
+              <el-form-item v-if="!isEditing" label="投票 (可选)">
+                <PollComposerPanel ref="pollPanelRef" />
               </el-form-item>
 
               <!-- Content Editor -->

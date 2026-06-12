@@ -34,6 +34,8 @@ export interface CreatePostRequest {
     coverImage?: string
     tags: string
     status?: number
+    /** Song：可选附带投票（仅新发帖时支持），见 @/api/poll PollCreateRequest */
+    poll?: import('@/api/poll').PollCreateRequest
 }
 
 export interface SaveDraftRequest {

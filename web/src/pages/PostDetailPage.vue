@@ -25,8 +25,8 @@ import { isTruthyFlag } from '@/utils/flags'
 import { 
   View, 
   CaretTop, 
-  Star, 
-  Share, 
+  Star,
+  Share,
   ChatLineRound,
   More,
   Warning,
@@ -34,12 +34,17 @@ import {
   Medal,
   Delete,
   RefreshRight,
-  CircleCheck
+  CircleCheck,
+  Bell,
+  BellFilled
 } from '@element-plus/icons-vue'
 import UserRoleBadge from '@/components/common/UserRoleBadge.vue'
 import UserBadge from '@/components/common/UserBadge.vue'
 import UserQuickCard from '@/components/common/UserQuickCard.vue'
 import CommentList from '@/components/comment/CommentList.vue'
+import PollCard from '@/components/poll/PollCard.vue'
+import { pollApi, type Poll } from '@/api/poll'
+import { subscriptionApi } from '@/api/subscription'
 import ReactionBar from '@/components/reaction/ReactionBar.vue'
 import { reactionApi, type ReactionResp } from '@/api/reaction'
 import CommentEditor from '@/components/comment/CommentEditor.vue'
@@ -55,6 +60,7 @@ const composerStore = usePostComposerStore()
 const post = ref<Post | null>(null)
 const comments = ref<Comment[]>([])
 const relatedPosts = ref<RecommendPost[]>([])
+const poll = ref<Poll | null>(null)
 const loading = ref(true)
 const commentLoading = ref(false)
 const replyingTo = ref<string | null>(null)
@@ -170,6 +176,42 @@ const handleFollow = async () => {
     ElMessage.error(e?.response?.data?.message || '操作失败')
   } finally {
     followLoading.value = false
+  }
+}
+
+// 主题追踪：订阅后有新回复收站内通知；开了邮件通知的用户每天还有聚合摘要邮件
+const isSubscribed = ref(false)
+const subscribeLoading = ref(false)
+
+const checkSubscriptionStatus = async () => {
+  if (!userStore.accessToken || !postId.value) return
+  try {
+    const res = await subscriptionApi.getStatus(postId.value)
+    isSubscribed.value = res.data?.subscribed === true
+  } catch {}
+}
+
+const handleSubscribe = async () => {
+  if (!userStore.accessToken) {
+    ElMessage.warning('请先登录后再追踪主题')
+    return
+  }
+  if (!postId.value) return
+  subscribeLoading.value = true
+  try {
+    if (isSubscribed.value) {
+      await subscriptionApi.unsubscribe(postId.value)
+      isSubscribed.value = false
+      pulseNotification.info('已取消追踪，本主题的新回复将不再提醒你')
+    } else {
+      await subscriptionApi.subscribe(postId.value)
+      isSubscribed.value = true
+      pulseNotification.success('追踪成功！本主题有新回复时会通知你', '追踪主题')
+    }
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || e?.message || '操作失败')
+  } finally {
+    subscribeLoading.value = false
   }
 }
 
@@ -318,13 +360,15 @@ watch(
 
 const fetchSecondaryData = async (id: string) => {
   const recommendCacheKey = `post:detail:recommend:${userStore.userId || 'anonymous'}:${id}`
-  const [commentRes, relatedRes] = await Promise.allSettled([
+  const [commentRes, relatedRes, pollRes] = await Promise.allSettled([
     commentApi.getByPostId(id, 1, 120),
     cachedRequest(
       recommendCacheKey,
       RELATED_POST_CACHE_TTL,
       () => recommendApi.getSimilar(id)
-    )
+    ),
+    // 投票单独拉取，不进帖子详情缓存（票数频繁变动）；无投票时 data=null
+    pollApi.getByPost(id)
   ])
 
   return {
@@ -332,6 +376,7 @@ const fetchSecondaryData = async (id: string) => {
     relatedPosts: relatedRes.status === 'fulfilled'
       ? ((relatedRes.value.data?.slice(0, 5) || []) as RecommendPost[])
       : [],
+    poll: pollRes.status === 'fulfilled' ? (pollRes.value.data || null) : null,
   }
 }
 
@@ -365,6 +410,8 @@ const fetchPost = async () => {
   post.value = null
   comments.value = []
   relatedPosts.value = []
+  poll.value = null
+  isSubscribed.value = false
   acceptedAnswerExpanded.value = false
   cancelReply()
   activeCommentId.value = getRouteCommentId()
@@ -376,10 +423,12 @@ const fetchPost = async () => {
     post.value = postRes.data || null
     comments.value = secondaryData.comments
     relatedPosts.value = secondaryData.relatedPosts
+    poll.value = secondaryData.poll
     syncPostMetricsToLists()
     applyPostSeo()
     scrollToRouteComment()
     void checkFollowStatus()
+    void checkSubscriptionStatus()
     void viewLogApi.recordView(id).catch(() => {})
   } catch (error) {
     post.value = null
@@ -528,6 +577,8 @@ const submitComment = async (content: string) => {
 
     pulseNotification.comment('你的想法已完美传递到主题讨论中，激荡智慧火花！', '回复评论成功')
     cancelReply()
+    // 评论后后端会自动订阅本帖，前端同步状态避免再请求
+    isSubscribed.value = true
     if (post.value) {
       const currentCount = toFiniteMetric(post.value.commentCount) ?? comments.value.length
       post.value.commentCount = currentCount + 1
@@ -1083,6 +1134,18 @@ onMounted(() => {
               >
                 私信
               </el-button>
+              <el-button
+                :type="isSubscribed ? 'default' : 'warning'"
+                plain
+                round
+                size="small"
+                class="subscribe-btn"
+                :loading="subscribeLoading"
+                @click="handleSubscribe"
+              >
+                <el-icon style="margin-right: 4px;"><BellFilled v-if="isSubscribed" /><Bell v-else /></el-icon>
+                {{ isSubscribed ? '已追踪' : '追踪' }}
+              </el-button>
               <el-dropdown trigger="click" @command="handleCommand" style="margin-left: 12px;">
                 <el-button circle plain size="small">
                    <el-icon><More /></el-icon>
@@ -1162,6 +1225,14 @@ onMounted(() => {
 
             <!-- Article Content -->
             <div class="content-body markdown-body" v-html="renderedContent" ref="contentRef" @click="handleMarkdownClick"></div>
+
+            <!-- 帖子投票：紧跟正文，独立接口数据，不进详情缓存 -->
+            <PollCard
+              v-if="poll"
+              :poll="poll"
+              :post-title="post.title"
+              @update="(p: Poll) => (poll = p)"
+            />
 
             <!-- Tags -->
             <div v-if="post.tags" class="post-tags">
