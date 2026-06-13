@@ -32,6 +32,10 @@ public class Tag implements Serializable {
 
     private LocalDateTime createTime;
 
-    @TableField(exist = false)
+    /**
+     * 可见帖子数(冗余计数,由 TagHeatDecayTask 每小时校准)。
+     * 迁移: sql/migrations/2026-06-13-add-tag-post-count.sql
+     */
+    @TableField("post_count")
     private Integer postCount;
 }

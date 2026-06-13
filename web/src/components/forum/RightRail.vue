@@ -61,7 +61,7 @@ const hotTags = ref([
         <router-link 
           v-for="tag in hotTags" 
           :key="tag.name" 
-          :to="`/t/${tag.name}`"
+          :to="`/tag/${tag.name}`"
           class="tag-item"
         >
           #{{ tag.name }}

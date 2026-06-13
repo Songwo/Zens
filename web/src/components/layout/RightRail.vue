@@ -4,6 +4,7 @@ import { Document, Reading, Help, InfoFilled } from '@element-plus/icons-vue'
 import { publicDataApi } from '@/api/publicData'
 
 import { useRouter } from 'vue-router'
+import { encodePostId } from '@/utils/shortId'
 import { ElMessage } from 'element-plus'
 
 const router = useRouter()
@@ -92,7 +93,7 @@ onMounted(async () => {
           v-for="(item, index) in popularItems"
           :key="item.postId"
           class="trending-item"
-          @click="router.push(`/t/${item.postId}`)"
+          @click="router.push(`/t/${encodePostId(item.postId)}`)"
         >
           <div class="item-rank" :class="{ 'is-top': index < 3 }">{{ index + 1 }}</div>
           <div class="item-content">
@@ -105,8 +106,22 @@ onMounted(async () => {
         </div>
 
         <!-- Empty fallback -->
-        <div v-if="popularItems.length === 0" class="empty-hot">
-          <el-empty description="暂无热门内容" :image-size="80" />
+        <div v-if="popularItems.length === 0" class="empty-hot-premium">
+          <div class="empty-glow-box">
+            <svg class="empty-icon-svg" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <defs>
+                <linearGradient id="glowGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stop-color="#F59E0B" stop-opacity="0.8" />
+                  <stop offset="100%" stop-color="#EF4444" stop-opacity="0.3" />
+                </linearGradient>
+              </defs>
+              <circle cx="50" cy="50" r="32" fill="url(#glowGrad)" filter="blur(4px)" opacity="0.15" />
+              <path d="M50 20C50 20 62 38 62 48C62 56.8366 56.6274 64 50 64C43.3726 64 38 56.8366 38 48C38 38 50 20 50 20Z" fill="url(#glowGrad)" />
+              <path d="M50 35C50 35 56 46 56 52C56 56.4183 53.3137 60 50 60C46.6863 60 44 56.4183 44 52C44 46 50 35 50 35Z" fill="#FFFBEB" opacity="0.8" />
+            </svg>
+          </div>
+          <div class="empty-title">热榜蓄势待发</div>
+          <div class="empty-desc">发布优质帖子并吸引更多互动，即可在此引燃本周热门！</div>
         </div>
       </div>
     </el-card>
@@ -346,14 +361,63 @@ onMounted(async () => {
   gap: 10px;
 }
 
-.empty-hot {
+.empty-hot-premium {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   text-align: center;
-  padding: 32px 0;
-  color: var(--el-text-color-secondary);
+  padding: 30px 16px;
+  background: linear-gradient(180deg, rgba(254, 243, 199, 0.15) 0%, rgba(255, 255, 255, 0) 100%);
+  border-radius: 12px;
+  border: 1px dashed rgba(245, 158, 11, 0.2);
+  transition: all 0.3s ease;
 }
 
-.empty-hot .el-text {
+.empty-hot-premium:hover {
+  border-color: rgba(245, 158, 11, 0.35);
+  background: linear-gradient(180deg, rgba(254, 243, 199, 0.28) 0%, rgba(255, 255, 255, 0) 100%);
+}
+
+.empty-glow-box {
+  width: 64px;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 12px;
+  position: relative;
+}
+
+.empty-icon-svg {
+  width: 100%;
+  height: 100%;
+  animation: pulseFlame 2.5s ease-in-out infinite alternate;
+}
+
+@keyframes pulseFlame {
+  0% {
+    transform: scale(0.96);
+    filter: drop-shadow(0 2px 4px rgba(245, 158, 11, 0.1));
+  }
+  100% {
+    transform: scale(1.04);
+    filter: drop-shadow(0 5px 10px rgba(239, 68, 68, 0.25));
+  }
+}
+
+.empty-title {
   font-size: 13px;
+  font-weight: 700;
+  color: #B45309;
+  margin-bottom: 6px;
+}
+
+.empty-desc {
+  font-size: 11px;
+  color: var(--el-text-color-secondary);
+  line-height: 1.45;
+  max-width: 180px;
 }
 
 /* Song：说明 */

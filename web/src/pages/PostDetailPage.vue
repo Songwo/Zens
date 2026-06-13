@@ -6,6 +6,7 @@ import PageBackButton from '@/components/common/PageBackButton.vue'
 import ScrollEdgeBar from '@/components/ui/ScrollEdgeBar.vue'
 import { postApi } from '@/api/post'
 import { commentApi } from '@/api/comment'
+import type { ShortLinkResolveResult } from '@/api/comment'
 import { reportApi } from '@/api/report'
 import { recommendApi } from '@/api/recommend'
 import { viewLogApi } from '@/api/viewLog'
@@ -15,27 +16,37 @@ import { pulseNotification } from '@/utils/pulseNotification'
 import { TOC_MARKDOWN_TAG, renderMarkdownWithToc, renderMarkdownWithTocResult, renderMarkdownWithTocAsync, type MarkdownTocRenderResult } from '@/utils/markdownToc'
 import DOMPurify from 'dompurify'
 import { timeAgo } from '@/utils/timeAgo'
-import { decodePostId, encodePostId } from '@/utils/shortId'
-import { generateSummary } from '@/utils/markdown'
+import { decodeCommentId, decodePostId, encodePostId } from '@/utils/shortId'
+import { generateSummary, stripMarkdown } from '@/utils/markdown'
 import { renderGithubRichCards, mergeConsecutiveBlockquotes } from '@/utils/richLink'
 import { cachedRequest } from '@/utils/requestCache'
 import { md } from '@/utils/markdownRenderer'
+import { isTruthyFlag } from '@/utils/flags'
 import { 
   View, 
   CaretTop, 
-  Star, 
-  Share, 
+  Star,
+  Share,
   ChatLineRound,
   More,
   Warning,
   EditPen,
   Medal,
   Delete,
-  RefreshRight
+  RefreshRight,
+  CircleCheck,
+  Bell,
+  BellFilled
 } from '@element-plus/icons-vue'
 import UserRoleBadge from '@/components/common/UserRoleBadge.vue'
+import UserBadge from '@/components/common/UserBadge.vue'
 import UserQuickCard from '@/components/common/UserQuickCard.vue'
 import CommentList from '@/components/comment/CommentList.vue'
+import PollCard from '@/components/poll/PollCard.vue'
+import { pollApi, type Poll } from '@/api/poll'
+import { subscriptionApi } from '@/api/subscription'
+import ReactionBar from '@/components/reaction/ReactionBar.vue'
+import { reactionApi, type ReactionResp } from '@/api/reaction'
 import CommentEditor from '@/components/comment/CommentEditor.vue'
 import { useUserStore } from '@/store/user'
 import { usePostComposerStore } from '@/store/postComposer'
@@ -49,16 +60,21 @@ const composerStore = usePostComposerStore()
 const post = ref<Post | null>(null)
 const comments = ref<Comment[]>([])
 const relatedPosts = ref<RecommendPost[]>([])
+const poll = ref<Poll | null>(null)
 const loading = ref(true)
 const commentLoading = ref(false)
 const replyingTo = ref<string | null>(null)
 const replyingToName = ref<string | null>(null)
 const regeneratingSummary = ref(false)
 const activeCommentId = ref('')
+const shortLinkTarget = ref<ShortLinkResolveResult | null>(null)
 const RELATED_POST_CACHE_TTL = 60 * 1000
 const POST_METRICS_UPDATED_EVENT = 'cp:post-metrics-updated'
 
 const postId = computed(() => {
+  if (shortLinkTarget.value?.postId) {
+    return shortLinkTarget.value.postId
+  }
   const rawId = String(route.params.id || '')
   return rawId.startsWith('p') ? decodePostId(rawId) : rawId
 })
@@ -66,6 +82,9 @@ const postId = computed(() => {
 watch(
   () => route.params.id,
   (rawId) => {
+    if (route.name === 'short-link-detail') {
+      return
+    }
     if (rawId && String(rawId).startsWith('POST_')) {
       const shortId = encodePostId(String(rawId))
       router.replace(`/t/${shortId}`)
@@ -97,6 +116,7 @@ const syncPostMetricsToLists = () => {
       viewCount: post.value.viewCount,
       commentCount: post.value.commentCount,
       lastActivityAt: post.value.lastActivityAt,
+      hasAdoptedAnswer: post.value.hasAdoptedAnswer,
     },
   }))
 }
@@ -104,11 +124,6 @@ const syncPostMetricsToLists = () => {
 const isAdmin = computed(() => {
   const roles = userStore.userInfo?.roles || []
   return roles.some((role: string) => role === 'ROLE_ADMIN' || role === 'ROLE_SUPER_ADMIN')
-})
-
-const isGlobalModerator = computed(() => {
-  const roles = userStore.userInfo?.roles || []
-  return roles.includes('ROLE_MODERATOR')
 })
 
 const moderatedSectionIds = computed(() => {
@@ -119,8 +134,8 @@ const moderatedSectionIds = computed(() => {
 const isDeletedPost = computed(() => post.value?.auditStatus === 'DELETED')
 
 const canModerateCurrentSection = computed(() => {
-  if (!post.value?.sectionId) return isAdmin.value || isGlobalModerator.value
-  return isAdmin.value || isGlobalModerator.value || moderatedSectionIds.value.has(Number(post.value.sectionId))
+  if (!post.value?.sectionId) return isAdmin.value
+  return isAdmin.value || moderatedSectionIds.value.has(Number(post.value.sectionId))
 })
 
 const canManageCurrentPost = computed(() => {
@@ -161,6 +176,42 @@ const handleFollow = async () => {
     ElMessage.error(e?.response?.data?.message || '操作失败')
   } finally {
     followLoading.value = false
+  }
+}
+
+// 主题追踪：订阅后有新回复收站内通知；开了邮件通知的用户每天还有聚合摘要邮件
+const isSubscribed = ref(false)
+const subscribeLoading = ref(false)
+
+const checkSubscriptionStatus = async () => {
+  if (!userStore.accessToken || !postId.value) return
+  try {
+    const res = await subscriptionApi.getStatus(postId.value)
+    isSubscribed.value = res.data?.subscribed === true
+  } catch {}
+}
+
+const handleSubscribe = async () => {
+  if (!userStore.accessToken) {
+    ElMessage.warning('请先登录后再追踪主题')
+    return
+  }
+  if (!postId.value) return
+  subscribeLoading.value = true
+  try {
+    if (isSubscribed.value) {
+      await subscriptionApi.unsubscribe(postId.value)
+      isSubscribed.value = false
+      pulseNotification.info('已取消追踪，本主题的新回复将不再提醒你')
+    } else {
+      await subscriptionApi.subscribe(postId.value)
+      isSubscribed.value = true
+      pulseNotification.success('追踪成功！本主题有新回复时会通知你', '追踪主题')
+    }
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || e?.message || '操作失败')
+  } finally {
+    subscribeLoading.value = false
   }
 }
 
@@ -309,13 +360,15 @@ watch(
 
 const fetchSecondaryData = async (id: string) => {
   const recommendCacheKey = `post:detail:recommend:${userStore.userId || 'anonymous'}:${id}`
-  const [commentRes, relatedRes] = await Promise.allSettled([
+  const [commentRes, relatedRes, pollRes] = await Promise.allSettled([
     commentApi.getByPostId(id, 1, 120),
     cachedRequest(
       recommendCacheKey,
       RELATED_POST_CACHE_TTL,
       () => recommendApi.getSimilar(id)
-    )
+    ),
+    // 投票单独拉取，不进帖子详情缓存（票数频繁变动）；无投票时 data=null
+    pollApi.getByPost(id)
   ])
 
   return {
@@ -323,6 +376,7 @@ const fetchSecondaryData = async (id: string) => {
     relatedPosts: relatedRes.status === 'fulfilled'
       ? ((relatedRes.value.data?.slice(0, 5) || []) as RecommendPost[])
       : [],
+    poll: pollRes.status === 'fulfilled' ? (pollRes.value.data || null) : null,
   }
 }
 
@@ -356,6 +410,9 @@ const fetchPost = async () => {
   post.value = null
   comments.value = []
   relatedPosts.value = []
+  poll.value = null
+  isSubscribed.value = false
+  acceptedAnswerExpanded.value = false
   cancelReply()
   activeCommentId.value = getRouteCommentId()
   try {
@@ -366,10 +423,12 @@ const fetchPost = async () => {
     post.value = postRes.data || null
     comments.value = secondaryData.comments
     relatedPosts.value = secondaryData.relatedPosts
+    poll.value = secondaryData.poll
     syncPostMetricsToLists()
     applyPostSeo()
     scrollToRouteComment()
     void checkFollowStatus()
+    void checkSubscriptionStatus()
     void viewLogApi.recordView(id).catch(() => {})
   } catch (error) {
     post.value = null
@@ -447,7 +506,6 @@ const handleCommentDelete = async (comment: any) => {
   try {
     await commentApi.delete(comment.id)
     comment.auditStatus = 'DELETED'
-    comment.content = null
     if (post.value) {
       const cur = toFiniteMetric(post.value.commentCount) ?? comments.value.length
       post.value.commentCount = Math.max(0, cur - 1)
@@ -456,6 +514,44 @@ const handleCommentDelete = async (comment: any) => {
     pulseNotification.info('评论已删除')
   } catch (e: any) {
     ElMessage.error(e?.response?.data?.message || '删除失败')
+  }
+}
+
+const handleCommentCollect = async (comment: any) => {
+  try {
+    const res = await commentApi.collect(comment.id)
+    const nextCollected = typeof res.data?.isCollected === 'boolean'
+      ? res.data.isCollected
+      : !comment.isCollected
+    const currentCount = Math.max(0, Number(comment.collectCount || 0))
+    comment.isCollected = nextCollected
+    comment.collectCount = Math.max(0, currentCount + (nextCollected ? 1 : -1))
+
+    if (comment.isCollected) {
+      pulseNotification.success(`已收藏 @${comment.nickname || '用户'} 的评论`, '收藏评论成功')
+    } else {
+      pulseNotification.info('已取消收藏该评论')
+    }
+  } catch (error: any) {
+    pulseNotification.error(error?.response?.data?.message || '收藏评论失败，请重试')
+  }
+}
+
+const handleCommentRestore = async (comment: any) => {
+  try {
+    await commentApi.restore(comment.id)
+    if (post.value) {
+      const cur = toFiniteMetric(post.value.commentCount) ?? comments.value.length
+      post.value.commentCount = cur + 1
+      syncPostMetricsToLists()
+    }
+    const commentRes = await commentApi.getByPostId(postId.value, 1, 120)
+    comments.value = commentRes.data.records || []
+    activeCommentId.value = String(comment.id || '')
+    await scrollToComment(String(comment.id || ''))
+    pulseNotification.success('评论已恢复，内容重新回到讨论区。', '恢复评论成功')
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '恢复失败')
   }
 }
 
@@ -481,6 +577,8 @@ const submitComment = async (content: string) => {
 
     pulseNotification.comment('你的想法已完美传递到主题讨论中，激荡智慧火花！', '回复评论成功')
     cancelReply()
+    // 评论后后端会自动订阅本帖，前端同步状态避免再请求
+    isSubscribed.value = true
     if (post.value) {
       const currentCount = toFiniteMetric(post.value.commentCount) ?? comments.value.length
       post.value.commentCount = currentCount + 1
@@ -539,7 +637,7 @@ const ensureCanonical = (path: string) => {
 
 const applyPostSeo = () => {
   if (!post.value) return
-  const canonicalPath = `/t/${post.value.id}`
+  const canonicalPath = `/t/${encodePostId(post.value.id)}`
   const title = `${post.value.title} - Zens`
   const description = (aiSummaryText.value || generateSummary(post.value.content || '', 160) || '校园社区帖子详情').slice(0, 160)
 
@@ -549,6 +647,10 @@ const applyPostSeo = () => {
   ensureMetaByProperty('og:description', description)
   ensureMetaByProperty('og:type', 'article')
   ensureMetaByProperty('og:url', `${window.location.origin}${canonicalPath}`)
+  // Song：分享卡片配图（有封面时）
+  if (post.value.coverImage) {
+    ensureMetaByProperty('og:image', String(post.value.coverImage))
+  }
   ensureCanonical(canonicalPath)
 }
 
@@ -701,21 +803,72 @@ const formatDate = (dateStr: string) => {
 }
 
 const getRouteCommentId = () => {
+  if (shortLinkTarget.value?.targetType === 'comment' && shortLinkTarget.value.commentId) {
+    return shortLinkTarget.value.commentId
+  }
+  const queryCommentCode = route.query.c
+  if (typeof queryCommentCode === 'string' && queryCommentCode.trim()) {
+    return decodeCommentId(queryCommentCode.trim())
+  }
   const queryCommentId = route.query.commentId
   if (typeof queryCommentId === 'string' && queryCommentId.trim()) {
-    return queryCommentId.trim()
+    return decodeCommentId(queryCommentId.trim())
   }
   if (route.hash?.startsWith('#comment-')) {
     const hashCommentId = route.hash.replace('#comment-', '').trim()
     if (hashCommentId) {
-      return hashCommentId
+      return decodeCommentId(hashCommentId)
     }
   }
   return ''
 }
 
-const scrollToRouteComment = async (retry = 0) => {
-  const commentId = getRouteCommentId()
+const hasCommentInTree = (list: Comment[], targetId: string): boolean => {
+  for (const item of list || []) {
+    if (String(item?.id || '') === targetId) {
+      return true
+    }
+    if (item.children?.length && hasCommentInTree(item.children, targetId)) {
+      return true
+    }
+  }
+  return false
+}
+
+const ensureCommentLoadedForAnchor = async (commentId: string) => {
+  if (!commentId || hasCommentInTree(comments.value, commentId)) {
+    return true
+  }
+
+  const pageSize = 100
+  const collected: Comment[] = []
+  let total = 0
+  let page = 1
+
+  while (page <= 20) {
+    const res = await commentApi.getByPostId(postId.value, page, pageSize)
+    const records = (res.data.records || []) as Comment[]
+    total = Number(res.data.total || 0)
+    collected.push(...records)
+
+    if (hasCommentInTree(collected, commentId)) {
+      comments.value = collected
+      return true
+    }
+
+    if (records.length === 0 || collected.length >= total) {
+      break
+    }
+    page++
+  }
+
+  if (collected.length > comments.value.length) {
+    comments.value = collected
+  }
+  return hasCommentInTree(comments.value, commentId)
+}
+
+const scrollToComment = async (commentId: string, retry = 0, triedLoading = false) => {
   activeCommentId.value = commentId
   if (!commentId) {
     return
@@ -728,14 +881,109 @@ const scrollToRouteComment = async (retry = 0) => {
   }
   if (retry < 4) {
     window.setTimeout(() => {
-      scrollToRouteComment(retry + 1)
+      scrollToComment(commentId, retry + 1, triedLoading)
     }, 180)
+    return
+  }
+
+  if (!triedLoading) {
+    const loaded = await ensureCommentLoadedForAnchor(commentId)
+    if (loaded) {
+      window.setTimeout(() => {
+        scrollToComment(commentId, 0, true)
+      }, 80)
+    }
   }
 }
+
+const scrollToRouteComment = async (retry = 0) => {
+  await scrollToComment(getRouteCommentId(), retry)
+}
+
+// 从已加载的评论树中找出被采纳的回复（后端按真实采纳记录标记 comment.isAdopted）
+const acceptedAnswer = computed<Comment | null>(() => {
+  const find = (list: Comment[]): Comment | null => {
+    for (const item of list || []) {
+      if (isTruthyFlag(item.isAdopted)) {
+        return item
+      }
+      const child = find(item.children || [])
+      if (child) return child
+    }
+    return null
+  }
+  return find(comments.value)
+})
+
+const acceptedAnswerId = computed(() => String(acceptedAnswer.value?.id || ''))
+
+// 帖子下方最佳答案预览：去除 markdown 后截断的纯文本
+const acceptedAnswerPreview = computed(() =>
+  generateSummary(acceptedAnswer.value?.content || '', 220)
+)
+
+// 展开后的完整纯文本，以及是否需要“展开全文”
+const acceptedAnswerFullText = computed(() =>
+  stripMarkdown(acceptedAnswer.value?.content || '')
+)
+const acceptedAnswerTruncated = computed(() => acceptedAnswerFullText.value.length > 220)
+const acceptedAnswerExpanded = ref(false)
+
+// 被采纳回复在顶层评论中的楼层（后端无楼层字段，按顺序推导；嵌套回复返回 0 不展示）
+const acceptedAnswerFloor = computed(() => {
+  const id = acceptedAnswerId.value
+  if (!id) return 0
+  const idx = comments.value.findIndex((c) => String(c.id) === id)
+  return idx >= 0 ? idx + 1 : 0
+})
+
+// 点击帖子下方“最佳答案入口”：平滑滚动到被采纳回复并短暂高亮
+const scrollToAcceptedAnswer = () => {
+  const id = acceptedAnswerId.value
+  const el = id ? document.getElementById(`comment-${id}`) : null
+  if (!el) {
+    ElMessage.warning('最佳答案暂未加载，请稍后再试')
+    return
+  }
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  el.classList.add('accepted-answer-highlight')
+  window.setTimeout(() => {
+    el.classList.remove('accepted-answer-highlight')
+  }, 1600)
+}
+
+// 评论表情：批量拉取已加载评论(含楼中楼)的反应，避免每条单独请求
+const commentReactions = ref<Record<string, ReactionResp>>({})
+
+const collectCommentIds = (list: Comment[], acc: string[] = []): string[] => {
+  for (const c of list || []) {
+    if (c?.id != null) acc.push(String(c.id))
+    if (c.children?.length) collectCommentIds(c.children, acc)
+  }
+  return acc
+}
+
+const loadCommentReactions = async () => {
+  const ids = collectCommentIds(comments.value)
+  if (ids.length === 0) {
+    commentReactions.value = {}
+    return
+  }
+  try {
+    commentReactions.value = (await reactionApi.batch('comment', ids)).data || {}
+  } catch {
+    /* 静默：表情不阻塞评论区 */
+  }
+}
+
+watch(comments, () => { loadCommentReactions() })
 
 watch(
   () => postId.value,
   (newId, oldId) => {
+    if (route.name === 'short-link-detail') {
+      return
+    }
     if (!newId || newId === oldId) {
       return
     }
@@ -745,7 +993,37 @@ watch(
 )
 
 watch(
-  () => [route.query.commentId, route.hash],
+  () => route.params.code,
+  async (code) => {
+    if (route.name !== 'short-link-detail') {
+      shortLinkTarget.value = null
+      return
+    }
+    const codeValue = String(code || '').trim()
+    if (!codeValue) {
+      shortLinkTarget.value = null
+      return
+    }
+    loading.value = true
+    try {
+      const res = await commentApi.resolveShortLink(codeValue)
+      shortLinkTarget.value = res.data || null
+      activeCommentId.value = getRouteCommentId()
+      await fetchPost()
+    } catch (e: any) {
+      shortLinkTarget.value = null
+      post.value = null
+      comments.value = []
+      ElMessage.error(e?.response?.data?.message || e?.message || '短链接不存在或已失效')
+    } finally {
+      loading.value = false
+    }
+  },
+  { immediate: true }
+)
+
+watch(
+  () => [route.query.c, route.query.commentId, route.hash],
   () => {
     scrollToRouteComment()
   }
@@ -753,6 +1031,9 @@ watch(
 
 onMounted(() => {
   activeCommentId.value = getRouteCommentId()
+  if (route.name === 'short-link-detail') {
+    return
+  }
   fetchPost()
 })
 </script>
@@ -786,7 +1067,16 @@ onMounted(() => {
               <span class="post-date">{{ formatDate(post.createTime) }}</span>
             </div>
             
-            <h1 class="post-title">{{ post.title }}</h1>
+            <div class="post-title-row">
+              <span
+                v-if="isTruthyFlag(post.hasAdoptedAnswer)"
+                class="solved-badge"
+              >
+                <el-icon class="solved-badge-icon"><CircleCheck /></el-icon>
+                已解决
+              </span>
+              <h1 class="post-title">{{ post.title }}</h1>
+            </div>
 
             <el-alert
               v-if="isDeletedPost"
@@ -821,6 +1111,7 @@ onMounted(() => {
                     <span class="author-name">{{ post.authorName }}</span>
                   </UserQuickCard>
                   <UserRoleBadge :roles="post.authorRoles" />
+                  <UserBadge :text="post.authorBadgeText || ''" :color="post.authorBadgeColor" :effect="post.authorBadgeStyle" />
                 </span>
                 <div class="post-stats">
                   <span class="stat-item"><el-icon><View /></el-icon> {{ post.viewCount }}</span>
@@ -842,6 +1133,18 @@ onMounted(() => {
                 @click="handlePrivateMessage"
               >
                 私信
+              </el-button>
+              <el-button
+                :type="isSubscribed ? 'default' : 'warning'"
+                plain
+                round
+                size="small"
+                class="subscribe-btn"
+                :loading="subscribeLoading"
+                @click="handleSubscribe"
+              >
+                <el-icon style="margin-right: 4px;"><BellFilled v-if="isSubscribed" /><Bell v-else /></el-icon>
+                {{ isSubscribed ? '已追踪' : '追踪' }}
               </el-button>
               <el-dropdown trigger="click" @command="handleCommand" style="margin-left: 12px;">
                 <el-button circle plain size="small">
@@ -923,6 +1226,14 @@ onMounted(() => {
             <!-- Article Content -->
             <div class="content-body markdown-body" v-html="renderedContent" ref="contentRef" @click="handleMarkdownClick"></div>
 
+            <!-- 帖子投票：紧跟正文，独立接口数据，不进详情缓存 -->
+            <PollCard
+              v-if="poll"
+              :poll="poll"
+              :post-title="post.title"
+              @update="(p: Poll) => (poll = p)"
+            />
+
             <!-- Tags -->
             <div v-if="post.tags" class="post-tags">
               <template v-for="tag in (typeof post.tags === 'string' ? post.tags.split(',') : post.tags)" :key="tag">
@@ -936,6 +1247,56 @@ onMounted(() => {
                    # {{ tag.trim() }}
                  </el-tag>
               </template>
+            </div>
+
+            <!-- 最佳答案快捷入口：已采纳时显示作者与内容预览，点击平滑滚动到被采纳的回复 -->
+            <div
+              v-if="isTruthyFlag(post.hasAdoptedAnswer)"
+              class="accepted-answer-card"
+              role="button"
+              tabindex="0"
+              @click="scrollToAcceptedAnswer"
+              @keyup.enter="scrollToAcceptedAnswer"
+            >
+              <div class="accepted-card-head">
+                <span class="accepted-entry-icon"><el-icon><CircleCheck /></el-icon></span>
+                <span class="accepted-entry-title">已采纳最佳答案</span>
+                <span class="accepted-card-action">查看完整回答 →</span>
+              </div>
+
+              <template v-if="acceptedAnswer">
+                <div class="accepted-answer-author">
+                  <el-avatar :size="22" :src="acceptedAnswer.userAvatar">
+                    {{ (acceptedAnswer.nickname || 'U').charAt(0) }}
+                  </el-avatar>
+                  <span class="accepted-answer-name">{{ acceptedAnswer.nickname || '匿名用户' }}</span>
+                  <UserRoleBadge :roles="acceptedAnswer.roles || []" />
+                  <UserBadge
+                    :text="acceptedAnswer.userBadgeText || ''"
+                    :color="acceptedAnswer.userBadgeColor"
+                    :effect="acceptedAnswer.userBadgeStyle"
+                  />
+                </div>
+                <p class="accepted-answer-snippet" :class="{ expanded: acceptedAnswerExpanded }">
+                  {{ acceptedAnswerExpanded ? acceptedAnswerFullText : acceptedAnswerPreview }}
+                </p>
+                <button
+                  v-if="acceptedAnswerTruncated"
+                  type="button"
+                  class="accepted-answer-toggle"
+                  @click.stop="acceptedAnswerExpanded = !acceptedAnswerExpanded"
+                >
+                  {{ acceptedAnswerExpanded ? '收起' : '展开全文' }}
+                </button>
+                <div class="accepted-answer-meta">
+                  <span v-if="acceptedAnswerFloor" class="accepted-meta-item">#{{ acceptedAnswerFloor }} 楼</span>
+                  <span v-if="acceptedAnswerFloor" class="accepted-meta-dot">·</span>
+                  <span class="accepted-meta-item"><el-icon><CaretTop /></el-icon>{{ acceptedAnswer.likeCount || 0 }} 赞</span>
+                  <span class="accepted-meta-dot">·</span>
+                  <span class="accepted-meta-item">{{ formatDate(acceptedAnswer.createTime) }}</span>
+                </div>
+              </template>
+              <p v-else class="accepted-entry-desc">点击查看被采纳的回复</p>
             </div>
 
             <!-- Actions -->
@@ -957,6 +1318,11 @@ onMounted(() => {
                 </el-button>
                 <el-button :icon="Share" @click="handleShare">分享</el-button>
               </el-button-group>
+            </div>
+
+            <!-- Reactions -->
+            <div class="post-reactions">
+              <ReactionBar target-type="post" :target-id="post.id" />
             </div>
           </template>
 
@@ -1007,14 +1373,21 @@ onMounted(() => {
             :active-comment-id="activeCommentId"
             :post-id="postId"
             :post-short-id="encodePostId(postId)"
-            :post-author-id="post?.userId"
             :current-user-id="userStore.userId"
-            :is-admin="isAdmin || isGlobalModerator"
+            :is-admin="isAdmin"
             :can-moderate-section="canModerateCurrentSection"
+            :post-author-id="post?.userId"
+            :reaction-map="commentReactions"
+            :has-adoption="isTruthyFlag(post?.hasAdoptedAnswer)"
+            :allow-adoption="isTruthyFlag(post?.allowAdoption)"
             @like="handleCommentLike"
+            @collect="handleCommentCollect"
             @reply="handleReply"
             @delete="handleCommentDelete"
+            @restore="handleCommentRestore"
             @report="handleCommentReport"
+            @adopted="fetchPost"
+            @canceled="fetchPost"
           />
         </div>
         </div>
@@ -1214,6 +1587,165 @@ onMounted(() => {
   color: var(--el-text-color-primary);
   line-height: 1.3;
   margin: 0 0 20px 0;
+}
+
+.post-title-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0 0 20px 0;
+}
+
+.post-title-row .post-title {
+  min-width: 0;
+  margin: 0;
+}
+
+.solved-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  margin-top: 6px;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 7px;
+  background: var(--accept-bg);
+  border: 1px solid var(--accept-border);
+  color: var(--accept-text);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.solved-badge-icon {
+  font-size: 14px;
+}
+
+/* 帖子正文下方：最佳答案预览卡片 */
+.accepted-answer-card {
+  margin-top: 18px;
+  padding: 14px 16px;
+  border-radius: 10px;
+  background: linear-gradient(90deg, var(--accept-bg) 0%, var(--accept-bg-soft) 100%);
+  border: 1px solid var(--accept-border);
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.accepted-answer-card:hover {
+  background: var(--accept-bg-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(246, 184, 0, 0.15);
+}
+
+.accepted-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.accepted-entry-icon {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--accept-primary);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: bold;
+  flex-shrink: 0;
+}
+
+.accepted-entry-title {
+  color: var(--accept-text);
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.accepted-card-action {
+  margin-left: auto;
+  color: var(--accept-action);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.accepted-answer-author {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.accepted-answer-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accept-text);
+}
+
+.accepted-answer-snippet {
+  margin: 6px 0 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--el-text-color-regular);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-word;
+}
+
+.accepted-answer-snippet.expanded {
+  display: block;
+  -webkit-line-clamp: unset;
+  overflow: visible;
+}
+
+.accepted-answer-toggle {
+  margin-top: 6px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--accept-action);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.accepted-answer-toggle:hover {
+  color: var(--accept-primary-hover);
+  text-decoration: underline;
+}
+
+.accepted-answer-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--accept-text-soft);
+}
+
+.accepted-meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.accepted-meta-dot {
+  opacity: 0.55;
+}
+
+.accepted-entry-desc {
+  margin: 8px 0 0;
+  color: var(--accept-text-soft);
+  font-size: 13px;
 }
 
 .deleted-alert {
@@ -1418,6 +1950,12 @@ onMounted(() => {
   justify-content: center;
   padding-top: 24px;
   border-top: 1px solid var(--el-border-color-lighter);
+}
+
+.post-reactions {
+  display: flex;
+  justify-content: center;
+  margin-top: 14px;
 }
 
 .comment-section {

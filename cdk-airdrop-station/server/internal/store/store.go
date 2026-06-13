@@ -1687,6 +1687,29 @@ func (s *Store) ListClaimsForUser(q map[string]string, user *model.User) model.P
 	return paginateMaps(rows, q)
 }
 
+func (s *Store) ListClaimsByUser(userID string, q map[string]string) model.PageResult {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	rows := []map[string]interface{}{}
+	for _, r := range s.data.ClaimRecords {
+		if r.UserID != userID {
+			continue
+		}
+		if q["status"] != "" && q["status"] != "all" && r.Status != q["status"] {
+			continue
+		}
+		if q["campaignId"] != "" && r.CampaignID != q["campaignId"] {
+			continue
+		}
+		if q["nodeId"] != "" && r.NodeID != q["nodeId"] {
+			continue
+		}
+		rows = append(rows, s.claimViewLocked(r))
+	}
+	sort.Slice(rows, func(i, j int) bool { return fmt.Sprint(rows[i]["createdAt"]) > fmt.Sprint(rows[j]["createdAt"]) })
+	return paginateMaps(rows, q)
+}
+
 func (s *Store) GetClaim(id string) (map[string]interface{}, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

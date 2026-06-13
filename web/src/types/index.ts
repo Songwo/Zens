@@ -34,6 +34,8 @@ export interface CreatePostRequest {
     coverImage?: string
     tags: string
     status?: number
+    /** Song：可选附带投票（仅新发帖时支持），见 @/api/poll PollCreateRequest */
+    poll?: import('@/api/poll').PollCreateRequest
 }
 
 export interface SaveDraftRequest {
@@ -120,6 +122,8 @@ export interface Post {
     likeCount: number
     collectCount: number
     commentCount: number
+    hasAdoptedAnswer?: number | boolean | string
+    allowAdoption?: number | boolean | string
 
     createTime: string
     updateTime: string
@@ -139,6 +143,9 @@ export interface Post {
     authorName: string
     authorAvatar?: string
     authorRoles?: string[]
+    authorBadgeText?: string
+    authorBadgeColor?: string
+    authorBadgeStyle?: string
 
     sentimentScore?: number
     sentimentLabel?: string
@@ -155,9 +162,16 @@ export interface Comment {
     nickname: string
     roles?: string[]
     userAvatar?: string
+    userBadgeText?: string
+    userBadgeColor?: string
+    userBadgeStyle?: string
     likeCount: number
+    collectCount?: number
+    isAdopted?: number | boolean | string
     createTime: string
+    editTime?: string | null
     isLiked?: boolean
+    isCollected?: boolean
     children?: Comment[]
     replyUserId?: string
     replyUserNickname?: string

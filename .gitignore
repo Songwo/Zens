@@ -6,6 +6,22 @@ target/
 /data
 /log
 ./log
+
+# Redis 快照 / 运行时生成物
+dump.rdb
+*.rdb
+
+# Superpowers 头脑风暴可视化 mockup(本地临时产物)
+.superpowers/
+
+# 根目录截图（构建/文档无关）
+/campus-pulse-home-desktop.png
+/campus-pulse-home-mobile.png
+/cdk-claim-smoke-desktop.png
+/cdk-claim-smoke-mobile.png
+/zens-vplus-preview.png
+/zens-vplus-products.png
+/zens-nav-desktop.png
 ./data
 
 .env
@@ -46,7 +62,6 @@ web/dist/
 web/node_modules/
 *.jar
 *.war
-docs/
 
 # Environment files
 .env
@@ -58,6 +73,8 @@ docs/
 out/
 tmp/
 tmp*/
+.next/
+*.tsbuildinfo
 .codex-work/
 .playwright-mcp/
 *.log
@@ -95,6 +112,8 @@ go-media-service/*.tgz
 zdc-shop/.next/
 zdc-shop/node_modules/
 zdc-shop/tsconfig.tsbuildinfo
+zdc-shop/dev.log
+zdc-shop/install.log
 
 .nested-git-backups/
 
@@ -103,3 +122,17 @@ cdk-airdrop-station/bin/
 cdk-airdrop-station/server/bin/
 cdk-airdrop-station/server/data/
 cdk-airdrop-station/**/*.bak
+
+# campus-lottery-station subproject artifacts
+campus-lottery-station/node_modules/
+campus-lottery-station/dist/
+campus-lottery-station/.env
+campus-lottery-station/.env.*
+!campus-lottery-station/.env.example
+
+# Catch-all: never commit any nested app dependencies/build output
+**/node_modules/
+**/dist/
+zens-nav/node_modules/
+zens-nav/dist/
+zens-nav/*.tsbuildinfo

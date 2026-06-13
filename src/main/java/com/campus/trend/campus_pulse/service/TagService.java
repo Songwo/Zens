@@ -7,6 +7,9 @@ import java.util.List;
 
 public interface TagService extends IService<Tag> {
 
+    /** 全量校准标签的 post_count 冗余列,返回受影响行数 */
+    int recalculatePostCounts();
+
     /**
      * 获取或创建标签（不存在时自动创建）
      *

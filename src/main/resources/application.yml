@@ -22,8 +22,8 @@ server:
       max: ${SERVER_TOMCAT_THREADS_MAX:200}
       min-spare: ${SERVER_TOMCAT_THREADS_MIN_SPARE:20}
     accept-count: ${SERVER_TOMCAT_ACCEPT_COUNT:100}
-    connection-timeout: 120000
-    keep-alive-timeout: 120000
+    connection-timeout: ${SERVER_TOMCAT_CONNECTION_TIMEOUT:60000}
+    keep-alive-timeout: ${SERVER_TOMCAT_KEEP_ALIVE_TIMEOUT:60000}
     max-connections: ${SERVER_TOMCAT_MAX_CONNECTIONS:8192}
     max-swallow-size: -1
 spring:
@@ -82,14 +82,28 @@ spring:
           min-idle: ${REDIS_POOL_MIN_IDLE:2}
           max-wait: 3000ms
 
-  # 2.2 邮件服务配置
+  # 2.2 RabbitMQ 配置
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:guest}
+    password: ${RABBITMQ_PASSWORD:guest}
+    virtual-host: ${RABBITMQ_VHOST:/}
+    listener:
+      simple:
+        acknowledge-mode: auto
+        concurrency: 2
+        max-concurrency: 10
+        prefetch: 10
+
+  # 2.3 邮件服务配置
   # 使用 QQ 邮箱示例，其他邮箱请修改 host 和 port
   # 163邮箱: smtp.163.com:465 或 smtp.163.com:25
   # Gmail: smtp.gmail.com:587
   mail:
     host: ${MAIL_HOST:smtp.163.com}         # SMTP 服务器地址
     port: ${MAIL_PORT:465}                  # 端口 (587=TLS, 465=SSL)
-    username: ${MAIL_USERNAME:zhaoqsnyah@163.com}   # 发件人邮箱
+    username: ${MAIL_USERNAME:}   # 发件人邮箱（生产环境必须通过环境变量注入）
     password: ${MAIL_PASSWORD:}      # 授权码（生产环境必须通过环境变量注入）
     protocol: smtp
     default-encoding: UTF-8
@@ -107,7 +121,7 @@ spring:
 mybatis-plus:
   configuration:
     map-underscore-to-camel-case: true
-    cache-enabled: true
+    cache-enabled: false
     default-statement-timeout: 30
     default-fetch-size: 100
     lazy-loading-enabled: true
@@ -129,7 +143,7 @@ management:
       enabled: ${MANAGEMENT_HEALTH_MAIL_ENABLED:true}
   endpoint:
     health:
-      show-details: always
+      show-details: ${MANAGEMENT_HEALTH_SHOW_DETAILS:when_authorized}
   metrics:
     tags:
       application: campus-pulse
@@ -172,7 +186,8 @@ logging:
 
 # 5.JWT 配置
 jwt:
-  secret: ${JWT_SECRET:zf3sg4ikVorzR1S/cel4+o/VkQH+4LZxU8RkX0c0Ne6BFPf9NnPL09AoHSK9Zg95}
+  # ⚠️ 此默认值仅为本地开发占位，严禁用于生产。生产环境必须通过环境变量 JWT_SECRET 注入至少 32 字节的随机串。
+  secret: ${JWT_SECRET:dev-only-placeholder-secret-override-with-JWT_SECRET-env-in-production}
   access-expire: ${JWT_ACCESS_EXPIRE:7200000}        # 默认 2 小时
   refresh-expire: ${JWT_REFRESH_EXPIRE:1209600000}   # 默认 14 天
   remember-access-multiplier: 7
@@ -314,8 +329,9 @@ cloudflare:
   turnstile:
     enabled: ${TURNSTILE_ENABLED:true}
     allow-local-preview-skip: ${TURNSTILE_ALLOW_LOCAL_PREVIEW_SKIP:true}
+    # site-key 为前端公开值，可保留；secret-key 为敏感密钥，禁止提交，必须通过环境变量 TURNSTILE_SECRET_KEY 注入。
     site-key: ${TURNSTILE_SITE_KEY:0x4AAAAAAC9xtOXBNKG-KQE9}
-    secret-key: ${TURNSTILE_SECRET_KEY:0x4AAAAAAC9xtFFfXflEn-SwY6a7WDL4w3c}
+    secret-key: ${TURNSTILE_SECRET_KEY:}
     verify-url: ${TURNSTILE_VERIFY_URL:https://challenges.cloudflare.com/turnstile/v0/siteverify}
     connect-timeout-seconds: ${TURNSTILE_CONNECT_TIMEOUT_SECONDS:5}
     read-timeout-seconds: ${TURNSTILE_READ_TIMEOUT_SECONDS:8}

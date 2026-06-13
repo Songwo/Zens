@@ -16,6 +16,7 @@ import com.campus.trend.campus_pulse.service.DirectMessageService;
 import com.campus.trend.campus_pulse.service.MailService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -40,6 +41,7 @@ public class DirectMessageServiceImpl implements DirectMessageService {
     private final DirectMessageMapper directMessageMapper;
     private final UserMapper userMapper;
     private final MailService mailService;
+    private final SimpMessagingTemplate messagingTemplate;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -73,6 +75,23 @@ public class DirectMessageServiceImpl implements DirectMessageService {
                 .setCreatedAt(LocalDateTime.now());
         directMessageMapper.insert(message);
 
+        // 1. WebSocket 实时推送给接收者
+        try {
+            DirectMessageResp pushResp = new DirectMessageResp();
+            pushResp.setId(message.getId());
+            pushResp.setSenderId(message.getSenderId());
+            pushResp.setReceiverId(message.getReceiverId());
+            pushResp.setContent(message.getContent());
+            pushResp.setIsRead(0);
+            pushResp.setCreatedAt(message.getCreatedAt());
+            pushResp.setSelf(false);
+
+            messagingTemplate.convertAndSendToUser(message.getReceiverId(), "/queue/messages", pushResp);
+            log.debug("WebSocket 实时推送私信成功: receiverId={}, msgId={}", message.getReceiverId(), message.getId());
+        } catch (Exception e) {
+            log.warn("WebSocket 实时推送私信失败: receiverId={}, err={}", req.getReceiverId(), e.getMessage());
+        }
+
         try {
             User sender = userMapper.selectById(senderId);
             if (StringUtils.hasText(receiver.getEmail())
@@ -103,36 +122,53 @@ public class DirectMessageServiceImpl implements DirectMessageService {
         int safePage = Math.max(page, 1);
         int safePageSize = Math.min(Math.max(pageSize, 1), 50);
 
-        List<DirectMessage> allMessages = directMessageMapper.selectList(
-                new LambdaQueryWrapper<DirectMessage>()
-                        .and(w -> w.eq(DirectMessage::getSenderId, userId)
-                                .or()
-                                .eq(DirectMessage::getReceiverId, userId))
-                        .orderByDesc(DirectMessage::getCreatedAt)
-                        .last("LIMIT " + CONVERSATION_SCAN_LIMIT)
-        );
-
-        Map<String, DirectMessage> latestByConversation = new LinkedHashMap<>();
-        for (DirectMessage msg : allMessages) {
-            latestByConversation.putIfAbsent(msg.getConversationId(), msg);
+        // 1. 获取会话最新消息的所有ID (排好序，最新消息的ID在最前)
+        List<Long> latestMessageIds = directMessageMapper.selectLatestMessageIds(userId);
+        if (latestMessageIds == null || latestMessageIds.isEmpty()) {
+            Map<String, Object> result = new HashMap<>();
+            result.put("records", new ArrayList<>());
+            result.put("total", 0);
+            result.put("current", safePage);
+            result.put("size", safePageSize);
+            result.put("pages", 0L);
+            return result;
         }
 
-        Map<String, Long> unreadByConversation = directMessageMapper.selectList(
-                new LambdaQueryWrapper<DirectMessage>()
-                        .eq(DirectMessage::getReceiverId, userId)
-                        .eq(DirectMessage::getIsRead, 0))
-                .stream()
-                .collect(Collectors.groupingBy(DirectMessage::getConversationId, Collectors.counting()));
+        int total = latestMessageIds.size();
+        int from = (safePage - 1) * safePageSize;
+        int to = Math.min(from + safePageSize, total);
 
-        Map<String, String> peerByConversation = new HashMap<>();
+        if (from >= total) {
+            Map<String, Object> result = new HashMap<>();
+            result.put("records", new ArrayList<>());
+            result.put("total", total);
+            result.put("current", safePage);
+            result.put("size", safePageSize);
+            result.put("pages", (long) Math.ceil((double) total / safePageSize));
+            return result;
+        }
+
+        // 2. 截取当前页对应的消息 IDs
+        List<Long> pageIds = latestMessageIds.subList(from, to);
+
+        // 3. 批量查出当前页的消息实体 (按 ID 降序，即时间降序)
+        List<DirectMessage> pageMessages = directMessageMapper.selectMessagesByIds(pageIds);
+
+        // 4. 收集当前页会话的 conversationId 与 peerId
+        List<String> activeConvIds = new ArrayList<>();
         List<String> peerIds = new ArrayList<>();
-        for (DirectMessage latest : latestByConversation.values()) {
-            String peerId = Objects.equals(latest.getSenderId(), userId)
-                    ? latest.getReceiverId()
-                    : latest.getSenderId();
-            peerByConversation.put(latest.getConversationId(), peerId);
+        Map<String, String> peerByConversation = new HashMap<>();
+
+        for (DirectMessage msg : pageMessages) {
+            activeConvIds.add(msg.getConversationId());
+            String peerId = Objects.equals(msg.getSenderId(), userId)
+                    ? msg.getReceiverId()
+                    : msg.getSenderId();
+            peerByConversation.put(msg.getConversationId(), peerId);
             peerIds.add(peerId);
         }
+
+        // 5. 批量查询当前页 peer 的 User 实体
         Map<String, User> userMap = new HashMap<>();
         List<String> distinctPeerIds = peerIds.stream()
                 .filter(StringUtils::hasText)
@@ -144,8 +180,24 @@ public class DirectMessageServiceImpl implements DirectMessageService {
                     .collect(Collectors.toMap(User::getId, u -> u, (a, b) -> a));
         }
 
+        // 6. 高能优化：批量查询当前页这 10 个会话的未读数，完全避免全表未读计数内存聚合！
+        Map<String, Long> unreadMap = new HashMap<>();
+        if (!activeConvIds.isEmpty()) {
+            List<Map<String, Object>> unreadCountsList = directMessageMapper.selectUnreadCounts(userId, activeConvIds);
+            if (unreadCountsList != null) {
+                for (Map<String, Object> map : unreadCountsList) {
+                    String convId = (String) map.get("conversationId");
+                    Number countNum = (Number) map.get("unreadCount");
+                    if (convId != null && countNum != null) {
+                        unreadMap.put(convId, countNum.longValue());
+                    }
+                }
+            }
+        }
+
+        // 7. 拼装当前页会话视图
         List<DirectConversationResp> conversations = new ArrayList<>();
-        for (DirectMessage latest : latestByConversation.values()) {
+        for (DirectMessage latest : pageMessages) {
             String peerId = peerByConversation.get(latest.getConversationId());
             User peer = userMap.get(peerId);
             if (peer == null) {
@@ -157,24 +209,22 @@ public class DirectMessageServiceImpl implements DirectMessageService {
             resp.setPeerId(peerId);
             resp.setPeerName(StringUtils.hasText(peer.getNickname()) ? peer.getNickname() : peer.getUsername());
             resp.setPeerAvatar(peer.getAvatar());
+            resp.setPeerBadgeText(peer.getBadgeText());
+            resp.setPeerBadgeColor(peer.getBadgeColor());
+            resp.setPeerBadgeStyle(peer.getBadgeStyle());
             resp.setLastMessage(latest.getContent());
             resp.setLastTime(latest.getCreatedAt());
-            resp.setUnreadCount(unreadByConversation.getOrDefault(latest.getConversationId(), 0L));
+            resp.setUnreadCount(unreadMap.getOrDefault(latest.getConversationId(), 0L));
             conversations.add(resp);
         }
 
-        int total = conversations.size();
-        int from = (safePage - 1) * safePageSize;
-        int to = Math.min(from + safePageSize, total);
-        List<DirectConversationResp> records = from >= total ? new ArrayList<>() : conversations.subList(from, to);
-
         Map<String, Object> result = new HashMap<>();
-        result.put("records", records);
+        result.put("records", conversations);
         result.put("total", total);
         result.put("current", safePage);
         result.put("size", safePageSize);
-        result.put("pages", total == 0 ? 0 : (long) Math.ceil((double) total / safePageSize));
-        log.debug("私信会话列表查询: userId={}, page={}, pageSize={}, total={}",
+        result.put("pages", (long) Math.ceil((double) total / safePageSize));
+        log.debug("高性能私信会话列表查询完成: userId={}, page={}, pageSize={}, total={}",
                 userId, safePage, safePageSize, total);
         return result;
     }

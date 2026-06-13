@@ -16,6 +16,21 @@ public class SecurityWhitelist {
                         "/auth/github/authorize-url",
                         "/auth/github/login",
                         "/auth/2fa/verify-login",
+                        // Song：前端静态入口与 PWA 资源。同源部署时这些文件会经过 Spring Security，
+                        // 必须放行，否则浏览器会出现 manifest/sw 403。
+                        "/",
+                        "/index.html",
+                        "/favicon.ico",
+                        "/manifest.webmanifest",
+                        "/manifest.json",
+                        "/registerSW.js",
+                        "/sw.js",
+                        "/workbox-*.js",
+                        "/robots.txt",
+                        "/logo.png",
+                        "/logo-horizontal.png",
+                        "/icons/**",
+                        "/assets/**",
                         "/static/**",
                         "/uploads/**",
                         "/ws/**",
@@ -42,6 +57,7 @@ public class SecurityWhitelist {
                         "/follow/stats/**",
                         "/level/thresholds",
                         "/changelog/list",
+                        "/short-link/**",
                         "/sso/clients/public/**",
                         "/actuator/health",
                         "/actuator/info",
@@ -52,5 +68,6 @@ public class SecurityWhitelist {
                         "/post/search-lists",
                         "/documents/list",
                         "/comment/create",
+                        "/short-link/comment",
         };
 }

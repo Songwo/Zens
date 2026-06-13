@@ -64,6 +64,7 @@ public class PostResp implements Serializable {
     private Integer likeCount;
     private Integer collectCount;
     private Integer commentCount;
+    private Integer hasAdoptedAnswer;
     private Double heatScore;
 
     // Song：=================== 时间信息 ===================
@@ -105,6 +106,13 @@ public class PostResp implements Serializable {
      */
     private List<String> authorRoles;
 
+    /**
+     * 作者徽章文字（管理员授予的纯文字 flair），空表示无
+     */
+    private String authorBadgeText;
+    private String authorBadgeColor;
+    private String authorBadgeStyle;
+
     // Song：=================== 智能分析数据 (新增) ===================
     /**
      * Song：情感分数 (0-1)
@@ -117,6 +125,11 @@ public class PostResp implements Serializable {
      * Song：板块名称 (便于前端展示)
      */
     private String sectionName;
+
+    /**
+     * Song：当前板块是否支持答案采纳 0=否 1=是（取自 sections.allow_adoption，前端据此决定是否显示采纳按钮，替代写死的 sectionId==11）
+     */
+    private Integer allowAdoption;
 
     private String trendLevel;
 

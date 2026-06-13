@@ -2,6 +2,8 @@ package com.campus.trend.campus_pulse.controller;
 
 import com.campus.trend.campus_pulse.common.api.Result;
 import com.campus.trend.campus_pulse.dto.request.CommentCreateReq;
+import com.campus.trend.campus_pulse.dto.request.CommentEditReq;
+import com.campus.trend.campus_pulse.dto.response.CollectActionResp;
 import com.campus.trend.campus_pulse.security.AuthUser;
 import com.campus.trend.campus_pulse.service.CommentService;
 import com.campus.trend.campus_pulse.utils.ClientIpUtils;
@@ -75,11 +77,27 @@ public class CommentController {
         return Result.success();
     }
 
-    /* Song：删除评论（仅评论作者或管理员） */
+    /* Song：删除评论（仅评论作者、管理员或对应板块版主） */
     @DeleteMapping("/{id}")
     public Result<?> deleteComment(@PathVariable String id) {
         AuthUser authUser = SecurityUtils.getAuthenticatedUser();
         commentService.deleteComment(id, authUser.getUser().getId());
+        return Result.success();
+    }
+
+    /* Song：编辑评论内容（仅评论作者、管理员或对应板块版主） */
+    @PutMapping("/{id}")
+    public Result<?> editComment(@PathVariable String id, @Valid @RequestBody CommentEditReq request) {
+        AuthUser authUser = SecurityUtils.getAuthenticatedUser();
+        commentService.editComment(id, request.getContent(), authUser.getUser().getId());
+        return Result.success();
+    }
+
+    /* Song：恢复软删除评论（评论作者、管理员或对应板块版主） */
+    @PostMapping("/{id}/restore")
+    public Result<?> restoreComment(@PathVariable String id) {
+        AuthUser authUser = SecurityUtils.getAuthenticatedUser();
+        commentService.restoreComment(id, authUser.getUser().getId());
         return Result.success();
     }
 
@@ -97,6 +115,14 @@ public class CommentController {
         AuthUser authUser = SecurityUtils.getAuthenticatedUser();
         commentService.toggleLike(id, authUser.getUser().getId());
         return Result.success();
+    }
+
+    /* Song：收藏/取消收藏评论 */
+    @PostMapping("/{id}/collect")
+    public Result<CollectActionResp> collectComment(@PathVariable String id) {
+        AuthUser authUser = SecurityUtils.getAuthenticatedUser();
+        boolean isCollected = commentService.toggleCollect(id, authUser.getUser().getId());
+        return Result.success(CollectActionResp.of(isCollected));
     }
 
     private boolean allowComment(String dimension, int limit) {

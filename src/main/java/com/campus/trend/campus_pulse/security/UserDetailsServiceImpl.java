@@ -1,7 +1,7 @@
 package com.campus.trend.campus_pulse.security;
 
 import com.campus.trend.campus_pulse.entity.User;
-import com.campus.trend.campus_pulse.exception.custom.LoginException;
+import com.campus.trend.campus_pulse.common.exception.LoginException;
 import com.campus.trend.campus_pulse.service.UserService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.userdetails.UserDetails;

@@ -44,6 +44,13 @@ public class Comment implements Serializable {
 
     private Integer likeCount;
 
+    private Integer collectCount;
+
+    /**
+     * Song：是否被采纳为最佳答案
+     */
+    private Integer isAdopted;
+
     /**
      * 审核/删除状态: APPROVED | DELETED
      */
@@ -55,4 +62,9 @@ public class Comment implements Serializable {
      * 最后更新时间(软删 3 天倒计时基准)
      */
     private LocalDateTime updateTime;
+
+    /**
+     * 最后编辑时间(由作者/版主/管理员修改评论内容时写入；与软删倒计时无关)
+     */
+    private LocalDateTime editTime;
 }

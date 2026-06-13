@@ -6,6 +6,7 @@ import api from '@/lib/api'
 import { useUserStore } from '@/store/user'
 import { sectionApi, type Section } from '@/api/section'
 import { userApi } from '@/api/user'
+import UserBadge from '@/components/common/UserBadge.vue'
 
 const userStore = useUserStore()
 const users = ref<any[]>([])
@@ -18,6 +19,9 @@ const roleDialogUser = ref<any>(null)
 const selectedRole = ref('')
 const selectedModeratedSectionIds = ref<number[]>([])
 const permissionSaving = ref(false)
+const badgeText = ref('')
+const badgeColor = ref('')
+const badgeStyle = ref('solid')
 
 const ROLE_LEVEL: Record<string, number> = {
   'ROLE_USER': 1,
@@ -174,6 +178,9 @@ const openRoleDialog = (user: any) => {
   selectedModeratedSectionIds.value = Array.isArray(user.moderatedSectionIds)
     ? user.moderatedSectionIds.map((id: number | string) => Number(id)).filter((id: number) => Number.isFinite(id) && id > 0)
     : []
+  badgeText.value = user.badgeText || ''
+  badgeColor.value = user.badgeColor || ''
+  badgeStyle.value = user.badgeStyle || 'solid'
   roleDialogVisible.value = true
 }
 
@@ -185,6 +192,7 @@ const submitRoleChange = async () => {
       params: { roleCode: selectedRole.value }
     })
     await userApi.updateModeratedSections(roleDialogUser.value.id, selectedModeratedSectionIds.value)
+    await userApi.updateBadge(roleDialogUser.value.id, { badgeText: badgeText.value.trim(), badgeColor: badgeColor.value, badgeStyle: badgeStyle.value })
     ElMessage.success('权限设置成功')
     roleDialogVisible.value = false
     fetchUsers()
@@ -277,6 +285,12 @@ onMounted(() => {
           <span v-else class="muted-text">—</span>
         </template>
       </el-table-column>
+      <el-table-column prop="badgeText" label="徽章" min-width="150" show-overflow-tooltip>
+        <template #default="{ row }">
+          <UserBadge v-if="row.badgeText" :text="row.badgeText" :color="row.badgeColor" :effect="row.badgeStyle" />
+          <span v-else class="muted-text">—</span>
+        </template>
+      </el-table-column>
       <el-table-column prop="status" label="状态" width="90">
         <template #default="{ row }">
           <el-tag :type="row.status === 0 ? 'danger' : 'success'" size="small">
@@ -355,7 +369,7 @@ onMounted(() => {
     </el-table>
 
     <!-- 权限设置弹窗 -->
-    <el-dialog v-model="roleDialogVisible" title="设置用户权限" width="520px" append-to-body>
+    <el-dialog v-model="roleDialogVisible" title="设置用户权限与徽章" width="520px" append-to-body>
       <div style="margin-bottom: 12px; color: var(--el-text-color-secondary); font-size: 14px;">
         用户：{{ roleDialogUser?.nickname || roleDialogUser?.username }}
       </div>
@@ -397,6 +411,29 @@ onMounted(() => {
           </el-option>
         </el-select>
       </div>
+
+      <div class="permission-block">
+        <div class="permission-title">用户徽章</div>
+        <div class="permission-hint">纯文字徽章（如「你可以访问L站」），跟随该用户显示在帖子/评论/私信处。留空表示清除，最多 20 字。</div>
+        <el-input
+          v-model="badgeText"
+          maxlength="20"
+          show-word-limit
+          clearable
+          placeholder="例如：你可以访问L站"
+        />
+        <div class="badge-style-row">
+          <el-select v-model="badgeStyle" style="width: 150px;">
+            <el-option label="纯色" value="solid" />
+            <el-option label="七彩跑马 🌈" value="rainbow" />
+          </el-select>
+          <el-color-picker v-model="badgeColor" :disabled="badgeStyle === 'rainbow'" />
+          <span class="badge-style-hint">{{ badgeStyle === 'rainbow' ? '七彩动效，忽略颜色' : '纯色徽章的颜色（留空=默认紫）' }}</span>
+        </div>
+        <div v-if="badgeText.trim()" class="badge-preview">
+          预览：<UserBadge :text="badgeText.trim()" :color="badgeColor" :effect="badgeStyle" />
+        </div>
+      </div>
       <template #footer>
         <el-button @click="roleDialogVisible = false">取消</el-button>
         <el-button type="primary" :loading="permissionSaving" @click="submitRoleChange">保存权限</el-button>
@@ -435,6 +472,14 @@ onMounted(() => {
 .muted-text {
   color: var(--el-text-color-placeholder);
 }
+.user-badge-cell {
+  color: #6d28d9;
+  font-weight: 600;
+  font-size: 12px;
+}
+:deep(html.dark) .user-badge-cell {
+  color: #a78bfa;
+}
 .permission-block {
   margin-top: 16px;
 }
@@ -447,6 +492,21 @@ onMounted(() => {
 .permission-hint {
   margin-bottom: 8px;
   font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+.badge-style-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+.badge-style-hint {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+.badge-preview {
+  margin-top: 10px;
+  font-size: 13px;
   color: var(--el-text-color-secondary);
 }
 .option-note {

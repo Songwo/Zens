@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 import AdminLayout from "./layouts/AdminLayout";
 import ClaimPage from "./pages/ClaimPage";
+import LocalClaimPage from "./pages/LocalClaimPage";
 import LoginPage from "./pages/LoginPage";
 import LoginCallbackPage from "./pages/LoginCallbackPage";
 
@@ -20,6 +21,7 @@ export default function App() {
       {/* 登录页 */}
       <Route path="/login" element={<LoginPage />} />
       <Route path="/login/callback" element={<LoginCallbackPage />} />
+      <Route path="/local-claim" element={<LocalClaimPage />} />
 
 
       {/* 管理后台 */}
@@ -72,8 +74,8 @@ export default function App() {
       {/* 独立领取页 — 普通用户唯一入口 */}
       <Route path="/claim/:projectCode" element={<ClaimPage />} />
 
-      {/* 默认重定向到管理后台 */}
-      <Route path="*" element={<Navigate to="/admin" replace />} />
+      {/* 默认进入本地领取测试页，方便开发联调账号/CDK */}
+      <Route path="*" element={<Navigate to="/local-claim" replace />} />
     </Routes>
   );
 }

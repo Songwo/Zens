@@ -4,10 +4,12 @@ import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Position, UserFilled } from '@element-plus/icons-vue'
 import UserRoleBadge from '@/components/common/UserRoleBadge.vue'
+import UserBadge from '@/components/common/UserBadge.vue'
 import { followApi } from '@/api/follow'
 import { userApi, type UserPublicProfile } from '@/api/user'
 import { useUserStore } from '@/store/user'
 import { getCardThemePalette } from '@/utils/cardTheme'
+import { encodeUserId } from '@/utils/shortId'
 
 const props = withDefaults(
   defineProps<{
@@ -64,6 +66,10 @@ const displayRoles = computed(() => {
   if (profile.value?.roles && profile.value.roles.length > 0) return profile.value.roles
   return props.roles || []
 })
+
+const displayBadge = computed(() => profile.value?.badgeText || '')
+const displayBadgeColor = computed(() => profile.value?.badgeColor || '')
+const displayBadgeEffect = computed(() => profile.value?.badgeStyle || 'solid')
 
 const stats = computed(() => ({
   postCount: profile.value?.postCount ?? 0,
@@ -179,6 +185,13 @@ const handlePrivateMessage = () => {
     },
   })
 }
+
+const goToProfile = () => {
+  const userId = normalizedUserId.value
+  if (userId) {
+    router.push(`/user/${encodeUserId(userId)}`)
+  }
+}
 </script>
 
 <template>
@@ -202,14 +215,15 @@ const handlePrivateMessage = () => {
         </div>
       </template>
       <template v-else>
-        <div class="head">
+        <div class="head clickable-head" @click.stop="goToProfile">
           <el-avatar :size="46" :src="displayAvatar">
             {{ displayName.charAt(0) || 'U' }}
           </el-avatar>
           <div class="meta">
             <div class="name-row">
-              <span class="name">{{ displayName }}</span>
+              <span class="name hover-underline">{{ displayName }}</span>
               <UserRoleBadge :roles="displayRoles" />
+              <UserBadge :text="displayBadge" :color="displayBadgeColor" :effect="displayBadgeEffect" />
             </div>
             <div class="username" v-if="displayUsername">@{{ displayUsername }}</div>
             <div class="level" v-if="profile?.level">Lv.{{ profile.level }}</div>
@@ -280,6 +294,19 @@ const handlePrivateMessage = () => {
   display: flex;
   gap: 10px;
   align-items: center;
+}
+
+.clickable-head {
+  cursor: pointer;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.clickable-head:hover {
+  opacity: 0.85;
+}
+
+.hover-underline:hover {
+  text-decoration: underline;
 }
 
 .meta {

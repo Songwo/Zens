@@ -41,6 +41,11 @@ public class TagServiceImpl extends ServiceImpl<TagMapper, Tag> implements TagSe
         this.objectMapper.disable(com.fasterxml.jackson.databind.SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
     }
 
+    @Override
+    public int recalculatePostCounts() {
+        return baseMapper.recalculateAllPostCounts();
+    }
+
     /**
      * Song：获取或创建标签（不存在时自动创建）
      *
@@ -190,9 +195,7 @@ public class TagServiceImpl extends ServiceImpl<TagMapper, Tag> implements TagSe
                 .last("LIMIT 20")
                 .list();
 
-        // 填充每个标签的帖子数量
-        results.forEach(tag -> tag.setPostCount(postMapper.countByTagName(tag.getName(), " " + tag.getName())));
-
+        // post_count 为冗余列,查询时随行返回,由 TagHeatDecayTask 每小时校准
         log.info("搜索标签 [{}], 找到 {} 个结果", keyword, results.size());
 
         return results;

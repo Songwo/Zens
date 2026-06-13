@@ -22,6 +22,12 @@ public record UserProfileResp(
         String profileCardTheme,
         String quickCardTheme,
         String profileCardBgUrl,
-        String quickCardBgUrl
+        String quickCardBgUrl,
+        Integer enrollmentYear,
+        String interestTags,
+        String coverConfig,
+        String badgeText,
+        String badgeColor,
+        String badgeStyle
 ) {
 }

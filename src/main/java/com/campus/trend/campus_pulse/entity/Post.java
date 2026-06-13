@@ -100,6 +100,12 @@ public class Post implements Serializable {
     private Integer likeCount;
     private Integer collectCount;
     private Integer commentCount;
+
+    /**
+     * Song：是否有采纳答案
+     */
+    private Integer hasAdoptedAnswer;
+
     private Double heatScore;
 
     /**

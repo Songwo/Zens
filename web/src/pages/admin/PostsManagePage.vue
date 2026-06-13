@@ -33,10 +33,6 @@ const readRouteSectionId = () => {
 const selectedSectionId = ref<number | undefined>(readRouteSectionId())
 
 const isAdmin = computed(() => hasAdminRole(userStore.userInfo))
-const isGlobalModerator = computed(() => {
-  const roles = (userStore.userInfo as any)?.roles || []
-  return roles.includes('ROLE_MODERATOR')
-})
 const moderatedSectionIds = computed<number[]>(() => {
   const rawIds = Array.isArray((userStore.userInfo as any)?.moderatedSectionIds)
     ? ((userStore.userInfo as any)?.moderatedSectionIds as Array<number | string>)
@@ -56,7 +52,7 @@ const emptyDescription = computed(() => isTrashMode.value ? '已删除的帖子�
 
 // 版主只看自己板块；管理员看全部
 const availableSections = computed(() => {
-  if (isAdmin.value || isGlobalModerator.value) return allSections.value
+  if (isAdmin.value) return allSections.value
   return allSections.value.filter(s => moderatedSectionIds.value.includes(Number(s.id)))
 })
 
@@ -67,10 +63,14 @@ const moderatedSectionNames = computed(() => {
 
 const scopeSummary = computed(() => {
   if (isAdmin.value) return '当前账号为管理员，可管理全部板块。'
-  if (isGlobalModerator.value) return '当前账号为全局版主，可管理全部板块。'
   if (moderatedSectionNames.value.length === 0) return '当前账号尚未加载到可管理板块。'
   return `当前账号是 ${moderatedSectionNames.value.join('、')} 的版主。`
 })
+
+const canManageRow = (row: Post) => {
+  if (isAdmin.value) return true
+  return Boolean(row.sectionId && moderatedSectionIds.value.includes(Number(row.sectionId)))
+}
 
 const unwrapPageData = <T,>(res: any): { records: T[]; total: number } => {
   const pageData = res?.data?.records
@@ -91,7 +91,7 @@ const fetchSections = async () => {
     const res = await sectionApi.getList()
     allSections.value = res.data || []
     // 版主若未指定板块，默认选第一个负责的板块
-    if (!isAdmin.value && !isGlobalModerator.value && selectedSectionId.value === undefined && moderatedSectionIds.value.length > 0) {
+    if (!isAdmin.value && selectedSectionId.value === undefined && moderatedSectionIds.value.length > 0) {
       selectedSectionId.value = moderatedSectionIds.value[0]
     }
   } catch {
@@ -148,6 +148,11 @@ const handlePageChange = (val: number) => {
 const isDeletedPost = (row: Post) => row.auditStatus === 'DELETED'
 
 const deletePost = async (postId: string) => {
+  const target = posts.value.find(post => post.id === postId)
+  if (target && !canManageRow(target)) {
+    ElMessage.warning('只能管理自己负责板块内的帖子')
+    return
+  }
   try {
     await ElMessageBox.confirm('确定要将这篇帖子移入回收站吗？7 天内可恢复。', '软删除确认', {
       confirmButtonText: '移入回收站',
@@ -167,6 +172,11 @@ const deletePost = async (postId: string) => {
 }
 
 const restorePost = async (postId: string) => {
+  const target = posts.value.find(post => post.id === postId)
+  if (target && !canManageRow(target)) {
+    ElMessage.warning('只能恢复自己负责板块内的帖子')
+    return
+  }
   try {
     await postApi.restore(postId)
     ElMessage.success('帖子已恢复')
@@ -183,6 +193,10 @@ const handleView = (postId: string) => {
 }
 
 const toggleCategoryPin = async (row: Post) => {
+  if (!canManageRow(row)) {
+    ElMessage.warning('只能管理自己负责板块内的帖子')
+    return
+  }
   try {
     await postApi.setCategoryPin(row.id)
     row.categoryPin = row.categoryPin === 1 ? 0 : 1
@@ -193,6 +207,10 @@ const toggleCategoryPin = async (row: Post) => {
 }
 
 const toggleFeature = async (row: Post) => {
+  if (!canManageRow(row)) {
+    ElMessage.warning('只能管理自己负责板块内的帖子')
+    return
+  }
   try {
     await postApi.feature(row.id)
     row.isFeatured = row.isFeatured === 1 ? 0 : 1
@@ -207,6 +225,11 @@ const rejectingPostId = ref('')
 const rejectReason = ref('')
 
 const openRejectDialog = (postId: string) => {
+  const target = posts.value.find(post => post.id === postId)
+  if (target && !canManageRow(target)) {
+    ElMessage.warning('只能管理自己负责板块内的帖子')
+    return
+  }
   rejectingPostId.value = postId
   rejectReason.value = ''
   rejectDialogVisible.value = true
@@ -228,6 +251,11 @@ const confirmReject = async () => {
 }
 
 const approvePost = async (postId: string) => {
+  const target = posts.value.find(post => post.id === postId)
+  if (target && !canManageRow(target)) {
+    ElMessage.warning('只能管理自己负责板块内的帖子')
+    return
+  }
   try {
     await postApi.approve(postId)
     ElMessage.success('已通过审核')
@@ -289,7 +317,7 @@ watch(
         <h1 class="title">{{ pageTitle }}</h1>
         <p class="subtitle">{{ pageSubtitle }}</p>
         <p class="scope-line">{{ scopeSummary }}</p>
-        <div v-if="!isAdmin && !isGlobalModerator && moderatedSectionNames.length > 0" class="scope-tags">
+        <div v-if="!isAdmin && moderatedSectionNames.length > 0" class="scope-tags">
           <el-tag
             v-for="name in moderatedSectionNames"
             :key="name"
@@ -410,7 +438,7 @@ watch(
         <el-table-column label="操作" width="180" fixed="right">
           <template #default="{ row }">
             <div class="action-btns">
-              <el-tooltip v-if="!isDeletedPost(row)" :content="row.categoryPin === 1 ? '取消板块置顶' : '板块置顶'" placement="top">
+              <el-tooltip v-if="!isDeletedPost(row) && canManageRow(row)" :content="row.categoryPin === 1 ? '取消板块置顶' : '板块置顶'" placement="top">
                 <el-button
                   circle
                   size="small"
@@ -419,7 +447,7 @@ watch(
                   @click="toggleCategoryPin(row)"
                 />
               </el-tooltip>
-              <el-tooltip v-if="!isDeletedPost(row)" :content="row.isFeatured ? '取消精华' : '设为精华'" placement="top">
+              <el-tooltip v-if="!isDeletedPost(row) && canManageRow(row)" :content="row.isFeatured ? '取消精华' : '设为精华'" placement="top">
                 <el-button
                   circle
                   size="small"
@@ -428,7 +456,7 @@ watch(
                   @click="toggleFeature(row)"
                 />
               </el-tooltip>
-              <el-tooltip v-if="!isDeletedPost(row) && (row.auditStatus === 'PENDING' || row.auditStatus === 'REJECTED')" content="通过审核" placement="top">
+              <el-tooltip v-if="!isDeletedPost(row) && canManageRow(row) && (row.auditStatus === 'PENDING' || row.auditStatus === 'REJECTED')" content="通过审核" placement="top">
                 <el-button
                   circle
                   size="small"
@@ -437,7 +465,7 @@ watch(
                   @click="approvePost(row.id)"
                 />
               </el-tooltip>
-              <el-tooltip v-if="!isDeletedPost(row)" content="打回修改" placement="top">
+              <el-tooltip v-if="!isDeletedPost(row) && canManageRow(row)" content="打回修改" placement="top">
                 <el-button
                   circle
                   size="small"
@@ -454,7 +482,7 @@ watch(
                   @click="handleView(row.id)"
                 />
               </el-tooltip>
-              <el-tooltip v-if="isDeletedPost(row)" content="恢复" placement="top">
+              <el-tooltip v-if="isDeletedPost(row) && canManageRow(row)" content="恢复" placement="top">
                 <el-button
                   circle
                   size="small"
@@ -464,7 +492,7 @@ watch(
                   @click="restorePost(row.id)"
                 />
               </el-tooltip>
-              <el-tooltip v-else content="移入回收站" placement="top">
+              <el-tooltip v-else-if="canManageRow(row)" content="移入回收站" placement="top">
                 <el-button
                   circle
                   size="small"

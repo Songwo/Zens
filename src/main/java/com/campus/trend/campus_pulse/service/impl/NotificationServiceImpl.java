@@ -55,18 +55,33 @@ public class NotificationServiceImpl implements NotificationService {
     @Autowired
     private StringRedisTemplate stringRedisTemplate;
 
+    @Autowired
+    @org.springframework.context.annotation.Lazy
+    private com.campus.trend.campus_pulse.service.AsyncTaskService asyncTaskService;
+
+    @Autowired
+    @org.springframework.context.annotation.Lazy
+    private com.campus.trend.campus_pulse.mq.MessageProducer messageProducer;
+
     @Value("${campus.notification.dedupe-window-seconds:120}")
     private long notificationDedupeWindowSeconds;
 
     private static final String NOTIFICATION_DEDUPE_PREFIX = "notify:dedupe:";
 
     @Override
-    @Transactional(rollbackFor = Exception.class)
     public void createNotification(String userId, String type, String title, String content,
             String relatedId, String relatedUserId) {
         if (!StringUtils.hasText(userId)) {
             return;
         }
+        // 直接发送到 MQ，将重活（去重检测、入库、WS推送）全部扔给消费者
+        messageProducer.sendNotification(userId, type, title, content, relatedId, relatedUserId);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void processNotification(String userId, String type, String title, String content,
+                                    String relatedId, String relatedUserId) {
         if (shouldSkipDuplicateNotification(userId, type, title, content, relatedId, relatedUserId)) {
             log.debug("通知命中去重窗口，跳过投递: userId={}, type={}, relatedId={}", userId, type, relatedId);
             return;
@@ -93,7 +108,7 @@ public class NotificationServiceImpl implements NotificationService {
             log.error("WebSocket推送通知失败: userId={}", userId, e);
         }
 
-        syncNotificationEmail(userId, title, content);
+        messageProducer.sendEmail(userId, title, content);
     }
 
     @Override
@@ -428,28 +443,6 @@ public class NotificationServiceImpl implements NotificationService {
         return content;
     }
 
-    private void syncNotificationEmail(String userId, String title, String content) {
-        try {
-            User targetUser = userMapper.selectById(userId);
-            if (targetUser == null) {
-                return;
-            }
-            if (targetUser.getEmailNotifyEnabled() != null && targetUser.getEmailNotifyEnabled() == 0) {
-                return;
-            }
-            if (!StringUtils.hasText(targetUser.getEmail())) {
-                return;
-            }
-            String nickname = StringUtils.hasText(targetUser.getNickname()) ? targetUser.getNickname() : targetUser.getUsername();
-            mailService.sendSimpleMail(
-                    targetUser.getEmail(),
-                    "【Zens社区】" + (StringUtils.hasText(title) ? title : "你有一条新通知"),
-                    "Hi " + nickname + "，你收到一条新通知：\n\n" + content + "\n\n请前往站内查看完整内容。");
-        } catch (Exception e) {
-            log.warn("通知邮件同步失败: userId={}, err={}", userId, e.getMessage());
-        }
-    }
-
     private String buildPostRelatedId(String postId, String commentId) {
         if (!StringUtils.hasText(postId)) {
             return null;
@@ -469,7 +462,7 @@ public class NotificationServiceImpl implements NotificationService {
         String content = String.format(
                 "你的账号刚在新的%s设备上登录，IP：%s，时间：%s。如非本人操作，请立即修改密码并开启二步验证。",
                 describeDeviceType(deviceType),
-                defaultString(clientIp, "未知"),
+                formatIpWithLocation(clientIp),
                 LocalDateTime.now().format(SECURITY_TIME_FMT));
         if (StringUtils.hasText(userAgent)) {
             content += "\n浏览器：" + userAgent;
@@ -483,7 +476,7 @@ public class NotificationServiceImpl implements NotificationService {
         String content = String.format(
                 "你的账号已在另一%s设备登录，此设备已被自动登出。IP：%s，时间：%s。",
                 describeDeviceType(deviceType),
-                defaultString(clientIp, "未知"),
+                formatIpWithLocation(clientIp),
                 LocalDateTime.now().format(SECURITY_TIME_FMT));
         createNotification(userId, NotificationType.SESSION_TERMINATED, "会话已被强制下线", content, null, null);
     }
@@ -493,7 +486,7 @@ public class NotificationServiceImpl implements NotificationService {
         if (!StringUtils.hasText(userId)) return;
         String content = String.format(
                 "你的登录密码已修改成功。IP：%s，时间：%s。如非本人操作，请立即联系管理员并使用找回密码功能重置。",
-                defaultString(clientIp, "未知"),
+                formatIpWithLocation(clientIp),
                 LocalDateTime.now().format(SECURITY_TIME_FMT));
         createNotification(userId, NotificationType.PASSWORD_CHANGED, "密码修改成功", content, null, null);
     }
@@ -503,7 +496,7 @@ public class NotificationServiceImpl implements NotificationService {
         if (!StringUtils.hasText(userId)) return;
         String content = String.format(
                 "你的账号已通过邮箱验证码重置密码。IP：%s，时间：%s。如非本人操作，请立即联系管理员。",
-                defaultString(clientIp, "未知"),
+                formatIpWithLocation(clientIp),
                 LocalDateTime.now().format(SECURITY_TIME_FMT));
         createNotification(userId, NotificationType.PASSWORD_RESET, "密码已重置", content, null, null);
     }
@@ -526,7 +519,7 @@ public class NotificationServiceImpl implements NotificationService {
         String content = String.format(
                 "过去 10 分钟内检测到 %d 次登录失败尝试，IP：%s，时间：%s。如非本人操作，建议立即修改密码并开启二步验证。",
                 failedAttempts,
-                defaultString(clientIp, "未知"),
+                formatIpWithLocation(clientIp),
                 LocalDateTime.now().format(SECURITY_TIME_FMT));
         createNotification(userId, NotificationType.LOGIN_FAILED_BURST, "登录失败次数异常", content, null, null);
     }
@@ -545,5 +538,15 @@ public class NotificationServiceImpl implements NotificationService {
 
     private static String defaultString(String value, String fallback) {
         return StringUtils.hasText(value) ? value : fallback;
+    }
+
+    private static String formatIpWithLocation(String ip) {
+        String safeIp = defaultString(ip, "未知");
+        if ("未知".equals(safeIp)) return safeIp;
+        String region = com.campus.trend.campus_pulse.utils.Ip2RegionUtils.getShortRegion(safeIp);
+        if ("未知".equals(region) || "本地 IP".equals(region)) {
+            return safeIp;
+        }
+        return String.format("%s (%s)", safeIp, region);
     }
 }

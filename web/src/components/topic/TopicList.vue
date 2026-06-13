@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { DataLine, Finished, Loading, Refresh } from '@element-plus/icons-vue'
@@ -8,12 +8,16 @@ import TopicRow from './TopicRow.vue'
 import { postApi } from '@/api/post'
 import type { PostSearchRequest } from '@/types'
 import { wsClient, type PostEvent } from '@/utils/websocket'
+import { isTruthyFlag } from '@/utils/flags'
+
+const PulseDashboardDialog = defineAsyncComponent(() => import('./PulseDashboardDialog.vue'))
 
 type PostMetricsUpdate = {
   postId: string
   viewCount?: number | string | null
   commentCount?: number | string | null
   lastActivityAt?: string | null
+  hasAdoptedAnswer?: number | string | boolean | null
 }
 
 const props = defineProps<{
@@ -115,6 +119,9 @@ const applyTopicMetrics = (postId: string, data?: PostMetricsUpdate | PostEvent[
     topic.replies = Math.max(0, toFiniteMetric(topic.replies) ?? 0) + 1
   }
   if (data?.lastActivityAt) topic.lastActive = data.lastActivityAt
+  if ('hasAdoptedAnswer' in (data || {})) {
+    topic.isSolved = isTruthyFlag(data?.hasAdoptedAnswer)
+  }
 }
 
 const buildSearchReq = (): PostSearchRequest => {
@@ -155,6 +162,9 @@ const mapPost = (p: any) => ({
     name: p.authorName || '匿名',
     avatar: p.authorAvatar || '',
     roles: p.authorRoles || [],
+    badgeText: p.authorBadgeText || '',
+    badgeColor: p.authorBadgeColor || '',
+    badgeStyle: p.authorBadgeStyle || 'solid',
   },
   createdAt: p.createTime,
   lastActive: p.lastActivityAt || p.createTime,
@@ -163,6 +173,7 @@ const mapPost = (p: any) => ({
   heatScore: p.heatScore,
   isPinned: p.isPinned === 1,
   isFeatured: p.isFeatured === 1,
+  isSolved: isTruthyFlag(p.hasAdoptedAnswer),
   trendLevel: p.trendLevel,
   sentimentLabel: p.sentimentLabel,
 })
@@ -177,12 +188,15 @@ const pulseInsight = computed(() => {
   const avgViews = Math.round(totalViews / sample.length)
 
   const parts: string[] = []
-  if (hotCount > 0) parts.push(`${hotCount} 条内容热度上升`)
+  if (hotCount > 0) parts.push(`${hotCount} 条热度上升`)
   if (positiveCount > 0) parts.push(`正向讨论占比 ${Math.round((positiveCount / sample.length) * 100)}%`)
   parts.push(`平均浏览 ${avgViews}`)
 
   return `AI 数据脉冲: ${parts.join(' · ')}`
 })
+
+// Interactive AI Pulse Dashboard State & Computed Charts
+const showPulseDashboard = ref(false)
 
 const resetDocumentState = () => {
   hasNewContent.value = false
@@ -401,10 +415,17 @@ defineExpose({
       </div>
     </transition>
 
-    <div v-if="pulseInsight" class="pulse-strip">
-      <el-icon><DataLine /></el-icon>
-      <span>{{ pulseInsight }}</span>
+    <div v-if="pulseInsight" class="pulse-strip clickable" @click="showPulseDashboard = true">
+      <el-icon class="pulse-icon"><DataLine /></el-icon>
+      <span class="pulse-text">{{ pulseInsight }}</span>
+      <span class="pulse-action-hint">查看趋势大屏 ➜</span>
     </div>
+
+    <PulseDashboardDialog
+      v-if="showPulseDashboard"
+      v-model="showPulseDashboard"
+      :topics="topics"
+    />
 
     <div class="topic-list">
       <template v-if="isFirstLoading">
@@ -497,11 +518,54 @@ defineExpose({
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 12px;
+  padding: 10px 14px;
   color: #0b57d0;
   font-size: 13px;
   font-weight: 600;
+  transition: all 0.26s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
 }
+
+.pulse-strip.clickable {
+  cursor: pointer;
+  border-color: #bcd2ff;
+  box-shadow: 0 2px 4px rgba(11, 87, 208, 0.02);
+}
+
+.pulse-strip.clickable:hover {
+  background: linear-gradient(90deg, #e8f1ff 0%, #f0f6ff 100%);
+  border-color: #8ab4f8;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(11, 87, 208, 0.08);
+}
+
+.pulse-icon {
+  font-size: 15px;
+  animation: pulseBeat 1.8s infinite alternate;
+}
+
+@keyframes pulseBeat {
+  0% { transform: scale(0.92); opacity: 0.8; }
+  100% { transform: scale(1.08); opacity: 1; }
+}
+
+.pulse-text {
+  flex: 1;
+}
+
+.pulse-action-hint {
+  font-size: 11px;
+  color: #1a73e8;
+  opacity: 0.8;
+  transition: opacity 0.2s, transform 0.2s;
+}
+
+.pulse-strip.clickable:hover .pulse-action-hint {
+  opacity: 1;
+  transform: translateX(2px);
+}
+
+
 
 .topic-skeleton {
   padding: 14px 16px;
@@ -569,6 +633,123 @@ defineExpose({
 
 .footer-state.no-more {
   color: var(--el-text-color-placeholder);
+}
+</style>
+
+<style>
+/* Global Glassmorphism Styles for Teleported AI Pulse Dashboard Dialog */
+.pulse-dashboard-dialog {
+  border-radius: 16px !important;
+  backdrop-filter: blur(20px) !important;
+  background: rgba(255, 255, 255, 0.9) !important;
+  border: 1px solid rgba(255, 255, 255, 0.6) !important;
+  box-shadow: 0 24px 64px rgba(15, 23, 42, 0.15) !important;
+  overflow: hidden;
+}
+
+.pulse-dashboard-dialog .el-dialog__header {
+  border-bottom: 1px solid rgba(241, 245, 249, 0.8) !important;
+  padding: 18px 24px !important;
+  margin: 0 !important;
+}
+
+.pulse-dashboard-dialog .el-dialog__title {
+  font-weight: 800 !important;
+  font-size: 16px !important;
+  color: var(--el-text-color-primary) !important;
+}
+
+.pulse-dashboard-dialog .el-dialog__body {
+  padding: 20px 24px 24px 24px !important;
+}
+
+.pulse-dashboard-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.dashboard-intro {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  background: linear-gradient(135deg, rgba(254, 243, 199, 0.25) 0%, rgba(255, 255, 255, 0.4) 100%) !important;
+  border: 1px solid rgba(252, 211, 77, 0.3) !important;
+  border-radius: 10px;
+  padding: 10px 14px;
+}
+
+.dashboard-intro p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #92400E;
+}
+
+.sparkle-icon {
+  font-size: 15px;
+  animation: bounceSpark 2s infinite alternate;
+}
+
+@keyframes bounceSpark {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(-2px); }
+}
+
+.pulse-chart-card {
+  background: #ffffff !important;
+  border: 1px solid rgba(226, 232, 240, 0.8) !important;
+  border-radius: 12px;
+  padding: 14px 16px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02) !important;
+  transition: all 0.24s ease;
+}
+
+.pulse-chart-card:hover {
+  border-color: rgba(203, 213, 225, 1) !important;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.04) !important;
+}
+
+.chart-title {
+  margin: 0 0 10px 0 !important;
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  color: var(--el-text-color-primary) !important;
+  display: flex;
+  align-items: center;
+}
+
+.chart-wrapper {
+  height: 180px;
+  width: 100%;
+}
+
+.pulse-insight-box {
+  background: #f8fafc !important;
+  border: 1px dashed #cbd5e1 !important;
+  border-radius: 10px;
+  padding: 12px 16px;
+}
+
+.insight-box-title {
+  margin: 0 0 6px 0 !important;
+  font-size: 12.5px !important;
+  font-weight: 700 !important;
+  color: #1e293b !important;
+}
+
+.insight-list {
+  margin: 0 !important;
+  padding-left: 16px !important;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.insight-list li {
+  font-size: 11.5px !important;
+  line-height: 1.5 !important;
+  color: #475569 !important;
 }
 </style>
 

@@ -35,6 +35,11 @@ const router = createRouter({
       component: () => import('@/pages/PostDetailPage.vue'),
     },
     {
+      path: '/r/:code',
+      name: 'short-link-detail',
+      component: () => import('@/pages/PostDetailPage.vue'),
+    },
+    {
       path: '/tag/:name',
       name: 'tag',
       component: () => import('@/pages/TagPage.vue'),
@@ -59,6 +64,12 @@ const router = createRouter({
       meta: { title: '个人中心', description: '查看个人资料、帖子、收藏与通知' }
     },
     {
+      path: '/level',
+      name: 'level',
+      component: () => import('@/pages/LevelPage.vue'),
+      meta: { requiresAuth: true, title: '我的等级', description: '查看等级进度、经验来源与等级特权' }
+    },
+    {
       path: '/settings',
       name: 'settings',
       component: () => import('@/pages/SettingsPage.vue'),
@@ -68,6 +79,12 @@ const router = createRouter({
       name: 'messages',
       component: () => import('@/pages/MessagesPage.vue'),
       meta: { requiresAuth: true, title: '私信', description: '与社区成员进行私信沟通' },
+    },
+    {
+      path: '/notifications',
+      name: 'notifications',
+      component: () => import('@/pages/NotificationsPage.vue'),
+      meta: { requiresAuth: true, title: '消息通知', description: '查看评论、点赞、关注与系统通知' },
     },
     {
       path: '/guide',

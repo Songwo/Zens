@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router'
 import MainLayout from '@/layouts/MainLayout.vue'
 import PostCard from '@/components/PostCard.vue'
 import PageBackButton from '@/components/common/PageBackButton.vue'
+import PostListSkeleton from '@/components/common/PostListSkeleton.vue'
 import { postApi } from '@/api/post'
 import { tagApi } from '@/api/tag'
 import type { Post } from '@/types'
@@ -11,6 +12,7 @@ import { ElMessage } from 'element-plus'
 import { CollectionTag, Star, StarFilled } from '@element-plus/icons-vue'
 import { useUserStore } from '@/store/user'
 import { cachedRequest } from '@/utils/requestCache'
+import { useInfiniteScroll } from '@/composables/useInfiniteScroll'
 
 const route = useRoute()
 const userStore = useUserStore()
@@ -106,6 +108,11 @@ const changeSort = (mode: any) => {
   sortMode.value = mode
   fetchPosts(true)
 }
+
+// Song：无限滚动
+const { sentinel } = useInfiniteScroll(() => fetchPosts(false), {
+  canLoadMore: () => hasMore.value && !loading.value && posts.value.length > 0,
+})
 
 const loadTagInfo = async () => {
   const currentTagName = tagName.value
@@ -220,22 +227,26 @@ onBeforeUnmount(() => {
       </div>
 
       <!-- Posts -->
-      <div class="posts-feed" v-loading="loading">
+      <div class="posts-feed">
+        <PostListSkeleton v-if="loading && posts.length === 0" :count="4" />
+
         <PostCard
           v-for="post in posts"
           :key="post.id"
           :post="post"
         />
 
-        <el-empty 
-          v-if="!loading && posts.length === 0" 
-          description="暂时没有发现与此话题相关的内容" 
+        <el-empty
+          v-if="!loading && posts.length === 0"
+          description="暂时没有发现与此话题相关的内容"
         />
 
         <!-- Pagination -->
-        <div v-if="!loading && hasMore && posts.length > 0" class="pagination-area">
-          <el-button @click="fetchPosts(false)" class="load-more-btn" text bg>展开更多内容</el-button>
+        <div v-if="hasMore && posts.length > 0" class="pagination-area">
+          <el-button :loading="loading" @click="fetchPosts(false)" class="load-more-btn" text bg>展开更多内容</el-button>
         </div>
+        <!-- Song：无限滚动哨兵 -->
+        <div ref="sentinel" class="infinite-sentinel" aria-hidden="true"></div>
 
         <div v-if="!hasMore && posts.length > 0" class="pagination-area">
           <span class="end-text">话题在这里靠岸了</span>
@@ -318,6 +329,11 @@ onBeforeUnmount(() => {
 .pagination-area {
   padding: 40px 0;
   text-align: center;
+}
+
+.infinite-sentinel {
+  height: 1px;
+  width: 100%;
 }
 
 .load-more-btn {

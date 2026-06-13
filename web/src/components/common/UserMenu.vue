@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, type Component } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/store/user'
-import { ChatDotRound, Clock, Document, Setting, Star, SwitchButton, User } from '@element-plus/icons-vue'
+import { ChatDotRound, Connection, Document, EditPen, Setting, Star, SwitchButton, User } from '@element-plus/icons-vue'
 import { hasAdminRole, hasBackofficeAccess } from '@/utils/sessionProfile'
 
 const router = useRouter()
@@ -15,13 +15,40 @@ const isAdmin = computed(() => hasAdminRole(userInfo.value))
 const canEnterBackoffice = computed(() => hasBackofficeAccess(userInfo.value))
 const backofficeLabel = computed(() => (isAdmin.value ? '管理后台' : '版务后台'))
 
+interface UserMenuItem {
+  key: string
+  label: string
+  icon: Component
+  command: string
+  divided?: boolean
+}
+
+// 配置式下拉项：command 即目标路由（或 'logout'）；每项独立，互不复用跳转逻辑。
+// tab 取值与 MePage 现有标签一致：posts / favorites / relations / creator。
+const menuItems = computed<UserMenuItem[]>(() => {
+  const items: UserMenuItem[] = [
+    { key: 'profile', label: '个人资料', icon: User, command: '/me', divided: true },
+    { key: 'posts', label: '我的动态', icon: Document, command: '/me?tab=posts' },
+    { key: 'favorites', label: '我的收藏', icon: Star, command: '/me?tab=favorites' },
+    { key: 'relations', label: '关系', icon: Connection, command: '/me?tab=relations' },
+    { key: 'creator', label: '创作管理', icon: EditPen, command: '/me?tab=creator' },
+    { key: 'messages', label: '私信会话', icon: ChatDotRound, command: '/messages', divided: true },
+    { key: 'settings', label: '账户设置', icon: Setting, command: '/settings' },
+  ]
+  if (canEnterBackoffice.value) {
+    items.push({ key: 'admin', label: backofficeLabel.value, icon: Setting, command: '/admin', divided: true })
+  }
+  items.push({ key: 'logout', label: '退出登录', icon: SwitchButton, command: 'logout', divided: true })
+  return items
+})
+
 const handleCommand = (command: string) => {
   if (command === 'logout') {
     userStore.logout()
     router.push('/auth?type=login')
-  } else {
-    router.push(command)
+    return
   }
+  router.push(command)
 }
 
 const goToLogin = () => {
@@ -44,29 +71,14 @@ const goToLogin = () => {
               <span class="username">{{ userInfo?.username }}</span>
               <span class="user-id">UID: {{ userInfo?.id }}</span>
             </div>
-            <el-dropdown-item divided command="/me">
-              <el-icon><User /></el-icon> 个人资料
-            </el-dropdown-item>
-            <el-dropdown-item command="/me?tab=posts">
-              <el-icon><Document /></el-icon> 我的帖子
-            </el-dropdown-item>
-            <el-dropdown-item command="/me?tab=favorites">
-              <el-icon><Star /></el-icon> 我的收藏
-            </el-dropdown-item>
-            <el-dropdown-item command="/me?tab=history">
-              <el-icon><Clock /></el-icon> 浏览记录
-            </el-dropdown-item>
-            <el-dropdown-item command="/messages">
-              <el-icon><ChatDotRound /></el-icon> 私信会话
-            </el-dropdown-item>
-            <el-dropdown-item command="/settings" divided>
-              <el-icon><Setting /></el-icon> 账户设置
-            </el-dropdown-item>
-            <el-dropdown-item v-if="canEnterBackoffice" command="/admin" divided>
-              <el-icon><Setting /></el-icon> {{ backofficeLabel }}
-            </el-dropdown-item>
-            <el-dropdown-item command="logout" divided class="logout-item">
-              <el-icon><SwitchButton /></el-icon> 退出登录
+            <el-dropdown-item
+              v-for="item in menuItems"
+              :key="item.key"
+              :command="item.command"
+              :divided="item.divided"
+              :class="{ 'logout-item': item.command === 'logout' }"
+            >
+              <el-icon><component :is="item.icon" /></el-icon> {{ item.label }}
             </el-dropdown-item>
           </el-dropdown-menu>
         </template>

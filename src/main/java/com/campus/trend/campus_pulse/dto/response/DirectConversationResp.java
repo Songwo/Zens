@@ -10,6 +10,9 @@ public class DirectConversationResp {
     private String peerId;
     private String peerName;
     private String peerAvatar;
+    private String peerBadgeText;
+    private String peerBadgeColor;
+    private String peerBadgeStyle;
     private String lastMessage;
     private LocalDateTime lastTime;
     private Long unreadCount;

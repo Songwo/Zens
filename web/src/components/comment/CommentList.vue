@@ -1,40 +1,73 @@
 <script setup lang="ts">
-import { ChatLineRound, Coordinate, More, Delete, Warning, Link } from '@element-plus/icons-vue'
-import { ref, watch } from 'vue'
+import { ChatLineRound, Coordinate, More, Delete, Warning, Link, Star, StarFilled, CircleCheck } from '@element-plus/icons-vue'
+import { ref, watch, computed } from 'vue'
 import DOMPurify from 'dompurify'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessageBox } from 'element-plus'
 import { timeAgo } from '@/utils/timeAgo'
 import UserRoleBadge from '@/components/common/UserRoleBadge.vue'
+import UserBadge from '@/components/common/UserBadge.vue'
+import AdoptAnswerAction from '@/components/comment/AdoptAnswerAction.vue'
+import ReactionBar from '@/components/reaction/ReactionBar.vue'
 import { mdComment } from '@/utils/markdownRenderer'
 import { warmupHighlighter, preloadLanguages } from '@/utils/shiki'
+import { pulseNotification } from '@/utils/pulseNotification'
+import { commentApi } from '@/api/comment'
+import { isTruthyFlag } from '@/utils/flags'
 
 const props = defineProps<{
   comments: any[]
   activeCommentId?: string | null
   postId: string
   postShortId?: string
-  postAuthorId?: string | null
   currentUserId?: string | null
   isAdmin?: boolean
   canModerateSection?: boolean
+  postAuthorId?: string
+  hasAdoption?: boolean
+  allowAdoption?: boolean
+  reactionMap?: Record<string, any>
 }>()
 
 const emit = defineEmits<{
   (e: 'like', comment: any): void
+  (e: 'collect', comment: any): void
   (e: 'reply', comment: any): void
   (e: 'delete', comment: any): void
+  (e: 'restore', comment: any): void
   (e: 'report', comment: any): void
+  (e: 'adopted'): void
+  (e: 'canceled'): void
 }>()
 
 const replySortMode = ref<'time' | 'hot'>('time')
 const expandedCommentIds = ref<Set<string>>(new Set())
 const COMMENT_COLLAPSE_THRESHOLD = 220
 
+// Song：分批渲染顶层评论，避免长评论区一次性渲染过多 DOM
+const COMMENT_PAGE_SIZE = 20
+const visibleCount = ref(COMMENT_PAGE_SIZE)
+const visibleComments = computed(() => props.comments.slice(0, visibleCount.value))
+const remainingComments = computed(() => Math.max(0, props.comments.length - visibleCount.value))
+const showMoreComments = () => {
+  visibleCount.value += COMMENT_PAGE_SIZE
+}
+// 顶层评论数量明显减少时（如切换帖子）重置可见数量
+watch(
+  () => props.comments.length,
+  (len) => {
+    if (len < visibleCount.value) visibleCount.value = COMMENT_PAGE_SIZE
+  }
+)
+
 const getAvatar = (c: any) => c.userAvatar || c.avatar || c.author?.avatar || ''
 const getName = (c: any) => c.nickname || c.author?.name || '匿名用户'
 const getTime = (c: any) => timeAgo(c.createTime || c.createdAt || '')
 const getLikes = (c: any) => c.likeCount ?? c.likes ?? 0
+const getCollects = (c: any) => c.collectCount ?? c.collects ?? 0
 const getRoles = (c: any) => c.roles || []
+const getBadge = (c: any) => c.userBadgeText || c.badgeText || ''
+const getBadgeColor = (c: any) => c.userBadgeColor || c.badgeColor || ''
+const getBadgeEffect = (c: any) => c.userBadgeStyle || c.badgeStyle || 'solid'
 const normalizeId = (value: unknown) => String(value ?? '').trim()
 const toCommentDomId = (value: unknown) => `comment-${normalizeId(value)}`
 const isCommentActive = (value: unknown) => {
@@ -151,13 +184,21 @@ const getSortedChildren = (children: any[]) => {
 
 const isDeletedComment = (c: any) => c?.auditStatus === 'DELETED'
 
-const canDelete = (c: any) => {
+const canManageComment = (c: any) => {
   if (!props.currentUserId) return false
-  if (isDeletedComment(c)) return false
   return c.userId === props.currentUserId
-      || (!!props.postAuthorId && props.postAuthorId === props.currentUserId)
       || props.isAdmin === true
       || props.canModerateSection === true
+}
+
+const canDelete = (c: any) => {
+  if (isDeletedComment(c)) return false
+  return canManageComment(c)
+}
+
+const canRestore = (c: any) => {
+  if (!isDeletedComment(c)) return false
+  return canManageComment(c)
 }
 
 const canReport = (c: any) => {
@@ -166,32 +207,110 @@ const canReport = (c: any) => {
   return c.userId !== props.currentUserId
 }
 
-const buildCommentLink = (commentId: string) => {
-  const shortId = props.postShortId || props.postId
-  return `${location.origin}/t/${shortId}?commentId=${commentId}`
+// Song：内联快速编辑（作者/版主/管理员，且评论未删除）
+const editingId = ref<string | null>(null)
+const editDraft = ref('')
+const editSaving = ref(false)
+
+const canEdit = (c: any) => {
+  if (isDeletedComment(c)) return false
+  return canManageComment(c)
+}
+
+const isEditing = (c: any) => editingId.value === normalizeId(c?.id)
+
+// Song：把存储的 HTML 转义内容还原为用户原始文本，供编辑框显示
+const decodeHtmlEntities = (html: string): string => {
+  const ta = document.createElement('textarea')
+  ta.innerHTML = String(html ?? '')
+  return ta.value
+}
+
+const startEdit = (comment: any) => {
+  editingId.value = normalizeId(comment.id)
+  editDraft.value = decodeHtmlEntities(comment.content)
+}
+
+const cancelEdit = () => {
+  editingId.value = null
+  editDraft.value = ''
+}
+
+const saveEdit = async (comment: any) => {
+  const text = editDraft.value.trim()
+  if (!text) {
+    pulseNotification.warning('评论内容不能为空')
+    return
+  }
+  if (text.length > 2000) {
+    pulseNotification.warning('评论内容过长，请精简到 2000 字以内')
+    return
+  }
+  editSaving.value = true
+  try {
+    await commentApi.edit(normalizeId(comment.id), text)
+    // Song：本地就地更新——mdComment 为 html:false，原始文本会被安全转义渲染，与后端存储显示一致
+    comment.content = editDraft.value
+    comment.editTime = new Date().toISOString()
+    renderVersion.value++
+    editingId.value = null
+    editDraft.value = ''
+    pulseNotification.success('评论已更新')
+  } catch (e: any) {
+    pulseNotification.error(e?.message || '编辑失败，请稍后重试')
+  } finally {
+    editSaving.value = false
+  }
+}
+
+const copyTextToClipboard = async (text: string) => {
+  if (navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(text)
+      return true
+    } catch {
+      // Fallback to execCommand below.
+    }
+  }
+
+  const textarea = document.createElement('textarea')
+  textarea.value = text
+  textarea.style.position = 'fixed'
+  textarea.style.opacity = '0'
+  textarea.style.pointerEvents = 'none'
+  document.body.appendChild(textarea)
+  textarea.select()
+
+  try {
+    return document.execCommand('copy')
+  } finally {
+    document.body.removeChild(textarea)
+  }
 }
 
 const handleAction = async (cmd: string, comment: any) => {
   if (cmd === 'copy') {
-    const link = buildCommentLink(comment.id)
     try {
-      await navigator.clipboard.writeText(link)
-      ElMessage.success('评论链接已复制')
-    } catch {
-      const textarea = document.createElement('textarea')
-      textarea.value = link
-      textarea.style.position = 'fixed'
-      textarea.style.opacity = '0'
-      document.body.appendChild(textarea)
-      textarea.select()
-      document.execCommand('copy')
-      document.body.removeChild(textarea)
-      ElMessage.success('评论链接已复制')
+      const res = await commentApi.createShortLink(props.postId, comment.id)
+      const code = res.data?.code
+      if (!code) {
+        throw new Error('short link code missing')
+      }
+      const link = `${location.origin}/r/${code}`
+      const copied = await copyTextToClipboard(link)
+
+      if (copied) {
+        pulseNotification.success('评论短链接已复制到剪贴板，链接中不会暴露帖子或评论 ID。', '评论链接复制成功')
+      } else {
+        pulseNotification.error('复制评论链接失败，请手动复制当前页面地址。', '复制失败')
+      }
+    } catch (error: any) {
+      pulseNotification.error(error?.message || '评论短链接生成失败，请重试。', '复制失败')
     }
   } else if (cmd === 'delete') {
     try {
       await ElMessageBox.confirm(
-        '确认删除该评论吗？删除后 3 天内可由管理员恢复，超过 3 天将永久清除。',
+        '确认删除该评论吗？删除后 3 天内可由评论作者、对应板块版主或管理员恢复。',
         '删除评论',
         {
           confirmButtonText: '删除',
@@ -204,8 +323,12 @@ const handleAction = async (cmd: string, comment: any) => {
     } catch {
       // 取消，无操作
     }
+  } else if (cmd === 'edit') {
+    startEdit(comment)
   } else if (cmd === 'report') {
     emit('report', comment)
+  } else if (cmd === 'restore') {
+    emit('restore', comment)
   }
 }
 
@@ -225,11 +348,11 @@ const handleAction = async (cmd: string, comment: any) => {
     </div>
 
     <div
-      v-for="(comment, index) in comments"
+      v-for="(comment, index) in visibleComments"
       :key="comment.id"
       :id="toCommentDomId(comment.id)"
       class="comment-item"
-      :class="{ 'is-active': isCommentActive(comment.id) }"
+      :class="{ 'is-active': isCommentActive(comment.id), 'is-adopted': isTruthyFlag(comment.isAdopted) }"
     >
       <div class="comment-avatar">
         <el-avatar :size="40" :src="getAvatar(comment)">
@@ -238,11 +361,19 @@ const handleAction = async (cmd: string, comment: any) => {
       </div>
 
       <div class="comment-main">
+        <!-- 最佳答案徽章 -->
+        <div v-if="isTruthyFlag(comment.isAdopted)" class="accepted-badge">
+          <el-icon class="check-icon"><CircleCheck /></el-icon>
+          <span>最佳答案</span>
+        </div>
+
         <div class="comment-meta">
           <div class="meta-left">
             <span class="author-name">{{ getName(comment) }}</span>
             <UserRoleBadge :roles="getRoles(comment)" />
+            <UserBadge :text="getBadge(comment)" :color="getBadgeColor(comment)" :effect="getBadgeEffect(comment)" />
             <span class="time-label">{{ getTime(comment) }}</span>
+            <span v-if="comment.editTime" class="edited-label">· 已编辑</span>
           </div>
           <div class="meta-right">
             <span class="floor-num">#{{ comment.floor || index + 1 }}</span>
@@ -253,10 +384,27 @@ const handleAction = async (cmd: string, comment: any) => {
           <div class="comment-deleted-placeholder">
             <el-icon><Delete/></el-icon>
             <span>该评论已删除</span>
+            <el-button
+              v-if="canRestore(comment)"
+              link
+              type="success"
+              size="small"
+              class="comment-restore-btn"
+              @click.stop="emit('restore', comment)"
+            >
+              恢复
+            </el-button>
           </div>
         </template>
         <template v-else>
-          <div class="comment-text markdown-body" :class="{ collapsed: isCollapsed(comment) }" v-html="sanitizeCommentHtml(comment.content)"></div>
+          <div v-if="isEditing(comment)" class="comment-edit-box">
+            <el-input v-model="editDraft" type="textarea" :rows="3" maxlength="2000" show-word-limit resize="vertical" placeholder="编辑评论内容…" />
+            <div class="comment-edit-actions">
+              <el-button size="small" @click.stop="cancelEdit">取消</el-button>
+              <el-button size="small" type="primary" :loading="editSaving" :disabled="!editDraft.trim()" @click.stop="saveEdit(comment)">保存</el-button>
+            </div>
+          </div>
+          <div v-else class="comment-text markdown-body" :class="{ collapsed: isCollapsed(comment) }" v-html="sanitizeCommentHtml(comment.content)"></div>
           <div v-if="isLongComment(comment.content)" class="expand-wrap">
             <el-button link type="primary" size="small" @click.stop="toggleExpand(comment)">
               {{ isCollapsed(comment) ? '展开全文' : '收起' }}
@@ -275,9 +423,24 @@ const handleAction = async (cmd: string, comment: any) => {
             >
               {{ getLikes(comment) > 0 ? getLikes(comment) : '点赞' }}
             </el-button>
+            <el-button
+              link
+              :type="comment.isCollected ? 'warning' : 'info'"
+              size="small"
+              :icon="comment.isCollected ? StarFilled : Star"
+              @click.stop="emit('collect', comment)"
+            >
+              {{ getCollects(comment) > 0 ? getCollects(comment) : '收藏' }}
+            </el-button>
             <el-button link type="info" size="small" :icon="ChatLineRound" @click.stop="emit('reply', comment)">
               回复
             </el-button>
+            <ReactionBar
+              target-type="comment"
+              :target-id="String(comment.id)"
+              :initial="props.reactionMap?.[String(comment.id)]"
+              :self-fetch="false"
+            />
           </div>
           <el-dropdown trigger="click" @command="(cmd: string) => handleAction(cmd, comment)">
             <el-button link size="small" :icon="More" class="action-trigger" @click.stop/>
@@ -297,6 +460,19 @@ const handleAction = async (cmd: string, comment: any) => {
           </el-dropdown>
         </div>
 
+        <!-- 答案采纳组件 -->
+        <AdoptAnswerAction
+          v-if="props.allowAdoption && props.postAuthorId && !isDeletedComment(comment)"
+          :post-id="props.postId"
+          :post-author-id="props.postAuthorId"
+          :comment-id="comment.id"
+          :comment-author-id="comment.userId"
+          :is-adopted="isTruthyFlag(comment.isAdopted)"
+          :has-adoption="props.hasAdoption || false"
+          @adopted="emit('adopted')"
+          @canceled="emit('canceled')"
+        />
+
         <!-- Nested Replies (children) -->
         <div v-if="comment.children && comment.children.length > 0" class="replies-block">
           <template v-for="child in getSortedChildren(comment.children)" :key="child.id">
@@ -314,6 +490,7 @@ const handleAction = async (cmd: string, comment: any) => {
                 <div class="reply-meta">
                   <span class="author-name">{{ getName(child) }}</span>
                   <UserRoleBadge :roles="getRoles(child)" />
+                  <UserBadge :text="getBadge(child)" :color="getBadgeColor(child)" :effect="getBadgeEffect(child)" />
                   <span v-if="child.replyUserNickname" class="reply-to">
                     <span class="reply-arrow">▸</span>回复 <strong>{{ child.replyUserNickname }}</strong>
                   </span>
@@ -323,6 +500,16 @@ const handleAction = async (cmd: string, comment: any) => {
                   <div class="comment-deleted-placeholder">
                     <el-icon><Delete/></el-icon>
                     <span>该评论已删除</span>
+                    <el-button
+                      v-if="canRestore(child)"
+                      link
+                      type="success"
+                      size="small"
+                      class="comment-restore-btn"
+                      @click.stop="emit('restore', child)"
+                    >
+                      恢复
+                    </el-button>
                   </div>
                 </template>
                 <template v-else>
@@ -344,9 +531,24 @@ const handleAction = async (cmd: string, comment: any) => {
                     >
                       {{ getLikes(child) > 0 ? getLikes(child) : '点赞' }}
                     </el-button>
+                    <el-button
+                      link
+                      :type="child.isCollected ? 'warning' : 'info'"
+                      size="small"
+                      :icon="child.isCollected ? StarFilled : Star"
+                      @click.stop="emit('collect', child)"
+                    >
+                      {{ getCollects(child) > 0 ? getCollects(child) : '收藏' }}
+                    </el-button>
                     <el-button link type="info" size="small" :icon="ChatLineRound" @click.stop="emit('reply', child)">
                       回复
                     </el-button>
+                    <ReactionBar
+                      target-type="comment"
+                      :target-id="String(child.id)"
+                      :initial="props.reactionMap?.[String(child.id)]"
+                      :self-fetch="false"
+                    />
                   </div>
                   <el-dropdown trigger="click" @command="(cmd: string) => handleAction(cmd, child)">
                     <el-button link size="small" :icon="More" class="action-trigger" @click.stop/>
@@ -384,6 +586,7 @@ const handleAction = async (cmd: string, comment: any) => {
                 <div class="reply-meta">
                   <span class="author-name">{{ getName(grandChild) }}</span>
                   <UserRoleBadge :roles="getRoles(grandChild)" />
+                  <UserBadge :text="getBadge(grandChild)" :color="getBadgeColor(grandChild)" :effect="getBadgeEffect(grandChild)" />
                   <span class="reply-to">
                     <span class="reply-arrow">▸</span>回复 <strong>{{ grandChild.replyUserNickname || getName(child) }}</strong>
                   </span>
@@ -393,6 +596,16 @@ const handleAction = async (cmd: string, comment: any) => {
                   <div class="comment-deleted-placeholder">
                     <el-icon><Delete/></el-icon>
                     <span>该评论已删除</span>
+                    <el-button
+                      v-if="canRestore(grandChild)"
+                      link
+                      type="success"
+                      size="small"
+                      class="comment-restore-btn"
+                      @click.stop="emit('restore', grandChild)"
+                    >
+                      恢复
+                    </el-button>
                   </div>
                 </template>
                 <template v-else>
@@ -414,9 +627,24 @@ const handleAction = async (cmd: string, comment: any) => {
                     >
                       {{ getLikes(grandChild) > 0 ? getLikes(grandChild) : '点赞' }}
                     </el-button>
+                    <el-button
+                      link
+                      :type="grandChild.isCollected ? 'warning' : 'info'"
+                      size="small"
+                      :icon="grandChild.isCollected ? StarFilled : Star"
+                      @click.stop="emit('collect', grandChild)"
+                    >
+                      {{ getCollects(grandChild) > 0 ? getCollects(grandChild) : '收藏' }}
+                    </el-button>
                     <el-button link type="info" size="small" :icon="ChatLineRound" @click.stop="emit('reply', grandChild)">
                       回复
                     </el-button>
+                    <ReactionBar
+                      target-type="comment"
+                      :target-id="String(grandChild.id)"
+                      :initial="props.reactionMap?.[String(grandChild.id)]"
+                      :self-fetch="false"
+                    />
                   </div>
                   <el-dropdown trigger="click" @command="(cmd: string) => handleAction(cmd, grandChild)">
                     <el-button link size="small" :icon="More" class="action-trigger" @click.stop/>
@@ -441,6 +669,11 @@ const handleAction = async (cmd: string, comment: any) => {
         </div>
       </div>
     </div>
+
+    <!-- Song：分批加载更多顶层评论，避免长评论区一次性渲染过多 DOM -->
+    <div v-if="remainingComments > 0" class="comment-load-more">
+      <el-button text bg @click="showMoreComments">展开更多评论（剩余 {{ remainingComments }} 条）</el-button>
+    </div>
   </div>
 </template>
 
@@ -459,6 +692,11 @@ const handleAction = async (cmd: string, comment: any) => {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
+}
+
+.comment-load-more {
+  padding: 16px 24px 20px;
+  text-align: center;
 }
 
 .list-tools {
@@ -641,7 +879,9 @@ const handleAction = async (cmd: string, comment: any) => {
 
 .actions-group {
   display: flex;
+  align-items: center;
   gap: 16px;
+  flex-wrap: wrap;
 }
 
 /* Song：说明 */
@@ -745,6 +985,11 @@ const handleAction = async (cmd: string, comment: any) => {
   margin-bottom: 12px;
 }
 
+.comment-restore-btn {
+  margin-left: 4px;
+  padding: 0 2px;
+}
+
 .comment-actions {
   position: relative;
 }
@@ -758,5 +1003,55 @@ const handleAction = async (cmd: string, comment: any) => {
 .comment-item:hover .action-trigger,
 .reply-item:hover .action-trigger {
   opacity: 1;
+}
+
+/* 最佳答案徽章（黄色主题小徽章，左上角，不抢版面） */
+.accepted-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+  padding: 0 12px;
+  background: var(--accept-primary);
+  color: #fff;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 10px;
+  box-shadow: 0 2px 8px rgba(246, 184, 0, 0.28);
+}
+
+.accepted-badge .check-icon {
+  font-size: 15px;
+  animation: checkBounce 0.6s ease;
+}
+
+@keyframes checkBounce {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.2); }
+}
+
+/* 被采纳的评论：轻量黄色突出，不使用大块绿色背景 */
+.comment-item.is-adopted {
+  background: var(--accept-bg-soft);
+  border: 1px solid var(--accept-border);
+  border-radius: 12px;
+}
+
+.comment-item.is-adopted:hover {
+  background: var(--accept-bg);
+}
+
+/* 从“最佳答案入口”跳转过来时的短暂高亮脉冲 */
+.comment-item.accepted-answer-highlight,
+.reply-item.accepted-answer-highlight {
+  animation: accepted-answer-pulse 1.6s ease;
+  border-radius: 12px;
+}
+
+@keyframes accepted-answer-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(246, 184, 0, 0.55); }
+  35% { box-shadow: 0 0 0 6px rgba(246, 184, 0, 0.18); }
+  100% { box-shadow: 0 0 0 0 rgba(246, 184, 0, 0); }
 }
 </style>

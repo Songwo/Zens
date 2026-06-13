@@ -1,11 +1,89 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
+import Components from 'unplugin-vue-components/vite'
+import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
+import { VitePWA } from 'vite-plugin-pwa'
 import path from 'path'
 
 // Song：构建配置参考链接
 export default defineConfig({
   plugins: [
-    vue()
+    vue(),
+    // Song：Element Plus 按需引入——模板里的 <el-xxx> 自动 import 组件与其 CSS，
+    // 大幅缩减首屏 vue-vendor 体积。指令(v-loading)在 main.ts 全局注册，故 directives:false；
+    // dirs:[] 关闭对 src/components 的扫描，只按需解析 Element Plus，不接管项目自有组件。
+    Components({
+      resolvers: [ElementPlusResolver({ importStyle: 'css' })],
+      directives: false,
+      dirs: [],
+      dts: 'src/components.d.ts',
+    }),
+    // Song：PWA —— Workbox generateSW 自动生成 Service Worker 与 manifest。
+    // registerType:'autoUpdate' 后台静默更新；injectRegister:'auto' 自动注入注册脚本（无需改 main.ts）。
+    // 安全要点：生产前端与后端 API 同源(allinsong.top)，SW 作用域覆盖全站，因此：
+    //   1) navigateFallbackDenylist 排除 /api、/ws、/uploads、/static，避免 SPA 回退劫持后端路由；
+    //   2) /api 绝不进 runtime 缓存（请求带 token，CacheFirst 会串号/返回过期数据）；
+    //   3) 仅对 /uploads、/static 静态资源做 StaleWhileRevalidate，让看过的图片离线可见。
+    VitePWA({
+      registerType: 'autoUpdate',
+      injectRegister: 'auto',
+      manifestFilename: 'manifest.json',
+      includeAssets: ['logo.png', 'logo-horizontal.png', 'robots.txt'],
+      manifest: {
+        name: 'Zens 校园社区',
+        short_name: 'Zens',
+        description: 'Zens 校园社区，聚合校园技术交流、学习资源、生活分享与社群互动。',
+        lang: 'zh-CN',
+        dir: 'ltr',
+        theme_color: '#f4b400',
+        background_color: '#f8fafc',
+        display: 'standalone',
+        orientation: 'portrait',
+        start_url: '/',
+        scope: '/',
+        icons: [
+          { src: 'icons/pwa-192x192.png', sizes: '192x192', type: 'image/png' },
+          { src: 'icons/pwa-512x512.png', sizes: '512x512', type: 'image/png' },
+          {
+            src: 'icons/pwa-maskable-512x512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'maskable',
+          },
+        ],
+      },
+      workbox: {
+        // 预缓存所有构建产物 → 完整离线可用（最大 chunk < 2MB Workbox 默认上限）
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        // SPA 导航回退到 index.html，但绝不劫持后端路由
+        navigateFallback: 'index.html',
+        navigateFallbackDenylist: [
+          /^\/api\//,
+          /^\/ws\b/,
+          /^\/uploads\//,
+          /^\/static\//,
+        ],
+        cleanupOutdatedCaches: true,
+        clientsClaim: true,
+        runtimeCaching: [
+          {
+            // 用户上传 / 后端静态图片：看过的离线可见，后台静默更新
+            urlPattern: ({ url }) =>
+              url.pathname.startsWith('/uploads/') || url.pathname.startsWith('/static/'),
+            handler: 'StaleWhileRevalidate',
+            options: {
+              cacheName: 'cp-media',
+              expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 * 30 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+        ],
+      },
+      devOptions: {
+        // 开发环境不启用 SW，避免本地缓存干扰热更新
+        enabled: false,
+      },
+    }),
   ],
   define: {
     global: 'globalThis',
@@ -25,33 +103,35 @@ export default defineConfig({
         manualChunks(id) {
           if (!id.includes('node_modules')) return undefined
 
-          if (
-            id.includes('/vue/') ||
-            id.includes('/vue-router/') ||
-            id.includes('/pinia/') ||
-            id.includes('/@element-plus/icons-vue/') ||
-            id.includes('/element-plus/') ||
-            id.includes('/@element-plus/')
-          ) {
-            return 'vue-vendor'
-          }
+          // Element Plus 与 Vue 依赖链存在循环引用，强制拆 vendor 在生产压缩后可能触发 TDZ。
+          // 这里交给 Rollup 自动排序，只保留编辑器/图表/高亮等按需加载重型依赖的分包。
           if (id.includes('/markdown-it/') || id.includes('/dompurify/')) {
             return 'editor-vendor'
           }
-          if (id.includes('/echarts/') || id.includes('/vue-echarts/')) {
-            return 'chart-vendor'
+          if (
+            id.includes('/@codemirror/') ||
+            id.includes('/codemirror/') ||
+            id.includes('/@lezer/')
+          ) {
+            return 'codemirror-vendor'
+          }
+          if (id.includes('/@shikijs/langs/')) {
+            // 让每个语言走独立 chunk，按需懒加载（不混进 shiki-vendor）
+            return undefined
+          }
+          if (id.includes('/shiki/') || id.includes('/@shikijs/')) {
+            return 'shiki-vendor'
           }
           if (id.includes('/sockjs-client/') || id.includes('/@stomp/stompjs/')) {
             return 'ws-vendor'
           }
-          if (
-            id.includes('/axios/') ||
-            id.includes('/date-fns/') ||
-            id.includes('/lucide-vue-next/')
-          ) {
+          if (id.includes('/echarts/') || id.includes('/vue-echarts/')) {
+            return 'chart-vendor'
+          }
+          if (id.includes('/axios/') || id.includes('/date-fns/')) {
             return 'app-utils-vendor'
           }
-          return 'misc-vendor'
+          return undefined
         },
       },
     },

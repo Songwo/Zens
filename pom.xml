@@ -140,6 +140,19 @@
             <optional>true</optional>
         </dependency>
 
+        <!-- RabbitMQ -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-amqp</artifactId>
+        </dependency>
+
+        <!-- IP 归属地查询 -->
+        <dependency>
+            <groupId>org.lionsoul</groupId>
+            <artifactId>ip2region</artifactId>
+            <version>2.7.0</version>
+        </dependency>
+
         <!-- 测试相关（可选择性删除） -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

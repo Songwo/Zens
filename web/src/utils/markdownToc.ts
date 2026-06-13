@@ -1,6 +1,18 @@
 import type MarkdownIt from 'markdown-it'
 
+type ShikiApi = typeof import('./shiki')
+
+let shikiApi: ShikiApi | null = null
+
+async function loadShikiApi(): Promise<ShikiApi> {
+  if (shikiApi) return shikiApi
+  shikiApi = await import('./shiki')
+  return shikiApi
+}
+
 export const TOC_MARKDOWN_TAG = '[TOC]'
+
+const FENCED_LANG_RE = /(^|\n) {0,3}(`{3,}|~{3,})[ \t]*([\w+\-#./]*)[^\n]*\n/g
 
 const TOC_PLACEHOLDER = '<!--CP_TOC_PLACEHOLDER-->'
 const TOC_TAG_PATTERN = /\[\s*(?:toc|目录)\s*]/gi
@@ -140,4 +152,25 @@ export function renderMarkdownWithTocResult(
     headings,
     hasTocTag
   }
+}
+
+/** 异步版本：先预热 Shiki 与所有出现的语言再调用同步渲染。 */
+export async function renderMarkdownWithTocAsync(
+  md: MarkdownIt,
+  content: string,
+  options: RenderMarkdownWithTocOptions = {}
+): Promise<MarkdownTocRenderResult> {
+  const shiki = await loadShikiApi()
+  await shiki.warmupHighlighter()
+  const src = content || ''
+  const langs: string[] = []
+  let m: RegExpExecArray | null
+  FENCED_LANG_RE.lastIndex = 0
+  while ((m = FENCED_LANG_RE.exec(src)) !== null) {
+    if (m[3]) langs.push(m[3])
+  }
+  if (langs.length > 0) {
+    await shiki.preloadLanguages(langs)
+  }
+  return renderMarkdownWithTocResult(md, src, options)
 }

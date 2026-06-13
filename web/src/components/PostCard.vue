@@ -1,13 +1,17 @@
 <script setup lang="ts">
-import { ChatDotRound, Pointer, View, MagicStick, Discount, More, EditPen, Star, StarFilled, Share, Delete, RefreshRight } from '@element-plus/icons-vue'
+import { ChatDotRound, Pointer, View, MagicStick, Discount, More, EditPen, Star, StarFilled, Share, Delete, RefreshRight, CircleCheck } from '@element-plus/icons-vue'
 import { postApi } from '@/api/post'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { pulseNotification } from '@/utils/pulseNotification'
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/store/user'
 import { usePostComposerStore } from '@/store/postComposer'
 import UserRoleBadge from '@/components/common/UserRoleBadge.vue'
+import UserBadge from '@/components/common/UserBadge.vue'
 import { stripMarkdown } from '@/utils/markdown'
+import { encodePostId, encodeUserId } from '@/utils/shortId'
+import { isTruthyFlag } from '@/utils/flags'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -26,11 +30,6 @@ const isAdmin = computed(() => {
   return roles.some((role: string) => role === 'ROLE_ADMIN' || role === 'ROLE_SUPER_ADMIN')
 })
 
-const isGlobalModerator = computed(() => {
-  const roles = userStore.userInfo?.roles || []
-  return roles.includes('ROLE_MODERATOR')
-})
-
 const moderatedSectionIds = computed(() => {
   const rawIds = userStore.userInfo?.moderatedSectionIds || []
   return new Set(rawIds.map((id: number | string) => Number(id)).filter((id: number) => Number.isFinite(id) && id > 0))
@@ -42,7 +41,7 @@ const currentUserId = computed(() => userStore.userId || userStore.userInfo?.id 
 const canManagePost = computed(() => {
   if (!props.post || !currentUserId.value) return false
   if (props.post.userId === currentUserId.value) return true
-  if (isAdmin.value || isGlobalModerator.value) return true
+  if (isAdmin.value) return true
   return Boolean(props.post.sectionId && moderatedSectionIds.value.has(Number(props.post.sectionId)))
 })
 
@@ -180,7 +179,7 @@ const submitReport = async () => {
 const imageError = ref(false)
 
 const goToPost = () => {
-  router.push('/p/' + props.post.id)
+  router.push('/t/' + encodePostId(props.post.id))
 }
 
 const handleLike = async (e: Event) => {
@@ -191,8 +190,14 @@ const handleLike = async (e: Event) => {
     await postApi.like(props.post.id)
     props.post.isLiked = !props.post.isLiked
     props.post.likeCount += props.post.isLiked ? 1 : -1
+
+    if (props.post.isLiked) {
+      pulseNotification.like(`你为帖子「${props.post.title}」注入了一次共鸣脉冲！`)
+    } else {
+      pulseNotification.info(`已取消对该帖子的点赞`)
+    }
   } catch (error) {
-    ElMessage.error('操作失败')
+    pulseNotification.error('点赞脉冲发射失败，请重试')
   }
 }
 
@@ -204,16 +209,24 @@ const handleCollect = async (e: Event) => {
     await postApi.collect(props.post.id)
     props.post.isCollected = !props.post.isCollected
     props.post.collectCount = (props.post.collectCount || 0) + (props.post.isCollected ? 1 : -1)
+
+    if (props.post.isCollected) {
+      pulseNotification.success(`成功将「${props.post.title}」收纳至你的灵感库`, '收藏成功')
+    } else {
+      pulseNotification.info(`已将该帖子移出你的灵感库`)
+    }
   } catch (error) {
-    ElMessage.error('操作失败')
+    pulseNotification.error('收藏失败，请重试')
   }
 }
 
 const handleShare = (e: Event) => {
   e.stopPropagation()
-  const url = `${window.location.origin}/t/${props.post.id}`
+  const url = `${window.location.origin}/t/${encodePostId(props.post.id)}`
   if (navigator.clipboard) {
-    navigator.clipboard.writeText(url).then(() => ElMessage.success('链接已复制到剪贴板'))
+    navigator.clipboard.writeText(url).then(() => {
+      pulseNotification.success('帖子链接已完美复制至剪贴板，快去呼朋唤友吧！', '链接复制成功')
+    })
   } else {
     const input = document.createElement('input')
     input.value = url
@@ -221,7 +234,7 @@ const handleShare = (e: Event) => {
     input.select()
     document.execCommand('copy')
     document.body.removeChild(input)
-    ElMessage.success('链接已复制到剪贴板')
+    pulseNotification.success('帖子链接已完美复制至剪贴板，快去呼朋唤友吧！', '链接复制成功')
   }
 }
 const parsedTags = computed(() => {
@@ -319,7 +332,7 @@ const highlightedSummary = computed(() => highlightText(postSummary.value))
     <div class="card-content">
       <!-- Author info and Section -->
       <div class="card-header-info">
-        <div class="author-block" @click.stop="post.userId ? router.push(`/user/${post.userId}`) : null" :style="post.userId ? 'cursor:pointer' : ''">
+        <div class="author-block" @click.stop="post.userId ? router.push(`/user/${encodeUserId(post.userId)}`) : null" :style="post.userId ? 'cursor:pointer' : ''">
           <div class="avatar-wrapper">
             <el-avatar :size="32" :src="post.authorAvatar" class="author-avatar">
               {{ post.authorName?.charAt(0) || 'U' }}
@@ -329,6 +342,7 @@ const highlightedSummary = computed(() => highlightText(postSummary.value))
             <div style="display:flex; align-items:center;">
               <span class="author-name">{{ post.authorName }}</span>
               <UserRoleBadge :roles="post.authorRoles" />
+              <UserBadge :text="post.authorBadgeText || ''" :color="post.authorBadgeColor" :effect="post.authorBadgeStyle" />
             </div>
             <div class="post-meta-text">
               <span class="post-date">{{ formatDate(post.createTime) }}</span>
@@ -374,6 +388,14 @@ const highlightedSummary = computed(() => highlightText(postSummary.value))
       <div class="card-body-content">
         <div class="text-content">
           <h2 class="post-title">
+            <!-- 已解决标记 -->
+            <span
+              v-if="isTruthyFlag(post.hasAdoptedAnswer)"
+              class="solved-tag"
+            >
+              <el-icon class="solved-tag-icon"><CircleCheck /></el-icon>
+              已解决
+            </span>
             <el-tag v-if="post.isPinned === 1" type="warning" size="small" effect="dark" class="hot-tag">
               置顶
             </el-tag>
@@ -624,6 +646,26 @@ const highlightedSummary = computed(() => highlightText(postSummary.value))
 
 .hot-tag {
   font-weight: bold;
+}
+
+.solved-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 6px;
+  background: var(--accept-bg);
+  border: 1px solid var(--accept-border);
+  color: var(--accept-text);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.solved-tag .solved-tag-icon {
+  font-size: 13px;
 }
 
 .title-text {

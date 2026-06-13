@@ -29,6 +29,56 @@ export function FeaturePage({ feature }) {
   return <AnalyticsPage feature={feature} />;
 }
 
+function DetailLine({ label, value, children }) {
+  return (
+    <p>
+      <b>{label}</b>
+      <span>{children || value || "--"}</span>
+    </p>
+  );
+}
+
+function ClaimAuditDetail({ record }) {
+  if (!record) return null;
+  return (
+    <div className="claim-audit">
+      <div className="claim-audit__summary">
+        <div>
+          <span>领取状态</span>
+          <StatusBadge status={record.status} />
+        </div>
+        <div>
+          <span>验证码</span>
+          <strong>{record.hcaptchaPassed ? "已通过" : "未通过 / 未启用"}</strong>
+        </div>
+        <div>
+          <span>风控命中</span>
+          <strong className={record.riskHit || record.status === "blocked" ? "danger" : ""}>
+            {record.riskHit || record.status === "blocked" ? "是" : "否"}
+          </strong>
+        </div>
+      </div>
+      <div className="detail-lines">
+        <DetailLine label="活动">{record.campaignName || record.campaignId}</DetailLine>
+        <DetailLine label="节点">{record.nodeName || record.nodeId}</DetailLine>
+        <DetailLine label="CDK">{record.rewardContent || record.code}</DetailLine>
+        <DetailLine label="原因">{record.reason}</DetailLine>
+        <DetailLine label="IP">{record.ip}</DetailLine>
+        <DetailLine label="设备指纹">{record.fingerprint}</DetailLine>
+        <DetailLine label="User-Agent">{record.userAgent}</DetailLine>
+        <DetailLine label="Claim Token">{record.claimToken}</DetailLine>
+        <DetailLine label="幂等键">{record.idempotencyKey}</DetailLine>
+        <DetailLine label="创建时间">{time(record.createdAt)}</DetailLine>
+      </div>
+      {!!record.riskRuleIds?.length && (
+        <div className="tag-list claim-audit__tags">
+          {record.riskRuleIds.map((id) => <span key={id}>{id}</span>)}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function CDKInventoryPage() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -253,7 +303,9 @@ export function ClaimRecordsPage() {
           <DataTable rows={tasks} columns={[{ key: "filename", title: "文件名" }, { key: "status", title: "状态", render: (r) => <StatusBadge status={r.status} /> }, { key: "createdAt", title: "创建时间", render: (r) => time(r.createdAt) }, { key: "download", title: "下载", render: (r) => r.filePath ? <a className="btn btn--text" href={r.filePath} target="_blank">下载</a> : "--" }]} />
         </section>
       )}
-      <Modal open={!!detail} title="领取详情" onCancel={() => setDetail(null)}><pre className="modal-body">{JSON.stringify(detail, null, 2)}</pre></Modal>
+      <Modal open={!!detail} title="领取审计详情" onCancel={() => setDetail(null)}>
+        <ClaimAuditDetail record={detail} />
+      </Modal>
     </div>
   );
 }

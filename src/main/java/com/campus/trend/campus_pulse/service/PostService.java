@@ -60,6 +60,8 @@ public interface PostService extends IService<Post> {
 
     java.util.List<com.campus.trend.campus_pulse.dto.response.PostResp> getPinnedPosts(Long sectionId);
 
+    void refreshPostCaches(String postId);
+
     void featurePost(String postId, String userId);
 
     void rejectPost(String postId, String reason, String operatorId);

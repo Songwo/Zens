@@ -15,6 +15,27 @@ function formatTime(iso) {
   return d.toLocaleString("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
 }
 
+function formatNumber(value) {
+  return new Intl.NumberFormat("zh-CN").format(Number(value || 0));
+}
+
+function getUserDisplay(user) {
+  if (!user) return "";
+  return user.nickname || user.username || user.email || "社区成员";
+}
+
+function splitRules(text) {
+  return String(text || "")
+    .split(/\n|。|；|;/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .slice(0, 5);
+}
+
+function listItems(res) {
+  return res?.items || res || [];
+}
+
 /* 内联 CDK 解密动画组件 */
 function InlineCDKReveal({ code, claimedAt }) {
   const [chars, setChars] = useState([]);
@@ -164,6 +185,7 @@ export default function ClaimPage() {
   const [toast, setToast] = useState("");
   const [brand, setBrand] = useState(DEFAULT_BRAND);
   const [currentUser, setCurrentUser] = useState(null);
+  const [myClaims, setMyClaims] = useState([]);
   const hcaptchaRef = useRef(null);
   const fingerprint = getFingerprint();
   const userScope = currentUser?.userId || currentUser?.id || "guest";
@@ -245,6 +267,22 @@ export default function ClaimPage() {
 
   useEffect(() => { fetchProject(); }, [fetchProject]);
 
+  useEffect(() => {
+    if (!isLoggedIn()) {
+      setMyClaims([]);
+      return;
+    }
+    let cancelled = false;
+    userApi.claims({ status: "success", pageSize: 4 })
+      .then((data) => {
+        if (!cancelled) setMyClaims(listItems(data));
+      })
+      .catch(() => {
+        if (!cancelled) setMyClaims([]);
+      });
+    return () => { cancelled = true; };
+  }, [claimResult]);
+
   async function handleClaim() {
     setClaiming(true);
     setError("");
@@ -281,7 +319,28 @@ export default function ClaimPage() {
     if (!isLoggedIn()) return { disabled: true, text: "需要身份验证" };
     if (project.requireCaptcha && !hcaptchaToken) return { disabled: true, text: "请先完成人机验证" };
     if (claiming) return { disabled: true, text: "正在领取..." };
-    return { disabled: false, text: "接入并领取" };
+    return { disabled: false, text: "立即领取福利" };
+  }
+
+  async function copyShareLink() {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setToast("领取链接已复制");
+    } catch {
+      setToast("复制失败，请手动复制浏览器地址");
+    }
+    setTimeout(() => setToast(""), 1800);
+  }
+
+  async function copyReward(value) {
+    if (!value) return;
+    try {
+      await navigator.clipboard.writeText(value);
+      setToast("兑换信息已复制");
+    } catch {
+      setToast("复制失败，请手动选择兑换信息");
+    }
+    setTimeout(() => setToast(""), 1800);
   }
 
   const claimState = getClaimState();
@@ -322,142 +381,199 @@ export default function ClaimPage() {
     );
   }
 
-  const progress = project.totalStock > 0 ? Math.round((project.claimedCount / project.totalStock) * 100) : 0;
+  const claimedCount = Number(project.claimedCount || 0);
+  const remaining = Number(project.remaining ?? project.remainingCount ?? Math.max(0, Number(project.totalStock || 0) - claimedCount));
+  const totalStock = Number(project.totalStock || claimedCount + remaining || 0);
+  const progress = totalStock > 0 ? Math.min(100, Math.round((claimedCount / totalStock) * 100)) : 0;
+  const rulesList = splitRules(project.rules);
+  const displayName = getUserDisplay(currentUser);
+  const nodeLabel = project.nodeSlug || project.projectCode || projectCode;
+  const timeRange = `${formatTime(project.startTime || project.startAt)} - ${formatTime(project.endTime || project.endAt)}`;
+  const showStock = project.showStock !== false;
+  const showEndTime = project.showEndTime !== false;
   const statusLabels = {
     active: "正在分发", upcoming: "等待激活", draft: "等待激活", ended: "周期结束", soldout: "额度耗尽", exhausted: "额度耗尽", disabled: "已关停", paused: "已暂停",
   };
 
   return (
-    <div className="claim-shell">
+    <div className="claim-shell claim-shell--community">
       <ParticleBurst trigger={burstTrigger} />
 
-      {/* 顶部品牌标识 */}
-      <header className="claim-brand anim-fade-up" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+      <header className="claim-brand claim-brand--community anim-fade-up">
+        <div className="claim-brand__identity">
           <img src="/logo.png" alt="Logo" width="48" height="48" className="claim-brand__logo" style={{ objectFit: 'cover', background: 'transparent', boxShadow: 'none' }} />
           <div>
             <h1>{brand.systemName}</h1>
-            <span>{brand.brandEnglishName}</span>
+            <span>社区福利发放中心</span>
           </div>
         </div>
         <CurrentUserBadge user={currentUser} loggedIn={isLoggedIn()} />
       </header>
 
-      {/* 主内容区 — 全幅无卡片 */}
-      <div className="claim-content anim-fade-up stagger-1">
-
-        {/* 状态行 */}
-        <div className="claim-status-line">
-          <div style={{display: 'flex', alignItems: 'center', gap: '16px'}}>
+      <main className="community-claim anim-fade-up stagger-1">
+        <section className="community-claim__hero">
+          <div className="community-claim__status-row">
             <span className={`status-dot status--${project.status}`}>{statusLabels[project.status] || project.status}</span>
-            <span className="claim-time-range">{formatTime(project.startTime)} — {formatTime(project.endTime)}</span>
+            <span className="claim-time-range">{timeRange}</span>
           </div>
-          <div style={{fontSize: '12px', color: 'var(--cp-faint)', fontWeight: 600}}>PER USER LIMIT: {project.perUserLimit}X</div>
-        </div>
 
-        {/* 倒计时 (如果即将开启) — 移动到标题上方更显眼 */}
-        {(project.status === "upcoming" || project.status === "draft") && project.startTime && (
-          <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '40px', background: 'var(--cp-surface-hover)', padding: '32px', borderRadius: '16px', border: '1px solid var(--cp-brand-glow)'}}>
-            <h3 style={{fontSize: '13px', color: 'var(--cp-brand)', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '1.5px', marginBottom: '20px'}}>距离分发网络开启还剩</h3>
-            <Countdown targetTime={project.startTime} onComplete={() => fetchProject()} />
-          </div>
-        )}
-
-        {/* 项目标题 */}
-        <h2 className="claim-title">{project.name}</h2>
-
-        {/* 主体区域 */}
-        <div style={{flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0}}>
-          <div style={{display: 'grid', gridTemplateColumns: project.rules ? '1.5fr 1fr' : '1fr', gap: '32px', flex: 1, minHeight: 0}}>
-            <div>
-              {project.description && (
-                <p className="claim-desc">{project.description}</p>
-              )}
-              
-              {/* 数据带 */}
-              <div className="claim-data-band anim-fade-up stagger-2">
-                <div className="claim-data-band__item" style={{paddingLeft: 0}}>
-                  <span className="claim-data-band__label">已释放负载</span>
-                  <span className="claim-data-band__value">{project.claimedCount}</span>
-                </div>
-                <div className="claim-data-band__item">
-                  <span className="claim-data-band__label">当前保留量</span>
-                  <span className="claim-data-band__value">{project.remaining}</span>
-                </div>
-                <div className="claim-data-band__item">
-                  <span className="claim-data-band__label">节点总容量</span>
-                  <span className="claim-data-band__value">{project.totalStock}</span>
-                </div>
-              </div>
-
-              {/* 进度条 */}
-              <div className="claim-track anim-fade-up stagger-2">
-                <div className="track-bar" style={{height: '10px', borderRadius: '5px'}}>
-                  <div className="track-bar__fill" style={{width: `${progress}%`}} />
-                </div>
-                <div className="track-meta">
-                  <span style={{fontWeight: 600}}>负载释放率 {progress}%</span>
-                {project.needLogin && <span style={{color: 'var(--cp-brand)', fontWeight: 600}}>需身份认证</span>}
-                </div>
-              </div>
-            </div>
-
-            {project.rules && (
-              <div className="claim-rules anim-fade-up stagger-3">
-                <h4>使用条款与协议</h4>
-                <p>{project.rules}</p>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* 底部领取区域 */}
-        <div className="claim-action anim-fade-up stagger-3" style={{padding: '24px 0 0', borderTop: '1px solid var(--cp-divider)', marginTop: '24px', flexShrink: 0}}>
-          {claimResult ? (
-            <div className="claim-result" style={{padding: 0, border: 'none', textAlign: 'center'}}>
-              <div className="claim-result__label" style={{fontSize: '16px', color: 'var(--cp-brand)', marginBottom: '12px'}}>领取成功 · CDK 已解锁</div>
-              {currentUser && (
-                <div style={{fontSize: '13px', color: 'var(--cp-muted)', marginBottom: '20px'}}>
-                  本兑换码已绑定至账号 <b style={{color: 'var(--cp-ink)'}}>{currentUser.nickname || currentUser.username}</b>，刷新页面不会重新发放新码。
-                </div>
-              )}
-              <InlineCDKReveal code={claimResult.code || claimResult.rewardContent} claimedAt={claimResult.claimedAt} />
-            </div>
-          ) : (
-            <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center'}}>
-              {project.requireCaptcha && (
-                <HCaptchaBox
-                  ref={hcaptchaRef}
-                  onVerify={setHcaptchaToken}
-                  onExpire={() => setHcaptchaToken("")}
-                  onError={() => setHcaptchaToken("")}
-                />
-              )}
-              <button
-                className={`btn ${claimState.disabled ? "btn--secondary" : "btn--primary"} claim-action__btn`}
-                disabled={claimState.disabled}
-                onClick={handleClaim}
-                style={{height: '48px', maxWidth: '320px', fontSize: '16px', width: '100%'}}
-              >
-                {project.buttonText && !claimState.disabled && !claiming ? project.buttonText : claimState.text}
-              </button>
-              {error && <p className="claim-error" style={{textAlign: 'center'}}>{error}</p>}
+          {(project.status === "upcoming" || project.status === "draft") && project.startTime && (
+            <div className="community-countdown">
+              <h3>距离开放领取</h3>
+              <Countdown targetTime={project.startTime} onComplete={() => fetchProject()} />
             </div>
           )}
-        </div>
 
-        {/* 登录提示 - 所有用户必须登录 */}
-        {!isLoggedIn() && !claimResult && (
-          <div className="claim-login-hint" style={{marginTop: '16px', padding: '16px 0 0', textAlign: 'center', borderTop: '1px solid var(--cp-divider)', flexShrink: 0}}>
-            <p style={{margin: 0, display: 'inline-block', color: 'var(--cp-muted)'}}>此通道需要经过身份验证才能接入</p>
-            <a href={`/login?returnUrl=${encodeURIComponent(window.location.pathname)}`} className="btn btn--text" style={{padding: '0 12px', color: 'var(--cp-brand)', fontWeight: 700}}>
-              前往验证身份 →
-            </a>
+          <div className="community-claim__copy">
+            <span className="community-claim__eyebrow">Community Benefit</span>
+            <h2 className="community-claim__title">{project.name}</h2>
+            <p className="community-claim__desc">
+              {project.description || "这是一个面向社区成员的限量福利活动。系统会校验社区账号、设备指纹和实时库存，成功领取后兑换信息会绑定到当前账号。"}
+            </p>
           </div>
-        )}
-      </div>
 
-      {/* 底部 */}
+          <div className="community-claim__chips" aria-label="活动关键信息">
+            <span>节点 {nodeLabel}</span>
+            <span>单账号 {project.perUserLimit || 1} 次</span>
+            {project.requireCaptcha && <span>人机验证</span>}
+            {project.needLogin !== false && <span>社区账号领取</span>}
+          </div>
+        </section>
+
+        <section className="community-claim__action-card">
+          <div className="claim-action-card__top">
+            <div>
+              <span className="claim-action-card__label">当前身份</span>
+              <strong>{displayName || "未登录社区账号"}</strong>
+            </div>
+            <span className={`claim-action-card__state ${isLoggedIn() ? "is-ready" : "is-waiting"}`}>
+              {isLoggedIn() ? "身份已确认" : "需要登录"}
+            </span>
+          </div>
+
+          {claimResult ? (
+            <div className="claim-result claim-result--community">
+              <div className="claim-result__label">领取成功，兑换信息已绑定到当前账号</div>
+              <InlineCDKReveal code={claimResult.code || claimResult.rewardContent} claimedAt={claimResult.claimedAt} />
+              <div className="claim-result__next">
+                <span>后续建议</span>
+                <p>妥善保存兑换信息；如福利来自社区活动帖，可返回活动帖完成反馈或晒图。</p>
+              </div>
+            </div>
+          ) : (
+            <>
+              {project.requireCaptcha && (
+                <div className="claim-captcha-wrap">
+                  <HCaptchaBox
+                    ref={hcaptchaRef}
+                    onVerify={setHcaptchaToken}
+                    onExpire={() => setHcaptchaToken("")}
+                    onError={() => setHcaptchaToken("")}
+                  />
+                </div>
+              )}
+
+              {isLoggedIn() ? (
+                <button
+                  className={`btn ${claimState.disabled ? "btn--secondary" : "btn--primary"} claim-action__btn`}
+                  disabled={claimState.disabled}
+                  onClick={handleClaim}
+                >
+                  {project.buttonText && !claimState.disabled && !claiming ? project.buttonText : claimState.text}
+                </button>
+              ) : (
+                <a href={`/login?returnUrl=${encodeURIComponent(window.location.pathname)}`} className="btn btn--primary claim-action__btn">
+                  使用社区账号登录
+                </a>
+              )}
+              {error && <p className="claim-error">{error}</p>}
+            </>
+          )}
+
+          <div className="claim-action-card__footer">
+            <button className="btn btn--secondary" onClick={copyShareLink}>复制领取链接</button>
+            <span>刷新页面不会重复发放已绑定福利。</span>
+          </div>
+        </section>
+
+        <section className="community-claim__insights">
+          <div className="community-stat">
+            <span>领取进度</span>
+            <strong>{progress}%</strong>
+            <div className="track-bar">
+              <div className="track-bar__fill" style={{ width: `${progress}%` }} />
+            </div>
+            <p>{showStock ? `${formatNumber(claimedCount)} 已领取 / ${formatNumber(totalStock)} 总库存` : "库存由运营方隐藏展示"}</p>
+          </div>
+
+          <div className="community-stat">
+            <span>剩余额度</span>
+            <strong>{showStock ? formatNumber(remaining) : "限量"}</strong>
+            <p>{remaining <= 0 ? "当前活动额度已发完" : "库存会在领取成功后实时扣减"}</p>
+          </div>
+
+          <div className="community-stat">
+            <span>活动周期</span>
+            <strong>{showEndTime ? (statusLabels[project.status] || project.status) : "进行中"}</strong>
+            <p>{showEndTime ? timeRange : "结束时间由运营方控制"}</p>
+          </div>
+        </section>
+
+        <section className="community-claim__details">
+          <div className="community-panel">
+            <div className="community-panel__header">
+              <h3>领取资格</h3>
+              <span>实时校验</span>
+            </div>
+            <div className="eligibility-list">
+              <div className="eligibility-item is-done"><b>1</b><span>使用社区账号完成身份确认</span></div>
+              <div className={`eligibility-item ${project.requireCaptcha ? "" : "is-done"}`}><b>2</b><span>{project.requireCaptcha ? "完成人机验证后领取" : "当前节点无需额外验证码"}</span></div>
+              <div className="eligibility-item is-done"><b>3</b><span>系统校验库存、账号、IP 与设备指纹</span></div>
+            </div>
+          </div>
+
+          <div className="community-panel">
+            <div className="community-panel__header">
+              <h3>活动规则</h3>
+              <span>{rulesList.length ? `${rulesList.length} 条` : "默认规则"}</span>
+            </div>
+            {rulesList.length ? (
+              <ul className="claim-rule-list">
+                {rulesList.map((rule, index) => <li key={`${rule}-${index}`}>{rule}</li>)}
+              </ul>
+            ) : (
+              <p className="community-panel__empty">每个社区账号仅按活动限制领取，异常设备、重复请求和黑名单会被自动拦截。</p>
+            )}
+          </div>
+        </section>
+
+        {isLoggedIn() && (
+          <section className="community-panel community-claim__history">
+            <div className="community-panel__header">
+              <h3>我的最近福利</h3>
+              <span>{myClaims.length ? `${myClaims.length} 条` : "暂无记录"}</span>
+            </div>
+            {myClaims.length ? (
+              <div className="claim-history-list">
+                {myClaims.map((item) => (
+                  <div className="claim-history-item" key={item.id || item.claimToken || item.createdAt}>
+                    <div>
+                      <strong>{item.campaignName || item.nodeName || "社区福利"}</strong>
+                      <span>{formatTime(item.createdAt)} · {item.nodeName || "领取节点"}</span>
+                    </div>
+                    <button className="btn btn--text" onClick={() => copyReward(item.rewardContent || item.code)}>
+                      复制
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="community-panel__empty">你在本系统领取过的福利会显示在这里，方便之后回看兑换信息。</p>
+            )}
+          </section>
+        )}
+      </main>
+
       <footer className="claim-footer-bar">
         Powered by {brand.systemName} · {brand.brandEnglishName}
       </footer>
