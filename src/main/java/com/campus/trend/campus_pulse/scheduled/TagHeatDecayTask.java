@@ -62,6 +62,13 @@ public class TagHeatDecayTask {
         } catch (Exception e) {
             log.error("标签热度衰减任务执行失败", e);
         }
+
+        try {
+            int reconciled = tagService.recalculatePostCounts();
+            log.info("标签 post_count 校准完成，共 {} 行", reconciled);
+        } catch (Exception e) {
+            log.error("标签 post_count 校准失败", e);
+        }
     }
 
     /**

@@ -331,10 +331,8 @@ public class CommentServiceImpl extends ServiceImpl<CommentMapper, Comment> impl
             return new Page<CommentResp>(pageNo, pageSize).setRecords(Collections.emptyList());
         }
 
-        // Song：一次性拉取该帖所有评论(含已删)，用于构建子树和判断占位
-        List<Comment> allComments = this.list(Wrappers.<Comment>lambdaQuery()
-                .eq(Comment::getPostId, postId)
-                .orderByAsc(Comment::getCreateTime));
+        // 只拉取当前页根评论的后代，避免大帖分页时每次加载整帖评论。
+        List<Comment> allComments = loadCommentSubtreeForRoots(postId, roots);
 
         // Song：被作为父引用过的 id 集合 —— 这些已删评论需要保留为占位
         Set<String> parentIdsThatHaveChildren = new HashSet<>();
@@ -403,6 +401,40 @@ public class CommentServiceImpl extends ServiceImpl<CommentMapper, Comment> impl
         }
 
         return resultPage;
+    }
+
+    private List<Comment> loadCommentSubtreeForRoots(String postId, List<Comment> roots) {
+        Map<String, Comment> commentMap = new LinkedHashMap<>();
+        Set<String> frontier = new HashSet<>();
+
+        for (Comment root : roots) {
+            if (root == null || !StringUtils.hasText(root.getId())) {
+                continue;
+            }
+            commentMap.put(root.getId(), root);
+            frontier.add(root.getId());
+        }
+
+        while (!frontier.isEmpty()) {
+            List<Comment> children = this.list(Wrappers.<Comment>lambdaQuery()
+                    .eq(Comment::getPostId, postId)
+                    .in(Comment::getParentId, frontier)
+                    .orderByAsc(Comment::getCreateTime));
+
+            Set<String> nextFrontier = new HashSet<>();
+            for (Comment child : children) {
+                if (child == null || !StringUtils.hasText(child.getId())) {
+                    continue;
+                }
+                if (!commentMap.containsKey(child.getId())) {
+                    commentMap.put(child.getId(), child);
+                    nextFrontier.add(child.getId());
+                }
+            }
+            frontier = nextFrontier;
+        }
+
+        return new ArrayList<>(commentMap.values());
     }
 
     @Override
@@ -604,13 +636,32 @@ public class CommentServiceImpl extends ServiceImpl<CommentMapper, Comment> impl
     }
 
     private void fillLikeStatus(List<CommentResp> responses, String currentUserId) {
-        for (CommentResp c : responses) {
-            String key = "comment:like:" + c.getId() + ":" + currentUserId;
-            c.setIsLiked(stringRedisTemplate.hasKey(key));
-            if (c.getChildren() != null) {
-                fillLikeStatus(c.getChildren(), currentUserId);
-            }
+        Set<String> commentIds = new HashSet<>();
+        collectCommentIds(responses, commentIds);
+        if (commentIds.isEmpty()) {
+            return;
         }
+
+        List<String> ids = new ArrayList<>(commentIds);
+        List<String> keys = ids.stream()
+                .map(id -> buildCommentLikeKey(id, currentUserId))
+                .toList();
+
+        Set<String> likedIds = new HashSet<>();
+        try {
+            List<String> values = stringRedisTemplate.opsForValue().multiGet(keys);
+            if (values != null) {
+                for (int i = 0; i < values.size(); i++) {
+                    if (values.get(i) != null) {
+                        likedIds.add(ids.get(i));
+                    }
+                }
+            }
+        } catch (Exception e) {
+            // Redis 异常不影响评论列表主流程，降级为未点赞状态。
+        }
+
+        applyLikeStatus(responses, likedIds);
     }
 
     private void fillCollectStatus(List<CommentResp> responses, String currentUserId) {
@@ -637,6 +688,19 @@ public class CommentServiceImpl extends ServiceImpl<CommentMapper, Comment> impl
             }
             if (c.getChildren() != null) {
                 collectCommentIds(c.getChildren(), commentIds);
+            }
+        }
+    }
+
+    private String buildCommentLikeKey(String commentId, String userId) {
+        return "comment:like:" + commentId + ":" + userId;
+    }
+
+    private void applyLikeStatus(List<CommentResp> responses, Set<String> likedIds) {
+        for (CommentResp c : responses) {
+            c.setIsLiked(likedIds.contains(c.getId()));
+            if (c.getChildren() != null) {
+                applyLikeStatus(c.getChildren(), likedIds);
             }
         }
     }

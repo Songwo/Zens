@@ -130,9 +130,7 @@ public class UserTagRelationServiceImpl extends ServiceImpl<UserTagRelationMappe
         // Song：3. 批量查询标签信息
         List<Tag> tags = tagMapper.selectBatchIds(tagIds);
 
-        // Song：4. 填充每个标签的帖子数量
-        tags.forEach(tag -> tag.setPostCount(postMapper.countByTagName(tag.getName(), " " + tag.getName())));
-
+        // post_count 为冗余列,查询时随行返回,由 TagHeatDecayTask 每小时校准
         log.info("用户 [{}] 关注了 {} 个标签", userId, tags.size());
 
         return tags;

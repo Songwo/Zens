@@ -1,5 +1,14 @@
 import type MarkdownIt from 'markdown-it'
-import { preloadLanguages, warmupHighlighter } from './shiki'
+
+type ShikiApi = typeof import('./shiki')
+
+let shikiApi: ShikiApi | null = null
+
+async function loadShikiApi(): Promise<ShikiApi> {
+  if (shikiApi) return shikiApi
+  shikiApi = await import('./shiki')
+  return shikiApi
+}
 
 export const TOC_MARKDOWN_TAG = '[TOC]'
 
@@ -151,7 +160,8 @@ export async function renderMarkdownWithTocAsync(
   content: string,
   options: RenderMarkdownWithTocOptions = {}
 ): Promise<MarkdownTocRenderResult> {
-  await warmupHighlighter()
+  const shiki = await loadShikiApi()
+  await shiki.warmupHighlighter()
   const src = content || ''
   const langs: string[] = []
   let m: RegExpExecArray | null
@@ -160,7 +170,7 @@ export async function renderMarkdownWithTocAsync(
     if (m[3]) langs.push(m[3])
   }
   if (langs.length > 0) {
-    await preloadLanguages(langs)
+    await shiki.preloadLanguages(langs)
   }
   return renderMarkdownWithTocResult(md, src, options)
 }

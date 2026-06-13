@@ -1,9 +1,14 @@
 import MarkdownIt from 'markdown-it'
-import {
-  highlightSync,
-  preloadLanguages,
-  warmupHighlighter,
-} from './shiki'
+
+type ShikiApi = typeof import('./shiki')
+
+let shikiApi: ShikiApi | null = null
+
+async function loadShikiApi(): Promise<ShikiApi> {
+  if (shikiApi) return shikiApi
+  shikiApi = await import('./shiki')
+  return shikiApi
+}
 
 /**
  * markdown-it 实例：
@@ -25,7 +30,7 @@ function createMd(options: { html: boolean; linkify: boolean; typographer: boole
       const trimmedLang = (lang || '').trim()
       const escapedLang = instance.utils.escapeHtml(trimmedLang)
 
-      const shikiHtml = trimmedLang ? highlightSync(str, trimmedLang) : null
+      const shikiHtml = trimmedLang ? shikiApi?.highlightSync(str, trimmedLang) : null
       if (shikiHtml) {
         return wrapShikiOutput(shikiHtml, escapedLang, str)
       }
@@ -110,10 +115,11 @@ function extractFencedLangs(src: string): string[] {
  */
 export async function renderAsync(src: string): Promise<string> {
   if (!src) return ''
-  await warmupHighlighter()
+  const shiki = await loadShikiApi()
+  await shiki.warmupHighlighter()
   const langs = extractFencedLangs(src)
   if (langs.length > 0) {
-    await preloadLanguages(langs)
+    await shiki.preloadLanguages(langs)
   }
   return md.render(src)
 }

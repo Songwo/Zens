@@ -27,6 +27,7 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       injectRegister: 'auto',
+      manifestFilename: 'manifest.json',
       includeAssets: ['logo.png', 'logo-horizontal.png', 'robots.txt'],
       manifest: {
         name: 'Zens 校园社区',
@@ -102,16 +103,8 @@ export default defineConfig({
         manualChunks(id) {
           if (!id.includes('node_modules')) return undefined
 
-          if (
-            id.includes('/vue/') ||
-            id.includes('/vue-router/') ||
-            id.includes('/pinia/') ||
-            id.includes('/@element-plus/icons-vue/') ||
-            id.includes('/element-plus/') ||
-            id.includes('/@element-plus/')
-          ) {
-            return 'vue-vendor'
-          }
+          // Element Plus 与 Vue 依赖链存在循环引用，强制拆 vendor 在生产压缩后可能触发 TDZ。
+          // 这里交给 Rollup 自动排序，只保留编辑器/图表/高亮等按需加载重型依赖的分包。
           if (id.includes('/markdown-it/') || id.includes('/dompurify/')) {
             return 'editor-vendor'
           }
@@ -129,20 +122,16 @@ export default defineConfig({
           if (id.includes('/shiki/') || id.includes('/@shikijs/')) {
             return 'shiki-vendor'
           }
-          if (id.includes('/echarts/') || id.includes('/vue-echarts/')) {
-            return 'chart-vendor'
-          }
           if (id.includes('/sockjs-client/') || id.includes('/@stomp/stompjs/')) {
             return 'ws-vendor'
           }
-          if (
-            id.includes('/axios/') ||
-            id.includes('/date-fns/') ||
-            id.includes('/lucide-vue-next/')
-          ) {
+          if (id.includes('/echarts/') || id.includes('/vue-echarts/')) {
+            return 'chart-vendor'
+          }
+          if (id.includes('/axios/') || id.includes('/date-fns/')) {
             return 'app-utils-vendor'
           }
-          return 'misc-vendor'
+          return undefined
         },
       },
     },

@@ -74,6 +74,7 @@ CREATE TABLE `sys_tag` (
   `name`        varchar(32)   NOT NULL COMMENT '标签名',
   `type`        tinyint       DEFAULT 1 COMMENT '1系统 2用户',
   `heat`        int           DEFAULT 0 COMMENT '热度值',
+  `post_count`  int           NOT NULL DEFAULT 0 COMMENT '可见帖子数(冗余计数,定时校准)',
   `create_time` datetime      DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_tag_name` (`name`),
