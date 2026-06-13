@@ -14,10 +14,12 @@ import com.campus.trend.campus_pulse.dto.request.PostSearchReq;
 import com.campus.trend.campus_pulse.entity.Post;
 import com.campus.trend.campus_pulse.entity.PostCollect;
 import com.campus.trend.campus_pulse.entity.PostLike;
+import com.campus.trend.campus_pulse.entity.PostVersionHistory;
 import com.campus.trend.campus_pulse.entity.Tag;
 import com.campus.trend.campus_pulse.entity.AnswerAdoption;
 import com.campus.trend.campus_pulse.mapper.AnswerAdoptionMapper;
 import com.campus.trend.campus_pulse.mapper.PostMapper;
+import com.campus.trend.campus_pulse.mapper.PostVersionHistoryMapper;
 import com.campus.trend.campus_pulse.mapper.SectionMapper;
 import com.campus.trend.campus_pulse.service.*;
 
@@ -26,6 +28,7 @@ import java.math.BigDecimal;
 import com.campus.trend.campus_pulse.entity.UserTagRelation;
 import com.campus.trend.campus_pulse.dto.media.MediaObject;
 import com.campus.trend.campus_pulse.dto.response.PostResp;
+import com.campus.trend.campus_pulse.dto.response.PostVersionHistoryResp;
 import com.campus.trend.campus_pulse.entity.PostMedia;
 import com.campus.trend.campus_pulse.entity.User;
 import com.campus.trend.campus_pulse.entity.Section;
@@ -48,6 +51,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 import static com.campus.trend.campus_pulse.service.post.PostSupport.SUMMARY_MAX_LEN;
@@ -88,6 +92,7 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
     private final com.campus.trend.campus_pulse.service.LevelService levelService;
     private final com.campus.trend.campus_pulse.service.AiPostAnalysisService aiPostAnalysisService;
     private final ObjectMapper objectMapper;
+    private final PostVersionHistoryMapper postVersionHistoryMapper;
     private final AsyncTaskService asyncTaskService;
     private final PostMediaService postMediaService;
     private final AnswerAdoptionMapper answerAdoptionMapper;
@@ -473,7 +478,9 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
             throw new BusinessException(ResultCode.NO_PERMISSION, "无权修改该帖子");
         }
 
+        Post before = snapshotPost(post);
         boolean contentChanged = false;
+        boolean visibleChanged = hasVisiblePostChange(post, request);
         boolean publishAction = Boolean.TRUE.equals(request.getPublish()) || Integer.valueOf(POST_STATUS_PUBLISHED).equals(request.getStatus());
         String title = request.getTitle();
         String content = request.getContent();
@@ -561,6 +568,10 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
             }
         }
 
+        if (visibleChanged) {
+            savePostVersionHistory(before, userId, buildPostChangeSummary(before, post, request));
+        }
+
         this.updateById(post);
 
         // Song：覆盖式同步 sys_post_media
@@ -570,6 +581,25 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
 
         postCacheManager.invalidatePostFeedCache(oldSectionId, post.getSectionId());
         postCacheManager.bumpPostDetailCacheVersion(post.getId());
+    }
+
+    @Override
+    public List<PostVersionHistoryResp> listVersionHistory(String postId, String userId) {
+        Post post = getById(postId);
+        if (post == null) {
+            throw new BusinessException(ResultCode.POST_NOT_FOUND);
+        }
+        if (!canManagePost(post, userId)) {
+            throw new BusinessException(ResultCode.NO_PERMISSION, "无权查看该帖版本历史");
+        }
+
+        List<PostVersionHistory> histories = postVersionHistoryMapper.selectList(
+                Wrappers.<PostVersionHistory>lambdaQuery()
+                        .eq(PostVersionHistory::getPostId, postId)
+                        .orderByDesc(PostVersionHistory::getVersionNo)
+                        .last("LIMIT 30")
+        );
+        return histories.stream().map(this::toPostVersionHistoryResp).toList();
     }
 
     @Override
@@ -1810,6 +1840,89 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
 
     private boolean isDeletedPost(Post post) {
         return post != null && AUDIT_STATUS_DELETED.equalsIgnoreCase(post.getAuditStatus());
+    }
+
+    private Post snapshotPost(Post source) {
+        return new Post()
+                .setId(source.getId())
+                .setUserId(source.getUserId())
+                .setSectionId(source.getSectionId())
+                .setTitle(source.getTitle())
+                .setContent(source.getContent())
+                .setTags(source.getTags())
+                .setCoverImage(source.getCoverImage());
+    }
+
+    private boolean hasVisiblePostChange(Post post, com.campus.trend.campus_pulse.dto.request.PostUpdateReq request) {
+        if (request == null) {
+            return false;
+        }
+        if (StringUtils.hasText(request.getTitle()) && !Objects.equals(post.getTitle(), request.getTitle())) {
+            return true;
+        }
+        if (StringUtils.hasText(request.getContent()) && !Objects.equals(post.getContent(), request.getContent())) {
+            return true;
+        }
+        if (request.getSectionId() != null && !Objects.equals(post.getSectionId(), request.getSectionId())) {
+            return true;
+        }
+        if (StringUtils.hasText(request.getCoverImage()) && !Objects.equals(post.getCoverImage(), request.getCoverImage())) {
+            return true;
+        }
+        if (StringUtils.hasText(request.getTags()) && !Objects.equals(post.getTags(), normalizeTags(request.getTags()))) {
+            return true;
+        }
+        return request.getMediaList() != null || StringUtils.hasText(request.getImages());
+    }
+
+    private void savePostVersionHistory(Post before, String editorId, String changeSummary) {
+        Integer maxVersion = postVersionHistoryMapper.selectMaxVersionNo(before.getId());
+        User editor = userService.getById(editorId);
+        String editorName = editor != null && StringUtils.hasText(editor.getNickname())
+                ? editor.getNickname()
+                : (editor != null ? editor.getUsername() : editorId);
+
+        PostVersionHistory history = new PostVersionHistory()
+                .setPostId(before.getId())
+                .setVersionNo((maxVersion != null ? maxVersion : 0) + 1)
+                .setEditorId(editorId)
+                .setEditorName(editorName)
+                .setTitle(before.getTitle())
+                .setContent(before.getContent())
+                .setTags(before.getTags())
+                .setSectionId(before.getSectionId())
+                .setCoverImage(before.getCoverImage())
+                .setChangeSummary(changeSummary)
+                .setCreatedAt(LocalDateTime.now());
+        postVersionHistoryMapper.insert(history);
+    }
+
+    private String buildPostChangeSummary(Post before, Post after, com.campus.trend.campus_pulse.dto.request.PostUpdateReq request) {
+        List<String> changes = new ArrayList<>();
+        if (!Objects.equals(before.getTitle(), after.getTitle())) changes.add("标题");
+        if (!Objects.equals(before.getContent(), after.getContent())) changes.add("正文");
+        if (!Objects.equals(before.getTags(), after.getTags())) changes.add("标签");
+        if (!Objects.equals(before.getSectionId(), after.getSectionId())) changes.add("板块");
+        if (!Objects.equals(before.getCoverImage(), after.getCoverImage())) changes.add("封面");
+        if (request != null && (request.getMediaList() != null || StringUtils.hasText(request.getImages()))) changes.add("媒体");
+        return changes.isEmpty() ? "内容更新" : "更新了" + String.join("、", changes);
+    }
+
+    private PostVersionHistoryResp toPostVersionHistoryResp(PostVersionHistory history) {
+        PostVersionHistoryResp resp = new PostVersionHistoryResp();
+        resp.setId(history.getId());
+        resp.setPostId(history.getPostId());
+        resp.setVersionNo(history.getVersionNo());
+        resp.setEditorId(history.getEditorId());
+        resp.setEditorName(history.getEditorName());
+        resp.setTitle(history.getTitle());
+        resp.setContent(history.getContent());
+        resp.setTags(history.getTags());
+        resp.setSectionId(history.getSectionId());
+        resp.setCoverImage(history.getCoverImage());
+        resp.setChangeSummary(history.getChangeSummary());
+        resp.setCreatedAt(history.getCreatedAt());
+        return resp;
     }
 
     private boolean canDeleteOrRestorePost(Post post, String userId) {

@@ -83,6 +83,7 @@ public class DirectMessageServiceImpl implements DirectMessageService {
             pushResp.setReceiverId(message.getReceiverId());
             pushResp.setContent(message.getContent());
             pushResp.setIsRead(0);
+            pushResp.setReadReceipt("UNREAD");
             pushResp.setCreatedAt(message.getCreatedAt());
             pushResp.setSelf(false);
 
@@ -258,6 +259,9 @@ public class DirectMessageServiceImpl implements DirectMessageService {
             resp.setReceiverId(item.getReceiverId());
             resp.setContent(item.getContent());
             resp.setIsRead(item.getIsRead());
+            resp.setReadReceipt(Objects.equals(item.getSenderId(), userId)
+                    ? (Integer.valueOf(1).equals(item.getIsRead()) ? "READ" : "DELIVERED")
+                    : null);
             resp.setCreatedAt(item.getCreatedAt());
             resp.setSelf(Objects.equals(item.getSenderId(), userId));
             return resp;
@@ -288,6 +292,17 @@ public class DirectMessageServiceImpl implements DirectMessageService {
                         .eq(DirectMessage::getIsRead, 0)
                         .set(DirectMessage::getIsRead, 1)
         );
+        try {
+            Map<String, Object> receipt = new HashMap<>();
+            receipt.put("type", "message-read");
+            receipt.put("readerId", userId);
+            receipt.put("peerId", peerId);
+            receipt.put("conversationId", buildConversationId(userId, peerId));
+            receipt.put("readAt", LocalDateTime.now());
+            messagingTemplate.convertAndSendToUser(peerId, "/queue/messages", receipt);
+        } catch (Exception e) {
+            log.warn("私信已读回执推送失败: readerId={}, peerId={}, err={}", userId, peerId, e.getMessage());
+        }
         log.debug("会话已读: userId={}, peerId={}", userId, peerId);
     }
 

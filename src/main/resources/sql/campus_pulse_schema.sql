@@ -189,7 +189,28 @@ CREATE TABLE `sys_post_media` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='帖子媒体关系表';
 
 -- ============================================================
--- 7) 媒体文件元数据表（Cloudflare R2）
+-- 7) 帖子版本历史表
+-- ============================================================
+CREATE TABLE `post_version_history` (
+  `id`             bigint        NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `post_id`        varchar(64)   NOT NULL COMMENT '帖子ID',
+  `version_no`     int           NOT NULL COMMENT '版本号',
+  `editor_id`      varchar(64)   NOT NULL COMMENT '编辑用户ID',
+  `editor_name`    varchar(128)  DEFAULT NULL COMMENT '编辑用户展示名',
+  `title`          varchar(255)  DEFAULT NULL COMMENT '编辑前标题',
+  `content`        longtext      DEFAULT NULL COMMENT '编辑前正文',
+  `tags`           varchar(512)  DEFAULT NULL COMMENT '编辑前标签',
+  `section_id`     bigint        DEFAULT NULL COMMENT '编辑前板块ID',
+  `cover_image`    varchar(1024) DEFAULT NULL COMMENT '编辑前封面',
+  `change_summary` varchar(512)  DEFAULT NULL COMMENT '变更摘要',
+  `created_at`     datetime      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '记录时间',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_post_version` (`post_id`, `version_no`),
+  KEY `idx_post_created` (`post_id`, `created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='帖子版本历史';
+
+-- ============================================================
+-- 8) 媒体文件元数据表（Cloudflare R2）
 -- ============================================================
 CREATE TABLE `sys_media_file` (
   `id`               varchar(64)   NOT NULL,
@@ -218,7 +239,7 @@ CREATE TABLE `sys_media_file` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='媒体文件元数据(R2)';
 
 -- ============================================================
--- 8) 帖子点赞表
+-- 9) 帖子点赞表
 -- ============================================================
 CREATE TABLE `sys_post_like` (
   `id`          varchar(64)   NOT NULL,

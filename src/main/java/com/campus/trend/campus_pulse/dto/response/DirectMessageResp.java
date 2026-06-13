@@ -11,6 +11,7 @@ public class DirectMessageResp {
     private String receiverId;
     private String content;
     private Integer isRead;
+    private String readReceipt;
     private LocalDateTime createdAt;
     private Boolean self;
 }

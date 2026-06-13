@@ -4,7 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import MainLayout from '@/layouts/MainLayout.vue'
 import PageBackButton from '@/components/common/PageBackButton.vue'
 import ScrollEdgeBar from '@/components/ui/ScrollEdgeBar.vue'
-import { postApi } from '@/api/post'
+import { postApi, type PostVersionHistory } from '@/api/post'
 import { commentApi } from '@/api/comment'
 import type { ShortLinkResolveResult } from '@/api/comment'
 import { reportApi } from '@/api/report'
@@ -36,7 +36,8 @@ import {
   RefreshRight,
   CircleCheck,
   Bell,
-  BellFilled
+  BellFilled,
+  Clock
 } from '@element-plus/icons-vue'
 import UserRoleBadge from '@/components/common/UserRoleBadge.vue'
 import UserBadge from '@/components/common/UserBadge.vue'
@@ -66,6 +67,10 @@ const commentLoading = ref(false)
 const replyingTo = ref<string | null>(null)
 const replyingToName = ref<string | null>(null)
 const regeneratingSummary = ref(false)
+const versionHistory = ref<PostVersionHistory[]>([])
+const versionHistoryVisible = ref(false)
+const versionHistoryLoading = ref(false)
+const activeVersion = ref<PostVersionHistory | null>(null)
 const activeCommentId = ref('')
 const shortLinkTarget = ref<ShortLinkResolveResult | null>(null)
 const RELATED_POST_CACHE_TTL = 60 * 1000
@@ -327,6 +332,8 @@ const canRegenerateSummary = computed(() => {
   return !isDeletedPost.value && canManageCurrentPost.value
 })
 
+const versionChangeCount = computed(() => versionHistory.value.length)
+
 const showSidebarToc = computed(() => tocRenderResult.value.hasTocTag)
 const TOC_COLLAPSE_THRESHOLD = 8
 const TOC_PREVIEW_COUNT = 6
@@ -411,6 +418,8 @@ const fetchPost = async () => {
   comments.value = []
   relatedPosts.value = []
   poll.value = null
+  versionHistory.value = []
+  activeVersion.value = null
   isSubscribed.value = false
   acceptedAnswerExpanded.value = false
   cancelReply()
@@ -426,6 +435,9 @@ const fetchPost = async () => {
     poll.value = secondaryData.poll
     syncPostMetricsToLists()
     applyPostSeo()
+    if (canManageCurrentPost.value) {
+      void loadVersionHistory()
+    }
     scrollToRouteComment()
     void checkFollowStatus()
     void checkSubscriptionStatus()
@@ -679,8 +691,51 @@ const handleCommand = async (command: string) => {
     await deletePost()
   } else if (command === 'restore') {
     await restorePost()
+  } else if (command === 'versions') {
+    await openVersionHistory()
   }
 }
+
+const loadVersionHistory = async () => {
+  if (!post.value || !canManageCurrentPost.value) return
+  versionHistoryLoading.value = true
+  try {
+    const res = await postApi.getVersions(post.value.id)
+    versionHistory.value = res.data || []
+    activeVersion.value = versionHistory.value[0] || null
+  } catch {
+    versionHistory.value = []
+  } finally {
+    versionHistoryLoading.value = false
+  }
+}
+
+const openVersionHistory = async () => {
+  versionHistoryVisible.value = true
+  await loadVersionHistory()
+}
+
+const lineDiff = (oldText = '', newText = '') => {
+  const oldLines = oldText.split('\n')
+  const newLines = newText.split('\n')
+  const max = Math.max(oldLines.length, newLines.length)
+  const rows: Array<{ type: 'same' | 'add' | 'remove'; text: string }> = []
+  for (let i = 0; i < max; i += 1) {
+    const oldLine = oldLines[i]
+    const newLine = newLines[i]
+    if (oldLine === newLine) {
+      if (oldLine !== undefined) rows.push({ type: 'same', text: oldLine })
+    } else {
+      if (oldLine !== undefined) rows.push({ type: 'remove', text: oldLine })
+      if (newLine !== undefined) rows.push({ type: 'add', text: newLine })
+    }
+  }
+  return rows
+}
+
+const activeVersionDiffRows = computed(() =>
+  lineDiff(activeVersion.value?.content || '', post.value?.content || '')
+)
 
 const handleFeature = async () => {
   if (!post.value) return
@@ -1116,6 +1171,9 @@ onMounted(() => {
                 <div class="post-stats">
                   <span class="stat-item"><el-icon><View /></el-icon> {{ post.viewCount }}</span>
                   <span class="stat-item"><el-icon><ChatLineRound /></el-icon> {{ visibleCommentCount }}</span>
+                  <span v-if="canManageCurrentPost" class="stat-item version-count">
+                    <el-icon><Clock /></el-icon> 已更改 {{ versionChangeCount }} 次
+                  </span>
                 </div>
               </div>
               <el-button
@@ -1157,6 +1215,12 @@ onMounted(() => {
                       command="edit"
                     >
                       <el-icon><EditPen /></el-icon> 编辑此贴
+                    </el-dropdown-item>
+                    <el-dropdown-item
+                      v-if="canManageCurrentPost"
+                      command="versions"
+                    >
+                      <el-icon><Clock /></el-icon> 版本历史（{{ versionChangeCount }}）
                     </el-dropdown-item>
                     <el-dropdown-item v-if="!isDeletedPost" command="report">
                       <el-icon><Warning /></el-icon> 举报违规内容
@@ -1396,6 +1460,68 @@ onMounted(() => {
 
       <ScrollEdgeBar v-if="post && !loading" />
     </div>
+
+    <el-dialog
+      v-model="versionHistoryVisible"
+      :title="`帖子版本历史（已更改 ${versionChangeCount} 次）`"
+      width="860px"
+      append-to-body
+      class="version-dialog"
+    >
+      <div v-loading="versionHistoryLoading" class="version-history">
+        <div class="version-list">
+          <button
+            v-for="item in versionHistory"
+            :key="item.id"
+            type="button"
+            class="version-item"
+            :class="{ active: activeVersion?.id === item.id }"
+            @click="activeVersion = item"
+          >
+            <span class="version-no">第 {{ item.versionNo }} 次更改</span>
+            <span class="version-summary">{{ item.changeSummary || '内容更新' }}</span>
+            <span class="version-meta">{{ item.editorName || '未知用户' }} · {{ formatDate(item.createdAt) }}</span>
+          </button>
+          <el-empty v-if="!versionHistoryLoading && versionHistory.length === 0" description="暂无版本历史" :image-size="72" />
+        </div>
+
+        <div class="version-detail" v-if="activeVersion">
+          <div class="field-diff">
+            <div class="field-row">
+              <span class="field-label">标题</span>
+              <div class="field-values">
+                <span class="old-value">{{ activeVersion.title || '无标题' }}</span>
+                <span class="arrow">→</span>
+                <span class="new-value">{{ post?.title || '无标题' }}</span>
+              </div>
+            </div>
+            <div class="field-row">
+              <span class="field-label">标签</span>
+              <div class="field-values">
+                <span class="old-value">{{ activeVersion.tags || '无' }}</span>
+                <span class="arrow">→</span>
+                <span class="new-value">{{ post?.tags || '无' }}</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="diff-panel">
+            <div class="diff-head">正文差异</div>
+            <div class="diff-body">
+              <div
+                v-for="(row, idx) in activeVersionDiffRows"
+                :key="idx"
+                class="diff-line"
+                :class="row.type"
+              >
+                <span class="diff-mark">{{ row.type === 'add' ? '+' : row.type === 'remove' ? '-' : ' ' }}</span>
+                <span class="diff-text">{{ row.text || ' ' }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </el-dialog>
 
     <!-- 举报弹窗 -->
     <el-dialog v-model="reportVisible" title="举报内容" width="400px" append-to-body>
@@ -2421,5 +2547,158 @@ onMounted(() => {
 
 .premium-restore-btn:active {
   transform: translateY(0);
+}
+
+.version-count {
+  color: var(--el-color-primary);
+}
+
+.version-history {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  gap: 16px;
+  min-height: 420px;
+}
+
+.version-list {
+  border-right: 1px solid var(--el-border-color-lighter);
+  padding-right: 12px;
+  overflow: auto;
+}
+
+.version-item {
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--el-border-color-lighter);
+  background: var(--el-bg-color);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  cursor: pointer;
+}
+
+.version-item.active {
+  border-color: var(--el-color-primary);
+  background: var(--el-color-primary-light-9);
+}
+
+.version-no,
+.version-summary,
+.version-meta {
+  display: block;
+}
+
+.version-no {
+  font-weight: 700;
+  color: var(--el-text-color-primary);
+}
+
+.version-summary {
+  margin-top: 4px;
+  color: var(--el-text-color-regular);
+  font-size: 13px;
+}
+
+.version-meta {
+  margin-top: 6px;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+}
+
+.version-detail {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.field-diff,
+.diff-panel {
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.field-row {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--el-border-color-lighter);
+}
+
+.field-row:last-child {
+  border-bottom: none;
+}
+
+.field-label {
+  color: var(--el-text-color-secondary);
+}
+
+.field-values {
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+}
+
+.old-value,
+.new-value {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.old-value {
+  color: var(--el-color-danger);
+}
+
+.new-value {
+  color: var(--el-color-success);
+}
+
+.diff-head {
+  padding: 10px 12px;
+  font-weight: 700;
+  background: var(--el-fill-color-light);
+}
+
+.diff-body {
+  max-height: 420px;
+  overflow: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+}
+
+.diff-line {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  padding: 2px 10px;
+  white-space: pre-wrap;
+}
+
+.diff-line.add {
+  background: rgba(103, 194, 58, 0.12);
+}
+
+.diff-line.remove {
+  background: rgba(245, 108, 108, 0.12);
+}
+
+.diff-mark {
+  user-select: none;
+  color: var(--el-text-color-secondary);
+}
+
+@media (max-width: 768px) {
+  .version-history {
+    grid-template-columns: 1fr;
+  }
+
+  .version-list {
+    border-right: none;
+    border-bottom: 1px solid var(--el-border-color-lighter);
+    padding-right: 0;
+    padding-bottom: 10px;
+    max-height: 180px;
+  }
 }
 </style>

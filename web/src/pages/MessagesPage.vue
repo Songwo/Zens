@@ -188,6 +188,11 @@ const orderedMessages = computed(() => {
   return [...messages.value].reverse()
 })
 
+const receiptLabel = (msg: DirectMessage) => {
+  if (!msg.self) return ''
+  return msg.readReceipt === 'READ' || msg.isRead === 1 ? '已读' : '已送达'
+}
+
 const loadConversations = async () => {
   conversationsLoading.value = true
   try {
@@ -342,6 +347,7 @@ const handleSend = async () => {
     receiverId: activePeerId.value,
     content: content,
     isRead: 1,
+    readReceipt: 'DELIVERED',
     createdAt: new Date().toISOString(),
     self: true
   }
@@ -495,6 +501,15 @@ const subscribeToMessagesWs = () => {
 
   // 监听后端发送的私信主题
   unsubscribeMessagesWs = wsClient.subscribe(`/user/${userStore.userId}/queue/messages`, (event: any) => {
+    if (event?.type === 'message-read') {
+      if (event.readerId === activePeerId.value) {
+        messages.value = messages.value.map(msg =>
+          msg.self ? { ...msg, isRead: 1, readReceipt: 'READ' } : msg
+        )
+      }
+      return
+    }
+
     const newMsg: DirectMessage = event
     
     // 如果是当前正在聊天的人发送的，直接追加并滚动
@@ -699,7 +714,10 @@ onUnmounted(() => {
                           <PostEmbedCard :post-id="getPostEmbedId(msg.content)" />
                         </div>
                       </div>
-                      <div class="meta">{{ formatMessageTime(msg.createdAt) }}</div>
+                      <div class="meta">
+                        <span>{{ formatMessageTime(msg.createdAt) }}</span>
+                        <span v-if="msg.self" class="receipt">{{ receiptLabel(msg) }}</span>
+                      </div>
                     </div>
                   </div>
                 </template>
@@ -1067,6 +1085,13 @@ html.dark .timeline-divider span {
   text-align: right;
   user-select: none;
   color: var(--el-text-color-secondary); /* 显著提升可读性 */
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.receipt {
+  color: var(--el-color-primary);
 }
 
 .message-editor {

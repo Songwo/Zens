@@ -7,6 +7,7 @@ import { Calendar, Check } from '@element-plus/icons-vue'
 const status = ref<CheckInStatus | null>(null)
 const loading = ref(true)
 const checking = ref(false)
+const expanded = ref(false)
 
 const WEEK_LABELS = ['日', '一', '二', '三', '四', '五', '六']
 
@@ -27,6 +28,7 @@ const handleCheckIn = async () => {
   try {
     const res = await checkInApi.checkIn()
     status.value = res.data
+    expanded.value = false
     const { continuousDays, rewardExp, rewardPoints } = res.data
     pulseNotification.success(
       `连续签到 ${continuousDays} 天，获得 +${rewardExp} 经验 +${rewardPoints} 积分`,
@@ -71,58 +73,72 @@ onMounted(fetchStatus)
 </script>
 
 <template>
-  <div class="checkin-card" v-loading="loading">
+  <div class="checkin-card" :class="{ compact: status?.checkedToday && !expanded }" v-loading="loading">
     <div class="checkin-head">
       <div class="checkin-title">
         <el-icon><Calendar /></el-icon>
         <span>每日签到</span>
-      </div>
-      <el-button
-        type="primary"
-        round
-        :icon="Check"
-        :loading="checking"
-        :disabled="status?.checkedToday"
-        @click="handleCheckIn"
-      >
-        {{ status?.checkedToday ? '今日已签到' : '签到' }}
-      </el-button>
-    </div>
-
-    <div class="checkin-stats">
-      <div class="stat">
-        <span class="stat-num">{{ status?.continuousDays ?? 0 }}</span>
-        <span class="stat-label">连续天数</span>
-      </div>
-      <div class="stat-divider"></div>
-      <div class="stat">
-        <span class="stat-num">{{ status?.totalDays ?? 0 }}</span>
-        <span class="stat-label">累计签到</span>
-      </div>
-      <div class="stat-divider"></div>
-      <div class="stat">
-        <span class="stat-num">{{ status?.totalPoints ?? 0 }}</span>
-        <span class="stat-label">当前积分</span>
-      </div>
-    </div>
-
-    <div class="checkin-calendar">
-      <div class="cal-week">
-        <span v-for="w in WEEK_LABELS" :key="w" class="cal-week-label">{{ w }}</span>
-      </div>
-      <div class="cal-grid">
-        <span v-for="b in leadingBlanks" :key="`b${b}`" class="cal-cell blank"></span>
-        <span
-          v-for="c in monthDays"
-          :key="c.day"
-          class="cal-cell"
-          :class="{ checked: c.checked, today: c.isToday, future: c.isFuture }"
-        >
-          <el-icon v-if="c.checked" class="cal-check"><Check /></el-icon>
-          <template v-else>{{ c.day }}</template>
+        <span v-if="status?.checkedToday && !expanded" class="compact-summary">
+          连续 {{ status?.continuousDays ?? 0 }} 天
         </span>
       </div>
+      <div class="checkin-actions">
+        <el-button
+          v-if="status?.checkedToday"
+          text
+          @click="expanded = !expanded"
+        >
+          {{ expanded ? '收起' : '查看' }}
+        </el-button>
+        <el-button
+          type="primary"
+          round
+          :icon="Check"
+          :loading="checking"
+          :disabled="status?.checkedToday"
+          @click="handleCheckIn"
+        >
+          {{ status?.checkedToday ? '今日已签到' : '签到' }}
+        </el-button>
+      </div>
     </div>
+
+    <template v-if="!status?.checkedToday || expanded">
+      <div class="checkin-stats">
+        <div class="stat">
+          <span class="stat-num">{{ status?.continuousDays ?? 0 }}</span>
+          <span class="stat-label">连续天数</span>
+        </div>
+        <div class="stat-divider"></div>
+        <div class="stat">
+          <span class="stat-num">{{ status?.totalDays ?? 0 }}</span>
+          <span class="stat-label">累计签到</span>
+        </div>
+        <div class="stat-divider"></div>
+        <div class="stat">
+          <span class="stat-num">{{ status?.totalPoints ?? 0 }}</span>
+          <span class="stat-label">当前积分</span>
+        </div>
+      </div>
+
+      <div class="checkin-calendar">
+        <div class="cal-week">
+          <span v-for="w in WEEK_LABELS" :key="w" class="cal-week-label">{{ w }}</span>
+        </div>
+        <div class="cal-grid">
+          <span v-for="b in leadingBlanks" :key="`b${b}`" class="cal-cell blank"></span>
+          <span
+            v-for="c in monthDays"
+            :key="c.day"
+            class="cal-cell"
+            :class="{ checked: c.checked, today: c.isToday, future: c.isFuture }"
+          >
+            <el-icon v-if="c.checked" class="cal-check"><Check /></el-icon>
+            <template v-else>{{ c.day }}</template>
+          </span>
+        </div>
+      </div>
+    </template>
   </div>
 </template>
 
@@ -133,6 +149,10 @@ onMounted(fetchStatus)
   border-radius: 14px;
   padding: 18px 20px;
   margin-bottom: 16px;
+}
+
+.checkin-card.compact {
+  padding: 12px 16px;
 }
 
 .checkin-head {
@@ -149,6 +169,21 @@ onMounted(fetchStatus)
   font-size: 16px;
   font-weight: 700;
   color: var(--el-text-color-primary);
+}
+
+.compact-summary {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--el-color-primary);
+  background: var(--el-color-primary-light-9);
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.checkin-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .checkin-stats {

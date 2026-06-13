@@ -5,6 +5,7 @@ import { useUiStore } from '@/store/ui'
 import { usePostComposerStore } from '@/store/postComposer'
 import AppearanceDock from '@/components/ui/AppearanceDock.vue'
 import PulseNotification from '@/components/common/PulseNotification.vue'
+import PwaInstallPrompt from '@/components/common/PwaInstallPrompt.vue'
 import { initSessionResilience } from '@/utils/sessionResilience'
 import { ensureCurrentUserProfile } from '@/utils/sessionProfile'
 import { publicDataApi } from '@/api/publicData'
@@ -173,6 +174,8 @@ onUnmounted(() => {
     <AppearanceDock />
 
     <PulseNotification />
+
+    <PwaInstallPrompt />
 
     <AsyncPostComposerModal v-if="showComposer" />
   </div>

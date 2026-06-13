@@ -2,6 +2,21 @@ import type { AxiosRequestConfig } from 'axios'
 import api from '@/lib/api'
 import type { Post, PostSearchRequest, Result, CreatePostRequest, SaveDraftRequest } from '@/types'
 
+export interface PostVersionHistory {
+    id: number
+    postId: string
+    versionNo: number
+    editorId: string
+    editorName?: string
+    title?: string
+    content?: string
+    tags?: string
+    sectionId?: number
+    coverImage?: string
+    changeSummary?: string
+    createdAt: string
+}
+
 export const postApi = {
     // Song：说明
     searchList(data: PostSearchRequest, config?: AxiosRequestConfig) {
@@ -82,6 +97,10 @@ export const postApi = {
     // Song：说明
     regenerateSummary(id: string) {
         return api.post<any, Result<string>>(`/post/${id}/summary/regenerate`)
+    },
+
+    getVersions(id: string) {
+        return api.get<any, Result<PostVersionHistory[]>>(`/post/${id}/versions`)
     },
 
     // Song：说明

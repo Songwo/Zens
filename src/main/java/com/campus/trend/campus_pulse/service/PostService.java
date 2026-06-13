@@ -8,8 +8,10 @@ import com.campus.trend.campus_pulse.dto.request.TagsExtractReq;
 import com.campus.trend.campus_pulse.dto.request.PostSearchReq;
 import com.campus.trend.campus_pulse.dto.request.PostUpdateReq;
 import com.campus.trend.campus_pulse.dto.response.PostResp;
+import com.campus.trend.campus_pulse.dto.response.PostVersionHistoryResp;
 import com.campus.trend.campus_pulse.entity.Post;
 
+import java.util.List;
 import java.util.Map;
 
 public interface PostService extends IService<Post> {
@@ -47,6 +49,8 @@ public interface PostService extends IService<Post> {
     IPage<Post> searchAllList(PostSearchReq postSearchRequest);
 
     void updatePost(PostUpdateReq request, String userId);
+
+    List<PostVersionHistoryResp> listVersionHistory(String postId, String userId);
 
     void deletePost(String postId, String userId);
 

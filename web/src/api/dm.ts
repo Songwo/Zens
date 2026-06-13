@@ -20,6 +20,7 @@ export interface DirectMessage {
   receiverId: string
   content: string
   isRead: number
+  readReceipt?: 'UNREAD' | 'DELIVERED' | 'READ'
   createdAt: string
   self: boolean
 }

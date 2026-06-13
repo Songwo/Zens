@@ -70,6 +70,12 @@ public class PostController {
         return Result.success(summary);
     }
 
+    @GetMapping("/{id}/versions")
+    public Result<?> listVersionHistory(@PathVariable String id) {
+        AuthUser authUser = SecurityUtils.getAuthenticatedUser();
+        return Result.success(postService.listVersionHistory(id, authUser.getUser().getId()));
+    }
+
     /* Song：分页搜索帖子列表（含作者信息） */
     @PostMapping("/search-lists")
     public Result<?> searchList(@RequestBody PostSearchReq postSearchRequest) {
