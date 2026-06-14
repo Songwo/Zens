@@ -34,6 +34,10 @@ public class ViewLog implements Serializable {
      * 设备类型
      */
     private String device;
+    /**
+     * 本次浏览停留毫秒数
+     */
+    private Integer durationMs;
     private LocalDateTime createTime;
 
 }

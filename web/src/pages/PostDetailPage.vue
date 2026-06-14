@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed, watch, nextTick, onUnmounted } from 'vue'
+import { ref, onMounted, computed, watch, nextTick, onUnmounted, createApp, type App as VueApp } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import MainLayout from '@/layouts/MainLayout.vue'
 import PageBackButton from '@/components/common/PageBackButton.vue'
@@ -51,12 +51,16 @@ import { reactionApi, type ReactionResp } from '@/api/reaction'
 import CommentEditor from '@/components/comment/CommentEditor.vue'
 import { useUserStore } from '@/store/user'
 import { usePostComposerStore } from '@/store/postComposer'
+import { useDwellTime } from '@/composables/useDwellTime'
+import OneboxCard from '@/components/common/OneboxCard.vue'
 import { followApi } from '@/api/follow'
 
 const route = useRoute()
 const router = useRouter()
 const userStore = useUserStore()
 const composerStore = usePostComposerStore()
+// Song：阅读时长追踪（借鉴 Discourse PostTiming），用于 TL 计算与热度加权
+const dwellTime = useDwellTime()
 
 const post = ref<Post | null>(null)
 const comments = ref<Comment[]>([])
@@ -242,7 +246,9 @@ const renderedContent = computed(() => {
       'controls','preload','poster','playsinline','muted','loop','autoplay',
       'viewBox','width','height','aria-hidden','aria-label','fill','d',
       'style',
-      'data-lang','data-raw','data-line','data-highlighted-chars','data-highlighted-chars-id'
+      'data-lang','data-raw','data-line','data-highlighted-chars','data-highlighted-chars-id',
+      // Song：Onebox 富链接卡片标记，挂载后由 OneboxCard 异步加载 OG 元数据
+      'data-onebox-url'
     ],
     FORCE_BODY: true,
     ALLOW_DATA_ATTR: false,
@@ -251,6 +257,39 @@ const renderedContent = computed(() => {
 
 const tocRenderResult = ref<MarkdownTocRenderResult>({ html: '', headings: [], hasTocTag: false })
 let _renderToken = 0
+
+// Song：Onebox 富链接动态挂载 —— 内容渲染后遍历 a[data-onebox-url]，用 OneboxCard 替换
+const oneboxApps: VueApp[] = []
+const hydrateOneboxCards = () => {
+  // Song：先卸载旧的动态挂载实例，避免重复/内存泄漏
+  for (const app of oneboxApps) {
+    try { app.unmount() } catch {}
+  }
+  oneboxApps.length = 0
+
+  const anchors = document.querySelectorAll('a[data-onebox-url]')
+  anchors.forEach((anchor) => {
+    const url = anchor.getAttribute('data-onebox-url')
+    if (!url) return
+    // Song：用一个新的 div 容器替换原 a 标签，在容器上挂载 OneboxCard
+    const mountPoint = document.createElement('div')
+    mountPoint.className = 'onebox-mount'
+    anchor.replaceWith(mountPoint)
+    try {
+      const app = createApp(OneboxCard, { url })
+      app.mount(mountPoint)
+      oneboxApps.push(app)
+    } catch (e) {
+      // Song：挂载失败时把原 a 标签放回去，至少保留可点击链接
+      mountPoint.replaceWith(anchor)
+    }
+  })
+}
+
+// Song：内容渲染后挂载 Onebox 卡片（nextTick 确保 DOM 已更新）
+watch(renderedContent, () => {
+  nextTick(() => hydrateOneboxCards())
+}, { immediate: true })
 watch(
   () => post.value?.content ?? '',
   async (content) => {
@@ -325,6 +364,11 @@ onUnmounted(() => {
     clearInterval(typistTimer)
     typistTimer = null
   }
+  // Song：卸载所有动态挂载的 Onebox 卡片实例
+  for (const app of oneboxApps) {
+    try { app.unmount() } catch {}
+  }
+  oneboxApps.length = 0
 })
 
 const canRegenerateSummary = computed(() => {
@@ -442,6 +486,8 @@ const fetchPost = async () => {
     void checkFollowStatus()
     void checkSubscriptionStatus()
     void viewLogApi.recordView(id).catch(() => {})
+    // Song：开始追踪本帖阅读时长（前端心跳上报）
+    dwellTime.start(id)
   } catch (error) {
     post.value = null
     ElMessage.error('获取详情失败')

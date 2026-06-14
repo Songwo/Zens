@@ -44,6 +44,20 @@ public class ViewLogController {
     }
 
     /**
+     * Song：阅读时长心跳 —— 前端在帖子详情页定时上报停留时长，累加到用户阅读总时长与帖子平均阅读时长。
+     * 用于信任等级计算（TL2/TL3 需要累计阅读时长）和热度公式加权。
+     */
+    @PostMapping("/heartbeat")
+    public Result<?> heartbeat(@RequestParam String postId,
+            @RequestParam(defaultValue = "0") int durationMs) {
+        String currentUserId = SecurityUtils.getCurrentUserId();
+        // Song：未登录用户的心跳也接受（仅用于帖子 avg_dwell_sec 统计），但不累加用户阅读时长
+        int safeDuration = Math.min(Math.max(durationMs, 0), 600_000); // 单次最多 10 分钟，防异常值
+        viewLogService.recordHeartbeat(postId, currentUserId, safeDuration);
+        return Result.success();
+    }
+
+    /**
      * 获取帖子浏览次数（指定时间段）
      */
     @GetMapping("/count")

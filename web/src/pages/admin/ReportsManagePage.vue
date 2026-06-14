@@ -192,6 +192,14 @@ const targetTypeLabel = (targetType: string) => {
   return targetType === 'comment' ? '评论' : '帖子'
 }
 
+// Song：flag 权重越高（来自更高信任等级用户）越应优先处理
+const flagWeightType = (weight?: number) => {
+  const w = weight ?? 1
+  if (w >= 5) return 'danger'
+  if (w >= 3) return 'warning'
+  return 'info'
+}
+
 const canRejectPost = (row: ReportManageItem) => {
   return row.status === 0 && row.targetType === 'post'
 }
@@ -263,6 +271,18 @@ onMounted(async () => {
     <el-table :data="reports" v-loading="loading" stripe border class="data-table">
       <el-table-column prop="id" label="ID" width="90" />
       <el-table-column prop="reporterId" label="举报人" width="200" show-overflow-tooltip />
+      <el-table-column label="举报权重" width="110" align="center">
+        <template #default="{ row }">
+          <el-tag
+            :type="flagWeightType(row.flagWeight)"
+            size="small"
+            effect="dark"
+          >
+            {{ row.flagWeight ?? 1 }}x
+            <span v-if="row.reporterTrustLevel !== undefined" class="flag-tl">TL{{ row.reporterTrustLevel }}</span>
+          </el-tag>
+        </template>
+      </el-table-column>
       <el-table-column label="所属板块" width="140" align="center">
         <template #default="{ row }">
           <el-tag size="small" effect="plain">{{ row.sectionName || '未知板块' }}</el-tag>
@@ -425,6 +445,12 @@ onMounted(async () => {
   color: var(--el-text-color-secondary);
   font-size: 13px;
   line-height: 1.5;
+}
+
+.flag-tl {
+  margin-left: 4px;
+  opacity: 0.85;
+  font-weight: 600;
 }
 
 .text-placeholder {

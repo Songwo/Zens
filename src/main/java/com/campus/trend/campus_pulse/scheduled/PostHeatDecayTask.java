@@ -145,6 +145,10 @@ public class PostHeatDecayTask {
                 + comments * 5.0
                 + collects * 2.0;
 
+        // Song：阅读时长加权 —— 平均阅读秒数封顶 5 分，把"打开就关"和"读5分钟"区分开（借鉴 Discourse PostTiming）
+        int avgDwellSec = post.getAvgDwellSec() != null ? post.getAvgDwellSec() : 0;
+        interactionScore += Math.min(avgDwellSec * 0.05, 5.0);
+
         // 2. 精华帖加分
         if (post.getIsFeatured() != null && post.getIsFeatured() == 1) {
             interactionScore += FEATURED_BONUS;

@@ -26,6 +26,8 @@ public class AsyncTaskServiceImpl implements AsyncTaskService {
     private final UserTagRelationService userTagRelationService;
     private final UserMapper userMapper;
     private final MailService mailService;
+    private final com.campus.trend.campus_pulse.mapper.PostMapper postMapper;
+    private final com.campus.trend.campus_pulse.service.SearchService searchService;
 
     @Override
     @Async("taskExecutor")
@@ -164,6 +166,31 @@ public class AsyncTaskServiceImpl implements AsyncTaskService {
                     "Hi " + nickname + "，你收到一条新通知：\n\n" + content + "\n\n请前往站内查看完整内容。");
         } catch (Exception e) {
             log.warn("异步通知邮件同步失败: userId={}, err={}", userId, e.getMessage());
+        }
+    }
+
+    @Override
+    @Async("taskExecutor")
+    public void syncPostToSearchAsync(String postId) {
+        if (!StringUtils.hasText(postId)) {
+            return;
+        }
+        try {
+            com.campus.trend.campus_pulse.entity.Post post = postMapper.selectById(postId);
+            if (post == null) {
+                // Song：帖子已不存在，从索引删除
+                searchService.deletePost(postId);
+                return;
+            }
+            // Song：草稿/删除态帖子不索引（查询时也不会返回）
+            String audit = post.getAuditStatus();
+            if ("DRAFT".equalsIgnoreCase(audit) || "DELETED".equalsIgnoreCase(audit)) {
+                searchService.deletePost(postId);
+                return;
+            }
+            searchService.indexPost(post);
+        } catch (Exception e) {
+            log.warn("同步帖子到搜索引擎失败 postId={}, err={}", postId, e.getMessage());
         }
     }
 }

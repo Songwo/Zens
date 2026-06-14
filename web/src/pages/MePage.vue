@@ -4,6 +4,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { useUserStore } from '@/store/user'
 import MainLayout from '@/layouts/MainLayout.vue'
 import ProfileHeader from '@/components/profile/ProfileHeader.vue'
+import TrustLevelBadge from '@/components/common/TrustLevelBadge.vue'
 import ProfilePostList from '@/components/profile/ProfilePostList.vue'
 import RelationsPanel from '@/components/profile/RelationsPanel.vue'
 import CreatorPanel from '@/components/profile/CreatorPanel.vue'
@@ -104,13 +105,14 @@ watch(() => route.query.tab, t => { if (t && typeof t === 'string') activeTab.va
 
       <CheckInCard />
 
-      <div class="level-entry" @click="router.push('/level')">
+      <div class="level-entry" @click="router.push('/trust')">
         <span class="level-entry-text">
           <el-icon><TrophyBase /></el-icon>
-          我的等级 Lv.{{ levelInfo?.level ?? headerProfile.level ?? 1 }}
-          <span class="level-entry-hint">· {{ levelHint || '查看升级特权' }}</span>
+          我的信任等级
+          <TrustLevelBadge :trust-level="userStore.userInfo?.trustLevel ?? 0" />
+          <span class="level-entry-hint">· 资历 Lv.{{ levelInfo?.level ?? headerProfile.level ?? 1 }} · {{ levelHint || '查看等级特权' }}</span>
         </span>
-        <span class="level-entry-arrow">查看特权 →</span>
+        <span class="level-entry-arrow">查看详情 →</span>
       </div>
 
       <el-tabs v-model="activeTab" class="me-tabs" @tab-change="onTab">

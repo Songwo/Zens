@@ -2,6 +2,10 @@
 import { ref, onMounted, computed, watch } from 'vue'
 import MainLayout from '@/layouts/MainLayout.vue'
 import { levelApi, type LevelInfo, type LevelThreshold, type LevelExpRecord } from '@/api/level'
+import { trustLevelApi, type TrustInfo } from '@/api/trustLevel'
+import { TRUST_LEVELS, trustLevelColor, trustLevelLabel } from '@/utils/trustLevel'
+import TrustLevelBadge from '@/components/common/TrustLevelBadge.vue'
+import { levelTitle } from '@/utils/levelPrivileges'
 import { userApi, type SupportContact } from '@/api/user'
 import { useUserStore } from '@/store/user'
 import { useRouter } from 'vue-router'
@@ -23,6 +27,7 @@ const LEVEL_THRESHOLDS_CACHE_TTL = 30 * 60 * 1000
 const SUPPORT_CONTACT_CACHE_TTL = 5 * 60 * 1000
 
 const levelInfo = ref<LevelInfo | null>(null)
+const trustInfo = ref<TrustInfo | null>(null)
 const thresholds = ref<LevelThreshold[]>([])
 const loading = ref(false)
 const recentRecordsLoading = ref(false)
@@ -142,6 +147,19 @@ const fetchLevelInfo = async () => {
   }
 }
 
+const fetchTrustInfo = async () => {
+  if (!isLoggedIn.value) return
+  try {
+    const res = await trustLevelApi.info()
+    trustInfo.value = res.data
+  } catch {
+    // Song：信任等级获取失败不阻塞页面
+  }
+}
+
+const currentTrustLevel = computed(() => trustInfo.value?.trustLevel ?? userStore.userInfo?.trustLevel ?? 0)
+const expTitle = computed(() => levelInfo.value ? levelTitle(levelInfo.value.level) : '')
+
 const fetchThresholds = async () => {
   try {
     const res = await cachedRequest(
@@ -254,7 +272,7 @@ const goLogin = () => {
 
 onMounted(async () => {
   loading.value = true
-  await Promise.all([fetchThresholds(), fetchLevelInfo(), fetchRecentExpRecords()])
+  await Promise.all([fetchThresholds(), fetchLevelInfo(), fetchRecentExpRecords(), fetchTrustInfo()])
   if (isLv6Unlocked.value) {
     await fetchSupportContact()
   }
@@ -296,8 +314,37 @@ watch(isLv6Unlocked, async (unlocked) => {
           </div>
           <div class="title-text">
             <h1>等级中心 <span>(Account Level)</span></h1>
-            <p class="subtitle">提升活跃度，解锁更多社区专属权限与荣耀标识。</p>
+            <p class="subtitle">双轴等级体系：信任等级（TL）控制功能权限，资历等级（Lv）记录社区贡献。</p>
           </div>
+        </div>
+      </div>
+
+      <!-- Song：双轴主横幅 —— TL 主轴（管权限）+ Lv 副轴（管资历），点击进对应详情页 -->
+      <div v-if="isLoggedIn" class="dual-axis-banner">
+        <div class="axis-card axis-trust" :style="{ '--axis-color': trustLevelColor(currentTrustLevel) }" @click="router.push('/trust')">
+          <div class="axis-head">
+            <span class="axis-tag">信任等级</span>
+            <span class="axis-level" :style="{ background: trustLevelColor(currentTrustLevel) }">
+              TL{{ currentTrustLevel }} · {{ trustLevelLabel(currentTrustLevel) }}
+            </span>
+          </div>
+          <p class="axis-desc">{{ TRUST_LEVELS[currentTrustLevel]?.description }}</p>
+          <div class="axis-privs">
+            <span v-for="p in (TRUST_LEVELS[currentTrustLevel]?.privileges || [])" :key="p" class="axis-priv-tag">{{ p }}</span>
+          </div>
+          <span class="axis-link">查看信任详情 →</span>
+        </div>
+        <div class="axis-card axis-exp" @click="router.push('/level')">
+          <div class="axis-head">
+            <span class="axis-tag axis-tag-secondary">资历等级</span>
+            <span class="axis-level axis-level-secondary" v-if="levelInfo">Lv.{{ levelInfo.level }} · {{ expTitle }}</span>
+          </div>
+          <p class="axis-desc">由发帖/签到攒经验驱动，记录你在社区的资历与贡献。</p>
+          <div class="axis-privs">
+            <span class="axis-priv-tag">{{ levelInfo?.experience ?? 0 }} 经验值</span>
+            <span class="axis-priv-tag" v-if="levelInfo && levelInfo.level < 10">距 Lv.{{ levelInfo.level + 1 }} 还差 {{ expNeeded }}</span>
+          </div>
+          <span class="axis-link">查看资历详情 →</span>
         </div>
       </div>
 
@@ -700,6 +747,90 @@ watch(isLv6Unlocked, async (unlocked) => {
   margin: 0;
   color: var(--el-text-color-regular);
   font-size: 15px;
+}
+
+/* Song：双轴主横幅 —— TL（信任/权限）+ Lv（资历/经验）并列 */
+.dual-axis-banner {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 28px;
+}
+.axis-card {
+  border: 1px solid var(--el-border-color);
+  border-radius: 12px;
+  padding: 18px 20px;
+  background: var(--el-fill-color-blank);
+  cursor: pointer;
+  transition: border-color 0.2s, box-shadow 0.2s, transform 0.15s;
+}
+.axis-card:hover {
+  border-color: var(--axis-color, var(--el-color-primary));
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  transform: translateY(-1px);
+}
+.axis-trust {
+  border-left: 4px solid var(--axis-color);
+}
+.axis-exp {
+  border-left: 4px solid var(--el-text-color-secondary);
+}
+.axis-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+.axis-tag {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--axis-color, var(--el-color-primary));
+  letter-spacing: 0.5px;
+}
+.axis-tag-secondary {
+  color: var(--el-text-color-secondary);
+}
+.axis-level {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 6px;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+}
+.axis-level-secondary {
+  background: var(--el-text-color-secondary);
+}
+.axis-desc {
+  margin: 6px 0 10px;
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
+  line-height: 1.5;
+}
+.axis-privs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.axis-priv-tag {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: var(--el-fill-color-light);
+  color: var(--el-text-color-regular);
+}
+.axis-link {
+  font-size: 12px;
+  color: var(--el-color-primary);
+  font-weight: 600;
+}
+@media (max-width: 768px) {
+  .dual-axis-banner {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* Song：说明 */

@@ -158,6 +158,8 @@ function createExternalLinkCard(doc: Document, anchor: HTMLAnchorElement): HTMLE
   card.href = anchor.href
   card.target = '_blank'
   card.rel = 'noopener noreferrer nofollow'
+  // Song：挂 data-onebox-url，供 PostDetailPage 渲染后动态加载 OG 卡片（YouTube/Bilibili 嵌入、OG 图文）
+  card.setAttribute('data-onebox-url', anchor.href)
 
   const iconSpan = doc.createElement('span')
   iconSpan.className = 'ext-link-icon'

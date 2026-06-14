@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import Avatar from '@/components/common/Avatar.vue'
 import UserRoleBadge from '@/components/common/UserRoleBadge.vue'
+import TrustLevelBadge from '@/components/common/TrustLevelBadge.vue'
 import UserBadge from '@/components/common/UserBadge.vue'
 import ProfileCover from '@/components/profile/ProfileCover.vue'
 import { parseCoverConfig, type CoverConfig } from '@/utils/coverConfig'
@@ -19,6 +20,8 @@ export interface ProfileHeaderData {
   enrollmentYear?: number
   interestTags?: string
   level?: number
+  /** 信任等级 0-4（TL0新人/TL1基础/TL2成员/TL3常客/TL4领袖） */
+  trustLevel?: number
   roles?: string[]
   badgeText?: string
   badgeColor?: string
@@ -93,8 +96,11 @@ const clickableStats = computed(() => isSelf.value)
       <div class="ph-namerow">
         <h1 class="ph-name">{{ profile.nickname || profile.username }}</h1>
         <UserRoleBadge :roles="profile.roles || []" />
+        <TrustLevelBadge :trust-level="profile.trustLevel ?? 0" />
         <UserBadge :text="profile.badgeText || ''" :color="profile.badgeColor" :effect="profile.badgeStyle" />
-        <span v-if="profile.level != null" class="ph-level-pill">Lv.{{ profile.level }}</span>
+        <el-tooltip content="资历等级（经验值驱动，仅展示）" placement="top" effect="dark">
+          <span v-if="profile.level != null" class="ph-level-pill">Lv.{{ profile.level }}</span>
+        </el-tooltip>
       </div>
       <div class="ph-handle">@{{ profile.username }}</div>
 
@@ -151,8 +157,9 @@ const clickableStats = computed(() => isSelf.value)
 .ph-avatar { margin-top: -36px; border: 4px solid var(--el-bg-color); border-radius: 50%; }
 .ph-namerow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
 .ph-name { margin: 0; font-size: 22px; font-weight: 800; color: var(--el-text-color-primary); }
-.ph-level-pill { font-size: 11px; font-weight: 700; color: var(--el-color-primary);
-  border: 1px solid var(--el-border-color); border-radius: 10px; padding: 1px 8px; }
+.ph-level-pill { font-size: 11px; font-weight: 600; color: var(--el-text-color-secondary);
+  border: 1px solid var(--el-border-color-light); border-radius: 10px; padding: 1px 8px;
+  background: var(--el-fill-color-light); cursor: help; }
 .ph-handle { font-size: 13px; font-weight: 600; color: var(--el-color-primary); margin-top: 2px; }
 .ph-bio { margin: 10px 0; font-size: 13px; line-height: 1.55; color: var(--el-text-color-regular); }
 .ph-bio-empty { color: var(--el-text-color-placeholder); cursor: pointer; }

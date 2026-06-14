@@ -9,6 +9,8 @@ export interface UserProfile {
     avatar: string
     email: string
     level?: number
+    /** 信任等级 0-4 (TL0新人/TL1基础/TL2成员/TL3常客/TL4领袖) */
+    trustLevel?: number
     bio?: string
     school: string
     major: string
@@ -48,6 +50,8 @@ export interface UserPublicProfile {
     school?: string
     major?: string
     level?: number
+    /** 信任等级 0-4 (TL0新人/TL1基础/TL2成员/TL3常客/TL4领袖) */
+    trustLevel?: number
     roles?: string[]
     enrollmentYear?: number
     interestTags?: string

@@ -38,6 +38,11 @@ CREATE TABLE `sys_user` (
   `role`                 varchar(50)   DEFAULT 'ROLE_USER' COMMENT '角色',
   `reputation`           int           DEFAULT 0 COMMENT '声望值',
   `contribution_val`     int           DEFAULT 0 COMMENT '社区贡献值',
+  `trust_level`          tinyint       NOT NULL DEFAULT 0 COMMENT '信任等级 0-4: TL0新人/TL1基础/TL2成员/TL3常客/TL4领袖',
+  `silenced_until`       datetime      DEFAULT NULL COMMENT '禁言截止时间，NULL=未禁言',
+  `read_time_sec`        int           NOT NULL DEFAULT 0 COMMENT '累计阅读时长(秒)，用于 TL 计算',
+  `days_visited`         int           NOT NULL DEFAULT 0 COMMENT '累计访问天数(sys_view_log 去重日期)',
+  `likes_given`          int           NOT NULL DEFAULT 0 COMMENT '发出点赞总数',
   `active_region`        varchar(100)  DEFAULT NULL COMMENT '常活跃地点',
   `preferred_cate_json`  json          DEFAULT NULL COMMENT '偏好分类权重',
   `total_posts`          int           DEFAULT 0 COMMENT '总发帖数',
@@ -63,7 +68,8 @@ CREATE TABLE `sys_user` (
   UNIQUE KEY `uk_user_email` (`email`),
   UNIQUE KEY `uk_user_github_id` (`github_id`),
   KEY `idx_user_role_status` (`role`, `status`),
-  KEY `idx_user_last_active` (`last_active_time`)
+  KEY `idx_user_last_active` (`last_active_time`),
+  KEY `idx_user_trust_level` (`trust_level`, `status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户表';
 
 -- ============================================================
@@ -143,6 +149,7 @@ CREATE TABLE `sys_post` (
   `collect_count`    int           DEFAULT 0 COMMENT '收藏数',
   `comment_count`    int           DEFAULT 0 COMMENT '评论数',
   `heat_score`       double        DEFAULT 0 COMMENT '热度值',
+  `avg_dwell_sec`    int           DEFAULT 0 COMMENT '平均阅读时长(秒)，热度加权用',
   `last_reply_at`    datetime      DEFAULT NULL COMMENT '最后回复时间',
   `last_activity_at` datetime      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '最后活跃时间',
   `create_time`      datetime      DEFAULT CURRENT_TIMESTAMP,
@@ -337,12 +344,13 @@ CREATE TABLE `short_links` (
 -- 14) 浏览日志表
 -- ============================================================
 CREATE TABLE `sys_view_log` (
-  `id`          bigint        NOT NULL AUTO_INCREMENT,
-  `post_id`     varchar(64)   NOT NULL,
-  `user_id`     varchar(64)   DEFAULT NULL,
-  `ip`          varchar(50)   DEFAULT NULL,
-  `device`      varchar(50)   DEFAULT NULL,
-  `create_time` datetime      DEFAULT CURRENT_TIMESTAMP,
+  `id`           bigint        NOT NULL AUTO_INCREMENT,
+  `post_id`      varchar(64)   NOT NULL,
+  `user_id`      varchar(64)   DEFAULT NULL,
+  `ip`           varchar(50)   DEFAULT NULL,
+  `device`       varchar(50)   DEFAULT NULL,
+  `duration_ms`  int           NOT NULL DEFAULT 0 COMMENT '本次浏览停留毫秒数',
+  `create_time`  datetime      DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `idx_view_log_create_time` (`create_time`),
   KEY `idx_view_log_post` (`post_id`),
@@ -408,18 +416,21 @@ CREATE TABLE `direct_messages` (
 -- 18) 举报表
 -- ============================================================
 CREATE TABLE `sys_report` (
-  `id`          varchar(64)   NOT NULL,
-  `target_type` varchar(20)   NOT NULL COMMENT 'post/comment',
-  `target_id`   varchar(64)   NOT NULL,
-  `reason`      varchar(100)  DEFAULT NULL,
-  `details`     text          DEFAULT NULL,
-  `reporter_id` varchar(64)   NOT NULL,
-  `status`      int           DEFAULT 0 COMMENT '0待处理 1已处理 2已忽略 3打回修改 10排队中 11处理中',
-  `create_time` datetime      DEFAULT CURRENT_TIMESTAMP,
-  `update_time` datetime      DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `id`                   varchar(64)   NOT NULL,
+  `target_type`          varchar(20)   NOT NULL COMMENT 'post/comment',
+  `target_id`            varchar(64)   NOT NULL,
+  `reason`               varchar(100)  DEFAULT NULL,
+  `details`              text          DEFAULT NULL,
+  `reporter_id`          varchar(64)   NOT NULL,
+  `reporter_trust_level` tinyint       DEFAULT 0 COMMENT '举报人当时的信任等级，用于加权',
+  `flag_weight`          int           DEFAULT 1 COMMENT 'flag 权重=举报人 TL 映射值',
+  `status`               int           DEFAULT 0 COMMENT '0待处理 1已处理 2已忽略 3打回修改 10排队中 11处理中',
+  `create_time`          datetime      DEFAULT CURRENT_TIMESTAMP,
+  `update_time`          datetime      DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `idx_report_status_time` (`status`, `create_time`),
-  KEY `idx_report_target` (`target_type`, `target_id`)
+  KEY `idx_report_target` (`target_type`, `target_id`),
+  KEY `idx_report_target_weight` (`target_type`, `target_id`, `flag_weight`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='举报表';
 
 -- ============================================================
@@ -546,6 +557,21 @@ CREATE TABLE `sys_changelog` (
   PRIMARY KEY (`id`),
   KEY `idx_changelog_status_sort` (`status`, `sort_order`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='发展历程/版本日志表';
+
+-- ============================================================
+-- 26) 信任等级变更日志表
+-- ============================================================
+CREATE TABLE `sys_trust_event` (
+  `id`           bigint        NOT NULL AUTO_INCREMENT,
+  `user_id`      varchar(64)   NOT NULL,
+  `old_level`    tinyint       NOT NULL,
+  `new_level`    tinyint       NOT NULL,
+  `reason`       varchar(200)  NOT NULL COMMENT '晋升/降级原因',
+  `metrics_json` text          DEFAULT NULL COMMENT '触发时的指标快照',
+  `create_time`  datetime      DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_trust_event_user_time` (`user_id`, `create_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='信任等级变更日志';
 
 -- ============================================================
 -- 基础种子数据

@@ -35,15 +35,18 @@ public class ViewLogServiceImpl extends ServiceImpl<ViewLogMapper, ViewLog>
     private final PostMapper postMapper;
     private final PostEventService postEventService;
     private final com.campus.trend.campus_pulse.service.post.PostCacheManager postCacheManager;
+    private final com.campus.trend.campus_pulse.mapper.UserMapper userMapper;
 
     public ViewLogServiceImpl(LevelService levelService, StringRedisTemplate stringRedisTemplate, PostMapper postMapper,
             PostEventService postEventService,
-            com.campus.trend.campus_pulse.service.post.PostCacheManager postCacheManager) {
+            com.campus.trend.campus_pulse.service.post.PostCacheManager postCacheManager,
+            com.campus.trend.campus_pulse.mapper.UserMapper userMapper) {
         this.levelService = levelService;
         this.stringRedisTemplate = stringRedisTemplate;
         this.postMapper = postMapper;
         this.postEventService = postEventService;
         this.postCacheManager = postCacheManager;
+        this.userMapper = userMapper;
     }
 
     @Override
@@ -88,6 +91,58 @@ public class ViewLogServiceImpl extends ServiceImpl<ViewLogMapper, ViewLog>
             } catch (Exception e) {
                 log.warn("每日浏览经验发放失败: {}", e.getMessage());
             }
+        }
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void recordHeartbeat(String postId, String userId, int durationMs) {
+        if (postId == null || durationMs <= 0) {
+            return;
+        }
+        // Song：同一帖子 5 秒内的心跳去重，避免前端定时器误差导致重复累加
+        if (userId != null) {
+            String dedupeKey = "view:heartbeat:" + userId + ":" + postId;
+            Boolean acquired = stringRedisTemplate.opsForValue().setIfAbsent(dedupeKey, "1", 5, TimeUnit.SECONDS);
+            if (Boolean.FALSE.equals(acquired)) {
+                return;
+            }
+        }
+
+        // Song：写入浏览日志（带停留时长），不重复 +1 view_count，避免刷量
+        ViewLog viewLog = new ViewLog()
+                .setPostId(postId)
+                .setUserId(userId)
+                .setDurationMs(durationMs)
+                .setCreateTime(LocalDateTime.now());
+        save(viewLog);
+
+        // Song：累加用户累计阅读时长（秒），用于 TL 计算
+        if (userId != null) {
+            try {
+                int sec = durationMs / 1000;
+                if (sec > 0) {
+                    userMapper.update(null,
+                            new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<com.campus.trend.campus_pulse.entity.User>()
+                                    .eq(com.campus.trend.campus_pulse.entity.User::getId, userId)
+                                    .setSql("read_time_sec = read_time_sec + " + sec));
+                }
+            } catch (Exception e) {
+                log.debug("累加用户阅读时长失败 userId={}, err={}", userId, e.getMessage());
+            }
+        }
+
+        // Song：累加帖子平均阅读时长（秒），用于热度公式加权
+        try {
+            int sec = durationMs / 1000;
+            if (sec > 0) {
+                postMapper.update(null,
+                        new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<Post>()
+                                .eq(Post::getId, postId)
+                                .setSql("avg_dwell_sec = (avg_dwell_sec * view_count + " + sec + ") / GREATEST(view_count, 1)"));
+            }
+        } catch (Exception e) {
+            log.debug("更新帖子平均阅读时长失败 postId={}, err={}", postId, e.getMessage());
         }
     }
 

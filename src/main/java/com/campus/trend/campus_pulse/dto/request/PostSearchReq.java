@@ -67,4 +67,9 @@ public class PostSearchReq {
     // 内部字段：是否包含软删除内容；前台回收站通过 auditStatus=DELETED 精确查询。
     @com.fasterxml.jackson.annotation.JsonIgnore
     private transient Boolean includeDeleted;
+
+    // Song：内部字段 - Meilisearch 关键词检索返回的 postId 列表（不从请求体传入）。
+    // 设置后 buildSearchWrapper 用 in() 限定，跳过 MySQL FULLTEXT。
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    private transient List<String> meiliPostIds;
 }

@@ -146,6 +146,13 @@
             <artifactId>spring-boot-starter-amqp</artifactId>
         </dependency>
 
+        <!-- Meilisearch 中文搜索引擎（开关+优雅降级，campus.meilisearch.enabled=false 时不创建 bean） -->
+        <dependency>
+            <groupId>com.meilisearch.sdk</groupId>
+            <artifactId>meilisearch-java</artifactId>
+            <version>0.14.2</version>
+        </dependency>
+
         <!-- IP 归属地查询 -->
         <dependency>
             <groupId>org.lionsoul</groupId>

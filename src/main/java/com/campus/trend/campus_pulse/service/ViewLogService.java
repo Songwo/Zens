@@ -15,9 +15,16 @@ public interface ViewLogService extends IService<ViewLog> {
 
     /**
      * Song：记录一次浏览
-     * 
+     *
      */
     void recordView(String postId, String userId, String ip, String device);
+
+    /**
+     * Song：阅读时长心跳 —— 前端每 10-30s 上报一次停留时长，累加到用户阅读总时长。
+     * 用于信任等级计算（TL2/TL3 需要 X 分钟阅读）和热度公式加权。
+     * 同一帖子 5 秒内的重复心跳会被合并去重。
+     */
+    void recordHeartbeat(String postId, String userId, int durationMs);
 
     /**
      * Song：获取帖子在指定时间段内的浏览次数

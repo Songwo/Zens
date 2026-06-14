@@ -15,11 +15,16 @@ import com.campus.trend.campus_pulse.mapper.CommentMapper;
 import com.campus.trend.campus_pulse.mapper.PostMapper;
 import com.campus.trend.campus_pulse.mapper.SectionMapper;
 import com.campus.trend.campus_pulse.mapper.SysReportMapper;
+import com.campus.trend.campus_pulse.service.AsyncTaskService;
 import com.campus.trend.campus_pulse.service.SectionModeratorService;
 import com.campus.trend.campus_pulse.service.SysReportService;
+import com.campus.trend.campus_pulse.service.TrustLevelService;
+import com.campus.trend.campus_pulse.config.properties.TrustLevelProperties;
 import com.campus.trend.campus_pulse.utils.PermissionUtils;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.util.ArrayList;
@@ -33,20 +38,28 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class SysReportServiceImpl extends ServiceImpl<SysReportMapper, SysReport> implements SysReportService {
 
     private final SectionModeratorService sectionModeratorService;
     private final PostMapper postMapper;
     private final CommentMapper commentMapper;
     private final SectionMapper sectionMapper;
+    private final TrustLevelService trustLevelService;
+    private final TrustLevelProperties trustLevelProperties;
+    private final AsyncTaskService asyncTaskService;
 
     private static final String AUDIT_STATUS_DELETED = "DELETED";
+    private static final String AUDIT_STATUS_PENDING = "PENDING";
+    private static final String AUDIT_STATUS_APPROVED = "APPROVED";
     private static final int POST_STATUS_PUBLISHED = 1;
+    private static final int POST_STATUS_DRAFT = 0;
     private static final int REPORT_STATUS_PENDING = 0;
     private static final int REPORT_STATUS_QUEUED = 10;
     private static final int REPORT_STATUS_PROCESSING = 11;
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void createReport(SysReport report, String reporterId) {
         if (report == null || !StringUtils.hasText(report.getTargetId())) {
             throw new BusinessException(ResultCode.PARAM_ERROR, "举报对象不能为空");
@@ -59,12 +72,60 @@ public class SysReportServiceImpl extends ServiceImpl<SysReportMapper, SysReport
         }
         validateReportTarget(targetType, report.getTargetId(), reporterId);
         ensureNoPendingDuplicate(targetType, report.getTargetId(), reporterId);
+        // Song：写入举报人的信任等级与 flag 权重（自治 flag 加权机制）
+        int tl = trustLevelService.getTrustLevel(reporterId);
+        int weight = trustLevelService.flagWeight(reporterId);
         report.setTargetType(targetType);
         report.setReporterId(reporterId);
+        report.setReporterTrustLevel(tl);
+        report.setFlagWeight(weight);
         report.setStatus(REPORT_STATUS_PENDING);
         report.setCreateTime(java.time.LocalDateTime.now());
         report.setUpdateTime(java.time.LocalDateTime.now());
         save(report);
+
+        // Song：聚合该目标所有未忽略举报的权重总和，达到阈值自动隐藏（社区自治）
+        try {
+            int totalWeight = baseMapper.sumFlagWeight(targetType, report.getTargetId());
+            int threshold = trustLevelProperties.getFlag().getAutoHideThreshold();
+            if (totalWeight >= threshold) {
+                autoHideForFlags(targetType, report.getTargetId(), totalWeight);
+            }
+        } catch (Exception e) {
+            log.warn("自治 flag 聚合判定失败 targetType={}, targetId={}, err={}",
+                    targetType, report.getTargetId(), e.getMessage());
+        }
+    }
+
+    /**
+     * Song：自治隐藏 —— 当某目标的 flag 权重总和达到阈值，自动将帖子置为 PENDING 等待管理员确认，
+     * 并通知作者。仅对 APPROVED 状态的帖子生效，避免重复处理。
+     */
+    private void autoHideForFlags(String targetType, String targetId, int totalWeight) {
+        if (!"post".equals(targetType)) {
+            // Song：评论暂不自动隐藏（影响面小），仅帖子走自治流程
+            return;
+        }
+        Post post = postMapper.selectById(targetId);
+        if (post == null || !AUDIT_STATUS_APPROVED.equalsIgnoreCase(post.getAuditStatus())) {
+            return;
+        }
+        post.setAuditStatus(AUDIT_STATUS_PENDING);
+        post.setUpdateTime(java.time.LocalDateTime.now());
+        postMapper.updateById(post);
+        log.info("自治隐藏触发: postId={}, 累计权重={}, 阈值={}", targetId, totalWeight,
+                trustLevelProperties.getFlag().getAutoHideThreshold());
+
+        // Song：异步通知作者内容被社区标记，进入人工复核
+        try {
+            asyncTaskService.sendSystemNotificationAsync(post.getUserId(),
+                    "你的帖子被社区标记",
+                    String.format("你的帖子「%s」被多位高信任等级用户标记，已暂时隐藏等待管理员复核。如有异议请联系管理员。",
+                            post.getTitle()),
+                    post.getId());
+        } catch (Exception e) {
+            log.warn("自治隐藏通知作者失败 postId={}", targetId);
+        }
     }
 
     private void validateReportTarget(String targetType, String targetId, String reporterId) {

@@ -107,6 +107,10 @@ public class Post implements Serializable {
     private Integer hasAdoptedAnswer;
 
     private Double heatScore;
+    /**
+     * 平均阅读时长（秒），热度加权用
+     */
+    private Integer avgDwellSec;
 
     /**
      * Song：最后回复时间

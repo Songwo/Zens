@@ -15,6 +15,7 @@ public record UserProfileResp(
         String school,
         String major,
         Integer level,
+        Integer trustLevel,
         List<String> roles,
         long postCount,
         long followingCount,

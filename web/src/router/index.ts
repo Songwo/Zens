@@ -104,6 +104,12 @@ const router = createRouter({
       meta: { requiresAuth: false, title: '等级中心', description: '查看等级成长、经验规则与权益' }
     },
     {
+      path: '/trust',
+      name: 'trust',
+      component: () => import('@/pages/UserTrustPage.vue'),
+      meta: { requiresAuth: true, title: '信任等级', description: '查看信任等级、行为指标与社区特权' }
+    },
+    {
       path: '/invite',
       name: 'invite',
       component: () => import('@/pages/InvitePage.vue'),

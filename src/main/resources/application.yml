@@ -317,6 +317,37 @@ campus:
     auto-backup-cron: ${LOG_AUTO_BACKUP_CRON:0 0 */6 * * ?}
     cleanup-cron: ${LOG_CLEANUP_CRON:0 20 4 * * ?}
     allowed-extensions: ${LOG_ALLOWED_EXTENSIONS:.log,.txt,.out,.err,.gz}
+  # Meilisearch 中文搜索引擎（默认关，关闭时搜索走 MySQL FULLTEXT 优雅降级）
+  meilisearch:
+    enabled: ${MEILISEARCH_ENABLED:false}
+    host: ${MEILISEARCH_HOST:http://localhost:7700}
+    api-key: ${MEILISEARCH_API_KEY:}
+    posts-index: ${MEILISEARCH_POSTS_INDEX:posts}
+    connect-timeout-ms: ${MEILISEARCH_CONNECT_TIMEOUT:3000}
+    read-timeout-ms: ${MEILISEARCH_READ_TIMEOUT:5000}
+  # 信任等级 TL0-TL4（借鉴 Discourse 社区自治模型，阈值均可调）
+  trust-level:
+    tl1:
+      requires-posts-entered: ${TL1_POSTS_ENTERED:3}
+      requires-posts-read: ${TL1_POSTS_READ:15}
+      requires-read-minutes: ${TL1_READ_MINUTES:5}
+      requires-days: ${TL1_DAYS:1}
+    tl2:
+      requires-days-visited: ${TL2_DAYS_VISITED:7}
+      requires-posts-entered: ${TL2_POSTS_ENTERED:15}
+      requires-posts-read: ${TL2_POSTS_READ:60}
+      requires-read-minutes: ${TL2_READ_MINUTES:30}
+      requires-likes-received: ${TL2_LIKES_RECEIVED:1}
+    tl3:
+      window-days: ${TL3_WINDOW_DAYS:100}
+      requires-days-visited: ${TL3_DAYS_VISITED:50}
+      requires-posts-read: ${TL3_POSTS_READ:500}
+      requires-likes-received: ${TL3_LIKES_RECEIVED:10}
+      requires-likes-given: ${TL3_LIKES_GIVEN:10}
+      requires-posts-created: ${TL3_POSTS_CREATED:10}
+    flag:
+      auto-hide-threshold: ${FLAG_AUTO_HIDE_THRESHOLD:10}
+    recalc-cron: ${TL_RECALC_CRON:0 30 2 * * ?}
 
 # 11. 第三方登录与二步验证配置
 oauth:

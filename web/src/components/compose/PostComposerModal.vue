@@ -26,6 +26,7 @@ import {
 } from '@/constants/upload'
 import { usePostComposerStore } from '@/store/postComposer'
 import { usePostDraft } from '@/composables/usePostDraft'
+import { canPostLinks, containsExternalLink } from '@/utils/trustLevel'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -171,6 +172,13 @@ const publish = async () => {
 
   if (!draft.form.sectionId) {
     ElMessage.warning('请选择板块')
+    return
+  }
+
+  // Song：TL0 新用户硬拦截 —— 未达到 TL1 不允许发布外链（借鉴 Discourse 反 spam 机制）
+  const trustLevel = userStore.userInfo?.trustLevel ?? 0
+  if (!canPostLinks(trustLevel) && containsExternalLink(content)) {
+    ElMessage.error('新用户暂不能发布外链，达到 TL1（进入3个帖子并阅读5分钟）后即可解锁')
     return
   }
 
@@ -548,6 +556,16 @@ onUnmounted(() => {
 
           <!-- BODY -->
           <div class="composer-body">
+            <!-- Song：TL0 新用户提示横幅（未达 TL1 时显示，提示外链/附件受限） -->
+            <el-alert
+              v-if="(userStore.userInfo?.trustLevel ?? 0) < 1"
+              class="tl0-hint"
+              type="warning"
+              :closable="false"
+              show-icon
+              title="新用户功能受限"
+              description="你当前的信任等级为 TL0（新人），暂不能在帖文中发布外链。进入 3 个帖子并阅读 5 分钟后自动晋升为 TL1 即可解锁。"
+            />
             <el-form :model="draft.form" label-position="top" class="compose-form">
               <!-- Title Input -->
               <el-form-item>
@@ -835,6 +853,11 @@ html.dark .close-btn:hover {
 }
 
 /* Song：说明 */
+.tl0-hint {
+  margin-bottom: 12px;
+  border-radius: 8px;
+}
+
 .composer-body {
   flex: 1;
   min-height: 0;

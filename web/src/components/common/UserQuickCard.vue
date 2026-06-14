@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Position, UserFilled } from '@element-plus/icons-vue'
 import UserRoleBadge from '@/components/common/UserRoleBadge.vue'
+import TrustLevelBadge from '@/components/common/TrustLevelBadge.vue'
 import UserBadge from '@/components/common/UserBadge.vue'
 import { followApi } from '@/api/follow'
 import { userApi, type UserPublicProfile } from '@/api/user'
@@ -223,10 +224,13 @@ const goToProfile = () => {
             <div class="name-row">
               <span class="name hover-underline">{{ displayName }}</span>
               <UserRoleBadge :roles="displayRoles" />
+              <TrustLevelBadge :trust-level="profile?.trustLevel ?? 0" />
               <UserBadge :text="displayBadge" :color="displayBadgeColor" :effect="displayBadgeEffect" />
             </div>
             <div class="username" v-if="displayUsername">@{{ displayUsername }}</div>
-            <div class="level" v-if="profile?.level">Lv.{{ profile.level }}</div>
+            <el-tooltip content="资历等级（经验值驱动，仅展示）" placement="top" effect="dark">
+              <div class="level level-secondary" v-if="profile?.level">Lv.{{ profile.level }}</div>
+            </el-tooltip>
           </div>
         </div>
 
@@ -335,6 +339,13 @@ const goToProfile = () => {
   font-size: 12px;
   color: var(--el-color-primary);
   margin-top: 2px;
+}
+/* Song：资历副徽章 —— 降为灰色次要展示，让 TL 彩色 chip 视觉更突出 */
+.level-secondary {
+  color: var(--el-text-color-secondary);
+  display: inline-block;
+  width: fit-content;
+  cursor: help;
 }
 
 .bio {

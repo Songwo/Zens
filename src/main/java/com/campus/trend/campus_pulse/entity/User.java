@@ -83,6 +83,26 @@ public class User implements Serializable {
     // ===== profile 字段 (原 sys_user_profile) =====
     private Integer reputation;
     private Integer contributionVal;
+    /**
+     * 信任等级 0-4: TL0新人/TL1基础/TL2成员/TL3常客/TL4领袖（借鉴 Discourse 社区自治模型）
+     */
+    private Integer trustLevel;
+    /**
+     * 禁言截止时间，NULL=未禁言
+     */
+    private LocalDateTime silencedUntil;
+    /**
+     * 累计阅读时长（秒），用于 TL 计算
+     */
+    private Integer readTimeSec;
+    /**
+     * 累计访问天数（sys_view_log 去重日期）
+     */
+    private Integer daysVisited;
+    /**
+     * 发出点赞总数
+     */
+    private Integer likesGiven;
     private String activeRegion;
 
     @TableField(typeHandler = JacksonTypeHandler.class)

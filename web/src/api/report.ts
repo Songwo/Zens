@@ -16,6 +16,10 @@ export interface ReportManageItem {
     reason: string
     details?: string
     reporterId: string
+    /** Song：举报人当时的信任等级 */
+    reporterTrustLevel?: number
+    /** Song：flag 权重（TL3→5, TL2→3, 其它→1） */
+    flagWeight?: number
     status: number
     createTime: string
     updateTime: string

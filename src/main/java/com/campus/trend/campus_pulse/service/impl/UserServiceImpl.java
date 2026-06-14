@@ -103,6 +103,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
                 user.getSchool(),
                 user.getMajor(),
                 user.getLevel(),
+                user.getTrustLevel() != null ? user.getTrustLevel() : 0,
                 List.of(StringUtils.hasText(user.getRole()) ? user.getRole() : "ROLE_USER"),
                 postCount,
                 followingCount,

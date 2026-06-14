@@ -39,4 +39,7 @@ public interface AsyncTaskService {
 
     /** 异步更新地区信息 */
     void updateActiveRegionAsync(String userId, String region);
+
+    /** 异步同步帖子到 Meilisearch 搜索引擎（发布/编辑/恢复时调用，关闭时静默返回） */
+    void syncPostToSearchAsync(String postId);
 }

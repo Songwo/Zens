@@ -37,6 +37,16 @@ public class SysReport implements Serializable {
     private String reporterId;
 
     /**
+     * Song：举报人当时的信任等级，用于加权
+     */
+    private Integer reporterTrustLevel;
+
+    /**
+     * Song：flag 权重 = 举报人 TL 映射值（TL3→5, TL2→3, 其它→1）
+     */
+    private Integer flagWeight;
+
+    /**
      * Song：状态: 0=待处理, 1=已处理, 2=已忽略
      */
     private Integer status;

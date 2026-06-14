@@ -19,6 +19,10 @@ export const viewLogApi = {
     /* Song：说明 */
     recordView: (postId: string) => api.post('/view-log/record', null, { params: { postId } }),
 
+    /* Song：阅读时长心跳 —— 前端定时上报停留毫秒数，累加到用户阅读时长与帖子平均阅读时长 */
+    heartbeat: (postId: string, durationMs: number) =>
+        api.post('/view-log/heartbeat', null, { params: { postId, durationMs } }),
+
     /* Song：说明 */
     getUserHistory: (userId: string, limit = 20) => api.get<any, Result<ViewLog[]>>(`/view-log/user-history/${userId}`, { params: { limit } }),
 

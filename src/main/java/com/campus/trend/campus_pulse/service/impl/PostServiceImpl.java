@@ -99,6 +99,8 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
     private final PollService pollService;
     private final PostSubscriptionService postSubscriptionService;
     private final PostCacheManager postCacheManager;
+    private final com.campus.trend.campus_pulse.service.TrustLevelService trustLevelService;
+    private final com.campus.trend.campus_pulse.service.SearchService searchService;
 
     @Override
     public Post searchByPostId(String postId) {
@@ -196,7 +198,9 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
         sysPost.setCollectCount(0);
         sysPost.setCommentCount(0);
         sysPost.setStatus(POST_STATUS_PUBLISHED); // Song：正常发布
-        sysPost.setAuditStatus(AUDIT_STATUS_APPROVED); // 默认通过；举报后再进入人工处理
+        // Song：新用户冷启动审核 —— TL0 用户或注册<24h/发帖<3 的新用户帖子进入 PENDING 人工审核，
+        //      借鉴 Discourse TL0 反 spam 机制，避免新注册账号灌水。TL1 及以上信任用户直接放行。
+        sysPost.setAuditStatus(resolveCreatePostAuditStatus(userId));
         sysPost.setHeatScore(0.0); // Song：初始热度
 
         // Song：初始化置顶和活跃时间字段
@@ -244,7 +248,42 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
             asyncTaskService.updateActiveRegionAsync(userId, createPostRequest.getLocationName());
         }
 
+        // Song：新用户帖子进入 PENDING 时异步通知作者，提升透明度
+        if (AUDIT_STATUS_PENDING.equals(sysPost.getAuditStatus())) {
+            asyncTaskService.sendSystemNotificationAsync(userId,
+                    "你的帖子正在审核",
+                    String.format("新用户帖子需管理员审核，「%s」通过后将公开显示。", sysPost.getTitle()),
+                    sysPost.getId());
+        }
+
+        // Song：异步同步到 Meilisearch 搜索引擎（关闭时静默返回）
+        asyncTaskService.syncPostToSearchAsync(sysPost.getId());
+
         postCacheManager.invalidatePostFeedCache(null, sysPost.getSectionId());
+    }
+
+    /**
+     * Song：新用户冷启动审核判定 —— 决定发帖时的初始审核状态。
+     * - TL1 及以上信任用户：直接 APPROVED
+     * - TL0 新用户 + (注册<24h 或 已发帖<3)：PENDING 人工审核
+     * - 其它：APPROVED（默认放行，举报后处理）
+     */
+    private String resolveCreatePostAuditStatus(String userId) {
+        if (trustLevelService.isUserTrusted(userId, 1)) {
+            return AUDIT_STATUS_APPROVED;
+        }
+        // Song：查用户的注册时间和发帖数判断是否新用户
+        com.campus.trend.campus_pulse.entity.User author = userService.getById(userId);
+        if (author == null) {
+            return AUDIT_STATUS_APPROVED;
+        }
+        boolean justRegistered = author.getCreateTime() == null
+                || author.getCreateTime().isAfter(LocalDateTime.now().minusHours(24));
+        boolean fewPosts = author.getTotalPosts() == null || author.getTotalPosts() < 3;
+        if (justRegistered || fewPosts) {
+            return AUDIT_STATUS_PENDING;
+        }
+        return AUDIT_STATUS_APPROVED;
     }
 
     @Override
@@ -581,6 +620,8 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
 
         postCacheManager.invalidatePostFeedCache(oldSectionId, post.getSectionId());
         postCacheManager.bumpPostDetailCacheVersion(post.getId());
+        // Song：异步同步更新后的帖子到 Meilisearch
+        asyncTaskService.syncPostToSearchAsync(post.getId());
     }
 
     @Override
@@ -627,6 +668,8 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
         this.updateById(post);
         postCacheManager.invalidatePostFeedCache(oldSectionId, null);
         postCacheManager.bumpPostDetailCacheVersion(postId);
+        // Song：从 Meilisearch 索引中删除（软删除的帖子不索引）
+        asyncTaskService.syncPostToSearchAsync(postId);
     }
 
     @Override
@@ -655,6 +698,8 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
         this.updateById(post);
         postCacheManager.invalidatePostFeedCache(null, post.getSectionId());
         postCacheManager.bumpPostDetailCacheVersion(postId);
+        // Song：恢复后重新索引到 Meilisearch
+        asyncTaskService.syncPostToSearchAsync(postId);
 
     }
 
@@ -723,9 +768,16 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
 
         String normalizedKeyword = normalizeKeyword(postSearchRequest.getKeyword());
         List<String> keywordTerms = splitKeywordTerms(normalizedKeyword);
+        // Song：Meilisearch 路径已用 in() 限定 postId，不需要 FULLTEXT 关键词查询
+        KeywordSearchMode initialMode = postSearchRequest.getMeiliPostIds() != null
+                ? KeywordSearchMode.NONE : KeywordSearchMode.FULLTEXT;
         try {
-            return this.page(pagePram, buildSearchWrapper(postSearchRequest, keywordTerms, KeywordSearchMode.FULLTEXT));
+            return this.page(pagePram, buildSearchWrapper(postSearchRequest, keywordTerms, initialMode));
         } catch (Exception e) {
+            if (postSearchRequest.getMeiliPostIds() != null) {
+                // Song：Meilisearch 路径出错不应回退 LIKE（会改变语义），直接抛
+                throw e;
+            }
             if (keywordTerms.isEmpty() || !shouldFallbackToLikeSearch(e)) {
                 throw e;
             }
@@ -892,7 +944,16 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
             wrapper.and(w -> w.eq(Post::getGlobalPin, 1).or().eq(Post::getCategoryPin, 1));
         }
 
-        applyKeywordSearch(wrapper, keywordTerms, keywordSearchMode, request.getMatchedAuthorIds());
+        // Song：Meilisearch 路径 —— 用检索返回的 postId 列表做 in() 限定，跳过 FULLTEXT 关键词查询
+        if (request.getMeiliPostIds() != null) {
+            if (request.getMeiliPostIds().isEmpty()) {
+                wrapper.eq(Post::getId, "__EMPTY__");
+            } else {
+                wrapper.in(Post::getId, request.getMeiliPostIds());
+            }
+        } else {
+            applyKeywordSearch(wrapper, keywordTerms, keywordSearchMode, request.getMatchedAuthorIds());
+        }
 
         if (StringUtils.hasText(request.getTag())) {
             String[] tagArr = request.getTag().trim().split("[,，]+");
@@ -1102,16 +1163,27 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
 
         String keyword = postSearchRequest.getKeyword();
         if (StringUtils.hasText(keyword) && keyword.trim().length() >= 2) {
-            List<String> authorIds = userService.lambdaQuery()
-                    .select(User::getId)
-                    .and(q -> q.like(User::getNickname, keyword.trim())
-                            .or().like(User::getUsername, keyword.trim()))
-                    .eq(User::getStatus, 1)
-                    .last("LIMIT 50")
-                    .list()
-                    .stream().map(User::getId).toList();
-            if (!authorIds.isEmpty()) {
-                postSearchRequest.setMatchedAuthorIds(authorIds);
+            // Song：Meilisearch 可用时优先用它做关键词检索（中文分词、错字容忍、相关度排序），
+            //      返回的 postId 列表交给后续 in() 查询做 hydration + 过滤；不可用则回退作者匹配 + FULLTEXT
+            if (searchService.isAvailable()) {
+                List<String> meiliIds = searchService.searchPostIds(postSearchRequest);
+                if (!meiliIds.isEmpty()) {
+                    postSearchRequest.setMeiliPostIds(meiliIds);
+                }
+            }
+            // Song：作者名匹配仍走 DB（Meilisearch 不索引用户昵称）
+            if (postSearchRequest.getMeiliPostIds() == null) {
+                List<String> authorIds = userService.lambdaQuery()
+                        .select(User::getId)
+                        .and(q -> q.like(User::getNickname, keyword.trim())
+                                .or().like(User::getUsername, keyword.trim()))
+                        .eq(User::getStatus, 1)
+                        .last("LIMIT 50")
+                        .list()
+                        .stream().map(User::getId).toList();
+                if (!authorIds.isEmpty()) {
+                    postSearchRequest.setMatchedAuthorIds(authorIds);
+                }
             }
         }
 
