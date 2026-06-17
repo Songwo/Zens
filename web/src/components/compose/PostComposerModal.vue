@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, onMounted, onUnmounted, computed, nextTick } from 'vue'
+import { ref, watch, onMounted, onUnmounted, computed, nextTick, defineAsyncComponent } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/store/user'
 import { postApi } from '@/api/post'
@@ -16,7 +16,6 @@ import {
 } from '@element-plus/icons-vue'
 import ImageUploader from '@/components/ImageUploader.vue'
 import MarkdownTutorial from './MarkdownTutorial.vue'
-import MarkdownEditor from '@/components/markdown/MarkdownEditor.vue'
 import PollComposerPanel from '@/components/poll/PollComposerPanel.vue'
 import type { PollCreateRequest } from '@/api/poll'
 import { uploadApi } from '@/api/upload'
@@ -27,6 +26,7 @@ import {
 import { usePostComposerStore } from '@/store/postComposer'
 import { usePostDraft } from '@/composables/usePostDraft'
 import { canPostLinks, containsExternalLink } from '@/utils/trustLevel'
+import { trustLevelApi } from '@/api/trustLevel'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -47,17 +47,80 @@ const editStatus = ref(1)
 const editAuditStatus = ref('')
 // 投票草稿：null=不附带投票。仅新发帖支持（v1），编辑态隐藏面板。不进本地草稿持久化。
 const pollPanelRef = ref<InstanceType<typeof PollComposerPanel> | null>(null)
-const editorRef = ref<InstanceType<typeof MarkdownEditor> | null>(null)
+const MarkdownEditor = defineAsyncComponent(() => import('@/components/markdown/MarkdownEditor.vue'))
+const editorRef = ref<{ insertAtCursor?: (text: string, options?: { ensureBlankLineBefore?: boolean; ensureBlankLineAfter?: boolean }) => void } | null>(null)
 const contentVideoInputRef = ref<HTMLInputElement | null>(null)
 const contentVideoUploading = ref(false)
+const composerTrustLevel = ref<number | null>(null)
+const tl0RestrictionTitle = '新用户功能受限'
+const tl0RestrictionDescription = '你当前的信任等级为 TL0（新人），暂不能在帖文中发布外链。进入 3 个帖子并阅读 5 分钟后自动晋升为 TL1 即可解锁。'
 
 const titleCharCount = computed(() => draft.form.title.trim().length)
 const contentCharCount = computed(() => draft.form.content.trim().length)
 const isDraftLikeEditing = computed(() => {
   return isEditing.value && (editStatus.value === 0 || editAuditStatus.value === 'REJECTED' || editAuditStatus.value === 'DRAFT')
 })
+const showTl0Hint = computed(() => composerTrustLevel.value === 0)
 
 const categoriesLoading = ref(false)
+
+const normalizeTrustLevel = (value: unknown): number | null => {
+  const level = Number(value)
+  if (!Number.isFinite(level)) return null
+  return Math.max(0, Math.min(4, Math.trunc(level)))
+}
+
+const readCachedTrustLevel = () => normalizeTrustLevel(userStore.userInfo?.trustLevel)
+
+const syncTrustLevelToUserStore = (trustLevel: number) => {
+  if (!userStore.userInfo) return
+  userStore.setUserInfo({
+    ...userStore.userInfo,
+    trustLevel,
+  })
+}
+
+const resolveCurrentTrustLevel = async (options: { force?: boolean } = {}) => {
+  const cachedTrustLevel = readCachedTrustLevel()
+
+  if (!options.force && cachedTrustLevel !== null && canPostLinks(cachedTrustLevel)) {
+    composerTrustLevel.value = cachedTrustLevel
+    return cachedTrustLevel
+  }
+
+  try {
+    const res = await trustLevelApi.info()
+    const freshTrustLevel = normalizeTrustLevel(res.data?.trustLevel)
+    if (res.code === 2000 && freshTrustLevel !== null) {
+      composerTrustLevel.value = freshTrustLevel
+      syncTrustLevelToUserStore(freshTrustLevel)
+      return freshTrustLevel
+    }
+  } catch (error) {
+    console.warn('刷新信任等级失败，使用本地缓存继续校验', error)
+  }
+
+  const fallbackTrustLevel = cachedTrustLevel ?? 0
+  composerTrustLevel.value = fallbackTrustLevel
+  return fallbackTrustLevel
+}
+
+const refreshComposerTrustLevel = () => {
+  const cachedTrustLevel = readCachedTrustLevel()
+  composerTrustLevel.value = cachedTrustLevel !== null && canPostLinks(cachedTrustLevel)
+    ? cachedTrustLevel
+    : null
+  void resolveCurrentTrustLevel({ force: true })
+}
+
+const showTl0RestrictionMessage = () => {
+  ElMessage({
+    type: 'warning',
+    message: tl0RestrictionDescription,
+    duration: 6500,
+    showClose: true,
+  })
+}
 
 // Song：说明
 const fetchCategories = async (force = false) => {
@@ -175,11 +238,13 @@ const publish = async () => {
     return
   }
 
-  // Song：TL0 新用户硬拦截 —— 未达到 TL1 不允许发布外链（借鉴 Discourse 反 spam 机制）
-  const trustLevel = userStore.userInfo?.trustLevel ?? 0
-  if (!canPostLinks(trustLevel) && containsExternalLink(content)) {
-    ElMessage.error('新用户暂不能发布外链，达到 TL1（进入3个帖子并阅读5分钟）后即可解锁')
-    return
+  // Song：TL0 新用户硬拦截 —— 发布前强制刷新信任等级，避免登录态缓存缺失时把 TL4 误判成 TL0。
+  if (containsExternalLink(content)) {
+    const trustLevel = await resolveCurrentTrustLevel({ force: true })
+    if (!canPostLinks(trustLevel)) {
+      showTl0RestrictionMessage()
+      return
+    }
   }
 
   // Song：新发帖时校验投票面板（编辑态不支持附加投票，见 spec）
@@ -364,7 +429,7 @@ const handleContentVideoChange = async (event: Event) => {
     if (!videoUrl) {
       throw new Error('视频上传失败')
     }
-    editorRef.value?.insertAtCursor(
+    editorRef.value?.insertAtCursor?.(
       `<video controls preload="metadata" src="${videoUrl}"></video>`,
       { ensureBlankLineBefore: true, ensureBlankLineAfter: true }
     )
@@ -441,6 +506,7 @@ watch(() => composerStore.isOpen, async (newVal) => {
     }
     
     fetchCategories()
+    refreshComposerTrustLevel()
 
     // Song：说明
     if (composerStore.context.editId) {
@@ -558,13 +624,13 @@ onUnmounted(() => {
           <div class="composer-body">
             <!-- Song：TL0 新用户提示横幅（未达 TL1 时显示，提示外链/附件受限） -->
             <el-alert
-              v-if="(userStore.userInfo?.trustLevel ?? 0) < 1"
+              v-if="showTl0Hint"
               class="tl0-hint"
               type="warning"
               :closable="false"
               show-icon
-              title="新用户功能受限"
-              description="你当前的信任等级为 TL0（新人），暂不能在帖文中发布外链。进入 3 个帖子并阅读 5 分钟后自动晋升为 TL1 即可解锁。"
+              :title="tl0RestrictionTitle"
+              :description="tl0RestrictionDescription"
             />
             <el-form :model="draft.form" label-position="top" class="compose-form">
               <!-- Title Input -->

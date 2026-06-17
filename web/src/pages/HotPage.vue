@@ -56,7 +56,7 @@ const handleRangeChange = (val: 'TODAY' | 'WEEK' | 'MONTH') => {
         </div>
         
         <div class="filter-controls">
-          <el-radio-group v-model="timeRange" size="large" @change="handleRangeChange">
+          <el-radio-group v-model="timeRange" size="large" @change="(val?: string | number | boolean) => handleRangeChange((val || 'WEEK') as 'TODAY' | 'WEEK' | 'MONTH')">
             <el-radio-button label="TODAY">今日热榜</el-radio-button>
             <el-radio-button label="WEEK">本周最热</el-radio-button>
             <el-radio-button label="MONTH">月度精华</el-radio-button>

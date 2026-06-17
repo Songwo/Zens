@@ -311,7 +311,7 @@ const uploadStatusType = (status: string | undefined) => {
         <el-switch
           v-model="autoRefresh"
           active-text="自动刷新"
-          @change="toggleAutoRefresh"
+          @change="(value: string | number | boolean) => toggleAutoRefresh(Boolean(value))"
         />
         <el-button type="primary" :icon="Refresh" @click="fetchAll">刷新</el-button>
       </div>

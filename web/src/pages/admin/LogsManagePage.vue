@@ -449,7 +449,7 @@ const typeLabel = (item: LogFileSummary) => {
 
         <div v-if="selectedMeta" class="viewer-shell" v-loading="contentLoading">
           <div class="toolbar">
-            <el-radio-group v-model="previewMode" size="small" @change="loadContent">
+            <el-radio-group v-model="previewMode" size="small" @change="() => loadContent()">
               <el-radio-button label="tail" :disabled="!selectedMeta.previewTailSupported">尾部预览</el-radio-button>
               <el-radio-button label="head">头部预览</el-radio-button>
             </el-radio-group>
@@ -462,7 +462,7 @@ const typeLabel = (item: LogFileSummary) => {
                 :max="overview?.previewMaxLines || 400"
                 :step="20"
                 size="small"
-                @change="loadContent"
+                @change="() => loadContent()"
               />
             </div>
 
@@ -471,7 +471,7 @@ const typeLabel = (item: LogFileSummary) => {
               <el-switch v-model="autoRefresh" :disabled="!canAutoRefresh" />
             </div>
 
-            <el-button size="small" :icon="Refresh" @click="loadContent">刷新内容</el-button>
+            <el-button size="small" :icon="Refresh" @click="() => loadContent()">刷新内容</el-button>
             <el-button size="small" @click="copyPreview">复制内容</el-button>
           </div>
 

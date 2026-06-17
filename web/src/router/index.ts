@@ -110,6 +110,12 @@ const router = createRouter({
       meta: { requiresAuth: true, title: '信任等级', description: '查看信任等级、行为指标与社区特权' }
     },
     {
+      path: '/onboarding',
+      name: 'onboarding',
+      component: () => import('@/pages/OnboardingPage.vue'),
+      meta: { requiresAuth: true, title: '新人引导', description: '了解信任等级与升级路径' }
+    },
+    {
       path: '/invite',
       name: 'invite',
       component: () => import('@/pages/InvitePage.vue'),
@@ -229,6 +235,12 @@ const router = createRouter({
           meta: { requiresAdmin: true },
         },
         {
+          path: 'performance',
+          name: 'admin-performance',
+          component: () => import('@/pages/admin/PerformanceManagePage.vue'),
+          meta: { requiresAdmin: true },
+        },
+        {
           path: 'logs',
           name: 'admin-logs',
           component: () => import('@/pages/admin/LogsManagePage.vue'),
@@ -250,6 +262,12 @@ const router = createRouter({
           path: 'sso',
           name: 'admin-sso',
           component: () => import('@/pages/admin/SsoManagePage.vue'),
+          meta: { requiresAdmin: true },
+        },
+        {
+          path: 'trust',
+          name: 'admin-trust',
+          component: () => import('@/pages/admin/TrustLevelManagePage.vue'),
           meta: { requiresAdmin: true },
         },
         // Song：说明

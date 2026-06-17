@@ -23,7 +23,6 @@ const REACTIONS: { type: ReactionType; emoji: string; label: string }[] = [
   { type: 'wow', emoji: '😮', label: '哇' },
   { type: 'celebrate', emoji: '🎉', label: '庆祝' },
 ]
-const emojiOf = (type: string) => REACTIONS.find(r => r.type === type)?.emoji || ''
 
 const counts = ref<Record<string, number>>({})
 const mine = ref<ReactionType | null>(null)

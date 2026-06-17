@@ -331,7 +331,7 @@ watch(
       </div>
       
       <div class="header-actions">
-        <el-radio-group :model-value="isTrashMode ? 'trash' : 'list'" @change="handleModeChange">
+        <el-radio-group :model-value="isTrashMode ? 'trash' : 'list'" @change="(mode?: string | number | boolean) => handleModeChange(mode ?? 'list')">
           <el-radio-button label="list">全部内容</el-radio-button>
           <el-radio-button label="trash">回收站</el-radio-button>
         </el-radio-group>

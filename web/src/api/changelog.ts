@@ -6,9 +6,18 @@ export interface ChangelogItem {
     version: string
     title: string
     content: string
+    stageNo?: string
+    stageLabel?: string
+    roadmapStatus?: 'released' | 'building' | 'planned' | string
+    highlights?: string
+    actionPath?: string
+    upgradeEnabled?: number
+    upgradeUrl?: string
     timestamp: string
     status: number
     sortOrder: number
+    createdAt?: string
+    updatedAt?: string
 }
 
 export const changelogApi = {
@@ -17,6 +26,13 @@ export const changelogApi = {
      */
     getList() {
         return api.get<any, Result<ChangelogItem[]>>('/changelog/list')
+    },
+
+    /**
+     * Song：获取后台发展历程配置列表 (管理员)
+     */
+    getAdminList() {
+        return api.get<any, Result<ChangelogItem[]>>('/admin/changelog/list')
     },
 
     /**

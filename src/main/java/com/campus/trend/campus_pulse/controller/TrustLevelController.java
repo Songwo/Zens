@@ -70,4 +70,27 @@ public class TrustLevelController {
         }
         return Result.success(trustLevelService.batchRecalculateAllActiveUsers());
     }
+
+    /**
+     * 查询信任等级变更审计日志（管理员用）
+     */
+    @GetMapping("/events")
+    public Result<?> events(@RequestParam(defaultValue = "1") int page,
+                            @RequestParam(defaultValue = "20") int pageSize) {
+        String operatorId = SecurityUtils.getCurrentUserId();
+        if (!PermissionUtils.isUserAdmin(operatorId)) {
+            return Result.success(java.util.Collections.emptyList());
+        }
+        return Result.success(trustLevelService.getRecentEvents(page, Math.min(Math.max(pageSize, 1), 100)));
+    }
+
+    /**
+     * 查询当前用户自己的信任等级变更历史
+     */
+    @GetMapping("/my-events")
+    public Result<?> myEvents(@RequestParam(defaultValue = "1") int page,
+                              @RequestParam(defaultValue = "20") int pageSize) {
+        String userId = SecurityUtils.getCurrentUserId();
+        return Result.success(trustLevelService.getEventsByUserId(userId, page, Math.min(Math.max(pageSize, 1), 50)));
+    }
 }

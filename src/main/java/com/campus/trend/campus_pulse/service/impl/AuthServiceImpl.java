@@ -326,6 +326,17 @@ public class AuthServiceImpl implements AuthService {
 
     private LoginResponse generateTokenResponse(User user, boolean rememberMe, String deviceId, String existsSessionId, String clientIp) {
         String role = user.getRole() != null ? user.getRole() : "ROLE_USER";
+        // Song：管理员登录时自动同步 trust_level = 4（领袖），保证前后端展示与权限判断一致
+        if ("ROLE_ADMIN".equals(role) || "ROLE_SUPER_ADMIN".equals(role)) {
+            if (user.getTrustLevel() == null || user.getTrustLevel() < 4) {
+                user.setTrustLevel(4);
+                try {
+                    userService.updateById(new com.campus.trend.campus_pulse.entity.User().setId(user.getId()).setTrustLevel(4));
+                } catch (Exception ignored) {
+                    // 同步失败不阻断登录，getTrustLevel() 已有管理员兜底
+                }
+            }
+        }
         List<String> roleCodes = List.of(role);
         String sessionId = StringUtils.hasText(existsSessionId) ? existsSessionId : UUID.randomUUID().toString();
         String safeDid = normalizeDeviceId(deviceId);

@@ -27,11 +27,9 @@ let idlePrefetchHandle: number | null = null
 const routePrefetchTimers: number[] = []
 
 const routePrefetchLoaders = [
-  () => import('@/pages/SearchPage.vue'),
   () => import('@/pages/HotPage.vue'),
   () => import('@/pages/FeaturedPage.vue'),
   () => import('@/pages/MePage.vue'),
-  () => import('@/pages/PostDetailPage.vue'),
 ]
 const routeDataWarmers = [
   () => publicDataApi.getHomeBootstrapCached(12, 5, 'WEEK'),

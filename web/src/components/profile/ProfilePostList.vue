@@ -37,6 +37,7 @@ const remove = (id: string) => { posts.value = posts.value.filter(p => p.id !== 
 const { sentinel } = useInfiniteScroll(() => load(false), {
   canLoadMore: () => hasMore.value && !loading.value && posts.value.length > 0,
 })
+void sentinel
 
 onMounted(() => load(true))
 watch(() => props.reloadKey, () => load(true))

@@ -15,7 +15,7 @@ export interface DirectConversation {
 }
 
 export interface DirectMessage {
-  id: number
+  id: number | string
   senderId: string
   receiverId: string
   content: string

@@ -465,6 +465,7 @@ public class CommentServiceImpl extends ServiceImpl<CommentMapper, Comment> impl
             userService.incrementLikesReceived(comment.getUserId());
         }
         updateById(comment);
+        postCacheManager.bumpPostDetailCacheVersion(comment.getPostId());
     }
 
     @Override
@@ -619,6 +620,13 @@ public class CommentServiceImpl extends ServiceImpl<CommentMapper, Comment> impl
                     c.setUserBadgeText(user.getBadgeText());
                     c.setUserBadgeColor(user.getBadgeColor());
                     c.setUserBadgeStyle(user.getBadgeStyle());
+                    // Song：透传评论者信任等级（前端展示 TL 徽章）
+                    // 管理员角色直接 TL4（与 getTrustLevel 兜底一致）
+                    if ("ROLE_ADMIN".equals(role) || "ROLE_SUPER_ADMIN".equals(role)) {
+                        c.setUserTrustLevel(4);
+                    } else {
+                        c.setUserTrustLevel(user.getTrustLevel() != null ? user.getTrustLevel() : 0);
+                    }
                 }
             }
 

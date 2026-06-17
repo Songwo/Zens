@@ -20,7 +20,6 @@ const hostname = computed(() => {
 
 const isYoutube = computed(() => data.value?.provider === 'youtube' && data.value?.embeddable)
 const isBilibili = computed(() => data.value?.provider === 'bilibili' && data.value?.embeddable)
-const isEmbed = computed(() => isYoutube.value || isBilibili.value)
 
 const youtubeEmbedUrl = computed(() => {
   if (!isYoutube.value || !data.value?.embedId) return null

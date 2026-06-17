@@ -5,11 +5,11 @@ import DOMPurify from 'dompurify'
 import { ElMessageBox } from 'element-plus'
 import { timeAgo } from '@/utils/timeAgo'
 import UserRoleBadge from '@/components/common/UserRoleBadge.vue'
+import TrustLevelBadge from '@/components/common/TrustLevelBadge.vue'
 import UserBadge from '@/components/common/UserBadge.vue'
 import AdoptAnswerAction from '@/components/comment/AdoptAnswerAction.vue'
 import ReactionBar from '@/components/reaction/ReactionBar.vue'
 import { mdComment } from '@/utils/markdownRenderer'
-import { warmupHighlighter, preloadLanguages } from '@/utils/shiki'
 import { pulseNotification } from '@/utils/pulseNotification'
 import { commentApi } from '@/api/comment'
 import { isTruthyFlag } from '@/utils/flags'
@@ -109,10 +109,10 @@ watch(
   async (list) => {
     if (!list || list.length === 0) return
     const langs = collectLangs(list)
+    if (langs.length === 0) return
+    const { warmupHighlighter, preloadLanguages } = await import('@/utils/shiki')
     await warmupHighlighter()
-    if (langs.length > 0) {
-      await preloadLanguages(langs)
-    }
+    await preloadLanguages(langs)
     renderVersion.value++
   },
   { immediate: true, deep: false }
@@ -371,6 +371,7 @@ const handleAction = async (cmd: string, comment: any) => {
           <div class="meta-left">
             <span class="author-name">{{ getName(comment) }}</span>
             <UserRoleBadge :roles="getRoles(comment)" />
+            <TrustLevelBadge :trust-level="comment.userTrustLevel ?? 0" />
             <UserBadge :text="getBadge(comment)" :color="getBadgeColor(comment)" :effect="getBadgeEffect(comment)" />
             <span class="time-label">{{ getTime(comment) }}</span>
             <span v-if="comment.editTime" class="edited-label">· 已编辑</span>
@@ -452,6 +453,9 @@ const handleAction = async (cmd: string, comment: any) => {
                 <el-dropdown-item v-if="canReport(comment)" command="report">
                   <el-icon><Warning/></el-icon>&nbsp;举报
                 </el-dropdown-item>
+                <el-dropdown-item v-if="canEdit(comment)" command="edit">
+                  编辑
+                </el-dropdown-item>
                 <el-dropdown-item v-if="canDelete(comment)" command="delete" divided>
                   <el-icon><Delete/></el-icon>&nbsp;删除
                 </el-dropdown-item>
@@ -490,6 +494,7 @@ const handleAction = async (cmd: string, comment: any) => {
                 <div class="reply-meta">
                   <span class="author-name">{{ getName(child) }}</span>
                   <UserRoleBadge :roles="getRoles(child)" />
+                  <TrustLevelBadge :trust-level="child.userTrustLevel ?? 0" />
                   <UserBadge :text="getBadge(child)" :color="getBadgeColor(child)" :effect="getBadgeEffect(child)" />
                   <span v-if="child.replyUserNickname" class="reply-to">
                     <span class="reply-arrow">▸</span>回复 <strong>{{ child.replyUserNickname }}</strong>
@@ -560,6 +565,9 @@ const handleAction = async (cmd: string, comment: any) => {
                         <el-dropdown-item v-if="canReport(child)" command="report">
                           <el-icon><Warning/></el-icon>&nbsp;举报
                         </el-dropdown-item>
+                        <el-dropdown-item v-if="canEdit(child)" command="edit">
+                          编辑
+                        </el-dropdown-item>
                         <el-dropdown-item v-if="canDelete(child)" command="delete" divided>
                           <el-icon><Delete/></el-icon>&nbsp;删除
                         </el-dropdown-item>
@@ -586,6 +594,7 @@ const handleAction = async (cmd: string, comment: any) => {
                 <div class="reply-meta">
                   <span class="author-name">{{ getName(grandChild) }}</span>
                   <UserRoleBadge :roles="getRoles(grandChild)" />
+                  <TrustLevelBadge :trust-level="grandChild.userTrustLevel ?? 0" />
                   <UserBadge :text="getBadge(grandChild)" :color="getBadgeColor(grandChild)" :effect="getBadgeEffect(grandChild)" />
                   <span class="reply-to">
                     <span class="reply-arrow">▸</span>回复 <strong>{{ grandChild.replyUserNickname || getName(child) }}</strong>
@@ -655,6 +664,9 @@ const handleAction = async (cmd: string, comment: any) => {
                         </el-dropdown-item>
                         <el-dropdown-item v-if="canReport(grandChild)" command="report">
                           <el-icon><Warning/></el-icon>&nbsp;举报
+                        </el-dropdown-item>
+                        <el-dropdown-item v-if="canEdit(grandChild)" command="edit">
+                          编辑
                         </el-dropdown-item>
                         <el-dropdown-item v-if="canDelete(grandChild)" command="delete" divided>
                           <el-icon><Delete/></el-icon>&nbsp;删除

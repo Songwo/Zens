@@ -13,10 +13,12 @@ import {
   Timer,
   Medal,
   SetUp,
+  Promotion,
   Ticket,
   Reading,
   Cpu,
-  Connection
+  Connection,
+  Odometer
 } from '@element-plus/icons-vue'
 import { useUserStore } from '@/store/user'
 import { hasAdminRole, hasModeratorCapability } from '@/utils/sessionProfile'
@@ -32,8 +34,10 @@ const allMenuItems = [
   { id: 'posts-trash', name: '内容回收站', icon: Delete, path: '/admin/posts/trash', access: 'backoffice' },
   { id: 'sections', name: '板块管理', icon: IconMenu, path: '/admin/sections', access: 'admin' },
   { id: 'users', name: '用户管理', icon: User, path: '/admin/users', access: 'admin' },
+  { id: 'trust', name: '信任等级管理', icon: Promotion, path: '/admin/trust', access: 'admin' },
   { id: 'reports', name: '举报管理', icon: Flag, path: '/admin/reports', access: 'backoffice' },
   { id: 'cache', name: '缓存管理', icon: SetUp, path: '/admin/cache', access: 'admin' },
+  { id: 'performance', name: '性能观测', icon: Odometer, path: '/admin/performance', access: 'admin' },
   { id: 'logs', name: '日志管理', icon: Reading, path: '/admin/logs', access: 'admin' },
   { id: 'media', name: '媒体存储', icon: Cpu, path: '/admin/media', access: 'admin' },
   { id: 'changelog', name: '发展历程管理', icon: Timer, path: '/admin/changelog', access: 'admin' },

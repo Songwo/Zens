@@ -58,6 +58,7 @@ public class SecurityWhitelist {
                         "/level/thresholds",
                         "/trust-level/thresholds",
                         "/changelog/list",
+                        "/api/changelog/list",
                         "/short-link/**",
                         "/sso/clients/public/**",
                         "/onebox/preview",

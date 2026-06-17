@@ -9,13 +9,11 @@ import { EditorView } from '@codemirror/view'
 import { HighlightStyle, syntaxHighlighting } from '@codemirror/language'
 import { tags as t } from '@lezer/highlight'
 
-const lightBg = '#ffffff'
 const lightFg = '#393a34'
 const lightMuted = '#aaaaaa'
 const lightSelectionBg = 'rgba(245, 192, 76, 0.30)'
 const lightCursor = '#b07d48'
 
-const darkBg = '#121212'
 const darkFg = '#dbd7caee'
 const darkMuted = '#666666'
 const darkSelectionBg = 'rgba(245, 192, 76, 0.22)'

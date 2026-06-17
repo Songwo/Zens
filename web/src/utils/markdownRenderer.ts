@@ -24,7 +24,8 @@ export const md = createMd({ html: true, linkify: true, typographer: true, break
 export const mdComment = createMd({ html: false, linkify: true, typographer: true, breaks: true })
 
 function createMd(options: { html: boolean; linkify: boolean; typographer: boolean; breaks: boolean }): MarkdownIt {
-  const instance = new MarkdownIt({
+  let instance: MarkdownIt
+  instance = new MarkdownIt({
     ...options,
     highlight: function (str: string, lang: string) {
       const trimmedLang = (lang || '').trim()
@@ -43,9 +44,10 @@ function createMd(options: { html: boolean; linkify: boolean; typographer: boole
   // Song：覆写 image 渲染规则，统一给所有图片加 loading="lazy" decoding="async"，
   // 覆盖正文 / 评论 / 私信等所有走 markdown 的图片（DOMPurify 白名单已放行这两个属性）。
   const defaultImageRenderer = instance.renderer.rules.image
-    || ((tokens, idx, opts, _env, self) => self.renderToken(tokens, idx, opts))
-  instance.renderer.rules.image = (tokens, idx, opts, env, self) => {
+    || ((tokens: any[], idx: number, opts: any, _env: any, self: any) => self.renderToken(tokens, idx, opts))
+  instance.renderer.rules.image = (tokens: any[], idx: number, opts: any, env: any, self: any) => {
     const token = tokens[idx]
+    if (!token) return ''
     token.attrSet('loading', 'lazy')
     token.attrSet('decoding', 'async')
     return defaultImageRenderer(tokens, idx, opts, env, self)

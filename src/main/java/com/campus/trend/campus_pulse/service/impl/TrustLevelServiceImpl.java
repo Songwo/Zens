@@ -71,8 +71,13 @@ public class TrustLevelServiceImpl implements TrustLevelService {
     public int getTrustLevel(String userId) {
         if (!StringUtils.hasText(userId)) return TL_NEW_USER;
         User user = userMapper.selectById(userId);
-        if (user == null || user.getTrustLevel() == null) return TL_NEW_USER;
-        return user.getTrustLevel();
+        if (user == null) return TL_NEW_USER;
+        // Song：管理员/超级管理员默认享有最高信任等级，不受行为指标限制
+        // 避免"管理员发外链被自己写的 TL0 拦截"这种割裂体验
+        if (PermissionUtils.isUserAdmin(userId)) {
+            return TL_LEADER;
+        }
+        return user.getTrustLevel() == null ? TL_NEW_USER : user.getTrustLevel();
     }
 
     @Override
@@ -174,6 +179,31 @@ public class TrustLevelServiceImpl implements TrustLevelService {
         }
         int old = user.getTrustLevel() == null ? TL_NEW_USER : user.getTrustLevel();
         applyLevelChange(user, old, newLevel, "管理员操作：" + (StringUtils.hasText(reason) ? reason : "无"), buildMetrics(user));
+    }
+
+    @Override
+    public java.util.List<com.campus.trend.campus_pulse.entity.TrustEvent> getRecentEvents(int page, int pageSize) {
+        int safePage = Math.max(page, 1);
+        int safeSize = Math.min(Math.max(pageSize, 1), 100);
+        com.baomidou.mybatisplus.extension.plugins.pagination.Page<com.campus.trend.campus_pulse.entity.TrustEvent> p =
+                new com.baomidou.mybatisplus.extension.plugins.pagination.Page<>(safePage, safeSize);
+        return trustEventMapper.selectPage(p,
+                com.baomidou.mybatisplus.core.toolkit.Wrappers.<com.campus.trend.campus_pulse.entity.TrustEvent>lambdaQuery()
+                        .orderByDesc(com.campus.trend.campus_pulse.entity.TrustEvent::getCreateTime))
+                .getRecords();
+    }
+
+    @Override
+    public java.util.List<com.campus.trend.campus_pulse.entity.TrustEvent> getEventsByUserId(String userId, int page, int pageSize) {
+        int safePage = Math.max(page, 1);
+        int safeSize = Math.min(Math.max(pageSize, 1), 50);
+        com.baomidou.mybatisplus.extension.plugins.pagination.Page<com.campus.trend.campus_pulse.entity.TrustEvent> p =
+                new com.baomidou.mybatisplus.extension.plugins.pagination.Page<>(safePage, safeSize);
+        return trustEventMapper.selectPage(p,
+                com.baomidou.mybatisplus.core.toolkit.Wrappers.<com.campus.trend.campus_pulse.entity.TrustEvent>lambdaQuery()
+                        .eq(com.campus.trend.campus_pulse.entity.TrustEvent::getUserId, userId)
+                        .orderByDesc(com.campus.trend.campus_pulse.entity.TrustEvent::getCreateTime))
+                .getRecords();
     }
 
     // ====================== 核心计算 ======================

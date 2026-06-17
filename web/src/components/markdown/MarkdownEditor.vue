@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { EditorSelection } from '@codemirror/state'
 import type { EditorView } from '@codemirror/view'
 import { Eye, SplitSquareHorizontal, Pencil } from 'lucide-vue-next'
@@ -241,11 +241,11 @@ function detectMention() {
   let atIdx = -1
   for (let i = lineText.length - 1; i >= 0; i--) {
     if (lineText[i] === '@') {
-      const prev = i > 0 ? lineText[i - 1] : ''
+      const prev = i > 0 ? lineText[i - 1] || '' : ''
       if (i === 0 || /[\s]/.test(prev)) atIdx = i
       break
     }
-    if (/[\s]/.test(lineText[i])) break
+    if (/[\s]/.test(lineText[i] || '')) break
   }
 
   if (atIdx >= 0) {

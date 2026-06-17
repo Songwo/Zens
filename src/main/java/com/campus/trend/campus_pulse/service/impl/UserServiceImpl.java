@@ -28,6 +28,8 @@ import com.campus.trend.campus_pulse.utils.SecurityUtils;
 import com.campus.trend.campus_pulse.common.api.ResultCode;
 import com.campus.trend.campus_pulse.common.exception.BusinessException;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -80,6 +82,34 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
 
     private static final String AUDIT_STATUS_PENDING = "PENDING";
     private static final String AUDIT_STATUS_APPROVED = "APPROVED";
+
+    /**
+     * 获取用户信息（带本地缓存）
+     * 缓存key: user:info::userId
+     * 过期策略: 5分钟写入过期 + 3分钟访问过期
+     */
+    @Cacheable(value = "user:info", key = "#userId", unless = "#result == null")
+    public User getById(String userId) {
+        return super.getById(userId);
+    }
+
+    /**
+     * 批量获取用户（用于列表页N+1优化）
+     */
+    public Map<String, User> batchGetUsers(List<String> userIds) {
+        if (userIds == null || userIds.isEmpty()) {
+            return Map.of();
+        }
+
+        // 去重
+        List<String> distinctIds = userIds.stream().distinct().toList();
+
+        // 批量查询
+        List<User> users = listByIds(distinctIds);
+
+        return users.stream()
+            .collect(Collectors.toMap(User::getId, u -> u, (a, b) -> a));
+    }
 
     @Override
     public UserProfileResp getPublicProfile(String userId) {
@@ -281,18 +311,11 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         }
         String normalizedUrl = normalizeAvatarUrl(avatarUrl);
 
-        try {
-            AuthUser authUser = SecurityUtils.getAuthenticatedUser();
-            if (authUser != null) {
-                User user = new User();
-                user.setId(authUser.getUser().getId());
-                user.setAvatar(normalizedUrl);
-                user.setUpdateTime(LocalDateTime.now());
-                this.updateById(user);
-            }
-        } catch (Exception e) {
-            log.warn("更新头像时写入用户信息失败: {}", e.getMessage());
-        }
+        User user = new User();
+        user.setId(userId);
+        user.setAvatar(normalizedUrl);
+        user.setUpdateTime(LocalDateTime.now());
+        this.updateById(user);
 
         return normalizedUrl;
     }
@@ -328,6 +351,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
+    @CacheEvict(value = "user:info", key = "#updateUserDetailRequest.userId != null ? #updateUserDetailRequest.userId : @securityUtils.getCurrentUserId()")
     public void updateUserDetails(UserDetailUpdateReq updateUserDetailRequest) {
         // Song：1.获取当前用户
         AuthUser auUser = SecurityUtils.getAuthenticatedUser();

@@ -163,6 +163,7 @@ const fetchPosts = async (reset = false) => {
 const { sentinel } = useInfiniteScroll(() => fetchPosts(false), {
   canLoadMore: () => hasMore.value && !postsLoading.value && posts.value.length > 0,
 })
+void sentinel
 
 const toggleFollow = async () => {
   if (!userStore.accessToken) {

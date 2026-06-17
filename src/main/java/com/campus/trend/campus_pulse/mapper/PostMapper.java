@@ -15,6 +15,9 @@ import java.util.List;
 @Mapper
 public interface PostMapper extends BaseMapper<Post> {
 
+    /**
+     * 批量更新帖子热度分数
+     */
     @Update("""
             <script>
             UPDATE sys_post
@@ -32,8 +35,20 @@ public interface PostMapper extends BaseMapper<Post> {
             """)
     int batchUpdateHeatScores(@Param("updates") List<PostHeatUpdateItem> updates);
 
+    /**
+     * 获取所有已发布的帖子ID（用于布隆过滤器初始化）
+     */
+    @Select("SELECT id FROM sys_post WHERE status = 1 AND (audit_status IS NULL OR audit_status = '' OR audit_status = 'PENDING' OR audit_status = 'APPROVED')")
+    List<String> selectAllPublishedPostIds();
+
     @Select("SELECT COUNT(*) FROM sys_post WHERE status = 1 AND (audit_status IS NULL OR audit_status = '' OR audit_status = 'PENDING' OR audit_status = 'APPROVED') AND (FIND_IN_SET(#{tagName}, tags) > 0 OR FIND_IN_SET(#{tagNameSpaced}, tags) > 0 OR tags = #{tagName})")
     int countByTagName(@Param("tagName") String tagName, @Param("tagNameSpaced") String tagNameSpaced);
+
+    @Update("UPDATE sys_post SET collect_count = COALESCE(collect_count, 0) + 1, update_time = NOW() WHERE id = #{postId}")
+    int incrementCollectCount(@Param("postId") String postId);
+
+    @Update("UPDATE sys_post SET collect_count = GREATEST(COALESCE(collect_count, 0) - 1, 0), update_time = NOW() WHERE id = #{postId}")
+    int decrementCollectCount(@Param("postId") String postId);
 
     @Select("""
             <script>

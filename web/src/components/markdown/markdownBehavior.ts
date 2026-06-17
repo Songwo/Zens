@@ -29,8 +29,8 @@ const LIST_PATTERNS: Array<{
     re: /^(\s*)(\d+)([.)])(\s+)(\[[ xX]\]\s+)?(.*)$/,
     build: m => {
       const indent = m[1] || ''
-      const num = parseInt(m[2], 10)
-      const sep = m[3]
+      const num = parseInt(m[2] || '1', 10)
+      const sep = m[3] || '.'
       const tail = m[4] || ' '
       const task = m[5] || ''
       const body = m[6] || ''
@@ -52,7 +52,7 @@ const LIST_PATTERNS: Array<{
     re: /^(\s*)([-*+])(\s+)(\[[ xX]\]\s+)?(.*)$/,
     build: m => {
       const indent = m[1] || ''
-      const marker = m[2]
+      const marker = m[2] || '-'
       const tail = m[3] || ' '
       const task = m[4] || ''
       const body = m[5] || ''
@@ -74,7 +74,7 @@ const LIST_PATTERNS: Array<{
     re: /^(\s*)(>+\s?)(.*)$/,
     build: m => {
       const indent = m[1] || ''
-      const marker = m[2]
+      const marker = m[2] || '> '
       const body = m[3] || ''
       return {
         indent,
@@ -110,6 +110,7 @@ const handleListContinuation = (view: EditorView): boolean => {
   if (ranges.some(r => !r.empty)) return false  // 有选区时让原生 Enter 接管
 
   const range = ranges[0]
+  if (!range) return false
   if (isInsideFencedCode(view, range.from)) return false
 
   const line = view.state.doc.lineAt(range.from)

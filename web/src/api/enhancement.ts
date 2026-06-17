@@ -1,4 +1,3 @@
-import type { AxiosRequestConfig } from 'axios'
 import api from '@/lib/api'
 import type { Result } from '@/types'
 

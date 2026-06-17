@@ -16,9 +16,16 @@ public interface SectionService {
     List<SectionResp> getAllSections();
 
     /**
-     * Song：获取启用的板块列表
+     * Song：获取启用的板块列表（带缓存）
      */
     List<SectionResp> getActiveSections();
+
+    /**
+     * 别名方法，用于缓存预热
+     */
+    default List<SectionResp> listActiveSections() {
+        return getActiveSections();
+    }
 
     Section getSectionById(Long id);
 

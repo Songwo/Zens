@@ -55,4 +55,23 @@ export const trustLevelApi = {
     recalculate() {
         return api.post<any, Result<number>>('/trust-level/recalculate')
     },
+    /** 查询信任等级变更日志（管理员） */
+    events(page = 1, pageSize = 20) {
+        return api.get<any, Result<TrustEvent[]>>('/trust-level/events', { params: { page, pageSize } })
+    },
+    /** 查询当前用户自己的信任等级变更历史 */
+    myEvents(page = 1, pageSize = 20) {
+        return api.get<any, Result<TrustEvent[]>>('/trust-level/my-events', { params: { page, pageSize } })
+    },
+}
+
+/** 信任等级变更事件（sys_trust_event） */
+export interface TrustEvent {
+    id: number
+    userId: string
+    oldLevel: number
+    newLevel: number
+    reason: string
+    metricsJson?: string
+    createTime: string
 }

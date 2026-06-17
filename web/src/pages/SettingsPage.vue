@@ -601,7 +601,7 @@ onMounted(() => {
                 <div class="item-desc">获赞、评论及系统提醒</div>
               </div>
             </div>
-            <el-switch v-model="notifications" @change="handleNotificationSwitch" />
+            <el-switch v-model="notifications" @change="(value: string | number | boolean) => handleNotificationSwitch(Boolean(value))" />
           </div>
 
           <div class="setting-item disabled">

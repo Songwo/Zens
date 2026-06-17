@@ -4,7 +4,6 @@ import { ElMessage } from 'element-plus'
 import { Check, PieChart, Clock, Lock } from '@element-plus/icons-vue'
 import { pollApi, type Poll } from '@/api/poll'
 import { useUserStore } from '@/store/user'
-import { timeAgo } from '@/utils/timeAgo'
 
 const props = defineProps<{
   poll: Poll
@@ -26,7 +25,7 @@ const submitting = ref(false)
 const closing = ref(false)
 
 // 单选用单值，多选用集合
-const selectedSingle = ref<number | null>(null)
+const selectedSingle = ref<number | undefined>(undefined)
 const selectedMulti = ref<number[]>([])
 
 const isMulti = computed(() => local.value.multiChoice === 1)
@@ -148,7 +147,7 @@ const handleClose = async () => {
         >
           <el-checkbox
             :model-value="selectedMulti.includes(opt.id)"
-            @change="toggleMulti(opt.id)"
+            @change="() => toggleMulti(opt.id)"
           />
           <span class="option-text">{{ opt.optionText }}</span>
         </label>

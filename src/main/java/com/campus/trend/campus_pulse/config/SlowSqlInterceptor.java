@@ -1,5 +1,7 @@
 package com.campus.trend.campus_pulse.config;
 
+import com.campus.trend.campus_pulse.monitor.PerformanceEventRecorder;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.ibatis.cache.CacheKey;
 import org.apache.ibatis.executor.Executor;
@@ -24,7 +26,10 @@ import java.util.Properties;
         @Signature(type = Executor.class, method = "query", args = {MappedStatement.class, Object.class, RowBounds.class, ResultHandler.class, CacheKey.class, BoundSql.class})
 })
 @Slf4j
+@RequiredArgsConstructor
 public class SlowSqlInterceptor implements Interceptor {
+
+    private final PerformanceEventRecorder performanceEventRecorder;
 
     @Value("${campus.observability.slow-sql-ms:300}")
     private long slowSqlMs;
@@ -48,6 +53,7 @@ public class SlowSqlInterceptor implements Interceptor {
             long elapsed = System.currentTimeMillis() - start;
             if (elapsed >= Math.max(50L, slowSqlMs)) {
                 String sql = boundSql != null ? sanitizeSql(boundSql.getSql()) : "";
+                performanceEventRecorder.recordSlowSql(mappedStatement.getId(), elapsed, sql);
                 log.warn("慢SQL告警: msId={}, cost={}ms, sql={}", mappedStatement.getId(), elapsed, sql);
             }
         }

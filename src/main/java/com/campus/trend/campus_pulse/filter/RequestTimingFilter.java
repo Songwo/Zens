@@ -1,9 +1,11 @@
 package com.campus.trend.campus_pulse.filter;
 
+import com.campus.trend.campus_pulse.monitor.PerformanceEventRecorder;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -17,7 +19,10 @@ import java.util.stream.Collectors;
 
 @Component
 @Slf4j
+@RequiredArgsConstructor
 public class RequestTimingFilter extends OncePerRequestFilter {
+
+    private final PerformanceEventRecorder performanceEventRecorder;
 
     @Value("${campus.observability.request-log-enabled:true}")
     private boolean requestLogEnabled;
@@ -43,6 +48,11 @@ public class RequestTimingFilter extends OncePerRequestFilter {
             long elapsed = System.currentTimeMillis() - start;
             response.setHeader("X-Response-Time-Ms", String.valueOf(elapsed));
             if (elapsed >= Math.max(100L, slowRequestMs)) {
+                performanceEventRecorder.recordSlowRequest(
+                        request.getMethod(),
+                        request.getRequestURI(),
+                        response.getStatus(),
+                        elapsed);
                 log.warn("慢请求: method={}, uri={}, status={}, cost={}ms",
                         request.getMethod(),
                         request.getRequestURI(),
@@ -74,4 +84,3 @@ public class RequestTimingFilter extends OncePerRequestFilter {
         return false;
     }
 }
-

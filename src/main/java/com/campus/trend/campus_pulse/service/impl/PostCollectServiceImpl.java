@@ -1,17 +1,23 @@
 package com.campus.trend.campus_pulse.service.impl;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.campus.trend.campus_pulse.common.api.ResultCode;
+import com.campus.trend.campus_pulse.common.exception.BusinessException;
 import com.campus.trend.campus_pulse.entity.Post;
 import com.campus.trend.campus_pulse.entity.PostCollect;
 import com.campus.trend.campus_pulse.mapper.PostCollectMapper;
 import com.campus.trend.campus_pulse.mapper.PostMapper;
 import com.campus.trend.campus_pulse.service.PostCollectService;
 import com.campus.trend.campus_pulse.service.LevelService;
+import com.campus.trend.campus_pulse.service.post.PostCacheManager;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -23,14 +29,19 @@ public class PostCollectServiceImpl extends ServiceImpl<PostCollectMapper, PostC
         implements PostCollectService {
 
     private final PostMapper postMapper;
+    private final PostCollectMapper postCollectMapper;
     private final LevelService levelService;
     private final com.campus.trend.campus_pulse.service.NotificationService notificationService;
+    private final PostCacheManager postCacheManager;
 
-    public PostCollectServiceImpl(PostMapper postMapper, LevelService levelService,
-            com.campus.trend.campus_pulse.service.NotificationService notificationService) {
+    public PostCollectServiceImpl(PostMapper postMapper, PostCollectMapper postCollectMapper, LevelService levelService,
+            com.campus.trend.campus_pulse.service.NotificationService notificationService,
+            PostCacheManager postCacheManager) {
         this.postMapper = postMapper;
+        this.postCollectMapper = postCollectMapper;
         this.levelService = levelService;
         this.notificationService = notificationService;
+        this.postCacheManager = postCacheManager;
     }
 
     /**
@@ -39,10 +50,9 @@ public class PostCollectServiceImpl extends ServiceImpl<PostCollectMapper, PostC
      */
     @Override
     public boolean isCollect(String postId, String userId) {
-        Long count = lambdaQuery()
+        Long count = postCollectMapper.selectCount(Wrappers.<PostCollect>lambdaQuery()
                 .eq(PostCollect::getPostId, postId)
-                .eq(PostCollect::getUserId, userId)
-                .count();
+                .eq(PostCollect::getUserId, userId));
         return count != null && count > 0;
     }
 
@@ -50,10 +60,9 @@ public class PostCollectServiceImpl extends ServiceImpl<PostCollectMapper, PostC
     public IPage<Post> getPostCollectWithPage(String userId, int page, int pageSize) {
         // Song：1. 查询该用户所有的收藏记录（分页）
         Page<PostCollect> postCollectPage = new Page<>(page, pageSize);
-        IPage<PostCollect> postCollects = lambdaQuery()
+        IPage<PostCollect> postCollects = page(postCollectPage, Wrappers.<PostCollect>lambdaQuery()
                 .eq(PostCollect::getUserId, userId)
-                .orderByDesc(PostCollect::getCreateTime)
-                .page(postCollectPage);
+                .orderByDesc(PostCollect::getCreateTime));
 
         // Song：2. 如果没有收藏记录，返回空分页
         if (postCollects.getRecords() == null || postCollects.getRecords().isEmpty()) {
@@ -92,36 +101,35 @@ public class PostCollectServiceImpl extends ServiceImpl<PostCollectMapper, PostC
     @Override
     @Transactional(rollbackFor = Exception.class)
     public boolean collectPost(String postId, String userId) {
-        // Song：1. 检查是否已收藏
+        Post post = getCollectablePost(postId);
+
         if (isCollect(postId, userId)) {
-            log.warn("用户 [{}] 已经收藏过帖子 [{}]", userId, postId);
+            log.debug("用户 [{}] 已经收藏过帖子 [{}]", userId, postId);
             return false;
         }
 
-        // Song：2. 创建收藏记录
         PostCollect postCollect = new PostCollect()
                 .setPostId(postId)
                 .setUserId(userId)
                 .setCreateTime(LocalDateTime.now());
 
-        boolean saved = save(postCollect);
+        boolean saved;
+        try {
+            saved = postCollectMapper.insert(postCollect) > 0;
+        } catch (DuplicateKeyException e) {
+            log.debug("收藏记录已存在: userId={}, postId={}", userId, postId);
+            return false;
+        }
 
-        // Song：3. 更新帖子的收藏数
         if (saved) {
-            Post post = postMapper.selectById(postId);
-            if (post != null) {
-                int currentCollectCount = post.getCollectCount() != null ? post.getCollectCount() : 0;
-                post.setCollectCount(currentCollectCount + 1);
-                postMapper.updateById(post);
-                log.info("用户 [{}] 收藏帖子 [{}] 成功，当前收藏数: {}", userId, postId, currentCollectCount + 1);
+            postMapper.incrementCollectCount(postId);
+            invalidatePostCache(post);
+            log.info("用户 [{}] 收藏帖子 [{}] 成功", userId, postId);
 
-                // Song：被收藏经验 +3（给帖子作者）
-                levelService.addExperience(post.getUserId(), 3, "被收藏");
+            levelService.addExperience(post.getUserId(), 3, "被收藏");
 
-                // Song：发送收藏通知（不给自己发通知）
-                if (!post.getUserId().equals(userId)) {
-                    notificationService.sendFavoriteNotification(post.getUserId(), userId, postId);
-                }
+            if (!post.getUserId().equals(userId)) {
+                notificationService.sendFavoriteNotification(post.getUserId(), userId, postId);
             }
         }
 
@@ -135,27 +143,21 @@ public class PostCollectServiceImpl extends ServiceImpl<PostCollectMapper, PostC
     @Override
     @Transactional(rollbackFor = Exception.class)
     public boolean uncollectPost(String postId, String userId) {
-        // Song：1. 检查是否已收藏
+        Post post = getExistingPost(postId);
+
         if (!isCollect(postId, userId)) {
-            log.warn("用户 [{}] 未收藏过帖子 [{}]", userId, postId);
+            log.debug("用户 [{}] 未收藏过帖子 [{}]", userId, postId);
             return false;
         }
 
-        // Song：2. 删除收藏记录
-        boolean removed = lambdaUpdate()
+        boolean removed = postCollectMapper.delete(Wrappers.<PostCollect>lambdaQuery()
                 .eq(PostCollect::getPostId, postId)
-                .eq(PostCollect::getUserId, userId)
-                .remove();
+                .eq(PostCollect::getUserId, userId)) > 0;
 
-        // Song：3. 更新帖子的收藏数
         if (removed) {
-            Post post = postMapper.selectById(postId);
-            if (post != null) {
-                int currentCollectCount = post.getCollectCount() != null ? post.getCollectCount() : 0;
-                post.setCollectCount(Math.max(0, currentCollectCount - 1));
-                postMapper.updateById(post);
-                log.info("用户 [{}] 取消收藏帖子 [{}] 成功，当前收藏数: {}", userId, postId, Math.max(0, currentCollectCount - 1));
-            }
+            postMapper.decrementCollectCount(postId);
+            invalidatePostCache(post);
+            log.info("用户 [{}] 取消收藏帖子 [{}] 成功", userId, postId);
         }
 
         return removed;
@@ -175,5 +177,41 @@ public class PostCollectServiceImpl extends ServiceImpl<PostCollectMapper, PostC
             collectPost(postId, userId);
             return true;
         }
+    }
+
+    private Post getExistingPost(String postId) {
+        if (!StringUtils.hasText(postId)) {
+            throw new BusinessException(ResultCode.PARAM_ERROR, "帖子ID不能为空");
+        }
+        Post post = postMapper.selectById(postId);
+        if (post == null) {
+            throw new BusinessException(ResultCode.POST_NOT_FOUND);
+        }
+        return post;
+    }
+
+    private Post getCollectablePost(String postId) {
+        Post post = getExistingPost(postId);
+        if (!isCollectable(post)) {
+            throw new BusinessException(ResultCode.NO_PERMISSION, "该帖子当前不可收藏");
+        }
+        return post;
+    }
+
+    private boolean isCollectable(Post post) {
+        if (post == null || !Integer.valueOf(1).equals(post.getStatus())) {
+            return false;
+        }
+        String auditStatus = post.getAuditStatus();
+        return !StringUtils.hasText(auditStatus)
+                || "PENDING".equalsIgnoreCase(auditStatus)
+                || "APPROVED".equalsIgnoreCase(auditStatus);
+    }
+
+    private void invalidatePostCache(Post post) {
+        if (post == null) {
+            return;
+        }
+        postCacheManager.invalidatePostCaches(post.getSectionId(), post.getId());
     }
 }

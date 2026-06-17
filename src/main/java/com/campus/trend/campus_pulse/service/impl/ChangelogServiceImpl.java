@@ -18,4 +18,12 @@ public class ChangelogServiceImpl extends ServiceImpl<ChangelogMapper, Changelog
                 .orderByDesc(Changelog::getSortOrder)
                 .list();
     }
+
+    @Override
+    public List<Changelog> getAdminList() {
+        return lambdaQuery()
+                .orderByDesc(Changelog::getSortOrder)
+                .orderByDesc(Changelog::getCreatedAt)
+                .list();
+    }
 }

@@ -170,7 +170,7 @@ onMounted(fetchCodes)
         </el-table-column>
         <el-table-column label="状态" width="90">
           <template #default="{ row }">
-            <el-tag :type="isExpired(row) ? 'warning' : statusMap[row.status]?.type" size="small">
+            <el-tag :type="isExpired(row) ? 'warning' : (statusMap[row.status]?.type as 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined)" size="small">
               {{ isExpired(row) ? '已过期' : statusMap[row.status]?.label }}
             </el-tag>
           </template>

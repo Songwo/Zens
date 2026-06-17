@@ -141,7 +141,6 @@ onMounted(loadData)
             <el-progress
               :percentage="levelInfo ? Math.round(levelInfo.progress * 100) : 0"
               :stroke-width="8"
-              status="striped"
               striped-flow
               class="gate-progress"
             />

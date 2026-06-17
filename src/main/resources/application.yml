@@ -3,7 +3,7 @@ server:
   forward-headers-strategy: framework
   compression:
     enabled: true
-    min-response-size: 2KB
+    min-response-size: 1KB
     mime-types:
       - application/json
       - application/xml
@@ -12,11 +12,10 @@ server:
       - text/plain
       - text/css
       - text/javascript
-
-
-
       - application/javascript
       - image/svg+xml
+  http2:
+    enabled: true
   tomcat:
     threads:
       max: ${SERVER_TOMCAT_THREADS_MAX:200}
@@ -28,8 +27,6 @@ server:
     max-swallow-size: -1
 spring:
   config:
-
-
     import:
       - optional:file:./.env.local[.properties]
       - optional:file:./.env.dev[.properties]
@@ -53,17 +50,18 @@ spring:
     username: ${DB_USERNAME:root}
     password: ${DB_PASSWORD:123456}
     hikari:
-      minimum-idle: ${DB_MIN_IDLE:8}
-      maximum-pool-size: ${DB_MAX_POOL_SIZE:32}
-      idle-timeout: 300000
-      max-lifetime: 1200000
-      connection-timeout: 20000
+      minimum-idle: ${DB_MIN_IDLE:10}
+      maximum-pool-size: ${DB_MAX_POOL_SIZE:50}
+      idle-timeout: 600000
+      max-lifetime: 1800000
+      connection-timeout: 10000
       validation-timeout: 5000
       keepalive-time: 60000
-      leak-detection-threshold: 120000
+      leak-detection-threshold: 60000
       connection-test-query: SELECT 1
       pool-name: CampusPulseHikariCP
       register-mbeans: true
+      auto-commit: false
 
   # 2.1 Redis 配置
   data:
@@ -238,10 +236,10 @@ trend:
 # 10. 上传安全控制配置
 campus:
   async:
-    core-pool-size: 4      # 4核CPU，核心线程=CPU核数
-    max-pool-size: 8       # 最大8个，避免上下文切换开销
-    queue-capacity: 500    # 队列适当加大，缓冲突发请求
-    keep-alive-seconds: 60
+    core-pool-size: 8      # CPU核数 * 2（从4增至8）
+    max-pool-size: 16      # 核心的2倍（从8增至16）
+    queue-capacity: 2000   # 增大队列容量（从500增至2000）
+    keep-alive-seconds: 120
     await-termination-seconds: 60
     thread-name-prefix: "campus-async-"
   cache:
@@ -270,6 +268,9 @@ campus:
     allowed-origin-patterns: ${ALLOWED_ORIGIN_PATTERNS:http://localhost:5173,http://127.0.0.1:5173,http://localhost:4173,http://127.0.0.1:4173,https://allinsong.top,https://www.allinsong.top}
     # 开发环境默认关闭，生产环境请在 application-prod.yml 或 .env 中显式配置
     request-signature-required: ${REQUEST_SIGNATURE_REQUIRED:false}
+    # IP黑名单防刷（1分钟200次以上自动封禁30分钟）
+    ip-blacklist:
+      enabled: ${IP_BLACKLIST_ENABLED:false}
   notification:
     dedupe-window-seconds: ${NOTIFICATION_DEDUPE_WINDOW_SECONDS:120}
   invite:
@@ -348,6 +349,10 @@ campus:
     flag:
       auto-hide-threshold: ${FLAG_AUTO_HIDE_THRESHOLD:10}
     recalc-cron: ${TL_RECALC_CRON:0 30 2 * * ?}
+  # 读写分离（默认关闭，需要配置主从数据库）
+  datasource:
+    read-write-separation:
+      enabled: ${READ_WRITE_SEPARATION_ENABLED:false}
 
 # 11. 第三方登录与二步验证配置
 oauth:

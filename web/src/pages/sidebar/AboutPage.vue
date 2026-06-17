@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { InfoFilled, Monitor, Setting, DataLine, Lightning } from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
 import MainLayout from '@/layouts/MainLayout.vue'
@@ -8,12 +8,115 @@ import { changelogApi, type ChangelogItem } from '@/api/changelog'
 const router = useRouter()
 const changelogs = ref<ChangelogItem[]>([])
 
+const fallbackRoadmapItems: ChangelogItem[] = [
+  {
+    id: -1,
+    version: 'v1.0.0',
+    title: '基础社区功能',
+    content: '已完成发帖、评论、标签分类、个人主页和后台管理。',
+    stageNo: '01',
+    stageLabel: '已上线',
+    roadmapStatus: 'released',
+    highlights: '发帖/评论/标签',
+    timestamp: '已上线',
+    status: 1,
+    sortOrder: 300
+  },
+  {
+    id: -2,
+    version: 'v1.1.0',
+    title: '用户体验优化',
+    content: '正在优化错误提示、内容推荐、项目展示和消息通知。',
+    stageNo: '02',
+    stageLabel: '建设中',
+    roadmapStatus: 'building',
+    highlights: '推荐/通知/展示',
+    timestamp: '建设中',
+    status: 1,
+    sortOrder: 200
+  },
+  {
+    id: -3,
+    version: 'v1.2.0',
+    title: '内容生态增强',
+    content: '计划加入积分等级、问答专区、创作者激励和专栏系统。',
+    stageNo: '03',
+    stageLabel: '下一阶段',
+    roadmapStatus: 'planned',
+    highlights: '积分/问答/专栏',
+    timestamp: '下一阶段',
+    status: 1,
+    sortOrder: 100
+  }
+]
+
+const resolveRoadmapItems = () => {
+  if (!changelogs.value.length) return fallbackRoadmapItems
+  const configuredItems = changelogs.value.filter(item => (
+    item.stageNo || item.stageLabel || item.roadmapStatus || item.highlights
+  ))
+  return configuredItems.length ? configuredItems : changelogs.value
+}
+
+const roadmapItems = computed(() => (
+  [...resolveRoadmapItems()].sort((a, b) => {
+    const aOrder = a.sortOrder ?? 0
+    const bOrder = b.sortOrder ?? 0
+    if (aOrder !== bOrder) return bOrder - aOrder
+    return getStageNo(a, 0).localeCompare(getStageNo(b, 0), 'zh-CN', { numeric: true })
+  })
+))
+
+const roadmapCurrentItem = computed(() => (
+  roadmapItems.value.find(item => getRoadmapStatus(item) === 'building')
+  || roadmapItems.value.find(item => getRoadmapStatus(item) === 'planned')
+  || roadmapItems.value[roadmapItems.value.length - 1]
+))
+
+const roadmapActionPath = computed(() => (
+  roadmapItems.value.find(item => item.actionPath)?.actionPath || ''
+))
+
+const getStageNo = (item: ChangelogItem, index: number) => (
+  item.stageNo || String(index + 1).padStart(2, '0')
+)
+
+const getRoadmapStatus = (item: ChangelogItem) => {
+  if (item.roadmapStatus === 'building' || item.stageLabel === '建设中') return 'building'
+  if (item.roadmapStatus === 'planned' || item.stageLabel === '下一阶段') return 'planned'
+  return 'released'
+}
+
+const getStageLabel = (item: ChangelogItem, index: number) => {
+  if (item.stageLabel) return item.stageLabel
+  const status = getRoadmapStatus(item)
+  if (status === 'building') return '建设中'
+  if (status === 'planned') return '下一阶段'
+  return index === 0 ? '已上线' : '已上线'
+}
+
+const getRoadmapStatusText = (item: ChangelogItem) => {
+  const status = getRoadmapStatus(item)
+  if (status === 'building') return '进行中'
+  if (status === 'planned') return '规划中'
+  return '已完成'
+}
+
+const handleRoadmapCta = () => {
+  if (!roadmapActionPath.value) return
+  if (/^https?:\/\//.test(roadmapActionPath.value)) {
+    window.open(roadmapActionPath.value, '_blank', 'noopener,noreferrer')
+    return
+  }
+  router.push(roadmapActionPath.value)
+}
+
 onMounted(async () => {
   try {
     const res = await changelogApi.getList()
     if (res.data) changelogs.value = res.data
   } catch {
-    // Song：说明
+    changelogs.value = []
   }
 })
 </script>
@@ -79,34 +182,55 @@ onMounted(async () => {
         </el-row>
       </div>
 
-      <!-- Timeline -->
-      <div class="section-container timeline-section">
-        <div class="section-title">
-          <el-icon><DataLine /></el-icon>
-          <h3>发展历程</h3>
-        </div>
-        
-        <el-card shadow="never" class="timeline-card">
-          <el-timeline v-if="changelogs.length">
-            <el-timeline-item
-              v-for="item in changelogs"
+      <!-- Roadmap -->
+      <div class="section-container roadmap-section">
+        <div class="roadmap-panel">
+          <div class="roadmap-header">
+            <div>
+              <p class="roadmap-kicker">社区路线图</p>
+              <h3>Zens 正在成长</h3>
+              <p v-if="roadmapCurrentItem" class="roadmap-current">
+                当前焦点：{{ roadmapCurrentItem.version }} · {{ roadmapCurrentItem.title }}
+              </p>
+            </div>
+            <button class="roadmap-link" :class="{ 'is-static': !roadmapActionPath }" type="button" @click="handleRoadmapCta">
+              查看完整路线图 <span>→</span>
+            </button>
+          </div>
+
+          <div class="roadmap-timeline" :style="{ '--roadmap-count': String(Math.max(roadmapItems.length, 1)) }">
+            <article
+              v-for="(item, index) in roadmapItems"
               :key="item.id"
-              :timestamp="item.timestamp"
-              placement="top"
-              :type="item.sortOrder >= 100 ? 'primary' : undefined"
-              :size="item.sortOrder >= 100 ? 'large' : 'normal'"
-              :color="item.sortOrder < 100 ? '#a0cfff' : undefined"
+              class="roadmap-node"
+              :class="[`roadmap-${getRoadmapStatus(item)}`, { 'is-focus': item.id === roadmapCurrentItem?.id }]"
             >
-              <el-card shadow="hover" class="timeline-node-card" :class="{ 'future-node': item.sortOrder < 100 }">
+              <div class="roadmap-marker-wrap" aria-hidden="true">
+                <span class="roadmap-marker"></span>
+              </div>
+              <div class="roadmap-card">
+                <div class="roadmap-stage">
+                  <span class="roadmap-index">{{ getStageNo(item, index) }}</span>
+                  <span class="roadmap-status">{{ getStageLabel(item, index) }}</span>
+                  <span class="roadmap-state">{{ getRoadmapStatusText(item) }}</span>
+                </div>
+                <div class="roadmap-version">{{ item.version }}</div>
                 <h4>{{ item.title }}</h4>
                 <p>{{ item.content }}</p>
-              </el-card>
-            </el-timeline-item>
-          </el-timeline>
-          <div v-else class="timeline-empty">
-            <p>暂无发展日志</p>
+                <div v-if="item.highlights" class="roadmap-highlights">{{ item.highlights }}</div>
+                <a
+                  v-if="item.upgradeEnabled === 1 && item.upgradeUrl"
+                  class="roadmap-upgrade"
+                  :href="item.upgradeUrl"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  在线升级
+                </a>
+              </div>
+            </article>
           </div>
-        </el-card>
+        </div>
       </div>
 
       <!-- Connect 快捷入口 -->
@@ -128,6 +252,7 @@ onMounted(async () => {
 <style scoped>
 .page-container {
   width: 100%;
+  max-width: 1200px;
   margin: 0 auto;
   padding: 32px 16px;
   animation: fadeIn 0.5s ease-out;
@@ -339,39 +464,296 @@ onMounted(async () => {
   line-height: 1.6;
 }
 
-/* Song：说明 */
-.timeline-card {
+.roadmap-section {
+  margin-bottom: 48px;
+}
+
+.roadmap-panel {
   border-radius: 20px;
-  padding: 16px 16px 0 16px;
-  background-color: var(--el-fill-color-blank);
-}
-
-.timeline-node-card {
-  border-radius: 12px;
+  padding: 28px;
+  background: var(--el-bg-color);
   border: 1px solid var(--el-border-color-lighter);
+  box-shadow: 0 16px 40px rgba(31, 41, 55, 0.05);
 }
 
-.timeline-node-card h4 {
-  margin: 0 0 12px 0;
-  font-size: 16px;
-  font-weight: 700;
+.roadmap-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 24px;
+}
+
+.roadmap-kicker {
+  margin: 0 0 6px 0;
   color: var(--el-color-primary);
+  font-size: 13px;
+  font-weight: 700;
 }
 
-.timeline-node-card p {
+.roadmap-header h3 {
   margin: 0;
-  font-size: 14px;
-  color: var(--el-text-color-regular);
-  line-height: 1.6;
+  font-size: 24px;
+  line-height: 1.2;
+  font-weight: 800;
+  color: var(--el-text-color-primary);
 }
 
-.future-node {
-  background-color: var(--el-fill-color-light);
-  border-style: dashed;
-}
-
-.future-node h4 {
+.roadmap-current {
+  margin: 10px 0 0;
   color: var(--el-text-color-secondary);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.roadmap-link {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  border: 1px solid var(--el-color-primary-light-7);
+  border-radius: 999px;
+  padding: 0 14px;
+  background: var(--el-fill-color-blank);
+  color: var(--el-color-primary);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.roadmap-link:hover {
+  border-color: var(--el-color-primary-light-5);
+  background: var(--el-color-primary-light-9);
+  transform: translateY(-1px);
+}
+
+.roadmap-link.is-static {
+  cursor: default;
+}
+
+.roadmap-link.is-static:hover {
+  transform: none;
+}
+
+.roadmap-timeline {
+  --roadmap-count: 3;
+  display: grid;
+  grid-template-columns: repeat(var(--roadmap-count), minmax(220px, 1fr));
+  gap: 0;
+  overflow-x: auto;
+  padding: 4px 2px 10px;
+  scrollbar-width: thin;
+}
+
+.roadmap-node {
+  position: relative;
+  min-width: 220px;
+  padding: 46px 9px 0;
+}
+
+.roadmap-node::before {
+  content: '';
+  position: absolute;
+  top: 18px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--el-border-color);
+}
+
+.roadmap-node:first-child::before {
+  left: 50%;
+}
+
+.roadmap-node:last-child::before {
+  right: 50%;
+}
+
+.roadmap-marker-wrap {
+  position: absolute;
+  top: 7px;
+  left: 50%;
+  z-index: 2;
+  transform: translateX(-50%);
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--el-bg-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.roadmap-marker {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--el-color-success);
+  box-shadow: 0 0 0 5px var(--el-color-success-light-9);
+}
+
+.roadmap-building .roadmap-marker {
+  background: var(--el-color-warning);
+  box-shadow: 0 0 0 5px var(--el-color-warning-light-9);
+}
+
+.roadmap-planned .roadmap-marker {
+  background: var(--el-bg-color);
+  border: 2px dashed var(--el-color-info);
+  box-shadow: 0 0 0 5px var(--el-fill-color-light);
+}
+
+.roadmap-card {
+  min-height: 250px;
+  height: 100%;
+  border-radius: 12px;
+  padding: 18px;
+  background: var(--el-fill-color-blank);
+  border: 1px solid var(--el-border-color-lighter);
+  box-shadow: 0 10px 24px rgba(31, 41, 55, 0.04);
+  display: flex;
+  flex-direction: column;
+}
+
+.roadmap-node.is-focus .roadmap-card {
+  border-color: var(--el-color-primary-light-5);
+  box-shadow: 0 14px 30px rgba(64, 158, 255, 0.12);
+  transform: translateY(-4px);
+}
+
+.roadmap-stage {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+  color: var(--el-color-success);
+  font-weight: 800;
+  flex-wrap: wrap;
+}
+
+.roadmap-building .roadmap-stage {
+  color: var(--el-color-warning);
+}
+
+.roadmap-planned .roadmap-stage {
+  color: var(--el-color-info);
+}
+
+.roadmap-index {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.roadmap-status {
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: var(--el-color-success-light-9);
+  font-size: 12px;
+  line-height: 1;
+}
+
+.roadmap-building .roadmap-status {
+  background: var(--el-color-warning-light-9);
+}
+
+.roadmap-planned .roadmap-status {
+  background: var(--el-fill-color-light);
+}
+
+.roadmap-state {
+  margin-left: auto;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.roadmap-version {
+  margin-bottom: 8px;
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.roadmap-card h4 {
+  margin: 0 0 10px 0;
+  color: var(--el-text-color-primary);
+  font-size: 17px;
+  line-height: 1.35;
+  font-weight: 800;
+}
+
+.roadmap-card p {
+  margin: 0;
+  color: var(--el-text-color-regular);
+  font-size: 14px;
+  line-height: 1.75;
+}
+
+.roadmap-highlights {
+  margin-top: auto;
+  padding-top: 14px;
+  border-top: 1px solid var(--el-border-color-lighter);
+  color: var(--el-text-color-primary);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.roadmap-upgrade {
+  display: inline-flex;
+  margin-top: 12px;
+  color: var(--el-color-primary);
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+@media (max-width: 960px) {
+  .roadmap-panel {
+    padding: 24px;
+  }
+
+  .roadmap-header {
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .roadmap-timeline {
+    display: flex;
+    flex-direction: column-reverse;
+    overflow-x: visible;
+    padding: 0 0 0 34px;
+  }
+
+  .roadmap-node {
+    min-width: 0;
+    padding: 0 0 18px 22px;
+  }
+
+  .roadmap-node::before {
+    top: 0;
+    bottom: 0;
+    left: -1px;
+    right: auto;
+    width: 2px;
+    height: auto;
+  }
+
+  .roadmap-node:first-child::before,
+  .roadmap-node:last-child::before {
+    left: -1px;
+    right: auto;
+  }
+
+  .roadmap-marker-wrap {
+    top: 2px;
+    left: 0;
+  }
+
+  .roadmap-card {
+    min-height: 0;
+  }
 }
 
 @media (max-width: 768px) {
@@ -384,12 +766,20 @@ onMounted(async () => {
   .vision-hero {
     padding: 32px 24px;
   }
-}
 
-.timeline-empty {
-  text-align: center;
-  padding: 32px;
-  color: var(--el-text-color-placeholder);
+  .roadmap-panel {
+    border-radius: 18px;
+    padding: 20px;
+  }
+
+  .roadmap-header h3 {
+    font-size: 21px;
+  }
+
+  .roadmap-link {
+    width: 100%;
+    justify-content: center;
+  }
 }
 
 /* Song：说明 */

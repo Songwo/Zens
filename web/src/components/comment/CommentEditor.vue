@@ -1,7 +1,6 @@
 <script setup lang="ts">
-import { ref, nextTick, watch } from 'vue'
+import { defineAsyncComponent, ref, nextTick, watch } from 'vue'
 import { Close } from '@element-plus/icons-vue'
-import MarkdownEditor from '@/components/markdown/MarkdownEditor.vue'
 
 const props = defineProps<{
   loading?: boolean
@@ -15,7 +14,8 @@ const emit = defineEmits<{
 }>()
 
 const content = ref('')
-const editorRef = ref<InstanceType<typeof MarkdownEditor> | null>(null)
+const MarkdownEditor = defineAsyncComponent(() => import('@/components/markdown/MarkdownEditor.vue'))
+const editorRef = ref<{ focus?: () => void } | null>(null)
 
 function handleSubmit() {
   const text = content.value.trim()
@@ -27,7 +27,7 @@ function handleSubmit() {
 watch(() => props.replyingTo, async (val) => {
   if (val) {
     await nextTick()
-    editorRef.value?.focus()
+    editorRef.value?.focus?.()
   }
 })
 </script>

@@ -39,6 +39,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.redisson.api.RBloomFilter;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -101,28 +102,64 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
     private final PostCacheManager postCacheManager;
     private final com.campus.trend.campus_pulse.service.TrustLevelService trustLevelService;
     private final com.campus.trend.campus_pulse.service.SearchService searchService;
+    private final RBloomFilter<String> postIdBloomFilter;
+    private final BatchUserService batchUserService;
 
     @Override
     public Post searchByPostId(String postId) {
+        if (!StringUtils.hasText(postId)) {
+            return null;
+        }
+
+        boolean possibleExists = true;
+        try {
+            possibleExists = postIdBloomFilter.contains(postId);
+        } catch (Exception e) {
+            log.debug("查询帖子ID布隆过滤器失败，回退数据库查询: postId={}, err={}", postId, e.getMessage());
+        }
+
         Post post = getById(postId);
         if (post != null) {
-            try {
-                // Song：尝试获取当前登录用户，若未登录会抛出异常，捕获后忽略即可
-                com.campus.trend.campus_pulse.security.AuthUser authUser = com.campus.trend.campus_pulse.utils.SecurityUtils
-                        .getAuthenticatedUser();
-                String userId = authUser.getUser().getId();
-
-                post.setIsLiked(postLikeService.isLike(postId, userId));
-                post.setIsCollected(postCollectService.isCollect(postId, userId));
-                log.info("Post detail: postId={}, userId={}, isLiked={}, isCollected={}", postId, userId,
-                        post.getIsLiked(), post.getIsCollected());
-            } catch (Exception e) {
-                log.debug("SearchByPostId - User not authenticated or error: {}", e.getMessage());
-                post.setIsLiked(false);
-                post.setIsCollected(false);
+            if (!possibleExists) {
+                addPostIdToBloomFilter(postId);
             }
+            hydratePostInteractionState(post);
+        } else if (!possibleExists) {
+            log.debug("布隆过滤器未命中且数据库未找到帖子: postId={}", postId);
         }
         return post;
+    }
+
+    private void hydratePostInteractionState(Post post) {
+        if (post == null || !StringUtils.hasText(post.getId())) {
+            return;
+        }
+        try {
+            // 尝试获取当前登录用户，若未登录会抛出异常，捕获后按游客处理。
+            com.campus.trend.campus_pulse.security.AuthUser authUser = com.campus.trend.campus_pulse.utils.SecurityUtils
+                    .getAuthenticatedUser();
+            String userId = authUser.getUser().getId();
+
+            post.setIsLiked(postLikeService.isLike(post.getId(), userId));
+            post.setIsCollected(postCollectService.isCollect(post.getId(), userId));
+            log.debug("Post detail: postId={}, userId={}, isLiked={}, isCollected={}", post.getId(), userId,
+                    post.getIsLiked(), post.getIsCollected());
+        } catch (Exception e) {
+            log.debug("SearchByPostId - User not authenticated or error: {}", e.getMessage());
+            post.setIsLiked(false);
+            post.setIsCollected(false);
+        }
+    }
+
+    private void addPostIdToBloomFilter(String postId) {
+        if (!StringUtils.hasText(postId)) {
+            return;
+        }
+        try {
+            postIdBloomFilter.add(postId);
+        } catch (Exception e) {
+            log.debug("添加帖子ID到布隆过滤器失败: postId={}, err={}", postId, e.getMessage());
+        }
     }
 
     @Override
@@ -211,6 +248,7 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
 
         // Song：3.保存帖子
         this.save(sysPost);
+        addPostIdToBloomFilter(sysPost.getId());
 
         // Song：3.1 覆盖式写入 sys_post_media
         if (mediaList != null) {
@@ -497,8 +535,6 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
         }
         // Song：该方法会自动处理收藏状态切换并更新收藏数
         postCollectService.toggleCollect(postId, userId);
-        postCacheManager.invalidatePostFeedCache(post.getSectionId(), post.getSectionId());
-        postCacheManager.bumpPostDetailCacheVersion(postId);
     }
 
     @Override
@@ -696,6 +732,7 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
         post.setRejectReason(null);
         post.setUpdateTime(LocalDateTime.now());
         this.updateById(post);
+        addPostIdToBloomFilter(postId);
         postCacheManager.invalidatePostFeedCache(null, post.getSectionId());
         postCacheManager.bumpPostDetailCacheVersion(postId);
         // Song：恢复后重新索引到 Meilisearch
@@ -752,6 +789,7 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
         post.setRejectReason(null);
         post.setUpdateTime(java.time.LocalDateTime.now());
         this.updateById(post);
+        addPostIdToBloomFilter(postId);
         postCacheManager.invalidatePostFeedCache(post.getSectionId(), post.getSectionId());
         postCacheManager.bumpPostDetailCacheVersion(post.getId());
     }
@@ -1209,10 +1247,7 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
         // Song：3. 批量查询用户
         Map<String, User> userMap = new HashMap<>();
         if (!userIds.isEmpty()) {
-            List<User> users = userService.listByIds(userIds);
-            for (User user : users) {
-                userMap.put(user.getId(), user);
-            }
+            userMap.putAll(batchUserService.batchGetUsers(userIds));
         }
         Map<Long, Section> sectionMap = new HashMap<>();
         if (!sectionIds.isEmpty()) {
@@ -1398,6 +1433,13 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
                 response.setAuthorBadgeText(author.getBadgeText());
                 response.setAuthorBadgeColor(author.getBadgeColor());
                 response.setAuthorBadgeStyle(author.getBadgeStyle());
+                // Song：透传作者信任等级（前端展示 TL 徽章）
+                // 管理员角色直接 TL4（与 getTrustLevel 兜底一致，避免老数据 trust_level=0 不显示徽章）
+                if ("ROLE_ADMIN".equals(role) || "ROLE_SUPER_ADMIN".equals(role)) {
+                    response.setAuthorTrustLevel(4);
+                } else {
+                    response.setAuthorTrustLevel(author.getTrustLevel() != null ? author.getTrustLevel() : 0);
+                }
             } else {
                 response.setAuthorName("未知用户");
                 response.setAuthorAvatar(null);

@@ -9,6 +9,8 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.redis.core.Cursor;
 import org.springframework.data.redis.core.RedisCallback;
 import org.springframework.data.redis.core.ScanOptions;
@@ -84,6 +86,7 @@ public class TagServiceImpl extends ServiceImpl<TagMapper, Tag> implements TagSe
      */
     @Override
     @Transactional(rollbackFor = Exception.class)
+    @CacheEvict(value = "tag:hot", allEntries = true)
     public void increaseHeat(Long tagId) {
         Tag tag = getById(tagId);
         if (tag != null) {
@@ -104,6 +107,7 @@ public class TagServiceImpl extends ServiceImpl<TagMapper, Tag> implements TagSe
      */
     @Override
     @Transactional(rollbackFor = Exception.class)
+    @CacheEvict(value = "tag:hot", allEntries = true)
     public void decreaseHeat(Long tagId) {
         Tag tag = getById(tagId);
         if (tag != null) {
@@ -135,6 +139,7 @@ public class TagServiceImpl extends ServiceImpl<TagMapper, Tag> implements TagSe
     }
 
     @Override
+    @Cacheable(value = "tag:hot", key = "#limit", unless = "#result == null || #result.isEmpty()")
     public List<Tag> getHotTags(int limit) {
         String cacheKey = "tag:hot:" + limit;
 

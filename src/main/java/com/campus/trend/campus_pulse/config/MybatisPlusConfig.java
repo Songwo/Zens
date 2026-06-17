@@ -3,12 +3,14 @@ package com.campus.trend.campus_pulse.config;
 import com.baomidou.mybatisplus.annotation.DbType;
 import com.baomidou.mybatisplus.extension.plugins.MybatisPlusInterceptor;
 import com.baomidou.mybatisplus.extension.plugins.inner.PaginationInnerInterceptor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /**
- * Song：配置分页插件等
+ * MyBatis-Plus配置 + 慢SQL监控
  */
+@Slf4j
 @Configuration
 public class MybatisPlusConfig {
 

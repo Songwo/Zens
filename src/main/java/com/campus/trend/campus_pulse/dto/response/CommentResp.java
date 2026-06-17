@@ -20,6 +20,8 @@ public class CommentResp {
     private String replyUserNickname; // Song：说明
     private Integer isAnonymous;
     private List<String> roles; // Song：用户角色列表
+    /** 评论者信任等级 0-4 */
+    private Integer userTrustLevel;
     private Integer likeCount;
     private Integer collectCount;
     private Integer isAdopted;

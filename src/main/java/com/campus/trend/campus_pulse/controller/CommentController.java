@@ -1,5 +1,6 @@
 package com.campus.trend.campus_pulse.controller;
 
+import com.campus.trend.campus_pulse.annotation.RateLimit;
 import com.campus.trend.campus_pulse.common.api.Result;
 import com.campus.trend.campus_pulse.dto.request.CommentCreateReq;
 import com.campus.trend.campus_pulse.dto.request.CommentEditReq;
@@ -39,6 +40,7 @@ public class CommentController {
      * Song：添加评论（需要登录）
      */
     @PostMapping("/add")
+    @RateLimit(key = "add_comment", limit = 30, windowSeconds = 60)
     public Result<?> addComment(@Valid @RequestBody CommentCreateReq request, HttpServletRequest httpRequest) {
         AuthUser authUser = SecurityUtils.getAuthenticatedUser();
         String userId = authUser.getUser().getId();
@@ -53,6 +55,7 @@ public class CommentController {
      * Song：创建评论（支持匿名，未登录用户也可以发评论）
      */
     @PostMapping("/create")
+    @RateLimit(key = "create_comment", limit = 30, windowSeconds = 60)
     public Result<?> createComment(@Valid @RequestBody CommentCreateReq request, HttpServletRequest httpRequest) {
         // Song：通过 SecurityContext 判断是否已认证，避免用 try-catch 做流控
         String userId = SecurityUtils.getCurrentUserId();
@@ -79,6 +82,7 @@ public class CommentController {
 
     /* Song：删除评论（仅评论作者、管理员或对应板块版主） */
     @DeleteMapping("/{id}")
+    @RateLimit(key = "delete_comment", limit = 30, windowSeconds = 60)
     public Result<?> deleteComment(@PathVariable String id) {
         AuthUser authUser = SecurityUtils.getAuthenticatedUser();
         commentService.deleteComment(id, authUser.getUser().getId());
@@ -87,6 +91,7 @@ public class CommentController {
 
     /* Song：编辑评论内容（仅评论作者、管理员或对应板块版主） */
     @PutMapping("/{id}")
+    @RateLimit(key = "edit_comment", limit = 30, windowSeconds = 60)
     public Result<?> editComment(@PathVariable String id, @Valid @RequestBody CommentEditReq request) {
         AuthUser authUser = SecurityUtils.getAuthenticatedUser();
         commentService.editComment(id, request.getContent(), authUser.getUser().getId());
@@ -95,6 +100,7 @@ public class CommentController {
 
     /* Song：恢复软删除评论（评论作者、管理员或对应板块版主） */
     @PostMapping("/{id}/restore")
+    @RateLimit(key = "restore_comment", limit = 20, windowSeconds = 60)
     public Result<?> restoreComment(@PathVariable String id) {
         AuthUser authUser = SecurityUtils.getAuthenticatedUser();
         commentService.restoreComment(id, authUser.getUser().getId());
@@ -111,6 +117,7 @@ public class CommentController {
 
     /* Song：点赞/取消点赞评论 */
     @PostMapping("/{id}/like")
+    @RateLimit(key = "like_comment", limit = 60, windowSeconds = 60)
     public Result<?> likeComment(@PathVariable String id) {
         AuthUser authUser = SecurityUtils.getAuthenticatedUser();
         commentService.toggleLike(id, authUser.getUser().getId());
@@ -119,6 +126,7 @@ public class CommentController {
 
     /* Song：收藏/取消收藏评论 */
     @PostMapping("/{id}/collect")
+    @RateLimit(key = "collect_comment", limit = 60, windowSeconds = 60)
     public Result<CollectActionResp> collectComment(@PathVariable String id) {
         AuthUser authUser = SecurityUtils.getAuthenticatedUser();
         boolean isCollected = commentService.toggleCollect(id, authUser.getUser().getId());

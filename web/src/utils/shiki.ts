@@ -123,7 +123,10 @@ async function getHighlighter(): Promise<HighlighterCore> {
   _initPromise = (async () => {
     const h = await createHighlighterCore({
       themes: [vitesseLight, vitesseDark],
-      langs: PRELOADED.map(name => LANG_IMPORTS[name]()),
+      langs: PRELOADED
+        .map(name => LANG_IMPORTS[name])
+        .filter((load): load is () => Promise<any> => Boolean(load))
+        .map(load => load()),
       engine: createOnigurumaEngine(import('shiki/wasm')),
     })
     PRELOADED.forEach(l => _loadedLangs.add(l))
@@ -146,7 +149,9 @@ export async function ensureLanguage(rawLang: string): Promise<string | null> {
   }
   const promise = (async () => {
     try {
-      const mod = await LANG_IMPORTS[lang]()
+      const load = LANG_IMPORTS[lang]
+      if (!load) return
+      const mod = await load()
       await h.loadLanguage(mod.default ?? mod)
       _loadedLangs.add(lang)
     } catch {

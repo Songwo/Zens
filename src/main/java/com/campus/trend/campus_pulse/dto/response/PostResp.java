@@ -112,6 +112,10 @@ public class PostResp implements Serializable {
     private String authorBadgeText;
     private String authorBadgeColor;
     private String authorBadgeStyle;
+    /**
+     * 作者信任等级 0-4（TL0新人/TL1基础/TL2成员/TL3常客/TL4领袖）
+     */
+    private Integer authorTrustLevel;
 
     // Song：=================== 智能分析数据 (新增) ===================
     /**

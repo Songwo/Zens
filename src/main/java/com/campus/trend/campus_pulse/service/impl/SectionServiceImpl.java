@@ -12,6 +12,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -47,6 +49,7 @@ public class SectionServiceImpl implements SectionService {
     private final ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
 
     @Override
+    @Cacheable(value = "section:list", key = "'all'", unless = "#result == null || #result.isEmpty()")
     public List<SectionResp> getAllSections() {
         return getOrLoadSections(ALL_SECTIONS_CACHE_KEY, () -> {
             LambdaQueryWrapper<Section> wrapper = new LambdaQueryWrapper<>();
@@ -56,6 +59,7 @@ public class SectionServiceImpl implements SectionService {
     }
 
     @Override
+    @Cacheable(value = "section:list", key = "'active'", unless = "#result == null || #result.isEmpty()")
     public List<SectionResp> getActiveSections() {
         return getOrLoadSections(ACTIVE_SECTIONS_CACHE_KEY, () -> {
             LambdaQueryWrapper<Section> wrapper = new LambdaQueryWrapper<>();

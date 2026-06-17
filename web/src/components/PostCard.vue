@@ -8,6 +8,7 @@ import { useRouter } from 'vue-router'
 import { useUserStore } from '@/store/user'
 import { usePostComposerStore } from '@/store/postComposer'
 import UserRoleBadge from '@/components/common/UserRoleBadge.vue'
+import TrustLevelBadge from '@/components/common/TrustLevelBadge.vue'
 import UserBadge from '@/components/common/UserBadge.vue'
 import { stripMarkdown } from '@/utils/markdown'
 import { encodePostId, encodeUserId } from '@/utils/shortId'
@@ -340,9 +341,10 @@ const highlightedSummary = computed(() => highlightText(postSummary.value))
           </div>
           <div class="author-details">
             <div style="display:flex; align-items:center;">
-              <span class="author-name">{{ post.authorName }}</span>
-              <UserRoleBadge :roles="post.authorRoles" />
-              <UserBadge :text="post.authorBadgeText || ''" :color="post.authorBadgeColor" :effect="post.authorBadgeStyle" />
+                <span class="author-name">{{ post.authorName }}</span>
+                <UserRoleBadge :roles="post.authorRoles" />
+                <TrustLevelBadge :trust-level="post.authorTrustLevel ?? 0" />
+                <UserBadge :text="post.authorBadgeText || ''" :color="post.authorBadgeColor" :effect="post.authorBadgeStyle" />
             </div>
             <div class="post-meta-text">
               <span class="post-date">{{ formatDate(post.createTime) }}</span>

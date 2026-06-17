@@ -44,4 +44,14 @@ public interface TrustLevelService {
      * 管理员手动设置某用户信任等级（仅 TL4 需手动，其它也可强制）。
      */
     void setTrustLevel(String operatorId, String userId, int newLevel, String reason);
+
+    /**
+     * 查询最近的信任等级变更日志（管理员审计用）。
+     */
+    java.util.List<com.campus.trend.campus_pulse.entity.TrustEvent> getRecentEvents(int page, int pageSize);
+
+    /**
+     * 查询指定用户自己的信任变更日志（普通用户自查用，按 userId 过滤）。
+     */
+    java.util.List<com.campus.trend.campus_pulse.entity.TrustEvent> getEventsByUserId(String userId, int page, int pageSize);
 }

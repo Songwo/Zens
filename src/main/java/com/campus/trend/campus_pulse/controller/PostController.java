@@ -1,5 +1,6 @@
 package com.campus.trend.campus_pulse.controller;
 
+import com.campus.trend.campus_pulse.annotation.RateLimit;
 import com.campus.trend.campus_pulse.common.api.Result;
 import com.campus.trend.campus_pulse.dto.request.PostCreateReq;
 import com.campus.trend.campus_pulse.dto.request.PostDraftReq;
@@ -37,6 +38,7 @@ public class PostController {
 
     /* Song：创建新帖子 */
     @PostMapping("/create-post")
+    @RateLimit(key = "create_post", limit = 10, windowSeconds = 60)
     public Result<?> createPost(@Valid @RequestBody PostCreateReq createPostRequest) {
         AuthUser authUser = SecurityUtils.getAuthenticatedUser();
         postService.createPost(createPostRequest, authUser.getUser().getId());
@@ -44,12 +46,14 @@ public class PostController {
     }
 
     @PostMapping("/save-draft")
+    @RateLimit(key = "save_draft", limit = 20, windowSeconds = 60)
     public Result<?> saveDraft(@RequestBody PostDraftReq draftRequest) {
         AuthUser authUser = SecurityUtils.getAuthenticatedUser();
         return Result.success(postService.saveDraft(draftRequest, authUser.getUser().getId()));
     }
 
     @PostMapping("/extract-tags")
+    @RateLimit(key = "extract_tags", limit = 5, windowSeconds = 60)
     public Result<?> extractTags(@Valid @RequestBody TagsExtractReq extractTagsRequest) {
         String userId = SecurityUtils.getCurrentUserId();
         log.info("请求 AI 提取标签: userId={}, tagSize={}, summarySize={}, contentLength={}",
@@ -64,6 +68,7 @@ public class PostController {
      * Song：重新生成帖子摘要（作者/管理员/版主）
      */
     @PostMapping("/{id}/summary/regenerate")
+    @RateLimit(key = "regenerate_summary", limit = 10, windowSeconds = 60)
     public Result<?> regenerateSummary(@PathVariable String id) {
         AuthUser authUser = SecurityUtils.getAuthenticatedUser();
         String summary = postService.regenerateSummary(id, authUser.getUser().getId());
@@ -91,6 +96,7 @@ public class PostController {
 
     /* Song：点赞/取消点赞 */
     @PostMapping("/{id}/like")
+    @RateLimit(key = "like_post", limit = 60, windowSeconds = 60)
     public Result<?> likePost(@PathVariable String id) {
         AuthUser authUser = SecurityUtils.getAuthenticatedUser();
         postService.likePost(id, authUser.getUser().getId());
@@ -99,6 +105,7 @@ public class PostController {
 
     /* Song：收藏/取消收藏 */
     @PostMapping("/{id}/collect")
+    @RateLimit(key = "collect_post", limit = 60, windowSeconds = 60)
     public Result<?> collectPost(@PathVariable String id) {
         AuthUser authUser = SecurityUtils.getAuthenticatedUser();
         postService.collectPost(id, authUser.getUser().getId());
@@ -107,6 +114,7 @@ public class PostController {
 
     /* Song：置顶/取消置顶帖子（限管理员） - 旧接口，保持兼容 */
     @PostMapping("/{id}/pin")
+    @RateLimit(key = "pin_post", limit = 30, windowSeconds = 60)
     public Result<?> pinPost(@PathVariable String id) {
         AuthUser authUser = SecurityUtils.getAuthenticatedUser();
         postService.pinPost(id, authUser.getUser().getId());
@@ -115,6 +123,7 @@ public class PostController {
 
     /* Song：全局置顶/取消全局置顶（限管理员） */
     @PostMapping("/{id}/global-pin")
+    @RateLimit(key = "global_pin_post", limit = 30, windowSeconds = 60)
     public Result<?> setGlobalPin(
             @PathVariable String id,
             @RequestBody(required = false) java.util.Map<String, Object> body) {
@@ -129,6 +138,7 @@ public class PostController {
 
     /* Song：板块置顶/取消板块置顶（限管理员/版主） */
     @PostMapping("/{id}/category-pin")
+    @RateLimit(key = "category_pin_post", limit = 30, windowSeconds = 60)
     public Result<?> setCategoryPin(
             @PathVariable String id,
             @RequestBody(required = false) java.util.Map<String, Object> body) {
@@ -149,6 +159,7 @@ public class PostController {
 
     /* Song：加精/取消加精帖子（限管理员/版主） */
     @PostMapping("/{id}/feature")
+    @RateLimit(key = "feature_post", limit = 30, windowSeconds = 60)
     public Result<?> featurePost(@PathVariable String id) {
         AuthUser authUser = SecurityUtils.getAuthenticatedUser();
         postService.featurePost(id, authUser.getUser().getId());
@@ -157,6 +168,7 @@ public class PostController {
 
     /* Song：更新帖子内容（管理员或作者本人） */
     @PostMapping("/update-post")
+    @RateLimit(key = "update_post", limit = 20, windowSeconds = 60)
     public Result<?> updatePost(
             @Valid @RequestBody com.campus.trend.campus_pulse.dto.request.PostUpdateReq updatePostRequest) {
         AuthUser authUser = SecurityUtils.getAuthenticatedUser();
@@ -166,6 +178,7 @@ public class PostController {
 
     /* Song：删除帖子（管理员或作者本人） */
     @DeleteMapping("/{id}")
+    @RateLimit(key = "delete_post", limit = 20, windowSeconds = 60)
     public Result<?> deletePost(@PathVariable String id) {
         AuthUser authUser = SecurityUtils.getAuthenticatedUser();
         postService.deletePost(id, authUser.getUser().getId());
@@ -174,6 +187,7 @@ public class PostController {
 
     /* 恢复软删除帖子（作者/管理员/版主，删除后7天内） */
     @PostMapping("/{id}/restore")
+    @RateLimit(key = "restore_post", limit = 20, windowSeconds = 60)
     public Result<?> restoreDeletedPost(@PathVariable String id) {
         AuthUser authUser = SecurityUtils.getAuthenticatedUser();
         postService.restoreDeletedPost(id, authUser.getUser().getId());
@@ -182,6 +196,7 @@ public class PostController {
 
     /* 打回帖子（管理员/版主）*/
     @PostMapping("/{id}/reject")
+    @RateLimit(key = "reject_post", limit = 30, windowSeconds = 60)
     public Result<?> rejectPost(@PathVariable String id,
                                 @RequestBody(required = false) java.util.Map<String, String> body) {
         AuthUser authUser = SecurityUtils.getAuthenticatedUser();
@@ -192,6 +207,7 @@ public class PostController {
 
     /* 通过审核（管理员/版主）*/
     @PostMapping("/{id}/approve")
+    @RateLimit(key = "approve_post", limit = 30, windowSeconds = 60)
     public Result<?> approvePost(@PathVariable String id) {
         AuthUser authUser = SecurityUtils.getAuthenticatedUser();
         postService.approvePost(id, authUser.getUser().getId());

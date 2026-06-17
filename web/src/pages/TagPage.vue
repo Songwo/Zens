@@ -113,6 +113,7 @@ const changeSort = (mode: any) => {
 const { sentinel } = useInfiniteScroll(() => fetchPosts(false), {
   canLoadMore: () => hasMore.value && !loading.value && posts.value.length > 0,
 })
+void sentinel
 
 const loadTagInfo = async () => {
   const currentTagName = tagName.value

@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { timeAgo } from '@/utils/timeAgo'
 import { encodePostId } from '@/utils/shortId'
 import UserRoleBadge from '@/components/common/UserRoleBadge.vue'
+import TrustLevelBadge from '@/components/common/TrustLevelBadge.vue'
 import UserBadge from '@/components/common/UserBadge.vue'
 import UserQuickCard from '@/components/common/UserQuickCard.vue'
 
@@ -13,7 +14,7 @@ type TopicItem = {
   excerpt: string
   category: { name: string; color: string }
   tags: string[]
-  author: { id?: string; username?: string; name: string; avatar: string; roles?: string[]; badgeText?: string; badgeColor?: string; badgeStyle?: string }
+  author: { id?: string; username?: string; name: string; avatar: string; roles?: string[]; trustLevel?: number; badgeText?: string; badgeColor?: string; badgeStyle?: string }
   createdAt: string
   lastActive: string
   replies: number
@@ -33,7 +34,7 @@ const props = defineProps<{
 }>()
 
 const goTopic = () => {
-  router.push(`/t/${encodePostId(props.topic.id)}`)
+  router.push(`/t/${encodePostId(String(props.topic.id))}`)
 }
 
 const maxVisibleTags = 3
@@ -131,6 +132,7 @@ const formatMetric = (value: number) => {
                 <span class="sp-author-name">{{ topic.author.name }}</span>
               </UserQuickCard>
               <UserRoleBadge :roles="topic.author.roles" />
+              <TrustLevelBadge :trust-level="topic.author.trustLevel ?? 0" />
               <UserBadge :text="topic.author.badgeText || ''" :color="topic.author.badgeColor" :effect="topic.author.badgeStyle" />
             </div>
             <div class="sp-time-row">
@@ -195,6 +197,7 @@ const formatMetric = (value: number) => {
               <span class="author-name">{{ topic.author.name }}</span>
             </UserQuickCard>
             <UserRoleBadge :roles="topic.author.roles" />
+            <TrustLevelBadge :trust-level="topic.author.trustLevel ?? 0" />
             <UserBadge :text="topic.author.badgeText || ''" :color="topic.author.badgeColor" :effect="topic.author.badgeStyle" />
           </div>
           <span class="rp-time">{{ timeAgo(topic.lastActive || topic.createdAt) }}</span>

@@ -6,7 +6,7 @@ import {
   Quote, List, ListOrdered, ListChecks,
   Link2, Image as ImageIcon, Code, FileCode,
   Table as TableIcon, Minus,
-  Smile, Hash, Wand2, Paintbrush, AtSign,
+  Smile, Hash, Paintbrush, AtSign,
 } from 'lucide-vue-next'
 import EmojiPicker from './EmojiPicker.vue'
 

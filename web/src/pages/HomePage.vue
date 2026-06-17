@@ -1,21 +1,68 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import MainLayout from '@/layouts/MainLayout.vue'
 import TopicList from '@/components/topic/TopicList.vue'
 import { publicDataApi, type PublicSiteStats } from '@/api/publicData'
+import { usePostComposerStore } from '@/store/postComposer'
+import {
+  Code2,
+  FileText,
+  Flame,
+  Hash,
+  Heart,
+  MessageCircle,
+  PencilLine,
+  Smile,
+  Sparkles,
+  Users,
+} from 'lucide-vue-next'
 
+const router = useRouter()
+const composerStore = usePostComposerStore()
 const siteStats = ref<PublicSiteStats>({
   totalPosts: 0,
   totalUsers: 0,
   totalComments: 0,
   todayPosts: 0,
 })
+const hotTopicCount = ref(8)
+
+const heroStats = computed(() => [
+  {
+    label: '今日新帖',
+    value: siteStats.value.todayPosts,
+    icon: MessageCircle,
+    tone: 'green',
+  },
+  {
+    label: '活跃用户',
+    value: siteStats.value.totalUsers,
+    icon: Users,
+    tone: 'orange',
+  },
+  {
+    label: '累计互动',
+    value: siteStats.value.totalComments,
+    icon: Heart,
+    tone: 'blue',
+  },
+  {
+    label: '热门话题',
+    value: hotTopicCount.value,
+    icon: Hash,
+    tone: 'purple',
+  },
+])
 
 onMounted(async () => {
   try {
-    const res = await publicDataApi.getHomeBootstrapCached(10, 5, 'WEEK')
+    const res = await publicDataApi.getHomeBootstrapCached(8, 5, 'WEEK')
     if (res.code === 2000 && res.data?.siteStats) {
       siteStats.value = res.data.siteStats
+    }
+    if (res.code === 2000 && Array.isArray(res.data?.hotTags)) {
+      hotTopicCount.value = res.data.hotTags.length
     }
   } catch {
     // ignore bootstrap failure on hero
@@ -27,30 +74,90 @@ onMounted(async () => {
   <MainLayout>
     <div class="page-content">
       <section class="hero-panel">
-        <div class="hero-copy">
-          <span class="hero-kicker">技术社区智能分析决策论坛系统</span>
-          <h1 class="hero-title">基于社区行为数据，识别热点、辅助治理、支持运营决策</h1>
-          <p class="hero-desc">
-            系统结合帖子浏览、评论回复、趋势变化与内容治理流程，对社区活跃主题进行动态分析，
-            为用户发现高价值内容，也为管理员提供决策依据。
-          </p>
+        <div class="hero-copy-area">
+          <div class="hero-copy">
+            <span class="hero-kicker">技术社区智能分析决策论坛系统</span>
+            <h1 class="hero-title">发现技术话题，记录学习成长</h1>
+            <p class="hero-desc">
+              在 Zens 社区交流开发问题、分享项目经验、沉淀学习笔记，和更多开发者一起成长。
+            </p>
+          </div>
+
+          <div class="hero-actions" aria-label="首页快捷操作">
+            <button class="hero-action primary" type="button" @click="composerStore.open()">
+              <PencilLine class="action-icon" aria-hidden="true" />
+              <span>发布帖子</span>
+            </button>
+            <button class="hero-action secondary" type="button" @click="router.push('/hot')">
+              <Flame class="action-icon" aria-hidden="true" />
+              <span>浏览热门</span>
+            </button>
+          </div>
         </div>
-        <div class="hero-metrics">
-          <div class="metric-pill">
-            <span class="metric-label">累计帖子</span>
-            <strong class="metric-value">{{ siteStats.totalPosts }}</strong>
+
+        <div class="hero-visual" aria-hidden="true">
+          <div class="visual-stage">
+            <div class="visual-orb orb-warm"></div>
+            <div class="visual-orb orb-blue"></div>
+
+            <div class="visual-card code-card">
+              <div class="visual-card-head">
+                <Code2 class="visual-card-icon" />
+                <span>topic.ts</span>
+              </div>
+              <div class="code-lines">
+                <span></span>
+                <span></span>
+                <span></span>
+              </div>
+            </div>
+
+            <div class="visual-card chat-card">
+              <MessageCircle class="chat-icon" />
+              <div class="bubble-lines">
+                <span></span>
+                <span></span>
+              </div>
+            </div>
+
+            <div class="visual-card doc-card">
+              <FileText class="doc-icon" />
+              <div class="doc-lines">
+                <span></span>
+                <span></span>
+                <span></span>
+              </div>
+            </div>
+
+            <div class="smile-chip">
+              <Smile />
+            </div>
+            <div class="spark-chip spark-one">
+              <Sparkles />
+            </div>
+            <div class="spark-chip spark-two">
+              <Sparkles />
+            </div>
+            <span class="float-dot dot-one"></span>
+            <span class="float-dot dot-two"></span>
+            <span class="float-dot dot-three"></span>
           </div>
-          <div class="metric-pill">
-            <span class="metric-label">活跃用户</span>
-            <strong class="metric-value">{{ siteStats.totalUsers }}</strong>
-          </div>
-          <div class="metric-pill">
-            <span class="metric-label">累计互动</span>
-            <strong class="metric-value">{{ siteStats.totalComments }}</strong>
-          </div>
-          <div class="metric-pill">
-            <span class="metric-label">今日新帖</span>
-            <strong class="metric-value">{{ siteStats.todayPosts }}</strong>
+        </div>
+
+        <div class="hero-stats" aria-label="社区数据概览">
+          <div
+            v-for="item in heroStats"
+            :key="item.label"
+            class="stat-card"
+            :class="`tone-${item.tone}`"
+          >
+            <div class="stat-icon-wrap">
+              <component :is="item.icon" class="stat-icon" aria-hidden="true" />
+            </div>
+            <div class="stat-copy">
+              <span class="stat-label">{{ item.label }}</span>
+              <strong class="stat-value">{{ item.value }}</strong>
+            </div>
           </div>
         </div>
       </section>
@@ -65,18 +172,49 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   gap: 20px;
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
 }
 
 .hero-panel {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
   display: grid;
-  grid-template-columns: minmax(0, 1.5fr) minmax(260px, 0.9fr);
-  gap: 20px;
-  padding: 24px;
-  border-radius: 16px;
-  border: 1px solid var(--el-border-color-lighter);
+  grid-template-columns: minmax(0, 1.16fr) minmax(260px, 0.72fr);
+  grid-template-areas:
+    "copy visual"
+    "stats visual";
+  gap: 12px 28px;
+  min-height: 0;
+  padding: 20px 28px;
+  border-radius: 26px;
+  border: 1px solid rgba(245, 190, 92, 0.34);
   background:
-    radial-gradient(circle at top right, var(--el-color-primary-light-9), transparent 38%),
-    linear-gradient(180deg, var(--el-bg-color-overlay), var(--el-fill-color-extra-light));
+    radial-gradient(circle at 86% 22%, rgba(255, 204, 111, 0.28), transparent 34%),
+    linear-gradient(135deg, #fff2bf 0%, #fff8e6 42%, #ffffff 100%);
+  box-shadow: 0 20px 50px rgba(156, 105, 26, 0.1), 0 1px 0 rgba(255, 255, 255, 0.8) inset;
+}
+
+.hero-panel::before {
+  position: absolute;
+  inset: 1px;
+  z-index: -1;
+  content: '';
+  border-radius: 25px;
+  background:
+    radial-gradient(circle at 18% 12%, rgba(255, 255, 255, 0.78), transparent 26%),
+    radial-gradient(circle at 60% 100%, rgba(255, 214, 135, 0.2), transparent 34%);
+  pointer-events: none;
+}
+
+.hero-copy-area {
+  grid-area: copy;
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  justify-content: flex-start;
 }
 
 .hero-copy {
@@ -85,66 +223,507 @@ onMounted(async () => {
 
 .hero-kicker {
   display: inline-flex;
-  padding: 5px 10px;
+  width: fit-content;
+  padding: 5px 11px;
   border-radius: 999px;
-  background: var(--el-color-primary-light-8);
-  color: var(--el-color-primary-dark-2);
+  border: 1px solid rgba(242, 165, 41, 0.22);
+  background: rgba(255, 255, 255, 0.56);
+  color: #9a6211;
   font-size: 12px;
   font-weight: 700;
-  letter-spacing: 0.06em;
+  letter-spacing: 0;
+  box-shadow: 0 8px 20px rgba(242, 165, 41, 0.08);
 }
 
 .hero-title {
-  margin: 14px 0 10px;
-  font-size: 28px;
-  line-height: 1.35;
-  color: var(--el-text-color-primary);
+  max-width: 620px;
+  margin: 10px 0 8px;
+  font-size: clamp(26px, 3.1vw, 36px);
+  line-height: 1.13;
+  letter-spacing: 0;
+  color: #1f2937;
 }
 
 .hero-desc {
   margin: 0;
-  max-width: 760px;
+  max-width: 560px;
   font-size: 14px;
-  line-height: 1.8;
-  color: var(--el-text-color-secondary);
+  line-height: 1.55;
+  color: #6b5a3f;
 }
 
-.hero-metrics {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  align-content: start;
+.hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
 }
 
-.metric-pill {
-  min-height: 88px;
-  padding: 16px;
-  border-radius: 14px;
-  border: 1px solid var(--el-border-color-lighter);
-  background: rgba(255, 255, 255, 0.7);
+.hero-action {
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 999px;
+  padding: 0 18px;
+  border: 1px solid transparent;
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: transform 0.18s ease, box-shadow 0.22s ease, border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.hero-action:active {
+  transform: scale(0.98);
+}
+
+.hero-action.primary {
+  color: #fff;
+  background: linear-gradient(135deg, #f6b800 0%, #f29b24 100%);
+  box-shadow: 0 12px 24px rgba(242, 155, 36, 0.26);
+}
+
+.hero-action.primary:hover {
+  box-shadow: 0 16px 28px rgba(242, 155, 36, 0.32);
+  transform: translateY(-1px);
+}
+
+.hero-action.secondary {
+  color: #8a5a00;
+  background: rgba(255, 255, 255, 0.74);
+  border-color: rgba(231, 174, 79, 0.4);
+  box-shadow: 0 10px 22px rgba(82, 58, 22, 0.06);
+}
+
+.hero-action.secondary:hover {
+  border-color: rgba(231, 174, 79, 0.72);
+  background: #fff;
+  transform: translateY(-1px);
+}
+
+.action-icon {
+  width: 17px;
+  height: 17px;
+  stroke-width: 2.4;
+}
+
+.hero-visual {
+  grid-area: visual;
+  position: relative;
+  display: flex;
+  min-height: 0;
+  align-items: center;
+}
+
+.visual-stage {
+  position: relative;
+  width: min(100%, 340px);
+  height: 160px;
+  margin: 0 0 0 auto;
+  transform: translate3d(0, 2px, 0);
+}
+
+.visual-orb {
+  position: absolute;
+  border-radius: 999px;
+  filter: blur(10px);
+  opacity: 0.7;
+}
+
+.orb-warm {
+  right: 28px;
+  bottom: 10px;
+  width: 150px;
+  height: 54px;
+  background: rgba(247, 180, 58, 0.24);
+}
+
+.orb-blue {
+  top: 28px;
+  right: 16px;
+  width: 78px;
+  height: 78px;
+  background: rgba(106, 155, 204, 0.18);
+}
+
+.visual-card,
+.smile-chip,
+.spark-chip {
+  position: absolute;
+  border: 1px solid rgba(231, 174, 79, 0.24);
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: 0 18px 34px rgba(124, 84, 24, 0.13);
+  backdrop-filter: blur(14px);
+}
+
+.visual-card {
+  border-radius: 20px;
+}
+
+.code-card {
+  top: 8px;
+  right: 38px;
+  width: 188px;
+  min-height: 86px;
+  padding: 12px;
+  transform: rotate(-4deg);
+}
+
+.visual-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #72511d;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.visual-card-icon {
+  width: 18px;
+  height: 18px;
+  color: #f29b24;
+}
+
+.code-lines,
+.doc-lines,
+.bubble-lines {
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
-  color: var(--el-text-color-primary);
+  gap: 7px;
+  margin-top: 9px;
 }
 
-.metric-label {
-  font-size: 13px;
-  color: var(--el-text-color-secondary);
+.code-lines span,
+.doc-lines span,
+.bubble-lines span {
+  display: block;
+  height: 7px;
+  border-radius: 999px;
+  background: #f2d592;
 }
 
-.metric-value {
-  font-size: 24px;
+.code-lines span:nth-child(1) {
+  width: 84%;
+}
+
+.code-lines span:nth-child(2) {
+  width: 58%;
+  background: #b8d5f0;
+}
+
+.code-lines span:nth-child(3) {
+  width: 72%;
+  background: #f7c86a;
+}
+
+.chat-card {
+  top: 70px;
+  left: 18px;
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  gap: 9px;
+  width: 158px;
+  min-height: 62px;
+  padding: 10px;
+  transform: rotate(5deg);
+}
+
+.chat-icon {
+  width: 32px;
+  height: 32px;
+  padding: 7px;
+  border-radius: 12px;
+  color: #35a66f;
+  background: #e9f8ef;
+}
+
+.bubble-lines {
+  margin-top: 2px;
+}
+
+.bubble-lines span:nth-child(1) {
+  width: 86px;
+  background: #cdeed9;
+}
+
+.bubble-lines span:nth-child(2) {
+  width: 62px;
+  background: #f3d080;
+}
+
+.doc-card {
+  right: 18px;
+  bottom: 0;
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  gap: 9px;
+  width: 166px;
+  min-height: 66px;
+  padding: 10px;
+  transform: rotate(3deg);
+}
+
+.doc-icon {
+  width: 32px;
+  height: 32px;
+  padding: 7px;
+  border-radius: 12px;
+  color: #4b8edb;
+  background: #eaf3ff;
+}
+
+.doc-lines {
+  gap: 7px;
+  margin-top: 1px;
+}
+
+.doc-lines span:nth-child(1) {
+  width: 74px;
+  background: #b9d7f2;
+}
+
+.doc-lines span:nth-child(2) {
+  width: 54px;
+  background: #f5cf79;
+}
+
+.doc-lines span:nth-child(3) {
+  width: 66px;
+  background: #e4e8ef;
+}
+
+.smile-chip {
+  top: 0;
+  left: 64px;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 15px;
+  color: #f29b24;
+  transform: rotate(8deg);
+}
+
+.smile-chip svg {
+  width: 22px;
+  height: 22px;
+}
+
+.spark-chip {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 11px;
+  color: #a56de2;
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.spark-one {
+  top: 18px;
+  right: 4px;
+  animation: soft-float 4s ease-in-out infinite;
+}
+
+.spark-two {
+  bottom: 20px;
+  left: 0;
+  color: #f2a51f;
+  animation: soft-float 4.8s ease-in-out infinite reverse;
+}
+
+.spark-chip svg {
+  width: 16px;
+  height: 16px;
+}
+
+.float-dot {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: #f6c453;
+  box-shadow: 0 8px 18px rgba(246, 196, 83, 0.3);
+}
+
+.dot-one {
+  top: 66px;
+  left: 40px;
+}
+
+.dot-two {
+  right: 2px;
+  bottom: 66px;
+  width: 12px;
+  height: 12px;
+  background: #9fd0ff;
+}
+
+.dot-three {
+  left: 164px;
+  bottom: 12px;
+  width: 8px;
+  height: 8px;
+  background: #82d8ad;
+}
+
+.hero-stats {
+  grid-area: stats;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.stat-card {
+  display: flex;
+  min-width: 0;
+  min-height: 52px;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid rgba(228, 189, 122, 0.22);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow: 0 10px 22px rgba(106, 74, 28, 0.06);
+  backdrop-filter: blur(12px);
+}
+
+.stat-icon-wrap {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 12px;
+}
+
+.stat-icon {
+  width: 17px;
+  height: 17px;
+  stroke-width: 2.4;
+}
+
+.stat-copy {
+  min-width: 0;
+}
+
+.stat-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  color: #6b5a3f;
+}
+
+.stat-value {
+  display: block;
+  margin-top: 2px;
+  font-size: 20px;
   line-height: 1;
+  color: #1f2937;
+}
+
+.tone-green .stat-icon-wrap {
+  color: #26a269;
+  background: #e8f8ef;
+}
+
+.tone-orange .stat-icon-wrap {
+  color: #e68a1f;
+  background: #fff1d7;
+}
+
+.tone-blue .stat-icon-wrap {
+  color: #3f8ed8;
+  background: #eaf4ff;
+}
+
+.tone-purple .stat-icon-wrap {
+  color: #8e63d9;
+  background: #f2ecff;
+}
+
+@keyframes soft-float {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+
+  50% {
+    transform: translate3d(0, -8px, 0);
+  }
 }
 
 @media (max-width: 900px) {
   .hero-panel {
     grid-template-columns: 1fr;
+    grid-template-areas:
+      "copy"
+      "visual"
+      "stats";
+    padding: 24px;
   }
 
   .hero-title {
-    font-size: 24px;
+    font-size: 30px;
+  }
+
+  .visual-stage {
+    margin: 0 auto;
+  }
+
+  .hero-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .page-content {
+    gap: 16px;
+  }
+
+  .hero-panel {
+    min-height: 0;
+    padding: 22px 18px;
+    border-radius: 22px;
+  }
+
+  .hero-panel::before {
+    border-radius: 21px;
+  }
+
+  .hero-title {
+    font-size: 28px;
+  }
+
+  .hero-desc {
+    font-size: 14px;
+  }
+
+  .hero-action {
+    flex: 1 1 150px;
+  }
+
+  .hero-visual {
+    min-height: 142px;
+  }
+
+  .visual-stage {
+    width: 100%;
+    height: 154px;
+    transform: scale(0.8);
+    transform-origin: center;
+  }
+
+  .hero-stats {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spark-one,
+  .spark-two {
+    animation: none;
   }
 }
 </style>

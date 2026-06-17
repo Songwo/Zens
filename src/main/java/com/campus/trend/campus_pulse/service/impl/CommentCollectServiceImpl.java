@@ -6,6 +6,7 @@ import com.campus.trend.campus_pulse.entity.CommentCollect;
 import com.campus.trend.campus_pulse.mapper.CommentCollectMapper;
 import com.campus.trend.campus_pulse.mapper.CommentMapper;
 import com.campus.trend.campus_pulse.service.CommentCollectService;
+import com.campus.trend.campus_pulse.service.post.PostCacheManager;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,6 +19,7 @@ public class CommentCollectServiceImpl extends ServiceImpl<CommentCollectMapper,
         implements CommentCollectService {
 
     private final CommentMapper commentMapper;
+    private final PostCacheManager postCacheManager;
 
     @Override
     public boolean isCollected(String commentId, String userId) {
@@ -42,6 +44,7 @@ public class CommentCollectServiceImpl extends ServiceImpl<CommentCollectMapper,
                     int currentCount = comment.getCollectCount() != null ? comment.getCollectCount() : 0;
                     comment.setCollectCount(Math.max(0, currentCount - 1));
                     commentMapper.updateById(comment);
+                    postCacheManager.bumpPostDetailCacheVersion(comment.getPostId());
                 }
             }
             return false;
@@ -60,6 +63,7 @@ public class CommentCollectServiceImpl extends ServiceImpl<CommentCollectMapper,
             int currentCount = comment.getCollectCount() != null ? comment.getCollectCount() : 0;
             comment.setCollectCount(currentCount + 1);
             commentMapper.updateById(comment);
+            postCacheManager.bumpPostDetailCacheVersion(comment.getPostId());
         }
         return true;
     }

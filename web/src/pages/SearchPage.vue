@@ -326,6 +326,7 @@ const { sentinel } = useInfiniteScroll(() => fetchPosts(false), {
   canLoadMore: () =>
     searchTab.value === 'post' && hasMore.value && !loading.value && posts.value.length > 0,
 })
+void sentinel
 
 const fetchUsers = async () => {
   const keyword = normalizedQuery.value

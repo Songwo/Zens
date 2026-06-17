@@ -75,7 +75,7 @@ function createState(initial: string) {
       syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
       themeCompartment.of(currentThemeExt()),
       syntaxCompartment.of(currentSyntaxExt()),
-      markdown({ base: markdownLanguage, addKeymaps: false }),
+      markdown({ base: markdownLanguage, addKeymap: false }),
       cmPlaceholder(props.placeholder),
       editableCompartment.of(EditorView.editable.of(!props.readonly)),
       EditorView.lineWrapping,
@@ -104,7 +104,11 @@ function createState(initial: string) {
           emit('update:modelValue', update.state.doc.toString())
         }
         if (update.focusChanged) {
-          emit(update.view.hasFocus ? 'focus' : 'blur')
+          if (update.view.hasFocus) {
+            emit('focus')
+          } else {
+            emit('blur')
+          }
         }
       }),
       EditorView.domEventHandlers({

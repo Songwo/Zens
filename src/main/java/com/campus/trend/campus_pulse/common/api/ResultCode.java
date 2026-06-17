@@ -25,6 +25,7 @@ public enum ResultCode {
     PARAM_ERROR(4001, "参数错误"),
     REQUEST_BODY_MISSING(4002, "请求体为空"),
     VALIDATE_FAILED(4003, "参数校验失败"),
+    TOO_MANY_REQUESTS(4029, "请求过于频繁，请稍后再试"),
 
     // Song：5000开头：资源问题
     USER_NOT_FOUND(5001, "用户不存在"),

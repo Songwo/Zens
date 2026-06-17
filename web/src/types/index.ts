@@ -146,6 +146,8 @@ export interface Post {
     authorBadgeText?: string
     authorBadgeColor?: string
     authorBadgeStyle?: string
+    /** 作者信任等级 0-4 */
+    authorTrustLevel?: number
 
     sentimentScore?: number
     sentimentLabel?: string
@@ -165,6 +167,8 @@ export interface Comment {
     userBadgeText?: string
     userBadgeColor?: string
     userBadgeStyle?: string
+    /** 评论者信任等级 0-4 */
+    userTrustLevel?: number
     likeCount: number
     collectCount?: number
     isAdopted?: number | boolean | string

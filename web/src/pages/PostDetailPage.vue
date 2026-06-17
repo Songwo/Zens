@@ -13,7 +13,7 @@ import { viewLogApi } from '@/api/viewLog'
 import type { Post, Comment, RecommendPost } from '@/types'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { pulseNotification } from '@/utils/pulseNotification'
-import { TOC_MARKDOWN_TAG, renderMarkdownWithToc, renderMarkdownWithTocResult, renderMarkdownWithTocAsync, type MarkdownTocRenderResult } from '@/utils/markdownToc'
+import { renderMarkdownWithTocResult, renderMarkdownWithTocAsync, type MarkdownTocRenderResult } from '@/utils/markdownToc'
 import DOMPurify from 'dompurify'
 import { timeAgo } from '@/utils/timeAgo'
 import { decodeCommentId, decodePostId, encodePostId } from '@/utils/shortId'
@@ -40,6 +40,7 @@ import {
   Clock
 } from '@element-plus/icons-vue'
 import UserRoleBadge from '@/components/common/UserRoleBadge.vue'
+import TrustLevelBadge from '@/components/common/TrustLevelBadge.vue'
 import UserBadge from '@/components/common/UserBadge.vue'
 import UserQuickCard from '@/components/common/UserQuickCard.vue'
 import CommentList from '@/components/comment/CommentList.vue'
@@ -1212,6 +1213,7 @@ onMounted(() => {
                     <span class="author-name">{{ post.authorName }}</span>
                   </UserQuickCard>
                   <UserRoleBadge :roles="post.authorRoles" />
+                  <TrustLevelBadge :trust-level="post.authorTrustLevel ?? 0" />
                   <UserBadge :text="post.authorBadgeText || ''" :color="post.authorBadgeColor" :effect="post.authorBadgeStyle" />
                 </span>
                 <div class="post-stats">

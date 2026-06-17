@@ -549,13 +549,21 @@ CREATE TABLE `sys_changelog` (
   `version`    varchar(50)   DEFAULT NULL COMMENT '版本号',
   `title`      varchar(100)  NOT NULL COMMENT '标题',
   `content`    text          DEFAULT NULL COMMENT '内容',
+  `stage_no`   varchar(16)   DEFAULT NULL COMMENT '路线图阶段编号，如 01',
+  `stage_label` varchar(32)  DEFAULT NULL COMMENT '路线图阶段标签，如 已上线/建设中/下一阶段',
+  `roadmap_status` varchar(32) DEFAULT 'released' COMMENT '上线状态 released/building/planned',
+  `highlights` varchar(255)  DEFAULT NULL COMMENT '路线图高亮信息，如 发帖/评论/标签',
+  `action_path` varchar(255) DEFAULT NULL COMMENT '详情或后续升级入口',
+  `upgrade_enabled` tinyint  DEFAULT 0 COMMENT '是否开放在线升级入口 1是 0否',
+  `upgrade_url` varchar(500) DEFAULT NULL COMMENT '在线升级地址或说明链接',
   `timestamp`  varchar(32)   DEFAULT NULL COMMENT '时间标签',
   `status`     tinyint       DEFAULT 1 COMMENT '状态 1发布 0隐藏',
   `sort_order` int           DEFAULT 0 COMMENT '排序',
   `created_at` datetime      DEFAULT CURRENT_TIMESTAMP,
   `updated_at` datetime      DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
-  KEY `idx_changelog_status_sort` (`status`, `sort_order`)
+  KEY `idx_changelog_status_sort` (`status`, `sort_order`),
+  KEY `idx_changelog_roadmap_status` (`roadmap_status`, `status`, `sort_order`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='发展历程/版本日志表';
 
 -- ============================================================
@@ -587,5 +595,12 @@ INSERT INTO `sections` (`id`, `name`, `description`, `icon`, `sort_order`, `stat
 (8,  '竞赛资讯',   '各类竞赛报名、经验分享',           'emoji_events', 8,  1),
 (9,  '失物招领',   '校园内失物招领信息',               'search',       9,  1),
 (10, '考研专区',   '考研备考、经验交流',               'psychology',   10, 1);
+
+INSERT INTO `sys_changelog`
+(`version`, `title`, `content`, `stage_no`, `stage_label`, `roadmap_status`, `highlights`, `timestamp`, `status`, `sort_order`)
+VALUES
+('v1.0.0', '基础社区功能', '已完成发帖、评论、标签分类、个人主页和后台管理。', '01', '已上线', 'released', '发帖/评论/标签', '已上线', 1, 300),
+('v1.1.0', '用户体验优化', '正在优化错误提示、内容推荐、项目展示和消息通知。', '02', '建设中', 'building', '推荐/通知/展示', '建设中', 1, 200),
+('v1.2.0', '内容生态增强', '计划加入积分等级、问答专区、创作者激励和专栏系统。', '03', '下一阶段', 'planned', '积分/问答/专栏', '下一阶段', 1, 100);
 
 SET FOREIGN_KEY_CHECKS = 1;

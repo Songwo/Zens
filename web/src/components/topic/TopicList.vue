@@ -104,7 +104,7 @@ const toFiniteMetric = (value: unknown): number | null => {
   return null
 }
 
-const applyTopicMetrics = (postId: string, data?: PostMetricsUpdate | PostEvent['data'], options: { incrementReply?: boolean } = {}) => {
+const applyTopicMetrics = (postId: string, data?: Partial<PostMetricsUpdate> & Record<string, any>, options: { incrementReply?: boolean } = {}) => {
   const index = topics.value.findIndex((item) => String(item.id) === String(postId))
   if (index === -1) return
 
@@ -162,6 +162,7 @@ const mapPost = (p: any) => ({
     name: p.authorName || '匿名',
     avatar: p.authorAvatar || '',
     roles: p.authorRoles || [],
+    trustLevel: p.authorTrustLevel ?? 0,
     badgeText: p.authorBadgeText || '',
     badgeColor: p.authorBadgeColor || '',
     badgeStyle: p.authorBadgeStyle || 'solid',

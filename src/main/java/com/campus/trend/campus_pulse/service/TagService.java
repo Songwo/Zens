@@ -41,6 +41,13 @@ public interface TagService extends IService<Tag> {
     List<Tag> getHotTags(int limit);
 
     /**
+     * 别名方法，用于缓存预热
+     */
+    default List<Tag> listHotTags(int limit) {
+        return getHotTags(limit);
+    }
+
+    /**
      * 搜索标签
      *
      * @param keyword 关键词

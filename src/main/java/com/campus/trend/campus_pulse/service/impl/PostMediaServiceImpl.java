@@ -60,7 +60,8 @@ public class PostMediaServiceImpl extends ServiceImpl<PostMediaMapper, PostMedia
             rows.add(row);
         }
         if (!rows.isEmpty()) {
-            saveBatch(rows);
+            // ✅ 优化：使用批量插入，500条一批
+            saveBatch(rows, 500);
         }
         return rows;
     }

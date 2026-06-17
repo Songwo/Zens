@@ -21,6 +21,7 @@ const PostEmbedCard = defineComponent({
     }
   },
   setup(props) {
+    const router = useRouter()
     const postData = ref<any>(null)
     const loading = ref(false)
 
@@ -51,14 +52,8 @@ const PostEmbedCard = defineComponent({
         href: `/t/${encodePostId(props.postId)}`,
         class: 'dm-post-card',
         onClick: (e: MouseEvent) => {
-          // 阻止默认跳转并触发路由，更优雅
           e.preventDefault()
-          const router = useRouter()
-          if (router) {
-            router.push(`/t/${encodePostId(props.postId)}`)
-          } else {
-            window.location.href = `/t/${encodePostId(props.postId)}`
-          }
+          router.push(`/t/${encodePostId(props.postId)}`)
         }
       }, [
         h('div', { class: 'dm-post-card-header' }, [
@@ -99,6 +94,11 @@ const draft = ref('')
 const showEmojiPicker = ref(false)
 const activePeerTyping = ref(false)
 const messageListRef = ref<HTMLElement | null>(null)
+const messageScrollTop = ref(0)
+const messageViewportHeight = ref(640)
+const VIRTUAL_MESSAGE_THRESHOLD = 120
+const ESTIMATED_MESSAGE_HEIGHT = 92
+const VIRTUAL_OVERSCAN = 8
 
 // 常用表情包列表
 const emojis = ['🎉', '👏', '🔥', '👀', '❤️', '🥺', '✨', '😊', '👍', '🌟', '🤣', '😎', '💡', '🎯', '🙌', '🎂']
@@ -188,6 +188,36 @@ const orderedMessages = computed(() => {
   return [...messages.value].reverse()
 })
 
+const useVirtualMessages = computed(() => orderedMessages.value.length > VIRTUAL_MESSAGE_THRESHOLD)
+
+const virtualRange = computed(() => {
+  const total = orderedMessages.value.length
+  if (!useVirtualMessages.value) {
+    return { start: 0, end: total, top: 0, bottom: 0 }
+  }
+  const start = Math.max(0, Math.floor(messageScrollTop.value / ESTIMATED_MESSAGE_HEIGHT) - VIRTUAL_OVERSCAN)
+  const visibleCount = Math.ceil(messageViewportHeight.value / ESTIMATED_MESSAGE_HEIGHT) + VIRTUAL_OVERSCAN * 2
+  const end = Math.min(total, start + visibleCount)
+  return {
+    start,
+    end,
+    top: start * ESTIMATED_MESSAGE_HEIGHT,
+    bottom: Math.max(0, total - end) * ESTIMATED_MESSAGE_HEIGHT,
+  }
+})
+
+const renderedMessages = computed(() => {
+  const range = virtualRange.value
+  return orderedMessages.value.slice(range.start, range.end)
+})
+
+const handleMessageScroll = () => {
+  const el = messageListRef.value
+  if (!el) return
+  messageScrollTop.value = el.scrollTop
+  messageViewportHeight.value = el.clientHeight || messageViewportHeight.value
+}
+
 const receiptLabel = (msg: DirectMessage) => {
   if (!msg.self) return ''
   return msg.readReceipt === 'READ' || msg.isRead === 1 ? '已读' : '已送达'
@@ -276,6 +306,7 @@ const loadMessages = async (reset = false) => {
         if (messageListRef.value && !reset) {
           const newScrollHeight = messageListRef.value.scrollHeight
           messageListRef.value.scrollTop = newScrollHeight - prevScrollHeight
+          handleMessageScroll()
         }
       })
     } else {
@@ -417,6 +448,7 @@ const showTypingIndicator = () => {
 const shouldShowTime = (msg: DirectMessage, index: number) => {
   if (index === 0) return true
   const prev = orderedMessages.value[index - 1]
+  if (!prev) return true
   const diff = new Date(msg.createdAt).getTime() - new Date(prev.createdAt).getTime()
   return diff > 5 * 60 * 1000 // 5分钟
 }
@@ -429,25 +461,19 @@ const hasPostEmbed = (content: string) => {
 const getPostEmbedId = (content: string) => {
   const match1 = content.match(/\[post:([a-zA-Z0-9_-]+)\]/)
   if (match1) {
-    const id = match1[1]
-    return id.startsWith('p') ? decodePostId(id) : id
+    const id = match1[1] || ''
+    return (id.startsWith('p') ? decodePostId(id) : id) || ''
   }
   const match2 = content.match(/\/t\/([a-zA-Z0-9_-]+)/)
   if (match2) {
-    const id = match2[1]
-    return id.startsWith('p') ? decodePostId(id) : id
+    const id = match2[1] || ''
+    return (id.startsWith('p') ? decodePostId(id) : id) || ''
   }
   return ''
 }
 
 const getNonEmbedContent = (content: string) => {
   return content.replace(/\[post:[a-zA-Z0-9_-]+\]/g, '').trim()
-}
-
-const sharePostToActiveChat = (postId: string, title: string) => {
-  const shortId = encodePostId(postId)
-  draft.value = `向你推荐了帖子: [post:${shortId}] \n\n/t/${shortId}`
-  handleSend()
 }
 
 const renderPeerName = (item: DirectConversation | null) => {
@@ -557,6 +583,7 @@ onMounted(async () => {
   subscribeToMessagesWs()
   startPolling()
   document.addEventListener('visibilitychange', handleVisibilityChange)
+  handleMessageScroll()
   scrollToBottom(false)
 })
 
@@ -679,7 +706,7 @@ onUnmounted(() => {
             </div>
 
             <!-- 中间独立滚动的消息列表 -->
-            <div class="message-list flex-1 overflow-y-auto min-h-0" ref="messageListRef">
+            <div class="message-list flex-1 overflow-y-auto min-h-0" ref="messageListRef" @scroll="handleMessageScroll">
               <div class="message-toolbar">
                 <el-button v-if="hasMoreMessages && !messageLoading" text @click="loadMessages(false)" class="load-more-btn">
                   加载更早消息
@@ -691,9 +718,11 @@ onUnmounted(() => {
               </div>
 
               <!-- 智能群组消息列表 -->
-              <template v-for="(msg, idx) in orderedMessages" :key="msg.id">
+              <div v-if="virtualRange.top > 0" class="virtual-spacer" :style="{ height: `${virtualRange.top}px` }"></div>
+
+              <template v-for="(msg, idx) in renderedMessages" :key="msg.id">
                   <!-- 智能时间合并 (5分钟内自动合并) -->
-                  <div v-if="shouldShowTime(msg, idx)" class="timeline-divider">
+                  <div v-if="shouldShowTime(msg, virtualRange.start + idx)" class="timeline-divider">
                     <span>{{ formatMessageTime(msg.createdAt) }}</span>
                   </div>
 
@@ -721,6 +750,8 @@ onUnmounted(() => {
                     </div>
                   </div>
                 </template>
+
+                <div v-if="virtualRange.bottom > 0" class="virtual-spacer" :style="{ height: `${virtualRange.bottom}px` }"></div>
 
                 <!-- 正在输入状态动画 -->
                 <div v-if="activePeerTyping" class="message-row">
@@ -756,8 +787,6 @@ onUnmounted(() => {
                       class="emoji-item"
                       style="font-size: 20px; text-align: center; cursor: pointer; padding: 4px; border-radius: 6px; transition: background 0.15s ease;"
                       @click="selectEmoji(emoji)"
-                      @mouseenter="$event.target.style.background = 'rgba(255,255,255,0.1)'"
-                      @mouseleave="$event.target.style.background = 'transparent'"
                     >
                       {{ emoji }}
                     </span>
@@ -1078,6 +1107,20 @@ html.dark .timeline-divider span {
   word-break: break-word;
 }
 
+.virtual-spacer {
+  flex: 0 0 auto;
+  pointer-events: none;
+}
+
+.emoji-only-content {
+  font-size: clamp(28px, 4.5vw, 40px);
+  line-height: 1.12;
+  letter-spacing: 0;
+  word-break: normal;
+  overflow-wrap: anywhere;
+  max-width: 180px;
+}
+
 .meta {
   margin-top: 4px;
   font-size: 10px;
@@ -1092,6 +1135,15 @@ html.dark .timeline-divider span {
 
 .receipt {
   color: var(--el-color-primary);
+}
+
+.message-row.self .meta {
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.message-row.self .receipt {
+  color: rgba(255, 255, 255, 0.96);
+  font-weight: 700;
 }
 
 .message-editor {
@@ -1147,6 +1199,10 @@ html.dark .message-editor :deep(.el-textarea__inner) {
   background: rgba(255, 255, 255, 0.1) !important;
 }
 
+.emoji-item:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
 /* 帖子卡片包裹区 */
 .dm-post-card-wrap {
   margin-top: 6px;
@@ -1189,6 +1245,11 @@ html.dark .message-editor :deep(.el-textarea__inner) {
     height: 100% !important;
     min-height: 0;
     width: 100%;
+  }
+
+  .emoji-only-content {
+    font-size: clamp(24px, 8vw, 34px);
+    max-width: 140px;
   }
   
   .mobile-back-btn {
