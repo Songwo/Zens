@@ -107,6 +107,148 @@ export LOTTERY_BOT_PASSWORD='机器人密码'
 
 ## 快速部署
 
+### Docker + 宝塔 + Cloudflare 子域名
+
+如果你已经用宝塔管理 Nginx，推荐直接用 Docker 跑抽奖站，再让宝塔反代到本机端口。抽奖站镜像会在构建时完成前端打包，并把静态文件打进 Go 二进制。
+
+1. Cloudflare 解析子域名
+
+在 Cloudflare DNS 添加：
+
+```text
+Type: A
+Name: lottery
+Content: 你的服务器公网 IP
+Proxy status: Proxied
+```
+
+SSL/TLS 建议设置为 `Full (strict)`。宝塔站点可以使用 Cloudflare Origin Certificate 或宝塔自己的 Let's Encrypt 证书。
+
+2. 服务器拉代码
+
+```bash
+cd /www/wwwroot
+git clone -b feat/trust-level-and-optimizations https://github.com/Songwo/Zens.git zens
+cd /www/wwwroot/zens/campus-lottery-station
+```
+
+如果服务器已有仓库：
+
+```bash
+cd /www/wwwroot/zens
+git pull origin feat/trust-level-and-optimizations
+cd campus-lottery-station
+```
+
+3. 创建 `.env`
+
+```bash
+cp .env.example .env
+nano .env
+```
+
+最少需要改这些值：
+
+```bash
+LOTTERY_PUBLIC_URL=https://lottery.example.com
+LOTTERY_LOGO_URL=https://zens.example.com/logo.png
+LOTTERY_DATA=/app/data/state.json
+LOTTERY_SESSION_SECRET=replace-with-a-long-random-string
+
+COMMUNITY_BASE_URL=https://zens.example.com
+COMMUNITY_API_BASE_URL=https://api.zens.example.com
+COMMUNITY_SSO_AUTHORIZE_URL=https://zens.example.com/sso/authorize
+COMMUNITY_JWT_SECRET=copy-main-site-jwt-secret
+
+SSO_CLIENT_ID=campus-lottery-station
+SSO_CLIENT_SECRET=copy-main-site-sso-client-secret
+```
+
+4. 启动容器
+
+```bash
+docker compose up -d --build
+docker compose ps
+docker compose logs -f --tail=100
+```
+
+容器只监听服务器本机：
+
+```text
+127.0.0.1:8093 -> container:8093
+```
+
+运行数据保存在 Docker volume `zens-lottery-data` 中，更新镜像不会清空抽奖数据。
+
+本机检查：
+
+```bash
+curl http://127.0.0.1:8093/api/health
+```
+
+5. 宝塔反向代理
+
+宝塔面板添加站点：
+
+```text
+域名：lottery.example.com
+PHP：纯静态
+```
+
+进入站点设置 -> 反向代理 -> 添加反向代理：
+
+```text
+代理名称：zens-lottery
+目标 URL：http://127.0.0.1:8093
+发送域名：$host
+```
+
+如果需要手动 Nginx 配置，可用：
+
+```nginx
+location / {
+    proxy_pass http://127.0.0.1:8093;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+```
+
+6. 主站 SSO 应用配置
+
+主站后台 SSO 应用必须配置：
+
+```text
+clientId: campus-lottery-station
+clientSecret: 和 .env 的 SSO_CLIENT_SECRET 一致
+redirectUri: https://lottery.example.com/api/auth/sso/callback
+logoUrl: https://zens.example.com/logo.png
+```
+
+7. 更新部署
+
+```bash
+cd /www/wwwroot/zens
+git pull origin feat/trust-level-and-optimizations
+cd campus-lottery-station
+docker compose up -d --build
+docker image prune -f
+```
+
+常用排查：
+
+```bash
+docker compose logs -f --tail=100
+docker compose restart
+docker compose down
+curl http://127.0.0.1:8093/api/bootstrap
+```
+
+登录后提示 `invalid-token` 时，优先检查 `.env` 里的 `COMMUNITY_JWT_SECRET` 是否和主站后端 `JWT_SECRET` 完全一致。授权回调失败时，检查主站 SSO 应用的 `redirectUri`。
+
+### systemd 裸机部署
+
 1. 准备服务器
 
 ```bash

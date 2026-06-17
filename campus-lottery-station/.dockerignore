@@ -1,0 +1,15 @@
+node_modules
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.playwright-mcp
+.git
+.gitignore
+server/data
+server/*.exe
+server/lottery-dev.*.log
+server/zens-lottery
+Dockerfile
+docker-compose*.yml
+README.md

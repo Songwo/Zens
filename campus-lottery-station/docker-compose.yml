@@ -1,0 +1,17 @@
+services:
+  zens-lottery:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: zens-lottery-station:latest
+    container_name: zens-lottery
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "127.0.0.1:8093:8093"
+    volumes:
+      - zens-lottery-data:/app/data
+
+volumes:
+  zens-lottery-data:
