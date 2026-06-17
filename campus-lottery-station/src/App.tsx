@@ -8,13 +8,16 @@ import { RulePanel } from "./components/RulePanel";
 import { TopicPreview } from "./components/TopicPreview";
 import {
   drawLottery,
+  fetchBootstrap,
   fetchBotAccount,
+  logout,
   publishResultComment,
   syncTopicComments,
 } from "./lib/api";
 import { buildPublicText } from "./lib/format";
 import type {
   BotAccount,
+  CurrentUser,
   DrawResult,
   FormState,
   HistoryRecord,
@@ -58,6 +61,10 @@ const defaultBotAccount: BotAccount = {
 
 export default function App() {
   const [form, setForm] = useState<FormState>(initialForm);
+  const [user, setUser] = useState<CurrentUser | null>(null);
+  const [communityBaseUrl, setCommunityBaseUrl] = useState("");
+  const [logoUrl, setLogoUrl] = useState("/logo.png");
+  const [ssoStartUrl, setSsoStartUrl] = useState("/api/auth/sso/start");
   const [topic, setTopic] = useState<TopicPreviewData | null>(null);
   const [result, setResult] = useState<DrawResult | null>(null);
   const [botAccount, setBotAccount] = useState<BotAccount | null>(defaultBotAccount);
@@ -71,6 +78,7 @@ export default function App() {
   const [publishingComment, setPublishingComment] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const isLoggedIn = Boolean(user);
 
   const previewPayload = useMemo(
     () => ({
@@ -84,6 +92,19 @@ export default function App() {
 
   useEffect(() => {
     let cancelled = false;
+    fetchBootstrap()
+      .then((data) => {
+        if (cancelled) return;
+        setUser(data.user);
+        setCommunityBaseUrl(data.config?.communityBaseUrl || "");
+        setLogoUrl(data.config?.logoUrl || "/logo.png");
+        setSsoStartUrl(data.config?.ssoStartUrl || "/api/auth/sso/start");
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : "初始化抽奖站失败");
+        }
+      });
     fetchBotAccount()
       .then((account) => {
         if (!cancelled) {
@@ -101,7 +122,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (form.topicUrl.trim().length < 12) {
+    if (!isLoggedIn || form.topicUrl.trim().length < 12) {
       setTopic(null);
       setParticipantsVisible(false);
       setResult(null);
@@ -139,7 +160,7 @@ export default function App() {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [form.replyOnly, form.topicUrl, previewPayload]);
+  }, [form.replyOnly, form.topicUrl, isLoggedIn, previewPayload]);
 
   function updateForm(patch: Partial<FormState>) {
     setForm((current) => ({ ...current, ...patch }));
@@ -150,6 +171,7 @@ export default function App() {
   }
 
   async function handlePreview() {
+    if (!requireLogin()) return;
     if (!form.topicUrl.trim()) {
       setError("请先粘贴 Zens 社区帖子链接。");
       return;
@@ -174,6 +196,7 @@ export default function App() {
   }
 
   async function handleSyncComments() {
+    if (!requireLogin()) return;
     if (!form.topicUrl.trim()) {
       setError("请先粘贴 Zens 社区帖子链接。");
       return;
@@ -197,6 +220,7 @@ export default function App() {
   }
 
   async function handleDraw() {
+    if (!requireLogin()) return;
     if (!form.topicUrl.trim()) {
       setError("请先粘贴 Zens 社区帖子链接。");
       return;
@@ -239,6 +263,11 @@ export default function App() {
 
   async function handlePublishResult() {
     if (!result) return;
+    if (!requireLogin()) return;
+    if (user && !["admin", "moderator", "super_admin"].includes(user.role)) {
+      setError("只有管理员或版主可以把中奖名单发布到原帖。");
+      return;
+    }
     const activeBotAccount = botAccount ?? defaultBotAccount;
     setPublishingComment(true);
     setError("");
@@ -284,9 +313,36 @@ export default function App() {
     URL.revokeObjectURL(url);
   }
 
+  function requireLogin() {
+    if (user) return true;
+    setError("请先登录社区账号，再同步评论、预览名单或开奖。");
+    return false;
+  }
+
+  async function handleLogout() {
+    try {
+      await logout();
+      setUser(null);
+      setTopic(null);
+      setResult(null);
+      setParticipantsVisible(false);
+      setPublishedComment(null);
+      setMessage("已退出抽奖站。");
+      setError("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "退出失败，请稍后重试");
+    }
+  }
+
   return (
     <div className="min-h-[100dvh] bg-canvas text-ink">
-      <Header />
+      <Header
+        user={user}
+        communityBaseUrl={communityBaseUrl}
+        logoUrl={logoUrl}
+        ssoStartUrl={ssoStartUrl}
+        onLogout={handleLogout}
+      />
 
       <main className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
         <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_340px]">
@@ -300,6 +356,8 @@ export default function App() {
               previewing={previewing}
               syncing={syncingComments}
               drawing={drawing}
+              user={user}
+              ssoStartUrl={ssoStartUrl}
             />
 
             {(message || error) && (

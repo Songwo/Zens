@@ -196,6 +196,8 @@ public class SsoController {
         claims.put("roles", List.of(StringUtils.hasText(user.getRole()) ? user.getRole() : "ROLE_USER"));
         claims.put("school", user.getSchool());
         claims.put("level", user.getLevel());
+        claims.put("points", user.getPoints() != null ? user.getPoints() : 0);
+        claims.put("trustLevel", user.getTrustLevel() != null ? user.getTrustLevel() : 0);
         claims.put("sso", true);
         claims.put("client_id", clientId);
 

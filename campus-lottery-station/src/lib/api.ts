@@ -1,5 +1,7 @@
 import type {
   BotAccount,
+  BootstrapData,
+  CurrentUser,
   DrawPayload,
   DrawResult,
   Participant,
@@ -186,6 +188,39 @@ export async function publishResultComment(payload: PublishResultPayload): Promi
   return postJson<PublishedComment>("/api/lottery/results/publish", payload);
 }
 
+export async function fetchMe(): Promise<CurrentUser | null> {
+  if (MOCK_ENABLED) {
+    await wait(180);
+    return null;
+  }
+  return getJson<CurrentUser | null>("/api/me");
+}
+
+export async function fetchBootstrap(): Promise<BootstrapData> {
+  if (MOCK_ENABLED) {
+    await wait(180);
+    return {
+      user: null,
+      config: {
+        communityBaseUrl: "http://localhost:5173",
+        logoUrl: "/logo.png",
+        ssoEnabled: true,
+        ssoClientId: "campus-lottery-station",
+        ssoStartUrl: "/api/auth/sso/start",
+      },
+    };
+  }
+  return getJson<BootstrapData>("/api/bootstrap");
+}
+
+export async function logout(): Promise<void> {
+  if (MOCK_ENABLED) {
+    await wait(160);
+    return;
+  }
+  await postJson<void>("/api/auth/logout", {});
+}
+
 async function getJson<T>(url: string): Promise<T> {
   const response = await fetch(url, {
     credentials: "include",
@@ -195,7 +230,7 @@ async function getJson<T>(url: string): Promise<T> {
   });
   const body = await response.json().catch(() => ({}));
   if (!response.ok || body.ok === false) {
-    throw new Error(body.error || `请求失败：${response.status}`);
+    throwApiError(response.status, body.error || `请求失败：${response.status}`);
   }
   return (body.data ?? body) as T;
 }
@@ -211,9 +246,15 @@ async function postJson<T>(url: string, payload: unknown): Promise<T> {
   });
   const body = await response.json().catch(() => ({}));
   if (!response.ok || body.ok === false) {
-    throw new Error(body.error || `请求失败：${response.status}`);
+    throwApiError(response.status, body.error || `请求失败：${response.status}`);
   }
   return (body.data ?? body) as T;
+}
+
+function throwApiError(status: number, message: string): never {
+  const error = new Error(message) as Error & { status?: number };
+  error.status = status;
+  throw error;
 }
 
 async function mockPreview(payload: PreviewPayload): Promise<TopicPreviewData> {

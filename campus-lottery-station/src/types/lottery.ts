@@ -7,6 +7,26 @@ export type FormState = {
   replyOnly: boolean;
 };
 
+export type CurrentUser = {
+  id: string;
+  username: string;
+  displayName: string;
+  avatar?: string;
+  level: number;
+  points: number;
+  role: "user" | "moderator" | "admin" | string;
+  provider?: string;
+  lastLoginAt?: string;
+};
+
+export type PublicConfig = {
+  communityBaseUrl: string;
+  logoUrl?: string;
+  ssoEnabled: boolean;
+  ssoClientId: string;
+  ssoStartUrl: string;
+};
+
 export type PreviewPayload = {
   topicUrl: string;
   maxFloor: number | null;
@@ -85,4 +105,9 @@ export type HistoryRecord = {
   drawnAt: string;
   participantCount: number;
   winnerCount: number;
+};
+
+export type BootstrapData = {
+  user: CurrentUser | null;
+  config: PublicConfig;
 };

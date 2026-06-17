@@ -8,7 +8,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import type { FormEvent } from "react";
-import type { FormState } from "../types/lottery";
+import type { CurrentUser, FormState } from "../types/lottery";
 
 type LotteryFormProps = {
   form: FormState;
@@ -19,6 +19,8 @@ type LotteryFormProps = {
   previewing: boolean;
   syncing: boolean;
   drawing: boolean;
+  user: CurrentUser | null;
+  ssoStartUrl: string;
 };
 
 export function LotteryForm({
@@ -30,9 +32,16 @@ export function LotteryForm({
   previewing,
   syncing,
   drawing,
+  user,
+  ssoStartUrl,
 }: LotteryFormProps) {
+  const loginRequired = !user;
+
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (loginRequired) {
+      return;
+    }
     onDraw();
   }
 
@@ -114,12 +123,19 @@ export function LotteryForm({
           <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0" />
           <div>
             <strong className="block font-semibold text-ink">抽奖种子 / 随机源</strong>
-            使用服务端随机种子生成结果，可复验。
+            使用服务端随机种子生成结果，可复验；同步评论、预览名单和开奖都需要先连接社区账号。
           </div>
         </div>
 
+        {loginRequired && (
+          <div className="rounded-lg border border-line bg-white px-4 py-3 text-sm leading-6 text-muted">
+            <strong className="block text-ink">请先登录社区账号</strong>
+            抽奖站会读取原帖评论并按你的社区身份记录操作，未登录状态不能同步名单或开奖。
+          </div>
+        )}
+
         <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-          <button className="btn-primary min-h-11 flex-1 sm:flex-none" type="submit" disabled={drawing}>
+          <button className="btn-primary min-h-11 flex-1 sm:flex-none" type="submit" disabled={drawing || loginRequired}>
             {drawing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
             开始抽奖
           </button>
@@ -127,7 +143,7 @@ export function LotteryForm({
             className="btn-secondary min-h-11 flex-1 sm:flex-none"
             type="button"
             onClick={onSyncComments}
-            disabled={syncing}
+            disabled={syncing || loginRequired}
           >
             {syncing ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageCircleMore className="h-4 w-4" />}
             同步帖子评论
@@ -136,11 +152,17 @@ export function LotteryForm({
             className="btn-secondary min-h-11 flex-1 sm:flex-none"
             type="button"
             onClick={onPreview}
-            disabled={previewing}
+            disabled={previewing || loginRequired}
           >
             {previewing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Eye className="h-4 w-4" />}
             预览参与名单
           </button>
+          {loginRequired && (
+            <a className="btn-secondary min-h-11 flex-1 sm:flex-none" href={ssoStartUrl || "/api/auth/sso/start"}>
+              <Info className="h-4 w-4" />
+              去连接社区账号
+            </a>
+          )}
         </div>
 
         <p className="flex items-center gap-2 text-sm text-muted">

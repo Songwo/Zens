@@ -32,19 +32,23 @@ var webFiles embed.FS
 const sessionCookie = "campus_lottery_session"
 
 type Config struct {
-	Addr            string
-	DataPath        string
-	PublicURL       string
-	CommunityBase   string
-	CommunityAPI    string
-	SSOAuthorizeURL string
-	SSOTokenURL     string
-	SSOClientID     string
-	SSOClientSecret string
-	SessionSecret   string
-	BotAccessToken  string
-	BotUsername     string
-	BotPassword     string
+	Addr                 string
+	DataPath             string
+	PublicURL            string
+	LogoURL              string
+	CommunityBase        string
+	CommunityAPI         string
+	SSOAuthorizeURL      string
+	SSOTokenURL          string
+	SSOClientID          string
+	SSOClientSecret      string
+	CommunityJWTSecret   string
+	SessionSecret        string
+	BotAccessToken       string
+	BotUsername          string
+	BotPassword          string
+	AllowDemoSSOFallback bool
+	CommentMaxPages      int
 }
 
 type App struct {
@@ -243,6 +247,15 @@ type communityCommentPage struct {
 	Pages   int                `json:"pages"`
 }
 
+type communitySimpleProfile struct {
+	ID       string `json:"id"`
+	Username string `json:"username"`
+	Nickname string `json:"nickname"`
+	Avatar   string `json:"avatar"`
+	Level    int    `json:"level"`
+	Points   int    `json:"points"`
+}
+
 type communityComment struct {
 	ID          string             `json:"id"`
 	PostID      string             `json:"postId"`
@@ -285,19 +298,23 @@ func loadConfig() Config {
 	communityBase := strings.TrimRight(env("COMMUNITY_BASE_URL", "http://localhost:8080"), "/")
 	communityAPI := strings.TrimRight(env("COMMUNITY_API_BASE_URL", "http://localhost:7800"), "/")
 	return Config{
-		Addr:            addr,
-		DataPath:        env("LOTTERY_DATA", filepath.Join("data", "state.json")),
-		PublicURL:       publicURL,
-		CommunityBase:   communityBase,
-		CommunityAPI:    communityAPI,
-		SSOAuthorizeURL: env("COMMUNITY_SSO_AUTHORIZE_URL", communityBase+"/api/sso/authorize"),
-		SSOTokenURL:     env("COMMUNITY_SSO_TOKEN_URL", communityBase+"/api/sso/token"),
-		SSOClientID:     env("SSO_CLIENT_ID", "campus-lottery-station"),
-		SSOClientSecret: env("SSO_CLIENT_SECRET", "change-me"),
-		SessionSecret:   env("LOTTERY_SESSION_SECRET", "campus-lottery-dev-secret"),
-		BotAccessToken:  env("LOTTERY_BOT_ACCESS_TOKEN", ""),
-		BotUsername:     env("LOTTERY_BOT_USERNAME", "zens-lottery-bot"),
-		BotPassword:     env("LOTTERY_BOT_PASSWORD", ""),
+		Addr:                 addr,
+		DataPath:             env("LOTTERY_DATA", filepath.Join("data", "state.json")),
+		PublicURL:            publicURL,
+		LogoURL:              env("LOTTERY_LOGO_URL", "/logo.png"),
+		CommunityBase:        communityBase,
+		CommunityAPI:         communityAPI,
+		SSOAuthorizeURL:      env("COMMUNITY_SSO_AUTHORIZE_URL", communityBase+"/sso/authorize"),
+		SSOTokenURL:          env("COMMUNITY_SSO_TOKEN_URL", communityBase+"/api/sso/token"),
+		SSOClientID:          env("SSO_CLIENT_ID", "campus-lottery-station"),
+		SSOClientSecret:      env("SSO_CLIENT_SECRET", "change-me"),
+		CommunityJWTSecret:   env("COMMUNITY_JWT_SECRET", ""),
+		SessionSecret:        env("LOTTERY_SESSION_SECRET", "campus-lottery-dev-secret"),
+		BotAccessToken:       env("LOTTERY_BOT_ACCESS_TOKEN", ""),
+		BotUsername:          env("LOTTERY_BOT_USERNAME", "zens-lottery-bot"),
+		BotPassword:          env("LOTTERY_BOT_PASSWORD", ""),
+		AllowDemoSSOFallback: envBool("LOTTERY_ALLOW_DEMO_SSO_FALLBACK", false),
+		CommentMaxPages:      envInt("LOTTERY_COMMENT_MAX_PAGES", 50),
 	}
 }
 
@@ -307,6 +324,26 @@ func env(key, fallback string) string {
 		return fallback
 	}
 	return value
+}
+
+func envBool(key string, fallback bool) bool {
+	value := strings.ToLower(strings.TrimSpace(os.Getenv(key)))
+	if value == "" {
+		return fallback
+	}
+	return value == "1" || value == "true" || value == "yes" || value == "on"
+}
+
+func envInt(key string, fallback int) int {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return fallback
+	}
+	parsed, err := strconv.Atoi(value)
+	if err != nil || parsed <= 0 {
+		return fallback
+	}
+	return parsed
 }
 
 func (app *App) routes(mux *http.ServeMux) {
@@ -555,8 +592,10 @@ func (app *App) bootstrap(w http.ResponseWriter, r *http.Request) {
 func (app *App) publicConfig() map[string]any {
 	return map[string]any{
 		"communityBaseUrl": app.cfg.CommunityBase,
+		"logoUrl":          app.cfg.LogoURL,
 		"ssoEnabled":       app.cfg.SSOClientID != "" && app.cfg.SSOAuthorizeURL != "",
 		"ssoClientId":      app.cfg.SSOClientID,
+		"ssoStartUrl":      "/api/auth/sso/start",
 	}
 }
 
@@ -812,6 +851,30 @@ func (app *App) ssoStart(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *App) ssoCallback(w http.ResponseWriter, r *http.Request) {
+	if errText := strings.TrimSpace(r.URL.Query().Get("error")); errText != "" {
+		http.Redirect(w, r, "/?sso="+url.QueryEscape(errText), http.StatusFound)
+		return
+	}
+	ssoToken := firstNonEmpty(
+		r.URL.Query().Get("sso_token"),
+		r.URL.Query().Get("ssoToken"),
+		r.URL.Query().Get("token"),
+	)
+	if ssoToken != "" {
+		user, err := app.userFromSSOToken(ssoToken)
+		if err != nil {
+			http.Redirect(w, r, "/?sso=invalid-token", http.StatusFound)
+			return
+		}
+		if err := app.persistLoginUser(user, "auth.sso_login", user.DisplayName+" 通过社区 SSO 登录抽奖站"); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		app.issueSession(w, user.ID)
+		http.Redirect(w, r, "/?sso=ok", http.StatusFound)
+		return
+	}
+
 	code := strings.TrimSpace(r.URL.Query().Get("code"))
 	state := strings.TrimSpace(r.URL.Query().Get("state"))
 	if code == "" {
@@ -825,7 +888,10 @@ func (app *App) ssoCallback(w http.ResponseWriter, r *http.Request) {
 
 	user, err := app.exchangeSSOCode(code)
 	if err != nil {
-		// Demo fallback keeps the project runnable before the main community SSO client is registered.
+		if !app.cfg.AllowDemoSSOFallback {
+			http.Redirect(w, r, "/?sso=exchange-failed", http.StatusFound)
+			return
+		}
 		user = User{
 			ID:          "sso-" + stableID(code),
 			Username:    "sso-user-" + stableID(code)[:6],
@@ -839,8 +905,23 @@ func (app *App) ssoCallback(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	err = app.store.update(func(state *State) error {
+	if err := app.persistLoginUser(user, "auth.sso_login", user.DisplayName+" 通过社区 SSO 登录抽奖站"); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	app.issueSession(w, user.ID)
+	http.Redirect(w, r, "/?sso=ok", http.StatusFound)
+}
+
+func (app *App) persistLoginUser(user User, eventType, message string) error {
+	return app.store.update(func(state *State) error {
 		user.LastLoginAt = time.Now().UTC()
+		if user.Username == "" {
+			user.Username = "user-" + stableID(user.ID)[:8]
+		}
+		if user.DisplayName == "" {
+			user.DisplayName = user.Username
+		}
 		if user.Avatar == "" {
 			user.Avatar = avatarLetter(user.DisplayName)
 		}
@@ -850,25 +931,25 @@ func (app *App) ssoCallback(w http.ResponseWriter, r *http.Request) {
 		if user.Provider == "" {
 			user.Provider = "sso"
 		}
+		if user.Level <= 0 {
+			user.Level = 1
+		}
+		if user.Points < 0 {
+			user.Points = 0
+		}
 		if state.Users == nil {
 			state.Users = map[string]User{}
 		}
 		state.Users[user.ID] = user
 		state.Audit = append(state.Audit, AuditEvent{
 			ID:        "audit-" + randomID(12),
-			Type:      "auth.sso_login",
+			Type:      eventType,
 			UserID:    user.ID,
-			Message:   user.DisplayName + " 通过社区 SSO 登录抽奖站",
+			Message:   message,
 			CreatedAt: time.Now().UTC(),
 		})
 		return nil
 	})
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	app.issueSession(w, user.ID)
-	http.Redirect(w, r, "/?sso=ok", http.StatusFound)
 }
 
 func (app *App) exchangeSSOCode(code string) (User, error) {
@@ -929,6 +1010,168 @@ func (app *App) exchangeSSOCode(code string) (User, error) {
 		Provider:    "sso",
 		LastLoginAt: time.Now().UTC(),
 	}, nil
+}
+
+func (app *App) userFromSSOToken(token string) (User, error) {
+	claims, err := verifyHS256JWT(token, app.cfg.CommunityJWTSecret)
+	if err != nil {
+		return User{}, err
+	}
+	if !claimBool(claims, "sso") {
+		return User{}, errors.New("不是有效的社区 SSO token")
+	}
+	clientID := claimString(claims, "client_id")
+	if clientID != "" && clientID != app.cfg.SSOClientID {
+		return User{}, errors.New("SSO token client_id 不匹配")
+	}
+	userID := claimSubject(claims)
+	if userID == "" {
+		return User{}, errors.New("SSO token 缺少用户 ID")
+	}
+	username := fallback(claimString(claims, "username"), "user-"+stableID(userID)[:8])
+	displayName := firstNonEmpty(
+		claimString(claims, "displayName"),
+		claimString(claims, "nickname"),
+		username,
+	)
+	role := normalizeRole(claimRoles(claims))
+	user := User{
+		ID:          userID,
+		Username:    username,
+		DisplayName: displayName,
+		Avatar:      claimString(claims, "avatar"),
+		Level:       claimInt(claims, "level", 1),
+		Points:      claimInt(claims, "points", 0),
+		Role:        role,
+		Provider:    "sso",
+		LastLoginAt: time.Now().UTC(),
+	}
+	if user.Level <= 0 {
+		user.Level = claimInt(claims, "trustLevel", 1)
+	}
+	if synced, err := app.fetchCommunitySimpleProfile(token); err == nil {
+		user = mergeCommunityProfile(user, synced)
+	}
+	return user, nil
+}
+
+func verifyHS256JWT(token, secret string) (map[string]any, error) {
+	secret = strings.TrimSpace(secret)
+	if secret == "" {
+		return nil, errors.New("未配置 COMMUNITY_JWT_SECRET，无法验证主站 SSO token")
+	}
+	parts := strings.Split(token, ".")
+	if len(parts) != 3 {
+		return nil, errors.New("JWT 格式不正确")
+	}
+	sig, err := base64.RawURLEncoding.DecodeString(parts[2])
+	if err != nil {
+		return nil, errors.New("JWT 签名格式不正确")
+	}
+	expected := hmac.New(sha256.New, []byte(secret))
+	_, _ = expected.Write([]byte(parts[0] + "." + parts[1]))
+	if !hmac.Equal(sig, expected.Sum(nil)) {
+		derived := sha256.Sum256([]byte(secret))
+		expected = hmac.New(sha256.New, derived[:])
+		_, _ = expected.Write([]byte(parts[0] + "." + parts[1]))
+		if !hmac.Equal(sig, expected.Sum(nil)) {
+			return nil, errors.New("JWT 签名无效")
+		}
+	}
+	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return nil, errors.New("JWT 载荷格式不正确")
+	}
+	var claims map[string]any
+	if err := json.Unmarshal(payload, &claims); err != nil {
+		return nil, errors.New("JWT 载荷解析失败")
+	}
+	if exp, ok := claims["exp"].(float64); ok && exp > 0 && time.Now().Unix() >= int64(exp) {
+		return nil, errors.New("SSO token 已过期")
+	}
+	return claims, nil
+}
+
+func claimSubject(claims map[string]any) string {
+	return claimString(claims, "sub")
+}
+
+func claimString(claims map[string]any, key string) string {
+	if value, ok := claims[key]; ok {
+		switch typed := value.(type) {
+		case string:
+			return strings.TrimSpace(typed)
+		case float64:
+			return strconv.FormatInt(int64(typed), 10)
+		}
+	}
+	return ""
+}
+
+func claimBool(claims map[string]any, key string) bool {
+	if value, ok := claims[key]; ok {
+		switch typed := value.(type) {
+		case bool:
+			return typed
+		case string:
+			return strings.EqualFold(typed, "true") || typed == "1"
+		}
+	}
+	return false
+}
+
+func claimInt(claims map[string]any, key string, fallbackValue int) int {
+	if value, ok := claims[key]; ok {
+		switch typed := value.(type) {
+		case float64:
+			return int(typed)
+		case string:
+			if parsed, err := strconv.Atoi(typed); err == nil {
+				return parsed
+			}
+		}
+	}
+	return fallbackValue
+}
+
+func claimRoles(claims map[string]any) []string {
+	value, ok := claims["roles"]
+	if !ok {
+		if role := claimString(claims, "role"); role != "" {
+			return []string{role}
+		}
+		return nil
+	}
+	switch typed := value.(type) {
+	case []any:
+		roles := make([]string, 0, len(typed))
+		for _, item := range typed {
+			if role, ok := item.(string); ok && strings.TrimSpace(role) != "" {
+				roles = append(roles, role)
+			}
+		}
+		return roles
+	case []string:
+		return typed
+	case string:
+		return []string{typed}
+	default:
+		return nil
+	}
+}
+
+func normalizeRole(roles []string) string {
+	for _, role := range roles {
+		normalized := strings.ToLower(strings.TrimSpace(role))
+		normalized = strings.TrimPrefix(normalized, "role_")
+		if normalized == "super_admin" || normalized == "admin" {
+			return "admin"
+		}
+		if normalized == "moderator" {
+			return "moderator"
+		}
+	}
+	return "user"
 }
 
 func (app *App) listDraws(w http.ResponseWriter, r *http.Request) {
@@ -1413,6 +1656,10 @@ func (app *App) lotteryPreview(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *App) syncLotteryComments(w http.ResponseWriter, r *http.Request) {
+	if _, ok := app.currentUser(r); !ok {
+		writeError(w, http.StatusUnauthorized, "请先登录社区账号后再同步帖子评论")
+		return
+	}
 	var req lotteryCriteria
 	if err := decodeJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
@@ -1430,6 +1677,10 @@ func (app *App) syncLotteryComments(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *App) drawTopicLottery(w http.ResponseWriter, r *http.Request) {
+	if _, ok := app.currentUser(r); !ok {
+		writeError(w, http.StatusUnauthorized, "请先登录社区账号后再开奖")
+		return
+	}
 	var req lotteryDrawRequest
 	if err := decodeJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
@@ -1478,10 +1729,26 @@ func (app *App) lotteryBotAccount(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *App) lotteryBotAccountApply(w http.ResponseWriter, r *http.Request) {
+	if user, ok := app.currentUser(r); !ok {
+		writeError(w, http.StatusUnauthorized, "请先登录社区账号")
+		return
+	} else if !canOperateOfficialLottery(user) {
+		writeError(w, http.StatusForbidden, "只有管理员或版主可以配置抽奖机器人")
+		return
+	}
 	writeJSON(w, http.StatusOK, APIResponse{OK: true, Data: app.lottery.bot})
 }
 
 func (app *App) publishLotteryResult(w http.ResponseWriter, r *http.Request) {
+	user, ok := app.currentUser(r)
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "请先登录社区账号后再发布中奖名单")
+		return
+	}
+	if !canOperateOfficialLottery(user) {
+		writeError(w, http.StatusForbidden, "只有管理员或版主可以发布官方中奖名单")
+		return
+	}
 	var req publishResultRequest
 	if err := decodeJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
@@ -1526,6 +1793,14 @@ func (app *App) publishLotteryResult(w http.ResponseWriter, r *http.Request) {
 		PostedAt:     postedAt.Format(time.RFC3339),
 	}
 	writeJSON(w, http.StatusOK, APIResponse{OK: true, Data: resp})
+}
+
+func canOperateOfficialLottery(user *User) bool {
+	if user == nil {
+		return false
+	}
+	role := strings.ToLower(strings.TrimSpace(user.Role))
+	return role == "admin" || role == "super_admin" || role == "moderator"
 }
 
 func (app *App) buildTopicPreview(req lotteryCriteria) (TopicPreview, string, error) {
@@ -1577,6 +1852,10 @@ func (app *App) fetchCommunityComments(postID string) ([]communityComment, error
 	all := []communityComment{}
 	page := 1
 	const pageSize = 200
+	maxPages := app.cfg.CommentMaxPages
+	if maxPages <= 0 {
+		maxPages = 50
+	}
 	for {
 		var resp communityResult[communityCommentPage]
 		path := fmt.Sprintf("/comment/post/%s?page=%d&size=%d", url.PathEscape(postID), page, pageSize)
@@ -1586,7 +1865,7 @@ func (app *App) fetchCommunityComments(postID string) ([]communityComment, error
 		if resp.Code != 2000 {
 			return nil, fmt.Errorf("主站读取评论失败：%s", fallback(resp.Message, "未知错误"))
 		}
-		all = append(all, resp.Data.Records...)
+		all = append(all, flattenCommunityComments(resp.Data.Records)...)
 		total := resp.Data.Total
 		pages := resp.Data.Pages
 		if pages > 0 {
@@ -1600,12 +1879,70 @@ func (app *App) fetchCommunityComments(postID string) ([]communityComment, error
 		} else if len(resp.Data.Records) < pageSize {
 			break
 		}
-		if page >= 20 {
+		if page >= maxPages {
 			return nil, errors.New("帖子评论过多，请设置截止楼层或分批处理")
 		}
 		page++
 	}
+	sort.SliceStable(all, func(i, j int) bool {
+		return compareCommunityTime(all[i].CreateTime, all[j].CreateTime) < 0
+	})
 	return all, nil
+}
+
+func flattenCommunityComments(records []communityComment) []communityComment {
+	out := make([]communityComment, 0, len(records))
+	var walk func(items []communityComment)
+	walk = func(items []communityComment) {
+		for _, item := range items {
+			children := item.Children
+			item.Children = nil
+			out = append(out, item)
+			if len(children) > 0 {
+				walk(children)
+			}
+		}
+	}
+	walk(records)
+	return out
+}
+
+func compareCommunityTime(a, b string) int {
+	ta := parseCommunityTime(a)
+	tb := parseCommunityTime(b)
+	switch {
+	case ta.IsZero() && tb.IsZero():
+		return strings.Compare(a, b)
+	case ta.IsZero():
+		return 1
+	case tb.IsZero():
+		return -1
+	case ta.Before(tb):
+		return -1
+	case ta.After(tb):
+		return 1
+	default:
+		return 0
+	}
+}
+
+func parseCommunityTime(value string) time.Time {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return time.Time{}
+	}
+	layouts := []string{
+		time.RFC3339,
+		"2006-01-02T15:04:05",
+		"2006-01-02 15:04:05",
+		"2006-01-02 15:04",
+	}
+	for _, layout := range layouts {
+		if parsed, err := time.ParseInLocation(layout, value, time.Local); err == nil {
+			return parsed
+		}
+	}
+	return time.Time{}
 }
 
 func (app *App) communityGet(path string, dst any) error {
@@ -1631,6 +1968,68 @@ func (app *App) communityGet(path string, dst any) error {
 		return fmt.Errorf("主社区响应解析失败：%w", err)
 	}
 	return nil
+}
+
+func (app *App) communityGetWithToken(path, token string, dst any) error {
+	req, err := http.NewRequest(http.MethodGet, app.communityURL(path), nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("X-Device-Id", "zens-lottery-station")
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+	client := http.Client{Timeout: 8 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("无法连接主社区：%w", err)
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("主社区返回错误：%s", resp.Status)
+	}
+	if err := json.Unmarshal(body, dst); err != nil {
+		return fmt.Errorf("主社区响应解析失败：%w", err)
+	}
+	return nil
+}
+
+func (app *App) fetchCommunitySimpleProfile(token string) (communitySimpleProfile, error) {
+	var resp communityResult[communitySimpleProfile]
+	if err := app.communityGetWithToken("/user/simple-profile", token, &resp); err != nil {
+		return communitySimpleProfile{}, err
+	}
+	if resp.Code != 2000 {
+		return communitySimpleProfile{}, fmt.Errorf("主站读取用户信息失败：%s", fallback(resp.Message, "未知错误"))
+	}
+	return resp.Data, nil
+}
+
+func mergeCommunityProfile(user User, profile communitySimpleProfile) User {
+	if profile.ID != "" {
+		user.ID = profile.ID
+	}
+	if profile.Username != "" {
+		user.Username = profile.Username
+	}
+	if profile.Nickname != "" {
+		user.DisplayName = profile.Nickname
+	}
+	if profile.Avatar != "" {
+		user.Avatar = profile.Avatar
+	}
+	if profile.Level > 0 {
+		user.Level = profile.Level
+	}
+	if profile.Points >= 0 {
+		user.Points = profile.Points
+	}
+	return user
 }
 
 func (app *App) communityPost(path string, payload any, token string, dst any) error {
@@ -1702,7 +2101,7 @@ func commentsToParticipants(comments []communityComment, post communityPost, req
 		displayName := fallback(comment.Nickname, "Zens 用户")
 		out = append(out, LotteryParticipant{
 			ID:          comment.UserID,
-			Username:    comment.UserID,
+			Username:    fallback(comment.Nickname, comment.UserID),
 			DisplayName: displayName,
 			Avatar:      fallback(comment.UserAvatar, avatarLetter(displayName)),
 			Floor:       floor,
@@ -1893,6 +2292,15 @@ func fallback(value, fallback string) string {
 		return fallback
 	}
 	return value
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
 }
 
 func (app *App) static(w http.ResponseWriter, r *http.Request) {
