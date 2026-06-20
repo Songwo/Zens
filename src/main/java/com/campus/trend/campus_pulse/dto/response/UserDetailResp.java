@@ -16,6 +16,7 @@ public class UserDetailResp {
     private String bio;
     private String major;
     private Integer level;
+    private Integer points;
     private int enrollmentYear;
     private String school;
     private Integer gender;

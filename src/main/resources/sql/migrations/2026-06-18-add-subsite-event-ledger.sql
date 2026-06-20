@@ -1,0 +1,20 @@
+CREATE TABLE IF NOT EXISTS `sys_subsite_event` (
+  `id`           bigint        NOT NULL AUTO_INCREMENT,
+  `event_id`     varchar(120)  NOT NULL COMMENT '子站侧全局幂等事件ID',
+  `source`       varchar(50)   NOT NULL COMMENT '来源子站，如 zdc-shop/cdk-airdrop/campus-lottery-station',
+  `event_type`   varchar(80)   NOT NULL COMMENT '事件类型，如 shop.order.delivered',
+  `user_id`      varchar(64)   DEFAULT NULL COMMENT '关联主站用户ID',
+  `title`        varchar(120)  NOT NULL COMMENT '事件标题',
+  `content`      varchar(500)  NOT NULL COMMENT '事件说明',
+  `related_id`   varchar(200)  DEFAULT NULL COMMENT '关联业务对象',
+  `severity`     varchar(20)   NOT NULL DEFAULT 'info' COMMENT 'info/success/warning/danger',
+  `status`       varchar(30)   NOT NULL DEFAULT 'recorded' COMMENT '业务状态',
+  `payload_json` json          DEFAULT NULL COMMENT '事件扩展数据',
+  `created_at`   datetime      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_subsite_event_id` (`event_id`),
+  KEY `idx_subsite_event_user_time` (`user_id`, `created_at`),
+  KEY `idx_subsite_event_source_time` (`source`, `created_at`),
+  KEY `idx_subsite_event_type_time` (`event_type`, `created_at`),
+  KEY `idx_subsite_event_status_time` (`status`, `created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='子站事件账本';

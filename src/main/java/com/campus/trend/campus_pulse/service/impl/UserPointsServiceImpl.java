@@ -23,13 +23,14 @@ import java.util.concurrent.TimeUnit;
 @RequiredArgsConstructor
 public class UserPointsServiceImpl implements UserPointsService {
 
-    private static final long IDEMPOTENT_TTL_SECONDS = 120;
+    private static final long IDEMPOTENT_TTL_SECONDS = TimeUnit.DAYS.toSeconds(7);
     private static final int MAX_CONSUME_AMOUNT = 1_000_000;
 
     private final UserService userService;
     private final LevelExpLogMapper levelExpLogMapper;
     private final StringRedisTemplate redisTemplate;
     private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
+    private final com.campus.trend.campus_pulse.monitor.EcosystemMetrics ecosystemMetrics;
 
     @Override
     public Map<String, Object> getPoints(String userId) {
@@ -60,10 +61,12 @@ public class UserPointsServiceImpl implements UserPointsService {
 
         User user = userService.getById(userId);
         if (user == null) {
+            ecosystemMetrics.recordPointsMutation("consume", "not_found");
             throw new BusinessException(ResultCode.FAILED, "USER_NOT_FOUND: 用户不存在");
         }
         int before = user.getPoints() == null ? 0 : user.getPoints();
         if (before < amount) {
+            ecosystemMetrics.recordPointsMutation("consume", "insufficient");
             throw new BusinessException(ResultCode.FAILED,
                     "INSUFFICIENT_POINTS: 积分不足 (当前 " + before + " < 需要 " + amount + ")");
         }
@@ -75,6 +78,7 @@ public class UserPointsServiceImpl implements UserPointsService {
                 .setSql("points = points - " + amount);
         boolean updated = userService.update(uw);
         if (!updated) {
+            ecosystemMetrics.recordPointsMutation("consume", "insufficient");
             throw new BusinessException(ResultCode.FAILED, "INSUFFICIENT_POINTS: 余额不足或并发扣减失败");
         }
 
@@ -91,6 +95,7 @@ public class UserPointsServiceImpl implements UserPointsService {
 
         writeIdempotentCache(idempotentKey, result, "[internal/consume]");
 
+        ecosystemMetrics.recordPointsMutation("consume", "success");
         log.info("[internal/consume] OK userId={} amount={} before={} after={} orderId={}",
                 userId, amount, before, after, orderId);
         return result;
@@ -110,6 +115,7 @@ public class UserPointsServiceImpl implements UserPointsService {
 
         User user = userService.getById(userId);
         if (user == null) {
+            ecosystemMetrics.recordPointsMutation("credit", "not_found");
             throw new BusinessException(ResultCode.FAILED, "USER_NOT_FOUND: 用户不存在");
         }
         int before = user.getPoints() == null ? 0 : user.getPoints();
@@ -119,6 +125,7 @@ public class UserPointsServiceImpl implements UserPointsService {
                 .setSql("points = COALESCE(points, 0) + " + amount);
         boolean updated = userService.update(uw);
         if (!updated) {
+            ecosystemMetrics.recordPointsMutation("credit", "error");
             throw new BusinessException(ResultCode.FAILED, "CREDIT_FAIL: 充值失败");
         }
 
@@ -135,6 +142,7 @@ public class UserPointsServiceImpl implements UserPointsService {
 
         writeIdempotentCache(idempotentKey, result, "[internal/credit]");
 
+        ecosystemMetrics.recordPointsMutation("credit", "success");
         log.info("[internal/credit] OK userId={} amount={} before={} after={} orderId={}",
                 userId, amount, before, after, orderId);
         return result;

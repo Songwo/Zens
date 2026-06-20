@@ -41,6 +41,9 @@ public class SsoClient implements Serializable {
     /** 是否启用 1:是 0:否 */
     private Integer enabled;
 
+    /** 第一方可信 1:自动授权跳过同意页 0:需手动同意 */
+    private Integer trusted;
+
     private LocalDateTime createTime;
     private LocalDateTime updateTime;
 }

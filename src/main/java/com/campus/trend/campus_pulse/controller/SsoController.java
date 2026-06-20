@@ -35,6 +35,44 @@ public class SsoController {
     private final SsoClientService ssoClientService;
     private final UserService userService;
     private final JwtUtil jwtUtil;
+    private final com.campus.trend.campus_pulse.monitor.EcosystemMetrics ecosystemMetrics;
+
+    private static final String POINT_SHOP_CLIENT_ID = "zdc-shop";
+    private static final String POINT_SHOP_CLIENT_NAME = "Zens 积分商城";
+    private static final String POINT_SHOP_REDIRECT_URI = String.join(", ",
+            "https://shop.allinsong.top/login/callback",
+            "https://mall.allinsong.top/login/callback",
+            "https://points.allinsong.top/login/callback",
+            "https://zdc-shop.allinsong.top/login/callback",
+            "http://localhost:3000/login/callback",
+            "http://127.0.0.1:3000/login/callback",
+            "http://localhost:3001/login/callback",
+            "http://127.0.0.1:3001/login/callback"
+    );
+    private static final String POINT_SHOP_DESCRIPTION = "Zens 社区积分商城，使用主站账号单点登录并同步积分权益。";
+    private static final String POINT_SHOP_LOGO_URL = "/logo.png";
+
+    private static final String LOTTERY_CLIENT_ID = "campus-lottery-station";
+    private static final String LOTTERY_CLIENT_NAME = "Zens 抽奖站";
+    private static final String LOTTERY_REDIRECT_URI = String.join(", ",
+            "https://lottery.allinsong.top/api/auth/sso/callback",
+            "https://draw.allinsong.top/api/auth/sso/callback",
+            "http://localhost:8093/api/auth/sso/callback",
+            "http://127.0.0.1:8093/api/auth/sso/callback"
+    );
+    private static final String LOTTERY_DESCRIPTION = "Zens 社区原帖评论抽奖工具，使用主站账号登录，可同步评论、执行抽奖并把开奖结果回写原帖。";
+    private static final String LOTTERY_LOGO_URL = "/logo.png";
+
+    private static final String CDK_CLIENT_ID = "cdk-airdrop";
+    private static final String CDK_CLIENT_NAME = "CDK 空投站";
+    private static final String CDK_REDIRECT_URI = String.join(", ",
+            "https://cdk.allinsong.top/login/callback",
+            "https://airdrop.allinsong.top/login/callback",
+            "http://localhost:8088/login/callback",
+            "http://127.0.0.1:8088/login/callback"
+    );
+    private static final String CDK_DESCRIPTION = "Zens 社区 CDK 空投领取站，使用主站账号单点登录并发放兑换码与活动权益。";
+    private static final String CDK_LOGO_URL = "/logo.png";
 
     @Value("${jwt.secret}")
     private String jwtSecret;
@@ -51,6 +89,42 @@ public class SsoController {
             result.add(clientToMap(c, false));
         }
         return Result.success(result);
+    }
+
+    /** 一键创建或修复积分商城 SSO 应用 */
+    @PostMapping("/clients/presets/point-shop")
+    public Result<?> upsertPointShopClient() {
+        return upsertPreset(POINT_SHOP_CLIENT_ID, POINT_SHOP_CLIENT_NAME,
+                POINT_SHOP_REDIRECT_URI, POINT_SHOP_DESCRIPTION, POINT_SHOP_LOGO_URL);
+    }
+
+    /** 一键创建或修复抽奖站 SSO 应用 */
+    @PostMapping("/clients/presets/lottery")
+    public Result<?> upsertLotteryClient() {
+        return upsertPreset(LOTTERY_CLIENT_ID, LOTTERY_CLIENT_NAME,
+                LOTTERY_REDIRECT_URI, LOTTERY_DESCRIPTION, LOTTERY_LOGO_URL);
+    }
+
+    /** 一键创建或修复 CDK 空投站 SSO 应用 */
+    @PostMapping("/clients/presets/cdk-airdrop")
+    public Result<?> upsertCdkAirdropClient() {
+        return upsertPreset(CDK_CLIENT_ID, CDK_CLIENT_NAME,
+                CDK_REDIRECT_URI, CDK_DESCRIPTION, CDK_LOGO_URL);
+    }
+
+    /** preset 应用的通用 upsert：复用 ssoClientService.upsertPresetClient，幂等。 */
+    private Result<?> upsertPreset(String clientId, String clientName, String redirectUri,
+                                   String description, String logoUrl) {
+        try {
+            SsoClient before = ssoClientService.lambdaQuery()
+                    .eq(SsoClient::getClientId, clientId)
+                    .one();
+            SsoClient client = ssoClientService.upsertPresetClient(
+                    clientId, clientName, redirectUri, description, logoUrl);
+            return Result.success(clientToMap(client, before == null));
+        } catch (RuntimeException e) {
+            return Result.failed(e.getMessage());
+        }
     }
 
     /** 创建 SSO 应用 */
@@ -149,6 +223,7 @@ public class SsoController {
         info.put("clientName", client.getClientName());
         info.put("description", client.getDescription());
         info.put("logoUrl", client.getLogoUrl());
+        info.put("trusted", client.getTrusted() != null && client.getTrusted() == 1);
         return Result.success(info);
     }
 
@@ -162,15 +237,17 @@ public class SsoController {
      */
     @PostMapping("/authorize")
     public Result<?> authorize(@RequestBody Map<String, String> body) {
-        String userId = SecurityUtils.getCurrentUserId();
-        if (userId == null) {
-            return Result.failed("请先登录");
-        }
-
         String clientId = body.get("clientId");
         String redirectUri = body.get("redirectUri");
 
+        String userId = SecurityUtils.getCurrentUserId();
+        if (userId == null) {
+            ecosystemMetrics.recordSsoAuthorize(clientId, "not_login");
+            return Result.failed("请先登录");
+        }
+
         if (!StringUtils.hasText(clientId) || !StringUtils.hasText(redirectUri)) {
+            ecosystemMetrics.recordSsoAuthorize(clientId, "missing_params");
             return Result.failed("缺少必要参数");
         }
 
@@ -178,12 +255,16 @@ public class SsoController {
         try {
             ssoClientService.validateClient(clientId, redirectUri);
         } catch (RuntimeException e) {
+            ecosystemMetrics.recordSsoAuthorize(clientId, "invalid_client");
+            log.warn("SSO 授权被拒: userId={}, clientId={}, redirectUri={}, reason={}",
+                    userId, clientId, redirectUri, e.getMessage());
             return Result.failed(e.getMessage());
         }
 
         // 查询用户完整信息
         User user = userService.getById(userId);
         if (user == null) {
+            ecosystemMetrics.recordSsoAuthorize(clientId, "user_not_found");
             return Result.failed("用户不存在");
         }
 
@@ -214,7 +295,8 @@ public class SsoController {
                 .signWith(signingKey)
                 .compact();
 
-        log.info("SSO 授权: userId={}, clientId={}, redirectUri={}", userId, clientId, redirectUri);
+        ecosystemMetrics.recordSsoAuthorize(clientId, "success");
+        log.info("SSO 授权: userId={}, clientId={}, redirectUri={}, result=success", userId, clientId, redirectUri);
 
         return Result.success(Map.of("ssoToken", ssoToken));
     }
@@ -239,6 +321,7 @@ public class SsoController {
         map.put("description", client.getDescription());
         map.put("logoUrl", client.getLogoUrl());
         map.put("enabled", client.getEnabled() != null && client.getEnabled() == 1);
+        map.put("trusted", client.getTrusted() != null && client.getTrusted() == 1);
         map.put("createTime", client.getCreateTime());
         map.put("updateTime", client.getUpdateTime());
         return map;

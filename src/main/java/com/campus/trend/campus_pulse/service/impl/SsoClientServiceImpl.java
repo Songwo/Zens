@@ -7,8 +7,11 @@ import com.campus.trend.campus_pulse.service.SsoClientService;
 import org.springframework.stereotype.Service;
 
 import java.security.SecureRandom;
+import java.util.ArrayList;
 import java.util.Base64;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 @Service
 public class SsoClientServiceImpl extends ServiceImpl<SsoClientMapper, SsoClient> implements SsoClientService {
@@ -39,6 +42,30 @@ public class SsoClientServiceImpl extends ServiceImpl<SsoClientMapper, SsoClient
                 .setEnabled(1);
         save(client);
         return client;
+    }
+
+    @Override
+    public SsoClient upsertPresetClient(String clientId, String clientName, String redirectUri, String description, String logoUrl) {
+        SsoClient existing = lambdaQuery().eq(SsoClient::getClientId, clientId).one();
+        if (existing == null) {
+            // preset 均为第一方自家子站,标记 trusted=1 以支持自动授权(跳过同意页)
+            SsoClient created = createClient(clientId, clientName, redirectUri, description, logoUrl);
+            created.setTrusted(1);
+            updateById(created);
+            return created;
+        }
+
+        existing.setClientName(clientName.trim())
+                .setRedirectUri(mergeRedirectUris(existing.getRedirectUri(), redirectUri))
+                .setDescription(hasText(existing.getDescription()) ? existing.getDescription() : description)
+                .setLogoUrl(hasText(existing.getLogoUrl()) ? existing.getLogoUrl() : logoUrl)
+                .setEnabled(1)
+                .setTrusted(1);
+        if (!hasText(existing.getClientSecret())) {
+            existing.setClientSecret(generateSecret());
+        }
+        updateById(existing);
+        return existing;
     }
 
     @Override
@@ -111,5 +138,25 @@ public class SsoClientServiceImpl extends ServiceImpl<SsoClientMapper, SsoClient
         byte[] bytes = new byte[32];
         SECURE_RANDOM.nextBytes(bytes);
         return "sso_" + Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+    }
+
+    private String mergeRedirectUris(String current, String required) {
+        Set<String> merged = new LinkedHashSet<>();
+        for (String value : new String[]{current, required}) {
+            if (!hasText(value)) {
+                continue;
+            }
+            for (String item : value.split(",")) {
+                String uri = item.trim();
+                if (!uri.isEmpty()) {
+                    merged.add(uri);
+                }
+            }
+        }
+        return String.join(", ", new ArrayList<>(merged));
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.trim().isEmpty();
     }
 }

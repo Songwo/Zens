@@ -133,6 +133,9 @@ CREATE TABLE `sys_post` (
   `images`           json          DEFAULT NULL COMMENT '图片列表',
   `tags`             varchar(255)  DEFAULT NULL COMMENT '标签(逗号分隔)',
   `is_anonymous`     tinyint(1)    DEFAULT 0 COMMENT '是否匿名',
+  `post_type`        varchar(32)   NOT NULL DEFAULT 'NORMAL' COMMENT '帖子类型 NORMAL/LOTTERY',
+  `comment_deadline` datetime      DEFAULT NULL COMMENT '抽奖帖评论截止时间',
+  `comment_once_per_user` tinyint(1) NOT NULL DEFAULT 0 COMMENT '抽奖帖是否限制每人评论一次',
   `location_name`    varchar(100)  DEFAULT NULL COMMENT '位置名称',
   `sentiment_score`  decimal(5,2)  DEFAULT 0.00 COMMENT '情感分数',
   `status`           tinyint       DEFAULT 1 COMMENT '状态 1正常 0草稿',
@@ -166,6 +169,7 @@ CREATE TABLE `sys_post` (
   KEY `idx_post_feed_pin` (`status`, `global_pin`, `category_pin`, `pin_order`, `pin_expire_at`),
   KEY `idx_post_audit_query` (`status`, `audit_status`, `create_time`),
   KEY `idx_post_audit_update` (`audit_status`, `update_time`),
+  KEY `idx_post_type_deadline` (`post_type`, `comment_deadline`),
   KEY `idx_post_section_activity` (`section_id`, `status`, `last_activity_at`, `id`),
   FULLTEXT KEY `ft_post_search` (`title`, `content`, `summary`, `tags`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='帖子表';
@@ -535,6 +539,7 @@ CREATE TABLE `sys_sso_client` (
   `description`   varchar(500)  DEFAULT NULL COMMENT '应用描述',
   `logo_url`      varchar(500)  DEFAULT NULL COMMENT '应用Logo URL',
   `enabled`       tinyint(1)    DEFAULT 1 COMMENT '是否启用 1:是 0:否',
+  `trusted`       tinyint(1)    NOT NULL DEFAULT 0 COMMENT '第一方可信:1 自动授权跳过同意页, 0 需手动同意',
   `create_time`   datetime      DEFAULT CURRENT_TIMESTAMP,
   `update_time`   datetime      DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
@@ -542,7 +547,31 @@ CREATE TABLE `sys_sso_client` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='SSO 应用注册表';
 
 -- ============================================================
--- 25) 发展历程 / 版本日志表
+-- 25) 子站事件账本
+-- ============================================================
+CREATE TABLE `sys_subsite_event` (
+  `id`           bigint        NOT NULL AUTO_INCREMENT,
+  `event_id`     varchar(120)  NOT NULL COMMENT '子站侧全局幂等事件ID',
+  `source`       varchar(50)   NOT NULL COMMENT '来源子站，如 zdc-shop/cdk-airdrop/campus-lottery-station',
+  `event_type`   varchar(80)   NOT NULL COMMENT '事件类型，如 shop.order.delivered',
+  `user_id`      varchar(64)   DEFAULT NULL COMMENT '关联主站用户ID',
+  `title`        varchar(120)  NOT NULL COMMENT '事件标题',
+  `content`      varchar(500)  NOT NULL COMMENT '事件说明',
+  `related_id`   varchar(200)  DEFAULT NULL COMMENT '关联业务对象',
+  `severity`     varchar(20)   NOT NULL DEFAULT 'info' COMMENT 'info/success/warning/danger',
+  `status`       varchar(30)   NOT NULL DEFAULT 'recorded' COMMENT '业务状态',
+  `payload_json` json          DEFAULT NULL COMMENT '事件扩展数据',
+  `created_at`   datetime      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_subsite_event_id` (`event_id`),
+  KEY `idx_subsite_event_user_time` (`user_id`, `created_at`),
+  KEY `idx_subsite_event_source_time` (`source`, `created_at`),
+  KEY `idx_subsite_event_type_time` (`event_type`, `created_at`),
+  KEY `idx_subsite_event_status_time` (`status`, `created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='子站事件账本';
+
+-- ============================================================
+-- 26) 发展历程 / 版本日志表
 -- ============================================================
 CREATE TABLE `sys_changelog` (
   `id`         bigint        NOT NULL AUTO_INCREMENT,
@@ -567,7 +596,7 @@ CREATE TABLE `sys_changelog` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='发展历程/版本日志表';
 
 -- ============================================================
--- 26) 信任等级变更日志表
+-- 27) 信任等级变更日志表
 -- ============================================================
 CREATE TABLE `sys_trust_event` (
   `id`           bigint        NOT NULL AUTO_INCREMENT,

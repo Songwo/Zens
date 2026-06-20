@@ -1,10 +1,13 @@
 package com.campus.trend.campus_pulse.controller;
 
 import com.campus.trend.campus_pulse.common.api.Result;
+import com.campus.trend.campus_pulse.common.notification.NotificationType;
+import com.campus.trend.campus_pulse.service.NotificationService;
 import com.campus.trend.campus_pulse.service.UserPointsService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -21,6 +24,7 @@ import org.springframework.web.bind.annotation.*;
 public class InternalUserController {
 
     private final UserPointsService userPointsService;
+    private final NotificationService notificationService;
 
     /**
      * GET /api/internal/user/{userId}/points
@@ -57,6 +61,25 @@ public class InternalUserController {
                 userId, req.amount, req.reason, req.orderId, req.idempotencyKey));
     }
 
+    /**
+     * POST /api/internal/user/{userId}/notifications
+     *
+     * 子站事件回流主站通知中心。用于积分商城订单、CDK 领取、抽奖开奖等事件。
+     */
+    @PostMapping("/{userId}/notifications")
+    public Result<?> createSubsiteNotification(@PathVariable @NotBlank String userId,
+                                               @RequestBody @Valid SubsiteNotificationRequest req) {
+        notificationService.createNotification(
+                userId,
+                NotificationType.SYSTEM,
+                req.title,
+                req.content,
+                req.relatedId,
+                null
+        );
+        return Result.success();
+    }
+
     // ─── DTO ────────────────────────────────────────────────────────────
     public static class ConsumeRequest {
         @Min(value = 1, message = "amount 必须为正整数")
@@ -67,5 +90,20 @@ public class InternalUserController {
         public String orderId;
         @NotBlank @Size(min = 8, max = 100)
         public String idempotencyKey;
+    }
+
+    public static class SubsiteNotificationRequest {
+        @NotBlank @Size(max = 40)
+        @Pattern(regexp = "^[a-z0-9._:-]+$", message = "source 只能包含小写字母、数字、点、下划线、冒号或短横线")
+        public String source;
+
+        @NotBlank @Size(max = 120)
+        public String title;
+
+        @NotBlank @Size(max = 500)
+        public String content;
+
+        @Size(max = 200)
+        public String relatedId;
     }
 }

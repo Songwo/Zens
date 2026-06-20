@@ -22,8 +22,9 @@ import java.io.UnsupportedEncodingException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.LinkedHashMap;
 import java.util.Locale;
-import java.util.Set;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
@@ -45,18 +46,25 @@ public class InternalServiceFilter extends OncePerRequestFilter {
     private static final String INTERNAL_PREFIX = "/api/internal/";
     private static final long TIMESTAMP_WINDOW_MS = 60_000L; // ±60s
     private static final Pattern NONCE_PATTERN = Pattern.compile("^[A-Za-z0-9_-]{16,128}$");
-    private static final Set<String> ALLOWED_SERVICE_IDS = Set.of("zdc-shop");
 
     private final StringRedisTemplate redisTemplate;
     private final ObjectMapper objectMapper;
-    private final String shopSecret;
+    private final com.campus.trend.campus_pulse.monitor.EcosystemMetrics ecosystemMetrics;
+    /** serviceId -> 共享密钥。白名单即本 map 的 keySet。 */
+    private final Map<String, String> serviceSecrets;
 
     public InternalServiceFilter(StringRedisTemplate redisTemplate,
                                  ObjectMapper objectMapper,
-                                 @Value("${internal.service.shop-secret:dev-shop-secret-change-me}") String shopSecret) {
+                                 com.campus.trend.campus_pulse.monitor.EcosystemMetrics ecosystemMetrics,
+                                 @Value("${internal.service.shop-secret:dev-shop-secret-change-me}") String shopSecret,
+                                 @Value("${internal.service.lottery-secret:dev-lottery-secret-change-me}") String lotterySecret) {
         this.redisTemplate = redisTemplate;
         this.objectMapper = objectMapper;
-        this.shopSecret = shopSecret;
+        this.ecosystemMetrics = ecosystemMetrics;
+        Map<String, String> secrets = new LinkedHashMap<>();
+        secrets.put("zdc-shop", shopSecret);
+        secrets.put("campus-lottery-station", lotterySecret);
+        this.serviceSecrets = Map.copyOf(secrets);
     }
 
     @Override
@@ -75,15 +83,18 @@ public class InternalServiceFilter extends OncePerRequestFilter {
 
         if (!StringUtils.hasText(serviceId) || !StringUtils.hasText(tsHeader)
                 || !StringUtils.hasText(nonce) || !StringUtils.hasText(signature)) {
+            ecosystemMetrics.recordInternalApiCall(serviceId, "missing_headers");
             reject(response, HttpStatus.UNAUTHORIZED, "MISSING_SERVICE_HEADERS", "缺少服务调用头");
             return;
         }
-        if (!ALLOWED_SERVICE_IDS.contains(serviceId)) {
+        if (!serviceSecrets.containsKey(serviceId)) {
             log.warn("[internal] 未知 service id: {}", serviceId);
+            ecosystemMetrics.recordInternalApiCall(serviceId, "unknown_service");
             reject(response, HttpStatus.UNAUTHORIZED, "UNKNOWN_SERVICE", "未授权的调用方");
             return;
         }
         if (!NONCE_PATTERN.matcher(nonce).matches()) {
+            ecosystemMetrics.recordInternalApiCall(serviceId, "invalid_nonce");
             reject(response, HttpStatus.BAD_REQUEST, "INVALID_NONCE", "nonce 不合法");
             return;
         }
@@ -92,12 +103,14 @@ public class InternalServiceFilter extends OncePerRequestFilter {
         try {
             timestamp = Long.parseLong(tsHeader);
         } catch (NumberFormatException e) {
+            ecosystemMetrics.recordInternalApiCall(serviceId, "invalid_timestamp");
             reject(response, HttpStatus.BAD_REQUEST, "INVALID_TIMESTAMP", "timestamp 不合法");
             return;
         }
         long now = System.currentTimeMillis();
         if (Math.abs(now - timestamp) > TIMESTAMP_WINDOW_MS) {
             log.warn("[internal] 时间戳过期: ts={}, now={}, diff={}", timestamp, now, now - timestamp);
+            ecosystemMetrics.recordInternalApiCall(serviceId, "timestamp_skew");
             reject(response, HttpStatus.UNAUTHORIZED, "TIMESTAMP_SKEW", "请求时间戳过期");
             return;
         }
@@ -107,6 +120,7 @@ public class InternalServiceFilter extends OncePerRequestFilter {
                 nonceKey, "1", TIMESTAMP_WINDOW_MS * 2, TimeUnit.MILLISECONDS);
         if (!Boolean.TRUE.equals(firstSeen)) {
             log.warn("[internal] nonce 复用: {}", nonce);
+            ecosystemMetrics.recordInternalApiCall(serviceId, "duplicate_nonce");
             reject(response, HttpStatus.CONFLICT, "DUPLICATE_NONCE", "请求重复");
             return;
         }
@@ -117,6 +131,7 @@ public class InternalServiceFilter extends OncePerRequestFilter {
         String expectedSig;
         try {
             expectedSig = computeSignature(
+                    serviceSecrets.get(serviceId),
                     request.getMethod(),
                     request.getRequestURI(),
                     tsHeader,
@@ -125,6 +140,7 @@ public class InternalServiceFilter extends OncePerRequestFilter {
             );
         } catch (Exception e) {
             log.error("[internal] 计算签名失败", e);
+            ecosystemMetrics.recordInternalApiCall(serviceId, "sign_fail");
             reject(response, HttpStatus.INTERNAL_SERVER_ERROR, "SIGN_FAIL", "签名计算异常");
             return;
         }
@@ -132,15 +148,17 @@ public class InternalServiceFilter extends OncePerRequestFilter {
         if (!constantTimeEquals(expectedSig, signature.toLowerCase(Locale.ROOT))) {
             log.warn("[internal] 签名不匹配: uri={}, expected={}, got={}",
                     request.getRequestURI(), expectedSig, signature);
+            ecosystemMetrics.recordInternalApiCall(serviceId, "bad_signature");
             reject(response, HttpStatus.UNAUTHORIZED, "BAD_SIGNATURE", "签名校验失败");
             return;
         }
 
+        ecosystemMetrics.recordInternalApiCall(serviceId, "ok");
         request.setAttribute("internal.serviceId", serviceId);
         chain.doFilter(cached, response);
     }
 
-    private String computeSignature(String method, String path, String timestamp, String nonce, String body)
+    private String computeSignature(String secret, String method, String path, String timestamp, String nonce, String body)
             throws NoSuchAlgorithmException, UnsupportedEncodingException,
             java.security.InvalidKeyException {
         String bodyHash = sha256Hex(body == null ? "" : body);
@@ -152,7 +170,7 @@ public class InternalServiceFilter extends OncePerRequestFilter {
                 bodyHash
         );
         Mac mac = Mac.getInstance("HmacSHA256");
-        mac.init(new SecretKeySpec(shopSecret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+        mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
         byte[] sig = mac.doFinal(payload.getBytes(StandardCharsets.UTF_8));
         return toHex(sig);
     }
