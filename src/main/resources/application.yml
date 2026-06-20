@@ -197,6 +197,8 @@ internal:
   service:
     # 与 zdc-shop 共享的 HMAC 密钥;子站 .env 中 SHOP_SERVICE_SECRET 必须一致
     shop-secret: ${SHOP_SERVICE_SECRET:dev-shop-service-secret-CHANGE_ME_at_least_16_chars}
+    # 与 campus-lottery-station 共享的 HMAC 密钥;抽奖站 LOTTERY_SERVICE_SECRET 必须一致
+    lottery-secret: ${LOTTERY_SERVICE_SECRET:dev-lottery-service-secret-CHANGE_ME_at_least_16_chars}
 
 # 6.Web Url 配置
 Web:

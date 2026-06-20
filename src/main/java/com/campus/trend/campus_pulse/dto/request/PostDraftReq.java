@@ -3,6 +3,7 @@ package com.campus.trend.campus_pulse.dto.request;
 import com.campus.trend.campus_pulse.dto.media.MediaObject;
 import lombok.Data;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 /**
@@ -20,5 +21,8 @@ public class PostDraftReq {
     private String coverImage;
     private String tags;
     private Integer isAnonymous;
+    private String postType;
+    private LocalDateTime commentDeadline;
+    private Boolean commentOncePerUser;
     private String locationName;
 }

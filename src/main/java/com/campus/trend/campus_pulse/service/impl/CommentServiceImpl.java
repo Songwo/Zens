@@ -39,6 +39,8 @@ public class CommentServiceImpl extends ServiceImpl<CommentMapper, Comment> impl
     private static final String AUDIT_STATUS_PENDING = "PENDING";
     private static final String AUDIT_STATUS_APPROVED = "APPROVED";
     private static final String AUDIT_STATUS_DELETED = "DELETED";
+    private static final String AUDIT_STATUS_REJECTED = "REJECTED";
+    private static final String POST_TYPE_LOTTERY = "LOTTERY";
     private static final long COMMENT_RESTORE_GRACE_DAYS = 3L;
     private static final Pattern MENTION_PATTERN = Pattern.compile("@([\\p{IsHan}A-Za-z0-9_.-]{2,32})");
 
@@ -67,6 +69,7 @@ public class CommentServiceImpl extends ServiceImpl<CommentMapper, Comment> impl
         if (!isCommentablePost(post)) {
             throw new BusinessException(ResultCode.NO_PERMISSION, "该帖子当前不可评论");
         }
+        validateLotteryCommentRules(post, request, userId);
 
         Comment comment = new Comment();
         comment.setPostId(request.getPostId());
@@ -90,7 +93,7 @@ public class CommentServiceImpl extends ServiceImpl<CommentMapper, Comment> impl
         this.save(comment);
 
         Set<String> alreadyMentionedUserIds = new HashSet<>();
-        post.setCommentCount(post.getCommentCount() + 1);
+        post.setCommentCount((post.getCommentCount() == null ? 0 : post.getCommentCount()) + 1);
         // Song：更新最后回复时间和最后活跃时间
         LocalDateTime now = LocalDateTime.now();
         post.setLastReplyAt(now);
@@ -487,6 +490,37 @@ public class CommentServiceImpl extends ServiceImpl<CommentMapper, Comment> impl
 
     private boolean isCommentablePost(Post post) {
         return isPubliclyVisiblePost(post);
+    }
+
+    private void validateLotteryCommentRules(Post post, CommentCreateReq request, String userId) {
+        if (post == null || !POST_TYPE_LOTTERY.equalsIgnoreCase(post.getPostType())) {
+            return;
+        }
+
+        if (!StringUtils.hasText(userId)) {
+            throw new BusinessException(ResultCode.LOGIN_EXPIRED, "抽奖贴需要登录后才能评论");
+        }
+
+        if (Integer.valueOf(1).equals(request.getIsAnonymous())) {
+            throw new BusinessException(ResultCode.NO_PERMISSION, "抽奖贴不支持匿名评论，请以当前账号参与");
+        }
+
+        if (post.getCommentDeadline() != null && LocalDateTime.now().isAfter(post.getCommentDeadline())) {
+            throw new BusinessException(ResultCode.NO_PERMISSION, "该抽奖贴已截止评论");
+        }
+
+        if (Integer.valueOf(1).equals(post.getCommentOncePerUser())) {
+            Long existingCount = lambdaQuery()
+                    .eq(Comment::getPostId, post.getId())
+                    .eq(Comment::getUserId, userId)
+                    .and(w -> w.isNull(Comment::getAuditStatus)
+                            .or()
+                            .notIn(Comment::getAuditStatus, List.of(AUDIT_STATUS_DELETED, AUDIT_STATUS_REJECTED)))
+                    .count();
+            if (existingCount != null && existingCount > 0) {
+                throw new BusinessException(ResultCode.NO_PERMISSION, "该抽奖贴每个账号只能评论参与一次");
+            }
+        }
     }
 
     private boolean canViewHiddenPostComments(String currentUserId, Post post) {

@@ -8,6 +8,7 @@ import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Getter
@@ -57,6 +58,21 @@ public class PostCreateReq {
      * Song：是否匿名 1:是 0:否
      */
     private Integer isAnonymous;
+
+    /**
+     * 帖子类型：NORMAL 普通帖 / LOTTERY 抽奖帖。
+     */
+    private String postType;
+
+    /**
+     * 抽奖帖评论截止时间；为空表示不限制。
+     */
+    private LocalDateTime commentDeadline;
+
+    /**
+     * 抽奖帖是否限制每个用户只能评论一次。
+     */
+    private Boolean commentOncePerUser;
 
     private String locationName;
 

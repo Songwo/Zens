@@ -27,6 +27,9 @@ public class PostResp implements Serializable {
     private List<String> images;
     private String tags;
     private Integer isAnonymous;
+    private String postType;
+    private LocalDateTime commentDeadline;
+    private Integer commentOncePerUser;
 
     /**
      * Song：旧的置顶字段（已废弃）

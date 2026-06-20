@@ -135,6 +135,13 @@ jwt:
   remember-refresh-multiplier: ${JWT_REMEMBER_REFRESH_MULTIPLIER:4}
   sliding-renew-threshold: ${JWT_SLIDING_RENEW_THRESHOLD:900000}
 
+# 内部 s2s API 配置 (供 zdc-shop / campus-lottery-station 等 Zens 子站调用)
+# 生产环境强制由环境变量注入,无默认值
+internal:
+  service:
+    shop-secret: ${SHOP_SERVICE_SECRET}
+    lottery-secret: ${LOTTERY_SERVICE_SECRET}
+
 Web:
   AvatarUrl: ${AVATAR_BASE_URL}
 

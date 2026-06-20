@@ -284,10 +284,10 @@ public class AuthServiceImpl implements AuthService {
         User user = account.contains("@")
                 ? userService.lambdaQuery().eq(User::getEmail, account).one()
                 : userService.lambdaQuery().eq(User::getUsername, account).one();
-        if (user == null) throw new LoginException("账号不存在，请检查后重试");
+        if (user == null) throw new LoginException("用户名或密码错误");
         if (!passwordEncoder.matches(password, user.getPassword())) {
             trackLoginFailure(user.getId());
-            throw new LoginException("密码错误");
+            throw new LoginException("用户名或密码错误");
         }
         return user;
     }

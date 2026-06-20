@@ -52,6 +52,21 @@ public class Post implements Serializable {
      */
     private Integer isAnonymous;
 
+    /**
+     * 帖子类型：NORMAL 普通帖 / LOTTERY 抽奖帖。
+     */
+    private String postType;
+
+    /**
+     * 抽奖帖评论截止时间；为空表示不限制。
+     */
+    private LocalDateTime commentDeadline;
+
+    /**
+     * 抽奖帖是否限制每个用户只能评论一次。
+     */
+    private Integer commentOncePerUser;
+
     private String locationName;
 
     /**

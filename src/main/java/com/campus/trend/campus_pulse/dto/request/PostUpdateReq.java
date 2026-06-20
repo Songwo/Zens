@@ -4,6 +4,7 @@ import com.campus.trend.campus_pulse.dto.media.MediaObject;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Data
@@ -22,6 +23,9 @@ public class PostUpdateReq {
     private String tags; // Song：说明
     private Long sectionId;
     private Integer isAnonymous;
+    private String postType;
+    private LocalDateTime commentDeadline;
+    private Boolean commentOncePerUser;
     private String locationName;
     private Integer status;
     private Boolean publish;

@@ -264,6 +264,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         proFileResponse.setBio(sysUser.getBio());
         proFileResponse.setMajor(sysUser.getMajor());
         proFileResponse.setLevel(sysUser.getLevel() != null ? sysUser.getLevel() : 1);
+        proFileResponse.setPoints(sysUser.getPoints() != null ? sysUser.getPoints() : 0);
         proFileResponse.setEnrollmentYear(sysUser.getEnrollmentYear() != null ? sysUser.getEnrollmentYear() : 0);
         proFileResponse.setGender(sysUser.getGender());
         proFileResponse.setSchool(sysUser.getSchool());
@@ -352,7 +353,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    @CacheEvict(value = "user:info", key = "#updateUserDetailRequest.userId != null ? #updateUserDetailRequest.userId : @securityUtils.getCurrentUserId()")
+    @CacheEvict(value = "user:info", key = "T(com.campus.trend.campus_pulse.utils.SecurityUtils).getCurrentUserId()")
     public void updateUserDetails(UserDetailUpdateReq updateUserDetailRequest) {
         // Song：1.获取当前用户
         AuthUser auUser = SecurityUtils.getAuthenticatedUser();

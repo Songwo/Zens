@@ -76,6 +76,8 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
     private static final String AUDIT_STATUS_APPROVED = "APPROVED";
     private static final String AUDIT_STATUS_REJECTED = "REJECTED";
     private static final String AUDIT_STATUS_DELETED = "DELETED";
+    private static final String POST_TYPE_NORMAL = "NORMAL";
+    private static final String POST_TYPE_LOTTERY = "LOTTERY";
     private static final int RESTORE_GRACE_DAYS = 7;
 
     private final PostLikeService postLikeService;
@@ -205,6 +207,11 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
         sysPost.setSentimentScore(BigDecimal.valueOf(sentimentScore));
 
         sysPost.setIsAnonymous(createPostRequest.getIsAnonymous());
+        applyPostTypeRules(
+                sysPost,
+                createPostRequest.getPostType(),
+                createPostRequest.getCommentDeadline(),
+                createPostRequest.getCommentOncePerUser());
         sysPost.setLocationName(createPostRequest.getLocationName());
 
         // Song：新版媒体字段优先：若前端传了 mediaList，回填 images/coverImage 以兼容老列表接口。
@@ -593,6 +600,18 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
         if (request.getIsAnonymous() != null) {
             post.setIsAnonymous(request.getIsAnonymous());
         }
+        String requestedPostType = request.getPostType() != null ? request.getPostType() : post.getPostType();
+        boolean switchingToLottery = POST_TYPE_LOTTERY.equals(normalizePostType(requestedPostType))
+                && !POST_TYPE_LOTTERY.equalsIgnoreCase(post.getPostType());
+        applyPostTypeRules(
+                post,
+                requestedPostType,
+                request.getCommentDeadline() != null ? request.getCommentDeadline() : post.getCommentDeadline(),
+                request.getCommentOncePerUser() != null
+                        ? request.getCommentOncePerUser()
+                        : switchingToLottery
+                        ? Boolean.TRUE
+                        : Integer.valueOf(1).equals(post.getCommentOncePerUser()));
         if (StringUtils.hasText(request.getLocationName())) {
             post.setLocationName(request.getLocationName());
         }
@@ -888,6 +907,9 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
                 Post::getCoverImage,
                 Post::getTags,
                 Post::getIsAnonymous,
+                Post::getPostType,
+                Post::getCommentDeadline,
+                Post::getCommentOncePerUser,
                 Post::getStatus,
                 Post::getAuditStatus,
                 Post::getIsPinned,
@@ -1381,6 +1403,9 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
         response.setTags(post.getTags());
         response.setSummary(post.getSummary());
         response.setIsAnonymous(post.getIsAnonymous());
+        response.setPostType(post.getPostType());
+        response.setCommentDeadline(post.getCommentDeadline());
+        response.setCommentOncePerUser(post.getCommentOncePerUser());
         response.setIsPinned(post.getIsPinned());
         response.setLocationName(post.getLocationName());
         response.setStatus(post.getStatus());
@@ -1653,6 +1678,13 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
         post.setCoverImage(StringUtils.hasText(draftRequest.getCoverImage()) ? draftRequest.getCoverImage().trim() : null);
         post.setTags(normalizeTags(draftRequest.getTags()));
         post.setIsAnonymous(draftRequest.getIsAnonymous() != null ? draftRequest.getIsAnonymous() : 0);
+        applyPostTypeRules(
+                post,
+                draftRequest.getPostType() != null ? draftRequest.getPostType() : post.getPostType(),
+                draftRequest.getCommentDeadline() != null ? draftRequest.getCommentDeadline() : post.getCommentDeadline(),
+                draftRequest.getCommentOncePerUser() != null
+                        ? draftRequest.getCommentOncePerUser()
+                        : Integer.valueOf(1).equals(post.getCommentOncePerUser()));
         post.setLocationName(StringUtils.hasText(draftRequest.getLocationName()) ? draftRequest.getLocationName().trim() : null);
         post.setSummary(buildSummary(post.getContent()));
 
@@ -1986,6 +2018,16 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
         if (StringUtils.hasText(request.getTags()) && !Objects.equals(post.getTags(), normalizeTags(request.getTags()))) {
             return true;
         }
+        if (StringUtils.hasText(request.getPostType()) && !Objects.equals(post.getPostType(), normalizePostType(request.getPostType()))) {
+            return true;
+        }
+        if (request.getCommentDeadline() != null && !Objects.equals(post.getCommentDeadline(), request.getCommentDeadline())) {
+            return true;
+        }
+        if (request.getCommentOncePerUser() != null
+                && !Objects.equals(Integer.valueOf(Boolean.TRUE.equals(request.getCommentOncePerUser()) ? 1 : 0), post.getCommentOncePerUser())) {
+            return true;
+        }
         return request.getMediaList() != null || StringUtils.hasText(request.getImages());
     }
 
@@ -2061,6 +2103,35 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
             return true;
         }
         return sectionId != null && sectionModeratorService.isSectionModerator(userId, sectionId);
+    }
+
+    private void applyPostTypeRules(Post post,
+                                    String requestedPostType,
+                                    LocalDateTime commentDeadline,
+                                    Boolean commentOncePerUser) {
+        String postType = normalizePostType(requestedPostType);
+        post.setPostType(postType);
+
+        if (POST_TYPE_LOTTERY.equals(postType)) {
+            post.setIsAnonymous(0);
+            post.setCommentDeadline(commentDeadline);
+            post.setCommentOncePerUser(Boolean.FALSE.equals(commentOncePerUser) ? 0 : 1);
+            return;
+        }
+
+        post.setCommentDeadline(null);
+        post.setCommentOncePerUser(0);
+    }
+
+    private String normalizePostType(String rawType) {
+        if (!StringUtils.hasText(rawType)) {
+            return POST_TYPE_NORMAL;
+        }
+        String normalized = rawType.trim().toUpperCase(java.util.Locale.ROOT);
+        if (POST_TYPE_LOTTERY.equals(normalized)) {
+            return POST_TYPE_LOTTERY;
+        }
+        return POST_TYPE_NORMAL;
     }
 
 }
