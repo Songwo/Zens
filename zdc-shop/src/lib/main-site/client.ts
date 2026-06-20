@@ -8,6 +8,7 @@ import { buildSignedHeaders } from "./hmac";
  */
 
 const BASE = (process.env.MAIN_SITE_BACKEND_URL || "http://localhost:7800").replace(/\/$/, "");
+const SUCCESS_CODES = new Set([0, 200, 2000]);
 
 export interface PointsInfo {
   userId: string;
@@ -30,6 +31,27 @@ export interface ConsumeResult {
   reason: string;
   orderId: string;
   idempotencyKey: string;
+}
+
+export interface SubsiteNotificationRequest {
+  source: string;
+  title: string;
+  content: string;
+  relatedId?: string;
+}
+
+export interface SubsiteEventRequest {
+  eventId: string;
+  source: string;
+  eventType: string;
+  userId?: string;
+  title: string;
+  content: string;
+  relatedId?: string;
+  severity?: "info" | "success" | "warning" | "danger" | "error" | "default";
+  status?: string;
+  notifyUser?: boolean;
+  payload?: Record<string, unknown>;
 }
 
 export class MainSiteApiError extends Error {
@@ -68,25 +90,35 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
 
   if (!res.ok) {
     const d = (data || {}) as Record<string, unknown>;
+    const message = (d.message as string) || res.statusText || "主站调用失败";
     throw new MainSiteApiError(
-      (d.code as string) || `HTTP_${res.status}`,
-      (d.message as string) || res.statusText || "主站调用失败",
+      resolveErrorCode(d.code, message, `HTTP_${res.status}`),
+      message,
       res.status
     );
   }
   // 主站走的是 Result<T> 风格的统一包装
   const wrapped = data as { code?: number; data?: T; message?: string };
   if (wrapped && typeof wrapped === "object" && "code" in wrapped && "data" in wrapped) {
-    if (wrapped.code && wrapped.code !== 200 && wrapped.code !== 0) {
+    if (typeof wrapped.code === "number" && !SUCCESS_CODES.has(wrapped.code)) {
+      const message = wrapped.message || "主站返回业务错误";
       throw new MainSiteApiError(
-        String(wrapped.code),
-        wrapped.message || "主站返回业务错误",
+        resolveErrorCode(wrapped.code, message, String(wrapped.code)),
+        message,
         res.status
       );
     }
     return wrapped.data as T;
   }
   return data as T;
+}
+
+function resolveErrorCode(rawCode: unknown, message: string, fallback: string) {
+  const messageCode = /^([A-Z][A-Z0-9_]+):/.exec(message)?.[1];
+  if (messageCode) return messageCode;
+  if (typeof rawCode === "string" && rawCode.trim()) return rawCode;
+  if (typeof rawCode === "number") return String(rawCode);
+  return fallback;
 }
 
 export async function fetchPoints(userId: string): Promise<PointsInfo> {
@@ -122,4 +154,23 @@ export async function creditPoints(
     `/api/internal/user/${encodeURIComponent(userId)}/points/credit`,
     req
   );
+}
+
+export async function sendSubsiteNotification(
+  userId: string,
+  req: SubsiteNotificationRequest
+): Promise<void> {
+  if (!userId) throw new MainSiteApiError("INVALID_USER", "userId 必填", 400);
+  await call<void>(
+    "POST",
+    `/api/internal/user/${encodeURIComponent(userId)}/notifications`,
+    req
+  );
+}
+
+export async function sendSubsiteEvent(req: SubsiteEventRequest): Promise<void> {
+  if (!req.eventId) throw new MainSiteApiError("INVALID_EVENT", "eventId 必填", 400);
+  if (!req.source) throw new MainSiteApiError("INVALID_EVENT", "source 必填", 400);
+  if (!req.eventType) throw new MainSiteApiError("INVALID_EVENT", "eventType 必填", 400);
+  await call<void>("POST", "/api/internal/subsite/events", req);
 }

@@ -137,6 +137,11 @@ export default async function OrdersPage() {
                           失败原因: {o.failureReason}
                         </p>
                       )}
+                      {o.status === "REFUNDED" && (
+                        <p className="text-xs text-muted">
+                          积分已退回主站账户，可在 Zens 福利中心查看流水。
+                        </p>
+                      )}
                     </div>
                     <div className="sm:text-right">
                       <div className="flex items-baseline gap-1.5 font-mono tabular-nums sm:justify-end">

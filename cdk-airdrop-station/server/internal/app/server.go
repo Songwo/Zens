@@ -67,6 +67,7 @@ func New(cfg config.Config, stateStore *store.Store, logger *slog.Logger) *http.
 	mux.HandleFunc("/api/auth/community-shortcut", handler.AuthCommunityShortcut)
 	mux.HandleFunc("/api/auth/community-login", handler.AuthCommunityLogin)
 	mux.HandleFunc("/api/auth/community-config", handler.AuthCommunityConfig)
+	mux.HandleFunc("/api/auth/community-logout", handler.AuthCommunityLogout)
 
 	// UGC 福利系统 API
 	welfareStore, err := store.NewWelfareStore(cfg.DataFile, cfg.RedisURL, cfg.RabbitMQURL)

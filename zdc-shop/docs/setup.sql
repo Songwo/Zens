@@ -30,19 +30,23 @@ INSERT IGNORE INTO `sys_sso_client` (
   -- 此 secret 在当前 SSO 流程里不参与签名(用 jwt.secret),先随便填一个随机串
   -- 后续如果接 PKCE/OAuth2 再使用
   REPLACE(UUID(), '-', ''),
-  'http://localhost:3000/login/callback',
+  'https://shop.allinsong.top/login/callback, https://mall.allinsong.top/login/callback, https://points.allinsong.top/login/callback, https://zdc-shop.allinsong.top/login/callback, http://localhost:3000/login/callback, http://127.0.0.1:3000/login/callback, http://localhost:3001/login/callback, http://127.0.0.1:3001/login/callback',
   '使用 Zens 社区积分兑换虚拟物品的子站',
-  'http://localhost:3000/favicon.svg',
+  '/logo.png',
   1,
   NOW(),
   NOW()
 );
 
--- 生产域名 (注意: 当前 SsoClientService.validateClient 是精确匹配 redirect_uri,
--- 若需要同时支持 dev + prod 两个 URI, 需要改主站 service 允许多个,或者上线时再
--- UPDATE 一次)。先放生产 URI 的引导 SQL 在这里:
--- UPDATE sys_sso_client SET redirect_uri = 'https://shop.allinsong.top/login/callback'
--- WHERE client_id = 'zdc-shop';
+-- 如果表里已经存在旧的 zdc-shop 记录,可直接用下面这条修复本地/生产回调白名单:
+UPDATE `sys_sso_client`
+SET
+  `client_name` = 'Zens 积分商城',
+  `redirect_uri` = 'https://shop.allinsong.top/login/callback, https://mall.allinsong.top/login/callback, https://points.allinsong.top/login/callback, https://zdc-shop.allinsong.top/login/callback, http://localhost:3000/login/callback, http://127.0.0.1:3000/login/callback, http://localhost:3001/login/callback, http://127.0.0.1:3001/login/callback',
+  `description` = 'Zens 社区积分商城，使用主站账号单点登录并同步积分权益。',
+  `logo_url` = '/logo.png',
+  `enabled` = 1
+WHERE `client_id` = 'zdc-shop';
 
 -- ────── 3. (DEV 可选) 给测试账号灌点积分 ────────────────────────────
 --  sys_user.points 在主站现有业务里没有写入逻辑,新账号 points = 0 / NULL。

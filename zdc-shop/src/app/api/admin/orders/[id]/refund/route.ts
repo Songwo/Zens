@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { randomBytes } from "node:crypto";
 import { requireAdmin } from "@/lib/auth/admin-guard";
 import { prisma } from "@/lib/db";
-import { creditPoints, MainSiteApiError } from "@/lib/main-site/client";
+import { creditPoints, MainSiteApiError, sendSubsiteEvent } from "@/lib/main-site/client";
 
 interface RouteCtx {
   params: Promise<{ id: string }>;
@@ -13,7 +12,7 @@ interface RouteCtx {
  *
  * 把订单标记 REFUNDED 并把积分原路返还到主站。
  * 限制:
- *   - 只有 DELIVERED 或 PENDING 状态可退
+ *   - 只有 DELIVERED 状态可退; PENDING/FAILED 订单通常没有完成权益发放,由下单自动补偿处理
  *   - 兑换码会标 consumedBy=null 重新可用(若有)
  *   - 退款幂等: idempotencyKey = "refund:" + orderId
  */
@@ -25,9 +24,14 @@ export async function POST(_: NextRequest, ctx: RouteCtx) {
   const order = await prisma.order.findUnique({ where: { id } });
   if (!order) return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
   if (order.status === "REFUNDED") {
-    return NextResponse.json({ error: "ALREADY_REFUNDED" }, { status: 409 });
+    return NextResponse.json({
+      ok: true,
+      refundedPoints: order.pricePoints,
+      orderId: order.id,
+      note: "订单已退款",
+    });
   }
-  if (order.status !== "DELIVERED" && order.status !== "PENDING") {
+  if (order.status !== "DELIVERED") {
     return NextResponse.json(
       { error: "INVALID_STATE", message: `当前状态 ${order.status} 不可退款` },
       { status: 409 }
@@ -35,7 +39,7 @@ export async function POST(_: NextRequest, ctx: RouteCtx) {
   }
 
   // 1) 主站返还积分
-  const idempotencyKey = "refund:" + order.id + ":" + randomBytes(6).toString("hex");
+  const idempotencyKey = "shop:refund:" + order.id;
   try {
     await creditPoints(order.userId, {
       amount: order.pricePoints,
@@ -74,6 +78,28 @@ export async function POST(_: NextRequest, ctx: RouteCtx) {
       data: { stock: { increment: 1 } },
     }),
   ]);
+
+  try {
+    await sendSubsiteEvent({
+      eventId: `shop:order:${order.id}:manual-refunded`,
+      source: "zdc-shop",
+      eventType: "shop.order.manual_refunded",
+      userId: order.userId,
+      title: "商城订单已退款",
+      content: `订单 ${order.id.slice(0, 8)} 已退回 ${order.pricePoints} pts 到你的主站积分账户。`,
+      relatedId: `zdc-shop:order:${order.id}`,
+      severity: "warning",
+      status: "refunded",
+      notifyUser: true,
+      payload: {
+        orderId: order.id,
+        pricePoints: order.pricePoints,
+        refundedBy: guard.session?.userId || "admin",
+      },
+    });
+  } catch (e) {
+    console.warn("[admin/refund] 主站事件回流失败:", (e as Error).message);
+  }
 
   return NextResponse.json({
     ok: true,

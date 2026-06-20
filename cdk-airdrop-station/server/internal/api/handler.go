@@ -911,12 +911,13 @@ func (h *Handler) AuthCommunityLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 解析社区 SSO Token（使用相同密钥）
-	secretStr := os.Getenv("CDK_COMMUNITY_JWT_SECRET")
-	if secretStr == "" {
-		secretStr = "zf3sg4ikVorzR1S/cel4+o/VkQH+4LZxU8RkX0c0Ne6BFPf9NnPL09AoHSK9Zg95"
+	// 解析社区 SSO Token（使用与主站相同的 JWT 密钥）
+	secret, ok := communityJWTSecret()
+	if !ok {
+		// 绝不内置兜底密钥：缺配置直接拒绝，避免共享密钥落进源码/历史。
+		writeError(w, model.NewAppError(http.StatusInternalServerError, "INVALID_CONFIG", "服务未配置 CDK_COMMUNITY_JWT_SECRET，无法验证 SSO Token"))
+		return
 	}
-	secret := []byte(secretStr)
 	token, err := jwt.Parse(req.SsoToken, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method")
@@ -938,6 +939,17 @@ func (h *Handler) AuthCommunityLogin(w http.ResponseWriter, r *http.Request) {
 	if ssoFlag, _ := claims["sso"].(bool); !ssoFlag {
 		writeError(w, model.NewAppError(http.StatusUnauthorized, "NOT_SSO_TOKEN", "该 Token 不是 SSO 授权 Token"))
 		return
+	}
+
+	// 验证 client_id：token 必须是颁发给本站的，拒绝其它子站（如 zdc-shop）的 SSO token。
+	// 与 lottery（main.go userFromSSOToken）、shop（sso.ts verifySsoToken）对齐。
+	if expectedClientID := strings.TrimSpace(h.communityClientID); expectedClientID != "" {
+		tokenClientID, _ := claims["client_id"].(string)
+		if tokenClientID != expectedClientID {
+			writeError(w, model.NewAppError(http.StatusUnauthorized, "WRONG_CLIENT",
+				fmt.Sprintf("Token 不是颁发给本站的（期望 %s，实际 %s）", expectedClientID, tokenClientID)))
+			return
+		}
 	}
 
 	// 提取用户信息
@@ -997,13 +1009,28 @@ func (h *Handler) AuthCommunityConfig(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// AuthCommunityLogout 单点登出(SLO)前端通道端点。
+// 主站登出时用隐藏 iframe GET 加载本端点;因 token 存于本站 localStorage,
+// 这里返回一小段在 cdk 源内执行的 HTML 清掉它,实现跨站登出。
+func (h *Handler) AuthCommunityLogout(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte(`<!doctype html><html><head><meta charset="utf-8"><title>logout</title></head><body><script>
+try{['cdk_token','token','access_token'].forEach(function(k){localStorage.removeItem(k);});}catch(e){}
+</script></body></html>`))
+}
+
 func (h *Handler) parseJWTUser(r *http.Request) (string, string) {
 	authHeader := r.Header.Get("Authorization")
 	if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
 		return "", ""
 	}
 	tokenString := authHeader[7:]
-	secret := []byte("zf3sg4ikVorzR1S/cel4+o/VkQH+4LZxU8RkX0c0Ne6BFPf9NnPL09AoHSK9Zg95")
+	secret, ok := communityJWTSecret()
+	if !ok {
+		return "", ""
+	}
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method")
@@ -1053,8 +1080,20 @@ func (h *Handler) requireAdminRole(w http.ResponseWriter, r *http.Request) bool 
 
 func (h *Handler) generateJWT(userID, username string) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{"sub": userID, "username": username, "exp": time.Now().Add(24 * time.Hour).Unix()})
-	secret := []byte("zf3sg4ikVorzR1S/cel4+o/VkQH+4LZxU8RkX0c0Ne6BFPf9NnPL09AoHSK9Zg95")
+	secret, ok := communityJWTSecret()
+	if !ok {
+		return "", fmt.Errorf("CDK_COMMUNITY_JWT_SECRET 未配置，无法签发会话令牌")
+	}
 	return token.SignedString(secret)
+}
+
+// communityJWTSecret 从环境变量解析 JWT 密钥，绝不内置兜底密钥（避免共享密钥落进源码/历史）。
+func communityJWTSecret() ([]byte, bool) {
+	s := os.Getenv("CDK_COMMUNITY_JWT_SECRET")
+	if s == "" {
+		return nil, false
+	}
+	return []byte(s), true
 }
 
 func devLoginAllowed(r *http.Request) bool {

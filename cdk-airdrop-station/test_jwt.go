@@ -2,12 +2,25 @@ package main
 
 import (
 	"fmt"
+	"os"
+
 	"github.com/golang-jwt/jwt/v5"
 )
 
 func main() {
-	secret := []byte("zf3sg4ikVorzR1S/cel4+o/VkQH+4LZxU8RkX0c0Ne6BFPf9NnPL09AoHSK9Zg95")
-	ssoToken := "eyJhbGciOiJIUzUxMiJ9.eyJzY2hvb2wiOiLmnKzmoKEiLCJsZXZlbCI6Miwicm9sZXMiOlsiUk9MRV9TVVBFUl9BRE1JTiJdLCJuaWNrbmFtZSI6InplbnMiLCJhdmF0YXIiOiJodHRwczovL2FsbGluc29uZy50b3Avc3RhdGljL2F2YXRhci85NTI1OTQ2My1hNjQ3LTQ4ZjYtOWZkOS0zNWQ2YTczM2RkMDIuanBnIiwiZW1haWwiOiJoaXJsZXkzQHNvbmdib2tlLnVzLmtnIiwic3NvIjp0cnVlLCJjbGllbnRfaWQiOiJjZGstYWlyZHJvcCIsInVzZXJuYW1lIjoiU29uZyIsInN1YiI6IjIwMjcyMzExNjczMDcyMTQ4NTAiLCJpYXQiOjE3Nzg3Mjg3MTYsImV4cCI6MTc3ODcyOTAxNn0.P5AYDqbMvmKAK_SL1tJecVHolPFmyCeSrg2mpkU4RC-KXdsKmb24oR0trRbef7Yc6Y72odAsCMikfNpffaLurA"
+	// 调试脚本：密钥与待验 token 从环境变量读取，不再硬编码明文。
+	//   CDK_COMMUNITY_JWT_SECRET=... CDK_DEBUG_SSO_TOKEN=... go run test_jwt.go
+	secretStr := os.Getenv("CDK_COMMUNITY_JWT_SECRET")
+	if secretStr == "" {
+		fmt.Println("请设置 CDK_COMMUNITY_JWT_SECRET")
+		return
+	}
+	secret := []byte(secretStr)
+	ssoToken := os.Getenv("CDK_DEBUG_SSO_TOKEN")
+	if ssoToken == "" {
+		fmt.Println("请设置 CDK_DEBUG_SSO_TOKEN")
+		return
+	}
 	token, err := jwt.Parse(ssoToken, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method")

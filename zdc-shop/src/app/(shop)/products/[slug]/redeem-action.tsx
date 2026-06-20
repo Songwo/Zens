@@ -146,9 +146,9 @@ function ConfirmDialog({
         type="button"
         onClick={onCancel}
         aria-label="关闭"
-        className="absolute inset-0 bg-black/30 backdrop-blur-sm"
+        className="absolute inset-0 bg-ink/15 backdrop-blur-[2px]"
       />
-      <div className="relative w-full max-w-md animate-rise rounded-t-3xl bg-surface p-6 shadow-pop sm:rounded-3xl sm:p-8">
+      <div className="relative z-10 w-full max-w-md animate-rise rounded-t-3xl border border-divider bg-surface p-6 shadow-pop sm:rounded-3xl sm:p-8">
         <p className="eyebrow-brand">confirm · 确认兑换</p>
         <h3 className="mt-3 text-xl font-bold text-ink">{title}</h3>
         <p className="mt-2 text-sm text-muted">
