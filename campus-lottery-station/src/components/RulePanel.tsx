@@ -1,4 +1,5 @@
 import { AlertTriangle, Bot, CheckCircle2, ListChecks, ShieldCheck } from "lucide-react";
+import { AvatarMark } from "./AvatarMark";
 import type { BotAccount, PublishedComment } from "../types/lottery";
 
 type RulePanelProps = {
@@ -16,7 +17,7 @@ export function RulePanel({ botAccount, publishedComment }: RulePanelProps) {
         </div>
         <div className="space-y-3 text-sm leading-6 text-muted">
           <div className="flex items-center gap-3 rounded-lg border border-line bg-white px-3 py-3">
-            <span className="avatar-mark h-9 w-9">{botAccount?.avatar ?? "抽"}</span>
+            <AvatarMark value={botAccount?.avatar} fallback="抽" className="h-9 w-9" />
             <span className="min-w-0">
               <strong className="block truncate font-semibold text-ink">
                 {botAccount?.displayName ?? "Zens 抽奖机器人"}

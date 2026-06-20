@@ -1,4 +1,5 @@
 import { Bot, CheckCircle2, Copy, Download, Loader2, RefreshCcw, Send, ShieldCheck } from "lucide-react";
+import { AvatarMark } from "./AvatarMark";
 import { formatDateTime, formatFullDateTime } from "../lib/format";
 import type { BotAccount, DrawResult, PublishedComment } from "../types/lottery";
 
@@ -29,6 +30,8 @@ export function LotteryResult({
     return null;
   }
   const botName = botAccount?.displayName ?? "Zens 抽奖机器人";
+  const shortParticipantHash = result.participantHash ? `${result.participantHash.slice(0, 16)}...` : "";
+  const shortProof = result.proof ? `${result.proof.slice(0, 16)}...` : "";
 
   return (
     <section className="result-enter space-y-5 border-t border-line pt-7" aria-live="polite">
@@ -81,6 +84,28 @@ export function LotteryResult({
           </p>
         )}
       </div>
+      {(result.algorithm || result.participantHash || result.proof) && (
+        <div className="grid gap-2 rounded-lg border border-line bg-white px-4 py-3 text-xs text-muted sm:grid-cols-3">
+          {result.algorithm && (
+            <span className="min-w-0">
+              <strong className="block text-ink">算法</strong>
+              <span className="block truncate">{result.algorithm}</span>
+            </span>
+          )}
+          {result.participantHash && (
+            <span className="min-w-0">
+              <strong className="block text-ink">名单快照</strong>
+              <span className="block truncate">{shortParticipantHash}</span>
+            </span>
+          )}
+          {result.proof && (
+            <span className="min-w-0">
+              <strong className="block text-ink">结果证明</strong>
+              <span className="block truncate">{shortProof}</span>
+            </span>
+          )}
+        </div>
+      )}
 
       <ul className="divide-y divide-line rounded-lg border border-line bg-white">
         {result.winners.map((winner, index) => (
@@ -90,7 +115,7 @@ export function LotteryResult({
             style={{ animationDelay: `${index * 48}ms` }}
           >
             <div className="flex items-center gap-3">
-              <span className="avatar-mark">{winner.avatar ?? winner.displayName.slice(0, 1)}</span>
+              <AvatarMark value={winner.avatar} fallback={winner.displayName || winner.username} />
               <span className="grid h-7 w-7 place-items-center rounded-md bg-amber-soft text-sm font-semibold text-amber-ink">
                 {winner.rank}
               </span>

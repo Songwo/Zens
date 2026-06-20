@@ -70,6 +70,9 @@ export type Winner = Participant & {
 export type DrawResult = {
   drawId: string;
   seed: string;
+  algorithm?: string;
+  participantHash?: string;
+  proof?: string;
   participantCount: number;
   winners: Winner[];
 };
@@ -86,6 +89,9 @@ export type PublishResultPayload = {
   topicUrl: string;
   drawId: string;
   seed: string;
+  algorithm?: string;
+  participantHash?: string;
+  proof?: string;
   participantCount: number;
   winners: Winner[];
   botAccountId: string;

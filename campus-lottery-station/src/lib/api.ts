@@ -285,16 +285,30 @@ async function mockSyncComments(payload: SyncCommentsPayload): Promise<TopicPrev
 async function mockDraw(payload: DrawPayload): Promise<DrawResult> {
   await wait(760);
   const preview = await mockPreview(payload);
-  const seed = buildSeed(payload.topicUrl);
-  const winners = seededShuffle(preview.participants, seed)
+  const seed = buildSeed();
+  const algorithm = "zens-webcrypto-hmac-sha256-fisher-yates-dev-v1";
+  const participantHash = await hashJSON(
+    preview.participants.map((participant) => ({
+      id: participant.id,
+      username: participant.username,
+      displayName: participant.displayName,
+      floor: participant.floor,
+      repliedAt: participant.repliedAt,
+    })),
+  );
+  const winners = (await seededShuffle(preview.participants, seed, participantHash, algorithm))
     .slice(0, payload.winnerCount)
     .map((participant, index) => ({
       ...participant,
       rank: index + 1,
     }));
+  const proof = await hashJSON({ algorithm, seed, participantHash, winners });
   return {
     drawId: `zens-draw-${Date.now().toString(36)}`,
     seed,
+    algorithm,
+    participantHash,
+    proof,
     participantCount: preview.participantCount,
     winners,
   };
@@ -310,27 +324,78 @@ function extractTopicId(url: string): string {
   return match?.[1] ?? "1428";
 }
 
-function buildSeed(value: string): string {
-  let hash = 2166136261;
-  for (const char of value) {
-    hash ^= char.charCodeAt(0);
-    hash = Math.imul(hash, 16777619);
-  }
-  return `zens-${(hash >>> 0).toString(16)}-${new Date().toISOString().slice(0, 10)}`;
+function buildSeed(): string {
+  const bytes = new Uint8Array(32);
+  window.crypto.getRandomValues(bytes);
+  return `zens-${bytesToHex(bytes)}`;
 }
 
-function seededShuffle<T>(items: T[], seed: string): T[] {
+async function seededShuffle<T>(items: T[], seed: string, context: string, algorithm: string): Promise<T[]> {
   const output = [...items];
-  let state = 0;
-  for (const char of seed) {
-    state = (state * 31 + char.charCodeAt(0)) >>> 0;
-  }
+  const randomStream = await createRandomStream(seed, context, algorithm);
   for (let index = output.length - 1; index > 0; index -= 1) {
-    state = (1664525 * state + 1013904223) >>> 0;
-    const swapIndex = state % (index + 1);
+    const swapIndex = await randomStream.intn(index + 1);
     [output[index], output[swapIndex]] = [output[swapIndex], output[index]];
   }
   return output;
+}
+
+async function createRandomStream(seed: string, context: string, algorithm: string) {
+  const key = await window.crypto.subtle.importKey(
+    "raw",
+    hexToBytes(seed.replace(/^zens-/, "")),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  let counter = 0n;
+  return {
+    async intn(max: number) {
+      const limit = BigInt(max);
+      const uint64Max = (1n << 64n) - 1n;
+      const threshold = uint64Max - (uint64Max % limit);
+      for (;;) {
+        const block = await hmacBlock(key, algorithm, context, counter++);
+        const view = new DataView(block.buffer, block.byteOffset, block.byteLength);
+        const value = view.getBigUint64(0, false);
+        if (value < threshold) {
+          return Number(value % limit);
+        }
+      }
+    },
+  };
+}
+
+async function hmacBlock(key: CryptoKey, algorithm: string, context: string, counter: bigint) {
+  const counterBytes = new Uint8Array(8);
+  new DataView(counterBytes.buffer).setBigUint64(0, counter, false);
+  const payload = new Uint8Array([
+    ...new TextEncoder().encode(algorithm),
+    0,
+    ...new TextEncoder().encode(context),
+    0,
+    ...counterBytes,
+  ]);
+  const signature = await window.crypto.subtle.sign("HMAC", key, payload);
+  return new Uint8Array(signature);
+}
+
+async function hashJSON(value: unknown) {
+  const raw = new TextEncoder().encode(JSON.stringify(value));
+  const hash = await window.crypto.subtle.digest("SHA-256", raw);
+  return bytesToHex(new Uint8Array(hash));
+}
+
+function bytesToHex(bytes: Uint8Array) {
+  return [...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function hexToBytes(hex: string) {
+  const bytes = new Uint8Array(hex.length / 2);
+  for (let index = 0; index < bytes.length; index += 1) {
+    bytes[index] = Number.parseInt(hex.slice(index * 2, index * 2 + 2), 16);
+  }
+  return bytes;
 }
 
 function wait(ms: number) {

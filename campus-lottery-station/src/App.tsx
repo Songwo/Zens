@@ -51,6 +51,76 @@ const initialHistory: HistoryRecord[] = [
   },
 ];
 
+type PersistedWorkspace = {
+  form?: Partial<FormState>;
+  topic?: TopicPreviewData | null;
+  result?: DrawResult | null;
+  publishedComment?: PublishedComment | null;
+  history?: HistoryRecord[];
+  participantsVisible?: boolean;
+  updatedAt?: string;
+};
+
+const WORKSPACE_KEY = "zens-lottery:workspace:v1";
+const MAX_HISTORY_RECORDS = 20;
+
+function loadWorkspace(): PersistedWorkspace {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = window.localStorage.getItem(WORKSPACE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveWorkspace(workspace: PersistedWorkspace) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(
+      WORKSPACE_KEY,
+      JSON.stringify({
+        ...workspace,
+        history: workspace.history?.slice(0, MAX_HISTORY_RECORDS),
+        updatedAt: new Date().toISOString(),
+      }),
+    );
+  } catch {
+    // localStorage may be unavailable in privacy mode; the app can still run.
+  }
+}
+
+function clearWorkspace() {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(WORKSPACE_KEY);
+  } catch {
+    // Ignore storage failures during logout.
+  }
+}
+
+function restoreForm(form?: Partial<FormState>): FormState {
+  const winnerCount =
+    typeof form?.winnerCount === "number" && Number.isFinite(form.winnerCount)
+      ? Math.max(1, Math.min(50, Math.floor(form.winnerCount)))
+      : initialForm.winnerCount;
+  const maxFloor =
+    typeof form?.maxFloor === "number" && Number.isFinite(form.maxFloor) && form.maxFloor > 0
+      ? Math.floor(form.maxFloor)
+      : null;
+
+  return {
+    topicUrl: typeof form?.topicUrl === "string" ? form.topicUrl : initialForm.topicUrl,
+    winnerCount,
+    maxFloor,
+    excludeAuthor: typeof form?.excludeAuthor === "boolean" ? form.excludeAuthor : initialForm.excludeAuthor,
+    dedupeUser: typeof form?.dedupeUser === "boolean" ? form.dedupeUser : initialForm.dedupeUser,
+    replyOnly: typeof form?.replyOnly === "boolean" ? form.replyOnly : initialForm.replyOnly,
+  };
+}
+
 const defaultBotAccount: BotAccount = {
   id: "zens-lottery-bot",
   username: "zens-lottery-bot",
@@ -59,18 +129,37 @@ const defaultBotAccount: BotAccount = {
   status: "ready",
 };
 
+const ssoStatusMessage: Record<string, { type: "success" | "error"; text: string }> = {
+  ok: { type: "success", text: "社区账号已连接，可以开始同步评论和开奖。" },
+  "invalid-token": {
+    type: "error",
+    text: "主站授权令牌验证失败，请确认抽奖站的 COMMUNITY_JWT_SECRET 与主站 JWT_SECRET 完全一致，然后重新登录。",
+  },
+  "missing-code": { type: "error", text: "主站授权回调缺少登录凭证，请重新连接社区账号。" },
+  "bad-state": { type: "error", text: "主站授权状态校验失败，请重新连接社区账号。" },
+  "exchange-failed": { type: "error", text: "主站授权兑换失败，请检查 SSO 配置后重新登录。" },
+  access_denied: { type: "error", text: "已取消社区账号授权。" },
+};
+
 export default function App() {
-  const [form, setForm] = useState<FormState>(initialForm);
+  const [workspace] = useState<PersistedWorkspace>(() => loadWorkspace());
+  const [form, setForm] = useState<FormState>(() => restoreForm(workspace.form));
   const [user, setUser] = useState<CurrentUser | null>(null);
   const [communityBaseUrl, setCommunityBaseUrl] = useState("");
   const [logoUrl, setLogoUrl] = useState("/logo.png");
   const [ssoStartUrl, setSsoStartUrl] = useState("/api/auth/sso/start");
-  const [topic, setTopic] = useState<TopicPreviewData | null>(null);
-  const [result, setResult] = useState<DrawResult | null>(null);
+  const [topic, setTopic] = useState<TopicPreviewData | null>(() => workspace.topic ?? null);
+  const [result, setResult] = useState<DrawResult | null>(() => workspace.result ?? null);
   const [botAccount, setBotAccount] = useState<BotAccount | null>(defaultBotAccount);
-  const [publishedComment, setPublishedComment] = useState<PublishedComment | null>(null);
-  const [history, setHistory] = useState<HistoryRecord[]>(initialHistory);
-  const [participantsVisible, setParticipantsVisible] = useState(false);
+  const [publishedComment, setPublishedComment] = useState<PublishedComment | null>(
+    () => workspace.publishedComment ?? null,
+  );
+  const [history, setHistory] = useState<HistoryRecord[]>(
+    () => (workspace.history?.length ? workspace.history.slice(0, MAX_HISTORY_RECORDS) : initialHistory),
+  );
+  const [participantsVisible, setParticipantsVisible] = useState(() =>
+    Boolean(workspace.participantsVisible && workspace.topic),
+  );
   const [previewing, setPreviewing] = useState(false);
   const [autoPreviewing, setAutoPreviewing] = useState(false);
   const [syncingComments, setSyncingComments] = useState(false);
@@ -122,7 +211,45 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!isLoggedIn || form.topicUrl.trim().length < 12) {
+    const params = new URLSearchParams(window.location.search);
+    const ssoStatus = params.get("sso");
+    if (!ssoStatus) return;
+
+    const status = ssoStatusMessage[ssoStatus] || {
+      type: "error" as const,
+      text: `社区账号授权失败：${ssoStatus}`,
+    };
+    if (status.type === "success") {
+      setMessage(status.text);
+      setError("");
+    } else {
+      setError(status.text);
+      setMessage("");
+    }
+
+    params.delete("sso");
+    const nextQuery = params.toString();
+    const nextUrl = `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ""}${window.location.hash}`;
+    window.history.replaceState({}, "", nextUrl);
+  }, []);
+
+  useEffect(() => {
+    saveWorkspace({
+      form,
+      topic,
+      result,
+      publishedComment,
+      history,
+      participantsVisible: participantsVisible && Boolean(topic),
+    });
+  }, [form, history, participantsVisible, publishedComment, result, topic]);
+
+  useEffect(() => {
+    if (!isLoggedIn) {
+      return;
+    }
+
+    if (form.topicUrl.trim().length < 12) {
       setTopic(null);
       setParticipantsVisible(false);
       setResult(null);
@@ -277,6 +404,9 @@ export default function App() {
         topicUrl: form.topicUrl.trim(),
         drawId: result.drawId,
         seed: result.seed,
+        algorithm: result.algorithm,
+        participantHash: result.participantHash,
+        proof: result.proof,
         participantCount: result.participantCount,
         winners: result.winners,
         botAccountId: activeBotAccount.id,
@@ -322,9 +452,12 @@ export default function App() {
   async function handleLogout() {
     try {
       await logout();
+      clearWorkspace();
       setUser(null);
+      setForm(initialForm);
       setTopic(null);
       setResult(null);
+      setHistory(initialHistory);
       setParticipantsVisible(false);
       setPublishedComment(null);
       setMessage("已退出抽奖站。");

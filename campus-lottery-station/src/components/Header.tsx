@@ -1,4 +1,5 @@
 import { ArrowUpRight, History, LogIn, LogOut, ScrollText } from "lucide-react";
+import { AvatarMark } from "./AvatarMark";
 import type { CurrentUser } from "../types/lottery";
 
 type HeaderProps = {
@@ -51,13 +52,12 @@ export function Header({ user, communityBaseUrl, logoUrl, ssoStartUrl, onLogout 
         {user ? (
           <div className="flex min-w-0 flex-wrap items-center gap-2 lg:justify-self-end">
             <span className="inline-flex min-h-10 min-w-0 items-center gap-2 rounded-lg bg-cream px-3 text-sm font-medium text-amber-ink">
-              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-amber text-xs font-semibold text-white">
-                {isImageAvatar(user.avatar) ? (
-                  <img className="h-full w-full rounded-md object-cover" src={user.avatar} alt="" />
-                ) : (
-                  user.avatar || user.displayName.slice(0, 1)
-                )}
-              </span>
+              <AvatarMark
+                value={user.avatar}
+                fallback={user.displayName || user.username}
+                className="h-7 w-7 rounded-md bg-amber text-xs text-white"
+                imageClassName="rounded-md"
+              />
               <span className="min-w-0 truncate">{user.displayName}</span>
               <span className="shrink-0 text-xs text-muted">Lv.{user.level} · {user.points} 积分</span>
             </span>
@@ -75,8 +75,4 @@ export function Header({ user, communityBaseUrl, logoUrl, ssoStartUrl, onLogout 
       </div>
     </header>
   );
-}
-
-function isImageAvatar(value?: string) {
-  return Boolean(value && /^(https?:|\/|data:image\/)/i.test(value));
 }

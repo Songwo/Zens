@@ -87,16 +87,27 @@
     }
   ],
   "users": {
+    "2027231167307214850": {
+      "id": "2027231167307214850",
+      "username": "Song",
+      "displayName": "zens",
+      "avatar": "http://localhost:7800/static/avatar/9a3c9dcc-d2c7-4521-a72b-a5e5027f5daa.jpg",
+      "level": 9,
+      "points": 10,
+      "role": "admin",
+      "provider": "sso",
+      "lastLoginAt": "2026-06-18T14:01:55.5062958Z"
+    },
     "u-admin": {
       "id": "u-admin",
       "username": "admin",
-      "displayName": "社区运营管理员",
+      "displayName": "Local Admin",
       "avatar": "A",
-      "level": 6,
-      "points": 860,
+      "level": 9,
+      "points": 999,
       "role": "admin",
       "provider": "dev",
-      "lastLoginAt": "2026-05-29T14:36:44.9699872Z"
+      "lastLoginAt": "2026-06-18T13:12:10.654214Z"
     },
     "u-demo": {
       "id": "u-demo",
@@ -110,12 +121,100 @@
       "lastLoginAt": "2026-05-29T14:31:37.2113355Z"
     }
   },
+  "sessions": {
+    "OxudwNdObcbVkKgw3jOSxWoPfRaOAwM_kk59fifzeAg": {
+      "token": "OxudwNdObcbVkKgw3jOSxWoPfRaOAwM_kk59fifzeAg",
+      "userId": "u-admin",
+      "expiresAt": "2026-06-25T13:12:10.6573164Z"
+    }
+  },
+  "topicDraws": {
+    "e52eb00fc9639b22f9c6e06a5a3491abb55f81494ba733bd78f17b8f429210f2": {
+      "drawId": "zens-draw-Piagshgg-JKl5w",
+      "topicUrl": "http://localhost:5173/t/POST_LOTTERY_TEST_20260618",
+      "postId": "POST_LOTTERY_TEST_20260618",
+      "seed": "zens-568cd89bc505f91a7d6d4680e9088995eaac46cb57ca5cadb18fc5313bb6d542",
+      "algorithm": "zens-csprng-hmac-sha256-fisher-yates-v1",
+      "participantHash": "b6dcecc807c718e3650f819e7a1ab477719287f2117c66819acc91805f5006b2",
+      "proof": "233ed25f8068d5f092bdc7a319e35bbb7f7cdfc4752d6855d8983c6388eb9278",
+      "participantCount": 3,
+      "winners": [
+        {
+          "id": "2027328600699703297",
+          "username": "md5",
+          "displayName": "md5",
+          "avatar": "http://localhost:7800/static/avatar/c10e38d7-607f-44f2-b493-e69636629d3e.jpg",
+          "floor": 2,
+          "repliedAt": "2026-06-18T12:48:03+08:00",
+          "excerpt": "参与抽奖，祝 Zens 抽奖站联调顺利！",
+          "rank": 1
+        }
+      ],
+      "createdAt": "2026-06-18T13:12:10Z"
+    }
+  },
   "audit": [
     {
       "id": "audit-seed",
       "type": "system.seed",
       "message": "初始化校园抽奖福利站演示数据",
       "createdAt": "2026-05-29T14:31:37.2113355Z"
+    },
+    {
+      "id": "audit-vWxuE9fJFMczJ2nC",
+      "type": "auth.sso_login",
+      "userId": "2027231167307214850",
+      "message": "zens 通过社区 SSO 登录抽奖站",
+      "createdAt": "2026-06-18T04:09:43.7968204Z"
+    },
+    {
+      "id": "audit-MavXejlpHGmxTaW4",
+      "type": "auth.sso_login",
+      "userId": "2027231167307214850",
+      "message": "zens 通过社区 SSO 登录抽奖站",
+      "createdAt": "2026-06-18T04:11:41.83676Z"
+    },
+    {
+      "id": "audit-e5T7n61UmIFPXYpW",
+      "type": "auth.sso_login",
+      "userId": "2027231167307214850",
+      "message": "zens 通过社区 SSO 登录抽奖站",
+      "createdAt": "2026-06-18T04:25:56.616294Z"
+    },
+    {
+      "id": "audit-AGakg9j2JS0toB7Z",
+      "type": "auth.sso_login",
+      "userId": "2027231167307214850",
+      "message": "zens 通过社区 SSO 登录抽奖站",
+      "createdAt": "2026-06-18T05:04:20.892583Z"
+    },
+    {
+      "id": "audit-1mNaXsFf88wlVS9G",
+      "type": "auth.sso_login",
+      "userId": "2027231167307214850",
+      "message": "zens 通过社区 SSO 登录抽奖站",
+      "createdAt": "2026-06-18T05:34:14.7772783Z"
+    },
+    {
+      "id": "audit-zWQmtK-UQ_YSPuYd",
+      "type": "auth.sso_login",
+      "userId": "2027231167307214850",
+      "message": "zens 通过社区 SSO 登录抽奖站",
+      "createdAt": "2026-06-18T05:36:38.2904514Z"
+    },
+    {
+      "id": "audit-GyY4HRm7BfjqgANq",
+      "type": "auth.sso_login",
+      "userId": "2027231167307214850",
+      "message": "zens 通过社区 SSO 登录抽奖站",
+      "createdAt": "2026-06-18T05:46:50.1961553Z"
+    },
+    {
+      "id": "audit-uLuGqp8UfloYmIXM",
+      "type": "auth.sso_login",
+      "userId": "2027231167307214850",
+      "message": "zens 通过社区 SSO 登录抽奖站",
+      "createdAt": "2026-06-18T14:01:55.5071222Z"
     }
   ]
 }

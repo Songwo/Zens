@@ -5,8 +5,10 @@ import (
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/sha512"
 	"embed"
 	"encoding/base64"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -30,6 +32,8 @@ import (
 var webFiles embed.FS
 
 const sessionCookie = "campus_lottery_session"
+const lotteryAlgorithm = "zens-csprng-hmac-sha256-fisher-yates-v1"
+const lotterySeedSize = 32
 
 type Config struct {
 	Addr                 string
@@ -47,6 +51,8 @@ type Config struct {
 	BotAccessToken       string
 	BotUsername          string
 	BotPassword          string
+	ServiceID            string
+	ServiceSecret        string
 	AllowDemoSSOFallback bool
 	CommentMaxPages      int
 }
@@ -73,9 +79,11 @@ type Store struct {
 }
 
 type State struct {
-	Draws []Draw          `json:"draws"`
-	Users map[string]User `json:"users"`
-	Audit []AuditEvent    `json:"audit"`
+	Draws      []Draw                       `json:"draws"`
+	Users      map[string]User              `json:"users"`
+	Sessions   map[string]Session           `json:"sessions,omitempty"`
+	TopicDraws map[string]LotteryDrawResult `json:"topicDraws,omitempty"`
+	Audit      []AuditEvent                 `json:"audit"`
 }
 
 type User struct {
@@ -91,9 +99,15 @@ type User struct {
 }
 
 type Session struct {
-	Token     string    `json:"token"`
-	UserID    string    `json:"userId"`
-	ExpiresAt time.Time `json:"expiresAt"`
+	Token string `json:"token"`
+	UserID string `json:"userId"`
+	// CommunityAccessToken 存的是主站颁发的 5 分钟 SSO token,仅在登录回调时用于
+	// 本地验签确认身份(见 userFromSSOToken)。它【不会、也无法】通过主站用户态鉴权:
+	// 主站 JwtAuthenticationFilter 要求 token 必须命中 Redis 里的 access_token,而 SSO
+	// token 从不入 Redis。社区读取走公开端点(/post/**、/comment/post/**),机器人写入
+	// 走 LOTTERY_BOT_* 账号登录拿的真实 access token。此字段过期后即失效,属正常。
+	CommunityAccessToken string    `json:"-"`
+	ExpiresAt            time.Time `json:"expiresAt"`
 }
 
 type Draw struct {
@@ -183,6 +197,9 @@ type LotteryDrawResult struct {
 	TopicURL         string          `json:"topicUrl,omitempty"`
 	PostID           string          `json:"postId,omitempty"`
 	Seed             string          `json:"seed"`
+	Algorithm        string          `json:"algorithm,omitempty"`
+	ParticipantHash  string          `json:"participantHash,omitempty"`
+	Proof            string          `json:"proof,omitempty"`
 	ParticipantCount int             `json:"participantCount"`
 	Winners          []LotteryWinner `json:"winners"`
 	CreatedAt        string          `json:"createdAt,omitempty"`
@@ -221,6 +238,9 @@ type publishResultRequest struct {
 	TopicURL         string          `json:"topicUrl"`
 	DrawID           string          `json:"drawId"`
 	Seed             string          `json:"seed"`
+	Algorithm        string          `json:"algorithm,omitempty"`
+	ParticipantHash  string          `json:"participantHash,omitempty"`
+	Proof            string          `json:"proof,omitempty"`
 	ParticipantCount int             `json:"participantCount"`
 	Winners          []LotteryWinner `json:"winners"`
 	BotAccountID     string          `json:"botAccountId"`
@@ -243,8 +263,8 @@ type communityPost struct {
 
 type communityCommentPage struct {
 	Records []communityComment `json:"records"`
-	Total   int                `json:"total"`
-	Pages   int                `json:"pages"`
+	Total   looseInt           `json:"total"`
+	Pages   looseInt           `json:"pages"`
 }
 
 type communitySimpleProfile struct {
@@ -270,6 +290,36 @@ type communityComment struct {
 	Children    []communityComment `json:"children"`
 }
 
+type looseInt int
+
+func (n *looseInt) UnmarshalJSON(raw []byte) error {
+	raw = bytes.TrimSpace(raw)
+	if len(raw) == 0 || bytes.Equal(raw, []byte("null")) {
+		*n = 0
+		return nil
+	}
+	var asInt int
+	if err := json.Unmarshal(raw, &asInt); err == nil {
+		*n = looseInt(asInt)
+		return nil
+	}
+	var asString string
+	if err := json.Unmarshal(raw, &asString); err != nil {
+		return err
+	}
+	asString = strings.TrimSpace(asString)
+	if asString == "" {
+		*n = 0
+		return nil
+	}
+	parsed, err := strconv.Atoi(asString)
+	if err != nil {
+		return err
+	}
+	*n = looseInt(parsed)
+	return nil
+}
+
 func main() {
 	cfg := loadConfig()
 	store, err := OpenStore(cfg.DataPath)
@@ -280,8 +330,14 @@ func main() {
 	app := &App{
 		cfg:      cfg,
 		store:    store,
-		sessions: map[string]Session{},
+		sessions: activeSessions(store.snapshot()),
 		lottery:  NewLotteryRuntime(cfg),
+	}
+	if err := store.update(func(state *State) error {
+		state.Sessions = activeSessions(*state)
+		return nil
+	}); err != nil {
+		log.Printf("prune sessions: %v", err)
 	}
 
 	mux := http.NewServeMux()
@@ -289,6 +345,7 @@ func main() {
 
 	log.Printf("Campus Lottery Station listening on %s", cfg.Addr)
 	log.Printf("Public URL: %s", cfg.PublicURL)
+	log.Printf("Community API: %s", cfg.CommunityAPI)
 	log.Fatal(http.ListenAndServe(cfg.Addr, withSecurityHeaders(mux)))
 }
 
@@ -313,6 +370,8 @@ func loadConfig() Config {
 		BotAccessToken:       env("LOTTERY_BOT_ACCESS_TOKEN", ""),
 		BotUsername:          env("LOTTERY_BOT_USERNAME", "zens-lottery-bot"),
 		BotPassword:          env("LOTTERY_BOT_PASSWORD", ""),
+		ServiceID:            env("LOTTERY_SERVICE_ID", "campus-lottery-station"),
+		ServiceSecret:        env("LOTTERY_SERVICE_SECRET", ""),
 		AllowDemoSSOFallback: envBool("LOTTERY_ALLOW_DEMO_SSO_FALLBACK", false),
 		CommentMaxPages:      envInt("LOTTERY_COMMENT_MAX_PAGES", 50),
 	}
@@ -353,6 +412,7 @@ func (app *App) routes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/auth/dev-login", app.devLogin)
 	mux.HandleFunc("POST /api/auth/logout", app.logout)
 	mux.HandleFunc("GET /api/auth/sso/start", app.ssoStart)
+	mux.HandleFunc("GET /api/auth/sso/logout", app.ssoLogout)
 	mux.HandleFunc("GET /api/auth/sso/callback", app.ssoCallback)
 	mux.HandleFunc("GET /api/lotteries", app.listDraws)
 	mux.HandleFunc("GET /api/lotteries/{id}", app.getDraw)
@@ -402,6 +462,12 @@ func OpenStore(path string) (*Store, error) {
 	}
 	if store.data.Users == nil {
 		store.data.Users = map[string]User{}
+	}
+	if store.data.Sessions == nil {
+		store.data.Sessions = map[string]Session{}
+	}
+	if store.data.TopicDraws == nil {
+		store.data.TopicDraws = map[string]LotteryDrawResult{}
 	}
 	return store, nil
 }
@@ -523,6 +589,8 @@ func seedState() State {
 			admin.ID: admin,
 			demo.ID:  demo,
 		},
+		Sessions:   map[string]Session{},
+		TopicDraws: map[string]LotteryDrawResult{},
 		Audit: []AuditEvent{
 			{
 				ID:        "audit-seed",
@@ -562,6 +630,22 @@ func (s *Store) update(fn func(*State) error) error {
 		return err
 	}
 	return s.saveLocked()
+}
+
+func activeSessions(state State) map[string]Session {
+	now := time.Now().UTC()
+	sessions := map[string]Session{}
+	for token, session := range state.Sessions {
+		token = strings.TrimSpace(token)
+		if token == "" || session.UserID == "" || now.After(session.ExpiresAt) {
+			continue
+		}
+		if session.Token == "" {
+			session.Token = token
+		}
+		sessions[token] = session
+	}
+	return sessions
 }
 
 func (app *App) health(w http.ResponseWriter, r *http.Request) {
@@ -785,7 +869,7 @@ func (app *App) devLogin(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	app.issueSession(w, user.ID)
+	app.issueSession(w, user.ID, "")
 	writeJSON(w, http.StatusOK, APIResponse{OK: true, Data: user})
 }
 
@@ -813,11 +897,31 @@ func avatarLetter(value string) string {
 }
 
 func (app *App) logout(w http.ResponseWriter, r *http.Request) {
+	app.clearSession(w, r)
+	writeJSON(w, http.StatusOK, APIResponse{OK: true})
+}
+
+// ssoLogout 前端通道(front-channel)单点登出端点:主站登出时用隐藏 iframe GET 加载,
+// 清掉本站会话 cookie。返回 204,不重定向(供 iframe 静默调用)。
+func (app *App) ssoLogout(w http.ResponseWriter, r *http.Request) {
+	app.clearSession(w, r)
+	w.Header().Set("Cache-Control", "no-store")
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// clearSession 删除会话记录并过期会话 cookie。
+func (app *App) clearSession(w http.ResponseWriter, r *http.Request) {
 	cookie, err := r.Cookie(sessionCookie)
 	if err == nil {
 		app.mu.Lock()
 		delete(app.sessions, cookie.Value)
 		app.mu.Unlock()
+		if err := app.store.update(func(state *State) error {
+			delete(state.Sessions, cookie.Value)
+			return nil
+		}); err != nil {
+			log.Printf("delete session: %v", err)
+		}
 	}
 	http.SetCookie(w, &http.Cookie{
 		Name:     sessionCookie,
@@ -827,7 +931,6 @@ func (app *App) logout(w http.ResponseWriter, r *http.Request) {
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 	})
-	writeJSON(w, http.StatusOK, APIResponse{OK: true})
 }
 
 func (app *App) ssoStart(w http.ResponseWriter, r *http.Request) {
@@ -863,6 +966,7 @@ func (app *App) ssoCallback(w http.ResponseWriter, r *http.Request) {
 	if ssoToken != "" {
 		user, err := app.userFromSSOToken(ssoToken)
 		if err != nil {
+			log.Printf("SSO token verify failed: %v", err)
 			http.Redirect(w, r, "/?sso=invalid-token", http.StatusFound)
 			return
 		}
@@ -870,7 +974,7 @@ func (app *App) ssoCallback(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		app.issueSession(w, user.ID)
+		app.issueSession(w, user.ID, ssoToken)
 		http.Redirect(w, r, "/?sso=ok", http.StatusFound)
 		return
 	}
@@ -909,7 +1013,7 @@ func (app *App) ssoCallback(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	app.issueSession(w, user.ID)
+	app.issueSession(w, user.ID, "")
 	http.Redirect(w, r, "/?sso=ok", http.StatusFound)
 }
 
@@ -952,6 +1056,10 @@ func (app *App) persistLoginUser(user User, eventType, message string) error {
 	})
 }
 
+// exchangeSSOCode 走 authorization_code 换 token 流程。
+// 注意:主站【未实现】/api/sso/token 端点,只支持 direct-token 流(回调直接带 sso_token)。
+// 因此本函数在对接当前主站时不会成功;仅在 LOTTERY_ALLOW_DEMO_SSO_FALLBACK=true 的
+// 演示场景或未来主站补齐 code 交换端点后才有意义。正常登录走 ssoCallback 的 sso_token 分支。
 func (app *App) exchangeSSOCode(code string) (User, error) {
 	if app.cfg.SSOTokenURL == "" || app.cfg.SSOClientSecret == "" {
 		return User{}, errors.New("sso token endpoint disabled")
@@ -1013,7 +1121,7 @@ func (app *App) exchangeSSOCode(code string) (User, error) {
 }
 
 func (app *App) userFromSSOToken(token string) (User, error) {
-	claims, err := verifyHS256JWT(token, app.cfg.CommunityJWTSecret)
+	claims, err := verifyHMACJWT(token, app.cfg.CommunityJWTSecret)
 	if err != nil {
 		return User{}, err
 	}
@@ -1055,7 +1163,7 @@ func (app *App) userFromSSOToken(token string) (User, error) {
 	return user, nil
 }
 
-func verifyHS256JWT(token, secret string) (map[string]any, error) {
+func verifyHMACJWT(token, secret string) (map[string]any, error) {
 	secret = strings.TrimSpace(secret)
 	if secret == "" {
 		return nil, errors.New("未配置 COMMUNITY_JWT_SECRET，无法验证主站 SSO token")
@@ -1064,17 +1172,24 @@ func verifyHS256JWT(token, secret string) (map[string]any, error) {
 	if len(parts) != 3 {
 		return nil, errors.New("JWT 格式不正确")
 	}
+	headerPayload, err := base64.RawURLEncoding.DecodeString(parts[0])
+	if err != nil {
+		return nil, errors.New("JWT 头部格式不正确")
+	}
+	var header struct {
+		Alg string `json:"alg"`
+	}
+	if err := json.Unmarshal(headerPayload, &header); err != nil {
+		return nil, errors.New("JWT 头部解析失败")
+	}
+	alg := strings.ToUpper(strings.TrimSpace(header.Alg))
 	sig, err := base64.RawURLEncoding.DecodeString(parts[2])
 	if err != nil {
 		return nil, errors.New("JWT 签名格式不正确")
 	}
-	expected := hmac.New(sha256.New, []byte(secret))
-	_, _ = expected.Write([]byte(parts[0] + "." + parts[1]))
-	if !hmac.Equal(sig, expected.Sum(nil)) {
+	if !verifyJWTSig(alg, sig, []byte(secret), parts[0]+"."+parts[1]) {
 		derived := sha256.Sum256([]byte(secret))
-		expected = hmac.New(sha256.New, derived[:])
-		_, _ = expected.Write([]byte(parts[0] + "." + parts[1]))
-		if !hmac.Equal(sig, expected.Sum(nil)) {
+		if !verifyJWTSig(alg, sig, derived[:], parts[0]+"."+parts[1]) {
 			return nil, errors.New("JWT 签名无效")
 		}
 	}
@@ -1090,6 +1205,27 @@ func verifyHS256JWT(token, secret string) (map[string]any, error) {
 		return nil, errors.New("SSO token 已过期")
 	}
 	return claims, nil
+}
+
+func verifyJWTSig(alg string, sig []byte, key []byte, signingInput string) bool {
+	var mac hashWriter
+	switch alg {
+	case "HS256":
+		mac = hmac.New(sha256.New, key)
+	case "HS384":
+		mac = hmac.New(sha512.New384, key)
+	case "HS512":
+		mac = hmac.New(sha512.New, key)
+	default:
+		return false
+	}
+	_, _ = mac.Write([]byte(signingInput))
+	return hmac.Equal(sig, mac.Sum(nil))
+}
+
+type hashWriter interface {
+	Write([]byte) (int, error)
+	Sum([]byte) []byte
 }
 
 func claimSubject(claims map[string]any) string {
@@ -1546,34 +1682,71 @@ func buildAnnouncement(draw Draw) string {
 }
 
 func (app *App) currentUser(r *http.Request) (*User, bool) {
-	cookie, err := r.Cookie(sessionCookie)
-	if err != nil || cookie.Value == "" {
+	session, ok := app.currentSession(r)
+	if !ok {
 		return nil, false
 	}
-	app.mu.Lock()
-	session, ok := app.sessions[cookie.Value]
-	app.mu.Unlock()
-	if !ok || time.Now().UTC().After(session.ExpiresAt) {
-		return nil, false
-	}
+	return app.userByID(session.UserID)
+}
+
+func (app *App) userByID(userID string) (*User, bool) {
 	state := app.store.snapshot()
-	user, ok := state.Users[session.UserID]
+	user, ok := state.Users[userID]
 	if !ok {
 		return nil, false
 	}
 	return &user, true
 }
 
-func (app *App) issueSession(w http.ResponseWriter, userID string) {
+func (app *App) currentSession(r *http.Request) (Session, bool) {
+	cookie, err := r.Cookie(sessionCookie)
+	if err != nil || cookie.Value == "" {
+		return Session{}, false
+	}
+	app.mu.Lock()
+	session, ok := app.sessions[cookie.Value]
+	app.mu.Unlock()
+	if !ok {
+		return Session{}, false
+	}
+	if time.Now().UTC().After(session.ExpiresAt) {
+		app.mu.Lock()
+		delete(app.sessions, cookie.Value)
+		app.mu.Unlock()
+		if err := app.store.update(func(state *State) error {
+			delete(state.Sessions, cookie.Value)
+			return nil
+		}); err != nil {
+			log.Printf("delete expired session: %v", err)
+		}
+		return Session{}, false
+	}
+	if session.Token == "" {
+		session.Token = cookie.Value
+	}
+	return session, true
+}
+
+func (app *App) issueSession(w http.ResponseWriter, userID string, communityAccessToken string) {
 	token := randomID(32)
 	session := Session{
-		Token:     token,
-		UserID:    userID,
-		ExpiresAt: time.Now().UTC().Add(7 * 24 * time.Hour),
+		Token:                token,
+		UserID:               userID,
+		CommunityAccessToken: strings.TrimSpace(communityAccessToken),
+		ExpiresAt:            time.Now().UTC().Add(7 * 24 * time.Hour),
 	}
 	app.mu.Lock()
 	app.sessions[token] = session
 	app.mu.Unlock()
+	if err := app.store.update(func(state *State) error {
+		if state.Sessions == nil {
+			state.Sessions = map[string]Session{}
+		}
+		state.Sessions[token] = session
+		return nil
+	}); err != nil {
+		log.Printf("persist session: %v", err)
+	}
 	http.SetCookie(w, &http.Cookie{
 		Name:     sessionCookie,
 		Value:    token,
@@ -1656,8 +1829,13 @@ func (app *App) lotteryPreview(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *App) syncLotteryComments(w http.ResponseWriter, r *http.Request) {
-	if _, ok := app.currentUser(r); !ok {
+	session, ok := app.currentSession(r)
+	if !ok {
 		writeError(w, http.StatusUnauthorized, "请先登录社区账号后再同步帖子评论")
+		return
+	}
+	if _, ok := app.userByID(session.UserID); !ok {
+		writeError(w, http.StatusUnauthorized, "登录状态已失效，请重新连接社区账号")
 		return
 	}
 	var req lotteryCriteria
@@ -1665,7 +1843,7 @@ func (app *App) syncLotteryComments(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	preview, _, err := app.buildTopicPreview(req)
+	preview, _, err := app.buildTopicPreview(req, session.CommunityAccessToken)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
@@ -1677,8 +1855,13 @@ func (app *App) syncLotteryComments(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *App) drawTopicLottery(w http.ResponseWriter, r *http.Request) {
-	if _, ok := app.currentUser(r); !ok {
+	session, ok := app.currentSession(r)
+	if !ok {
 		writeError(w, http.StatusUnauthorized, "请先登录社区账号后再开奖")
+		return
+	}
+	if _, ok := app.userByID(session.UserID); !ok {
+		writeError(w, http.StatusUnauthorized, "登录状态已失效，请重新连接社区账号")
 		return
 	}
 	var req lotteryDrawRequest
@@ -1690,7 +1873,7 @@ func (app *App) drawTopicLottery(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "中奖人数必须大于 0")
 		return
 	}
-	preview, postID, err := app.buildTopicPreview(req.lotteryCriteria)
+	preview, postID, err := app.buildTopicPreview(req.lotteryCriteria, session.CommunityAccessToken)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
@@ -1702,7 +1885,18 @@ func (app *App) drawTopicLottery(w http.ResponseWriter, r *http.Request) {
 	if req.WinnerCount > len(preview.Participants) {
 		req.WinnerCount = len(preview.Participants)
 	}
-	picks, seed, err := securePickLottery(preview.Participants, req.WinnerCount)
+	participantHash := participantSnapshotHash(preview.Participants)
+	resultKey := topicDrawKey(postID, participantHash, req.WinnerCount)
+	state := app.store.snapshot()
+	if existing, ok := state.TopicDraws[resultKey]; ok && len(existing.Winners) > 0 {
+		app.lottery.mu.Lock()
+		app.lottery.topics[cacheKeyForTopic(req.TopicURL)] = preview
+		app.lottery.results[existing.DrawID] = existing
+		app.lottery.mu.Unlock()
+		writeJSON(w, http.StatusOK, APIResponse{OK: true, Data: existing})
+		return
+	}
+	picks, seed, proof, err := securePickLottery(preview.Participants, req.WinnerCount)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -1713,9 +1907,26 @@ func (app *App) drawTopicLottery(w http.ResponseWriter, r *http.Request) {
 		TopicURL:         strings.TrimSpace(req.TopicURL),
 		PostID:           postID,
 		Seed:             seed,
+		Algorithm:        lotteryAlgorithm,
+		ParticipantHash:  participantHash,
+		Proof:            proof,
 		ParticipantCount: len(preview.Participants),
 		Winners:          picks,
 		CreatedAt:        now.Format(time.RFC3339),
+	}
+	if err := app.store.update(func(state *State) error {
+		if state.TopicDraws == nil {
+			state.TopicDraws = map[string]LotteryDrawResult{}
+		}
+		if existing, ok := state.TopicDraws[resultKey]; ok && len(existing.Winners) > 0 {
+			result = existing
+			return nil
+		}
+		state.TopicDraws[resultKey] = result
+		return nil
+	}); err != nil {
+		writeError(w, http.StatusInternalServerError, "保存抽奖结果失败："+err.Error())
+		return
 	}
 	app.lottery.mu.Lock()
 	app.lottery.topics[cacheKeyForTopic(req.TopicURL)] = preview
@@ -1754,7 +1965,7 @@ func (app *App) publishLotteryResult(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if strings.TrimSpace(req.DrawID) == "" || len(req.Winners) == 0 {
+	if strings.TrimSpace(req.DrawID) == "" {
 		writeError(w, http.StatusBadRequest, "缺少抽奖结果")
 		return
 	}
@@ -1763,7 +1974,16 @@ func (app *App) publishLotteryResult(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	content := buildTopicLotteryComment(req)
+	result, ok := app.findStoredLotteryResult(req.DrawID)
+	if !ok {
+		writeError(w, http.StatusBadRequest, "抽奖结果不存在或已失效，请重新开奖后再发布")
+		return
+	}
+	if result.PostID != "" && result.PostID != postID {
+		writeError(w, http.StatusBadRequest, "抽奖结果与当前帖子不匹配")
+		return
+	}
+	content := buildTopicLotteryComment(publishRequestFromResult(result, req.BotAccountID))
 	token, err := app.botAccessToken()
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
@@ -1773,7 +1993,14 @@ func (app *App) publishLotteryResult(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadGateway, err.Error())
 		return
 	}
-	comments, err := app.fetchCommunityComments(postID)
+	// 开奖事件回流主站:写 SubsiteEvent 账本 + 给中奖者发站内通知。
+	// 优雅降级——失败只记日志,不影响已成功的评论发布与后续流程。
+	app.reportLotteryWinEvents(result, postID)
+	if err := app.closeCommunityLotteryComments(postID, token); err != nil {
+		writeError(w, http.StatusBadGateway, "中奖名单已发布，但关闭原帖评论失败："+err.Error())
+		return
+	}
+	comments, err := app.fetchCommunityComments(postID, token)
 	if err != nil {
 		writeError(w, http.StatusBadGateway, err.Error())
 		return
@@ -1795,6 +2022,40 @@ func (app *App) publishLotteryResult(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, APIResponse{OK: true, Data: resp})
 }
 
+func (app *App) findStoredLotteryResult(drawID string) (LotteryDrawResult, bool) {
+	drawID = strings.TrimSpace(drawID)
+	if drawID == "" {
+		return LotteryDrawResult{}, false
+	}
+	app.lottery.mu.Lock()
+	if result, ok := app.lottery.results[drawID]; ok {
+		app.lottery.mu.Unlock()
+		return result, true
+	}
+	app.lottery.mu.Unlock()
+	state := app.store.snapshot()
+	for _, result := range state.TopicDraws {
+		if result.DrawID == drawID {
+			return result, true
+		}
+	}
+	return LotteryDrawResult{}, false
+}
+
+func publishRequestFromResult(result LotteryDrawResult, botAccountID string) publishResultRequest {
+	return publishResultRequest{
+		TopicURL:         result.TopicURL,
+		DrawID:           result.DrawID,
+		Seed:             result.Seed,
+		Algorithm:        result.Algorithm,
+		ParticipantHash:  result.ParticipantHash,
+		Proof:            result.Proof,
+		ParticipantCount: result.ParticipantCount,
+		Winners:          result.Winners,
+		BotAccountID:     botAccountID,
+	}
+}
+
 func canOperateOfficialLottery(user *User) bool {
 	if user == nil {
 		return false
@@ -1803,16 +2064,16 @@ func canOperateOfficialLottery(user *User) bool {
 	return role == "admin" || role == "super_admin" || role == "moderator"
 }
 
-func (app *App) buildTopicPreview(req lotteryCriteria) (TopicPreview, string, error) {
+func (app *App) buildTopicPreview(req lotteryCriteria, token string) (TopicPreview, string, error) {
 	postID, err := postIDFromTopicURL(req.TopicURL)
 	if err != nil {
 		return TopicPreview{}, "", err
 	}
-	post, err := app.fetchCommunityPost(postID)
+	post, err := app.fetchCommunityPost(postID, token)
 	if err != nil {
 		return TopicPreview{}, "", err
 	}
-	comments, err := app.fetchCommunityComments(postID)
+	comments, err := app.fetchCommunityComments(postID, token)
 	if err != nil {
 		return TopicPreview{}, "", err
 	}
@@ -1834,9 +2095,9 @@ func (app *App) buildTopicPreview(req lotteryCriteria) (TopicPreview, string, er
 	return preview, postID, nil
 }
 
-func (app *App) fetchCommunityPost(postID string) (communityPost, error) {
+func (app *App) fetchCommunityPost(postID string, token string) (communityPost, error) {
 	var resp communityResult[communityPost]
-	if err := app.communityGet("/post/"+url.PathEscape(postID), &resp); err != nil {
+	if err := app.communityGet("/post/"+url.PathEscape(postID), token, &resp); err != nil {
 		return communityPost{}, err
 	}
 	if resp.Code != 2000 {
@@ -1848,7 +2109,7 @@ func (app *App) fetchCommunityPost(postID string) (communityPost, error) {
 	return resp.Data, nil
 }
 
-func (app *App) fetchCommunityComments(postID string) ([]communityComment, error) {
+func (app *App) fetchCommunityComments(postID string, token string) ([]communityComment, error) {
 	all := []communityComment{}
 	page := 1
 	const pageSize = 200
@@ -1859,15 +2120,15 @@ func (app *App) fetchCommunityComments(postID string) ([]communityComment, error
 	for {
 		var resp communityResult[communityCommentPage]
 		path := fmt.Sprintf("/comment/post/%s?page=%d&size=%d", url.PathEscape(postID), page, pageSize)
-		if err := app.communityGet(path, &resp); err != nil {
+		if err := app.communityGet(path, token, &resp); err != nil {
 			return nil, err
 		}
 		if resp.Code != 2000 {
 			return nil, fmt.Errorf("主站读取评论失败：%s", fallback(resp.Message, "未知错误"))
 		}
 		all = append(all, flattenCommunityComments(resp.Data.Records)...)
-		total := resp.Data.Total
-		pages := resp.Data.Pages
+		total := int(resp.Data.Total)
+		pages := int(resp.Data.Pages)
 		if pages > 0 {
 			if page >= pages {
 				break
@@ -1945,29 +2206,115 @@ func parseCommunityTime(value string) time.Time {
 	return time.Time{}
 }
 
-func (app *App) communityGet(path string, dst any) error {
-	req, err := http.NewRequest(http.MethodGet, app.communityURL(path), nil)
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Accept", "application/json")
+func (app *App) communityGet(path, token string, dst any) error {
+	return app.communityGetFromURLs(app.communityURLCandidates(path), token, dst)
+}
+
+func (app *App) communityGetFromURLs(candidates []string, token string, dst any) error {
 	client := http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return fmt.Errorf("无法连接主社区：%w", err)
+	var lastErr error
+	for _, target := range candidates {
+		req, err := http.NewRequest(http.MethodGet, target, nil)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		req.Header.Set("Accept", "application/json")
+		req.Header.Set("X-Device-Id", "zens-lottery-station")
+		if strings.TrimSpace(token) != "" {
+			req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(token))
+		}
+		resp, err := client.Do(req)
+		if err != nil {
+			lastErr = fmt.Errorf("无法连接主社区 %s：%w", target, err)
+			continue
+		}
+		body, readErr := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
+		_ = resp.Body.Close()
+		if readErr != nil {
+			lastErr = readErr
+			continue
+		}
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			lastErr = fmt.Errorf("主社区返回错误：%s（%s）%s", resp.Status, target, communityErrorSnippet(body))
+			if resp.StatusCode == http.StatusNotFound {
+				continue
+			}
+			if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+				// 帖子/评论读取在主站是公开端点,正常无需用户 token。出现 401/403 多半是
+				// 端点路径不对或主站白名单变动,而非"SSO token 过期"——别往 token 方向排查。
+				log.Printf("社区读取被拒(%s):%s。注意社区读取走公开端点,不依赖用户 token", resp.Status, target)
+			}
+			return lastErr
+		}
+		if !json.Valid(body) {
+			lastErr = fmt.Errorf("主社区响应不是 JSON：%s（%s）", http.DetectContentType(body), target)
+			continue
+		}
+		if err := json.Unmarshal(body, dst); err != nil {
+			return fmt.Errorf("主社区响应解析失败：%w（%s）", err, target)
+		}
+		return nil
 	}
-	defer resp.Body.Close()
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
-	if err != nil {
-		return err
+	if lastErr != nil {
+		return lastErr
 	}
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("主社区返回错误：%s", resp.Status)
+	return errors.New("主社区 API 地址未配置")
+}
+
+func (app *App) communityURLCandidates(path string) []string {
+	path = normalizeAPIPath(path)
+	base := strings.TrimRight(app.cfg.CommunityAPI, "/")
+	candidates := make([]string, 0, 2)
+	if base != "" {
+		candidates = append(candidates, base+path)
+		if !strings.HasSuffix(base, "/api") {
+			candidates = append(candidates, base+"/api"+path)
+		}
 	}
-	if err := json.Unmarshal(body, dst); err != nil {
-		return fmt.Errorf("主社区响应解析失败：%w", err)
+	return uniqueStrings(candidates)
+}
+
+func normalizeAPIPath(path string) string {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return "/"
 	}
-	return nil
+	if !strings.HasPrefix(path, "/") {
+		path = "/" + path
+	}
+	return path
+}
+
+func uniqueStrings(values []string) []string {
+	seen := map[string]bool{}
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		if strings.TrimSpace(value) == "" || seen[value] {
+			continue
+		}
+		seen[value] = true
+		out = append(out, value)
+	}
+	return out
+}
+
+func communityErrorSnippet(body []byte) string {
+	body = bytes.TrimSpace(body)
+	if len(body) == 0 {
+		return ""
+	}
+	var parsed struct {
+		Message string `json:"message"`
+		Error   string `json:"error"`
+	}
+	if json.Unmarshal(body, &parsed) == nil {
+		msg := firstNonEmpty(parsed.Message, parsed.Error)
+		if msg != "" {
+			return "：" + clipPlainText(msg, 120)
+		}
+	}
+	return "：" + clipPlainText(string(body), 120)
 }
 
 func (app *App) communityGetWithToken(path, token string, dst any) error {
@@ -2066,12 +2413,151 @@ func (app *App) communityPost(path string, payload any, token string, dst any) e
 	return nil
 }
 
+// ─── 内部 s2s API：开奖事件回流 ───────────────────────────────────────────
+//
+// 与主站 InternalServiceFilter 对应,签名串逐字节对齐 zdc-shop/src/lib/main-site/hmac.ts:
+//   payload   = METHOD + "\n" + PATH + "\n" + TIMESTAMP(ms) + "\n" + NONCE + "\n" + sha256Hex(BODY)
+//   signature = hex(HMAC_SHA256(LOTTERY_SERVICE_SECRET, payload))  // 全小写
+// 主站需在 internal.service.lottery-secret 配置同一密钥,并把 campus-lottery-station 加入白名单。
+
+const internalSubsiteEventsPath = "/api/internal/subsite/events"
+
+var eventIDInvalidChars = regexp.MustCompile(`[^a-z0-9._:-]+`)
+
+type subsiteEventReq struct {
+	EventID    string `json:"eventId"`
+	Source     string `json:"source"`
+	EventType  string `json:"eventType"`
+	UserID     string `json:"userId,omitempty"`
+	Title      string `json:"title"`
+	Content    string `json:"content"`
+	RelatedID  string `json:"relatedId,omitempty"`
+	Severity   string `json:"severity,omitempty"`
+	NotifyUser bool   `json:"notifyUser"`
+}
+
+// signedInternalHeaders 计算调主站 /api/internal/** 所需的 HMAC 头。
+func (app *App) signedInternalHeaders(method, path, body string) map[string]string {
+	ts := strconv.FormatInt(time.Now().UnixMilli(), 10)
+	nonceBytes := make([]byte, 16)
+	_, _ = rand.Read(nonceBytes)
+	nonce := hex.EncodeToString(nonceBytes) // 32 字符,命中主站 ^[A-Za-z0-9_-]{16,128}$
+	bodyHash := sha256.Sum256([]byte(body))
+	payload := strings.Join([]string{
+		strings.ToUpper(method),
+		path,
+		ts,
+		nonce,
+		hex.EncodeToString(bodyHash[:]),
+	}, "\n")
+	mac := hmac.New(sha256.New, []byte(app.cfg.ServiceSecret))
+	mac.Write([]byte(payload))
+	return map[string]string{
+		"X-Service-Id":        app.cfg.ServiceID,
+		"X-Service-Timestamp": ts,
+		"X-Service-Nonce":     nonce,
+		"X-Service-Signature": hex.EncodeToString(mac.Sum(nil)),
+	}
+}
+
+// sanitizeEventID 把任意串规整成主站要求的 eventId(8–120 字符, ^[a-z0-9._:-]+$),用于幂等去重。
+func sanitizeEventID(raw string) string {
+	s := strings.ToLower(strings.TrimSpace(raw))
+	s = eventIDInvalidChars.ReplaceAllString(s, "-")
+	if len(s) > 120 {
+		s = s[:120]
+	}
+	for len(s) < 8 {
+		s += "0"
+	}
+	return s
+}
+
+// reportLotteryWinEvents 把一次开奖的全部中奖者回流主站(写账本 + 通知)。
+// 优雅降级:未配置密钥则跳过;单个失败只记日志,绝不阻断已成功的评论发布。
+func (app *App) reportLotteryWinEvents(result LotteryDrawResult, postID string) {
+	if strings.TrimSpace(app.cfg.ServiceSecret) == "" {
+		log.Printf("未配置 LOTTERY_SERVICE_SECRET,跳过开奖事件回流 drawId=%s", result.DrawID)
+		return
+	}
+	for _, winner := range result.Winners {
+		if err := app.reportLotteryWinEvent(winner, result, postID); err != nil {
+			log.Printf("开奖事件回流失败 drawId=%s userId=%s: %v", result.DrawID, winner.ID, err)
+		}
+	}
+}
+
+func (app *App) reportLotteryWinEvent(winner LotteryWinner, result LotteryDrawResult, postID string) error {
+	if strings.TrimSpace(winner.ID) == "" {
+		return nil // 匿名或无主站用户 id 的中奖者无法精确通知,跳过
+	}
+	reqBody := subsiteEventReq{
+		EventID:    sanitizeEventID(fmt.Sprintf("lottery:%s:win:%s", result.DrawID, winner.ID)),
+		Source:     app.cfg.ServiceID,
+		EventType:  "lottery.draw.win",
+		UserID:     winner.ID,
+		Title:      "🎉 抽奖中奖通知",
+		Content:    fmt.Sprintf("恭喜你在社区抽奖活动中入选(第 %d 名)。开奖结果已公示在原帖,请留意站内通知。", winner.Rank),
+		RelatedID:  postID,
+		Severity:   "success",
+		NotifyUser: true,
+	}
+	raw, _ := json.Marshal(reqBody)
+	bodyStr := string(raw)
+
+	// 指数退避重试:网络错/5xx 重试,4xx 不重试(幂等 eventId 保证重复安全)。
+	// 每次重试重新签名——timestamp(±60s 窗口)与 nonce(单次)都不能复用。
+	const maxAttempts = 3
+	var lastErr error
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		retryable, err := app.postSignedInternal(internalSubsiteEventsPath, bodyStr)
+		if err == nil {
+			if attempt > 1 {
+				log.Printf("开奖事件回流第 %d 次重试成功 eventId=%s", attempt, reqBody.EventID)
+			}
+			return nil
+		}
+		lastErr = err
+		if !retryable || attempt == maxAttempts {
+			break
+		}
+		backoff := time.Duration(200*(1<<(attempt-1))) * time.Millisecond
+		jitter := time.Duration(time.Now().UnixNano()%120) * time.Millisecond
+		log.Printf("开奖事件回流第 %d 次失败,%v 后重试 eventId=%s: %v", attempt, backoff+jitter, reqBody.EventID, err)
+		time.Sleep(backoff + jitter)
+	}
+	return lastErr
+}
+
+// postSignedInternal 向主站内部接口发一次签名 POST。
+// 返回 retryable:网络错误/5xx 为 true(值得重试),4xx 为 false(请求本身有问题)。
+func (app *App) postSignedInternal(path, bodyStr string) (retryable bool, err error) {
+	req, err := http.NewRequest(http.MethodPost, app.communityURL(path), strings.NewReader(bodyStr))
+	if err != nil {
+		return false, err
+	}
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Content-Type", "application/json")
+	for k, v := range app.signedInternalHeaders(http.MethodPost, path, bodyStr) {
+		req.Header.Set(k, v)
+	}
+	client := http.Client{Timeout: 12 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return true, fmt.Errorf("无法连接主站内部接口：%w", err) // 网络层错误可重试
+	}
+	defer resp.Body.Close()
+	respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		return false, nil
+	}
+	canRetry := resp.StatusCode >= 500 // 5xx 可重试,4xx 不重试
+	return canRetry, fmt.Errorf("主站内部接口返回错误：%s %s", resp.Status, strings.TrimSpace(string(respBody)))
+}
+
 func (app *App) communityURL(path string) string {
 	base := strings.TrimRight(app.cfg.CommunityAPI, "/")
-	if !strings.HasPrefix(path, "/") {
-		path = "/" + path
-	}
-	return base + path
+	return base + normalizeAPIPath(path)
 }
 
 func commentsToParticipants(comments []communityComment, post communityPost, req lotteryCriteria) []LotteryParticipant {
@@ -2122,19 +2608,19 @@ func isValidLotteryComment(comment communityComment) bool {
 	return true
 }
 
-func securePickLottery(participants []LotteryParticipant, count int) ([]LotteryWinner, string, error) {
+func securePickLottery(participants []LotteryParticipant, count int) ([]LotteryWinner, string, string, error) {
 	pool := append([]LotteryParticipant(nil), participants...)
-	seedBytes := make([]byte, 16)
+	seedBytes := make([]byte, lotterySeedSize)
 	if _, err := rand.Read(seedBytes); err != nil {
-		return nil, "", err
+		return nil, "", "", err
 	}
 	seed := "zens-" + hex.EncodeToString(seedBytes)
+	randomStream := newDeterministicRandomStream(seedBytes, participantSnapshotHash(participants))
 	for i := len(pool) - 1; i > 0; i-- {
-		n, err := rand.Int(rand.Reader, big.NewInt(int64(i+1)))
+		j, err := randomStream.Intn(i + 1)
 		if err != nil {
-			return nil, "", err
+			return nil, "", "", err
 		}
-		j := int(n.Int64())
 		pool[i], pool[j] = pool[j], pool[i]
 	}
 	winners := make([]LotteryWinner, 0, count)
@@ -2144,7 +2630,100 @@ func securePickLottery(participants []LotteryParticipant, count int) ([]LotteryW
 			Rank:               i + 1,
 		})
 	}
-	return winners, seed, nil
+	proof := lotteryProof(seed, participants, winners)
+	return winners, seed, proof, nil
+}
+
+type deterministicRandomStream struct {
+	key     []byte
+	context string
+	counter uint64
+}
+
+func newDeterministicRandomStream(seed []byte, context string) *deterministicRandomStream {
+	return &deterministicRandomStream{
+		key:     append([]byte(nil), seed...),
+		context: context,
+	}
+}
+
+func (s *deterministicRandomStream) Intn(max int) (int, error) {
+	if max <= 0 {
+		return 0, errors.New("random max must be positive")
+	}
+	limit := uint64(max)
+	threshold := ^uint64(0) - (^uint64(0) % limit)
+	for {
+		block := s.nextBlock()
+		value := binary.BigEndian.Uint64(block[:8])
+		if value < threshold {
+			return int(value % limit), nil
+		}
+	}
+}
+
+func (s *deterministicRandomStream) nextBlock() []byte {
+	var counter [8]byte
+	binary.BigEndian.PutUint64(counter[:], s.counter)
+	s.counter++
+
+	mac := hmac.New(sha256.New, s.key)
+	_, _ = mac.Write([]byte(lotteryAlgorithm))
+	_, _ = mac.Write([]byte{0})
+	_, _ = mac.Write([]byte(s.context))
+	_, _ = mac.Write([]byte{0})
+	_, _ = mac.Write(counter[:])
+	return mac.Sum(nil)
+}
+
+func participantSnapshotHash(participants []LotteryParticipant) string {
+	type participantDigest struct {
+		ID          string `json:"id"`
+		Username    string `json:"username"`
+		DisplayName string `json:"displayName"`
+		Floor       int    `json:"floor"`
+		RepliedAt   string `json:"repliedAt"`
+	}
+	digest := make([]participantDigest, 0, len(participants))
+	for _, participant := range participants {
+		digest = append(digest, participantDigest{
+			ID:          participant.ID,
+			Username:    participant.Username,
+			DisplayName: participant.DisplayName,
+			Floor:       participant.Floor,
+			RepliedAt:   participant.RepliedAt,
+		})
+	}
+	raw, _ := json.Marshal(digest)
+	sum := sha256.Sum256(raw)
+	return hex.EncodeToString(sum[:])
+}
+
+func lotteryProof(seed string, participants []LotteryParticipant, winners []LotteryWinner) string {
+	payload := struct {
+		Algorithm       string          `json:"algorithm"`
+		Seed            string          `json:"seed"`
+		ParticipantHash string          `json:"participantHash"`
+		Winners         []LotteryWinner `json:"winners"`
+	}{
+		Algorithm:       lotteryAlgorithm,
+		Seed:            seed,
+		ParticipantHash: participantSnapshotHash(participants),
+		Winners:         winners,
+	}
+	raw, _ := json.Marshal(payload)
+	sum := sha256.Sum256(raw)
+	return hex.EncodeToString(sum[:])
+}
+
+func topicDrawKey(postID, participantHash string, winnerCount int) string {
+	sum := sha256.Sum256([]byte(strings.Join([]string{
+		strings.TrimSpace(postID),
+		participantHash,
+		strconv.Itoa(winnerCount),
+		lotteryAlgorithm,
+	}, "|")))
+	return hex.EncodeToString(sum[:])
 }
 
 func (app *App) botAccessToken() (string, error) {
@@ -2189,19 +2768,51 @@ func (app *App) createCommunityComment(postID, content, token string) error {
 	return nil
 }
 
+func (app *App) closeCommunityLotteryComments(postID, token string) error {
+	var resp communityResult[any]
+	payload := map[string]any{
+		"postId":             postID,
+		"postType":           "LOTTERY",
+		"commentDeadline":    time.Now().Add(-time.Second).Format("2006-01-02T15:04:05"),
+		"commentOncePerUser": true,
+	}
+	if err := app.communityPost("/post/update-post", payload, token, &resp); err != nil {
+		return err
+	}
+	if resp.Code != 2000 {
+		return fmt.Errorf("主站关闭评论失败：%s", fallback(resp.Message, "未知错误"))
+	}
+	return nil
+}
+
 func buildTopicLotteryComment(req publishResultRequest) string {
 	var b strings.Builder
-	b.WriteString("## Zens 社区抽奖结果\n\n")
-	b.WriteString(fmt.Sprintf("本次抽奖基于帖子回复数据生成，共 %d 名有效参与者，抽取 %d 名中奖者。\n\n", req.ParticipantCount, len(req.Winners)))
+	b.WriteString("## Zens 社区抽取结果\n\n")
+	b.WriteString(fmt.Sprintf("本次活动基于帖子回复数据生成，共 %d 名有效参与者，抽取 %d 名入选用户。\n\n", req.ParticipantCount, len(req.Winners)))
+	if req.Algorithm != "" {
+		b.WriteString("- 随机算法：")
+		b.WriteString(req.Algorithm)
+		b.WriteString("\n")
+	}
 	b.WriteString("- 随机种子：")
 	b.WriteString(req.Seed)
 	b.WriteString("\n")
+	if req.ParticipantHash != "" {
+		b.WriteString("- 名单快照哈希：")
+		b.WriteString(req.ParticipantHash)
+		b.WriteString("\n")
+	}
+	if req.Proof != "" {
+		b.WriteString("- 结果证明哈希：")
+		b.WriteString(req.Proof)
+		b.WriteString("\n")
+	}
 	b.WriteString("- 规则：排除发帖人、同一用户只计入一次，并按设置的截止楼层统计。\n\n")
-	b.WriteString("### 中奖名单\n\n")
+	b.WriteString("### 入选名单\n\n")
 	for _, winner := range req.Winners {
 		b.WriteString(fmt.Sprintf("%d. %s（%s 楼，回复时间 %s）\n", winner.Rank, winner.DisplayName, strconv.Itoa(winner.Floor), formatCommunityDisplayTime(winner.RepliedAt)))
 	}
-	b.WriteString("\n请中奖用户留意社区站内通知或管理员私信。")
+	b.WriteString("\n请入选用户留意社区站内通知或管理员私信。")
 	return b.String()
 }
 

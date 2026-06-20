@@ -1,4 +1,5 @@
 import { Loader2, MessageCircleMore, UsersRound } from "lucide-react";
+import { AvatarMark } from "./AvatarMark";
 import { formatDateTime, formatFullDateTime } from "../lib/format";
 import type { Participant } from "../types/lottery";
 
@@ -49,14 +50,16 @@ export function ParticipantPreview({
           {participants.map((participant, index) => (
             <li
               key={participant.id}
-              className="list-row-enter flex items-start gap-3 px-4 py-3 transition hover:bg-cream/40"
+              className="list-row-enter grid grid-cols-[40px_minmax(0,1fr)_70px] items-start gap-3 px-4 py-3 transition hover:bg-cream/40 sm:grid-cols-[40px_minmax(0,1fr)_110px]"
               style={{ animationDelay: `${Math.min(index, 10) * 28}ms` }}
             >
-              <span className="avatar-mark">{participant.avatar ?? participant.displayName.slice(0, 1)}</span>
+              <AvatarMark value={participant.avatar} fallback={participant.displayName || participant.username} />
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                  <strong className="text-sm font-semibold text-ink">{participant.displayName}</strong>
-                  <span className="text-sm text-muted">@{participant.username}</span>
+                  <strong className="max-w-full truncate text-sm font-semibold text-ink">
+                    {participant.displayName}
+                  </strong>
+                  <span className="max-w-full truncate text-sm text-muted">@{participant.username}</span>
                 </div>
                 <p className="mt-1 truncate text-sm text-muted">{participant.excerpt}</p>
               </div>
