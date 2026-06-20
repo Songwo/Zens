@@ -33,7 +33,9 @@ Campus Pulse 不是一个普通的论坛系统。它以**行为驱动洞察**为
 | 🗂️ **内容治理** | 多级审核流程（PENDING/APPROVED/REJECTED）、举报异步工作流、版主申请机制 |
 | 💬 **实时通知** | WebSocket（STOMP over SockJS）推送点赞/评论/关注/系统通知，前端实时角标更新 |
 | 🎨 **个性化** | 用户资料卡片/头像预览卡片双主题系统，支持自定义背景图 |
-| 📱 **响应式** | 移动端完整适配，Tab 横向滚动，骨架屏加载，路由组件 keep-alive 缓存 |
+| 📱 **响应式 + PWA** | 移动端完整适配，Tab 横向滚动，骨架屏加载，keep-alive 缓存，PWA 离线可安装 |
+| 🛡️ **信任等级** | TL0-TL4 五级信任体系，行为驱动升降级，按等级解锁权限与举报加权 |
+| 🪐 **子站生态** | SSO 统一登录 + HMAC 内部 API 串联积分商城 / 抽奖站 / CDK 空投站 / 导航站，积分双向流转、事件账本回流 |
 
 ---
 
@@ -129,11 +131,22 @@ Campus Pulse 采用 **Java 主应用 + Go 媒体服务** 双后端拆分，Java 
 - 通知类型：点赞、收藏、评论、@提及、关注、审核结果、系统公告
 - 前端 Badge 实时更新，通知跳转智能路由（follow → 用户主页 / 其他 → 帖子详情）
 
+### 🪐 子站生态（Zens 一站式）
+Campus Pulse 作为 **Zens 主站**，对外提供 SSO 统一登录与 HMAC 签名的内部 API，串联多个独立子站，形成积分驱动的一站式生态：
+
+- **SSO 统一登录**：OAuth2 授权码风格流程，`sys_sso_client` 注册应用，`trusted` 标记第一方应用自动授权跳过同意页，支持单点登出（SLO）
+- **积分商城（zdc-shop）**：Next.js 子站，全量融入主站登录与积分体系，下单/退款双向增减 `sys_user.points`
+- **抽奖站（campus-lottery-station）**：SSO 登录 + 开奖事件回流主站，帖子可挂载抽奖规则
+- **CDK 空投站（cdk-airdrop-station）**：SSO 登录领取兑换码
+- **导航站（zens-nav）**：生态入口聚合
+- **事件账本**：`sys_subsite_event` 统一记录子站事件（积分变动、开奖、兑换），幂等去重 + 多维索引，主站可审计与回流
+- **内部 API 安全**：`InternalServiceFilter` 多密钥白名单 + HMAC 签名校验，子站与主站间服务端通信不走用户 token
+
 ---
 
 ## 🗄️ 数据库设计
 
-共 **25 张核心表**，结构文件：[`src/main/resources/sql/campus_pulse_schema.sql`](src/main/resources/sql/campus_pulse_schema.sql)
+共 **28 张核心表**，结构文件：[`src/main/resources/sql/campus_pulse_schema.sql`](src/main/resources/sql/campus_pulse_schema.sql)
 
 | 表名 | 说明 |
 |------|------|
@@ -160,7 +173,9 @@ Campus Pulse 采用 **Java 主应用 + Go 媒体服务** 双后端拆分，Java 
 | `post_heat_snapshots` | 热度快照表 |
 | `trend_stats` | 趋势统计表 |
 | `invite_codes` | 邀请码表 |
-| `sys_sso_client` | SSO 应用注册表 |
+| `sys_sso_client` | SSO 应用注册表，含第一方可信（`trusted`）自动授权 |
+| `sys_subsite_event` | 子站事件账本，子站行为（开奖/兑换等）回流主站，幂等 `event_id` |
+| `sys_trust_event` | 信任等级变更事件日志，记录升降级原因 |
 | `sys_changelog` | 发展历程 / 版本日志表 |
 
 ---
@@ -577,12 +592,14 @@ GET /actuator/prometheus
 
 ## 🗺️ Roadmap
 
-- [ ] Docker Compose 一键启动
-- [ ] 消息已读回执
-- [ ] 帖子版本历史（diff 展示）
-- [ ] 更丰富的用户等级权益体系
-- [ ] 移动端 PWA 支持
+- [x] 消息已读回执
+- [x] 帖子版本历史（diff 展示）
+- [x] 更丰富的用户等级权益体系（信任等级 TL0-TL4）
+- [x] 移动端 PWA 支持
+- [x] 子站生态接入（积分商城 / 抽奖站 / CDK 空投站 / 导航站）
+- [ ] Docker Compose 全栈一键启动
 - [ ] 管理后台数据大屏
+- [ ] 元宇宙空间 / 积分福利体系深化
 
 ---
 

@@ -136,3 +136,18 @@ campus-lottery-station/.env.*
 zens-nav/node_modules/
 zens-nav/dist/
 zens-nav/*.tsbuildinfo
+
+# campus-lottery-station Go server build output
+campus-lottery-station/server/campus-lottery-station.exe
+campus-lottery-station/server/*.exe
+
+# 误产生 / 本地临时产物
+$null
+*.err
+# 根目录调试截图
+/lottery-avatar-fix.png
+/lottery-local-logged-in.png
+/lottery-post-detail.png
+/*-fix.png
+/*-logged-in.png
+/*-post-detail.png
