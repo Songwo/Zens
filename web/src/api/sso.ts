@@ -11,6 +11,7 @@ export interface SsoClientItem {
     description?: string
     logoUrl?: string
     enabled: boolean
+    trusted?: boolean
     createTime?: string
     updateTime?: string
 }
@@ -20,6 +21,7 @@ export interface SsoClientPublicInfo {
     clientName: string
     description?: string
     logoUrl?: string
+    trusted?: boolean
 }
 
 export const ssoApi = {
@@ -62,6 +64,21 @@ export const ssoApi = {
     /** 重置密钥 */
     resetSecret(id: string) {
         return api.post<any, Result<{ clientSecret: string }>>(`/sso/clients/${id}/reset-secret`)
+    },
+
+    /** 一键创建或修复积分商城 SSO 应用 */
+    upsertPointShopClient() {
+        return api.post<any, Result<SsoClientItem>>('/sso/clients/presets/point-shop')
+    },
+
+    /** 一键创建或修复抽奖站 SSO 应用 */
+    upsertLotteryClient() {
+        return api.post<any, Result<SsoClientItem>>('/sso/clients/presets/lottery')
+    },
+
+    /** 一键创建或修复 CDK 空投站 SSO 应用 */
+    upsertCdkAirdropClient() {
+        return api.post<any, Result<SsoClientItem>>('/sso/clients/presets/cdk-airdrop')
     },
 
     /** 获取应用公开信息（授权页用） */

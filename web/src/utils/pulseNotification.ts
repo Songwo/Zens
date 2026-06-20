@@ -42,15 +42,15 @@ export const pulseNotification = {
     }
   },
 
-  like(message: string, title = '社区共鸣 · 点赞成功') {
+  like(message: string, title = '点赞成功') {
     this.show({ type: 'like', title, message })
   },
 
-  comment(message: string, title = '灵感碰撞 · 评论成功') {
+  comment(message: string, title = '评论成功') {
     this.show({ type: 'comment', title, message })
   },
 
-  post(message: string, title = '声波脉冲 · 发布成功') {
+  post(message: string, title = '发布成功') {
     this.show({ type: 'post', title, message })
   },
 
@@ -58,7 +58,7 @@ export const pulseNotification = {
     this.show({ type: 'success', title, message })
   },
 
-  warning(message: string, title = '安全提示') {
+  warning(message: string, title = '提示') {
     this.show({ type: 'warning', title, message })
   },
 
@@ -66,7 +66,7 @@ export const pulseNotification = {
     this.show({ type: 'error', title, message })
   },
 
-  info(message: string, title = '系统消息') {
+  info(message: string, title = '通知') {
     this.show({ type: 'info', title, message })
   }
 }

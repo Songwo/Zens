@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch, h } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Bell, ChatDotRound, Check, Delete, EditPen, Search } from '@element-plus/icons-vue'
+import { Bell, ChatDotRound, Check, Connection, Delete, EditPen, Present, Search } from '@element-plus/icons-vue'
 import { ElNotification } from 'element-plus'
 import AppLogo from '@/components/common/AppLogo.vue'
 import UserMenu from '@/components/common/UserMenu.vue'
+import AppLauncher from '@/components/layout/AppLauncher.vue'
 import { usePostComposerStore } from '@/store/postComposer'
 import { useUserStore } from '@/store/user'
 import { notificationApi, type Notification } from '@/api/notification'
@@ -39,6 +40,8 @@ const currentPageLabel = computed(() => {
   const path = route.path
   if (path === '/hot') return '热门排行'
   if (path === '/featured') return '精华汇总'
+  if (path === '/benefits') return '福利中心'
+  if (path === '/metaverse') return 'Zens 星港'
   if (path.startsWith('/s/')) return '板块详情'
   if (path.startsWith('/t/')) return '帖子详情'
   if (path === '/me') return '个人中心'
@@ -395,6 +398,28 @@ onUnmounted(() => {
           <el-icon><Search /></el-icon>
         </el-button>
 
+        <el-button
+          text
+          class="metaverse-shortcut"
+          :class="{ active: route.path.startsWith('/benefits') }"
+          @click="router.push('/benefits')"
+        >
+          <el-icon><Present /></el-icon>
+          <span class="metaverse-label">福利</span>
+        </el-button>
+
+        <el-button
+          text
+          class="metaverse-shortcut"
+          :class="{ active: route.path.startsWith('/metaverse') }"
+          @click="router.push('/metaverse')"
+        >
+          <el-icon><Connection /></el-icon>
+          <span class="metaverse-label">星港</span>
+        </el-button>
+
+        <AppLauncher class="ecosystem-launcher" />
+
         <el-button type="primary" @click="goCompose" class="compose-btn">
           <el-icon><EditPen /></el-icon>
           <span class="compose-label">发帖</span>
@@ -543,6 +568,31 @@ onUnmounted(() => {
   justify-content: flex-end;
   gap: 10px;
   flex-shrink: 0;
+}
+
+.metaverse-shortcut {
+  height: 36px;
+  border-radius: 999px;
+  border: 1px solid var(--el-border-color-light);
+  color: var(--el-text-color-regular);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(255, 255, 255, 0.62)),
+    var(--el-bg-color);
+  font-weight: 800;
+  padding: 0 12px;
+}
+
+.metaverse-shortcut :deep(.el-icon) {
+  margin-right: 5px;
+  color: var(--cp-primary-dark);
+}
+
+.metaverse-shortcut:hover,
+.metaverse-shortcut.active {
+  color: #7a5700;
+  border-color: color-mix(in srgb, var(--cp-primary) 54%, var(--el-border-color-light));
+  background: var(--accept-bg-soft);
+  transform: translateY(-1px);
 }
 
 .icon-btn {
@@ -705,6 +755,19 @@ onUnmounted(() => {
   }
 
   .compose-label {
+    display: none;
+  }
+
+  .metaverse-shortcut {
+    width: 36px;
+    padding: 0;
+  }
+
+  .metaverse-shortcut :deep(.el-icon) {
+    margin-right: 0;
+  }
+
+  .metaverse-label {
     display: none;
   }
 

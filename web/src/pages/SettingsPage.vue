@@ -25,6 +25,7 @@ import { uploadApi } from '@/api/upload'
 import { UPLOAD_IMAGE_MAX_SIZE_BYTES, UPLOAD_IMAGE_MAX_SIZE_MB } from '@/constants/upload'
 import { CARD_THEME_OPTIONS, getCardThemePalette } from '@/utils/cardTheme'
 import { ensureCurrentUserProfile, patchCurrentUserProfile } from '@/utils/sessionProfile'
+import { getErrorMessage } from '@/utils/errorMessage'
 
 const userStore = useUserStore()
 const uiStore = useUiStore()
@@ -146,8 +147,8 @@ const handleSaveProfile = async () => {
       emailNotifyEnabled: notifications.value ? 1 : 0,
       twoFactorEnabled: twoFactorEnabled.value ? 1 : 0,
     } as any)
-  } catch {
-    ElMessage.error('更新失败，请重试')
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, '个人信息保存失败，请检查填写内容'))
   } finally {
     profileLoading.value = false
   }
@@ -172,8 +173,8 @@ const handleAvatarUpload = async (file: any) => {
     ElMessage.success('头像更新成功')
     profileForm.avatar = url
     patchCurrentUserProfile({ avatar: url } as any)
-  } catch {
-    ElMessage.error('头像上传失败')
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, '头像上传失败，请检查图片后重试'))
   }
 }
 
@@ -239,9 +240,9 @@ const handleNotificationSwitch = async (value: boolean) => {
   try {
     await userApi.updateNotificationSettings({ emailNotifyEnabled: value })
     ElMessage.success(value ? '已开启邮件同步通知' : '已关闭邮件同步通知')
-  } catch {
+  } catch (error) {
     notifications.value = !value
-    ElMessage.error('通知设置保存失败')
+    ElMessage.error(getErrorMessage(error, '通知设置保存失败'))
   }
 }
 
@@ -359,7 +360,7 @@ const handleUpdatePassword = async () => {
       router.push('/auth/login')
     }, 1500)
   } catch (error) {
-    ElMessage.error('密码修改失败，请检查原密码')
+    ElMessage.error(getErrorMessage(error, '密码修改失败，请检查原密码'))
   }
 }
 

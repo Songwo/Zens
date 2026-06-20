@@ -61,6 +61,19 @@ const isDraftLikeEditing = computed(() => {
   return isEditing.value && (editStatus.value === 0 || editAuditStatus.value === 'REJECTED' || editAuditStatus.value === 'DRAFT')
 })
 const showTl0Hint = computed(() => composerTrustLevel.value === 0)
+const isLotteryPost = computed({
+  get: () => draft.form.postType === 'LOTTERY',
+  set: (value: boolean) => {
+    draft.form.postType = value ? 'LOTTERY' : 'NORMAL'
+    if (value) {
+      draft.form.isAnonymous = 0
+      draft.form.commentOncePerUser = true
+    } else {
+      draft.form.commentDeadline = ''
+      draft.form.commentOncePerUser = true
+    }
+  }
+})
 
 const categoriesLoading = ref(false)
 
@@ -269,6 +282,9 @@ const publish = async () => {
         sectionId: draft.form.sectionId,
         tags: draft.form.tags.join(','),
         coverImage: draft.form.coverImage || undefined,
+        postType: draft.form.postType,
+        commentDeadline: draft.form.postType === 'LOTTERY' && draft.form.commentDeadline ? draft.form.commentDeadline : undefined,
+        commentOncePerUser: draft.form.postType === 'LOTTERY' ? draft.form.commentOncePerUser : false,
         status: 1,
         publish: true
       })
@@ -282,6 +298,9 @@ const publish = async () => {
         sectionId: draft.form.sectionId,
         tags: draft.form.tags.join(','),
         coverImage: draft.form.coverImage || undefined,
+        postType: draft.form.postType,
+        commentDeadline: draft.form.postType === 'LOTTERY' && draft.form.commentDeadline ? draft.form.commentDeadline : undefined,
+        commentOncePerUser: draft.form.postType === 'LOTTERY' ? draft.form.commentOncePerUser : false,
         status: 1,
         poll: pollPayload || undefined
       })
@@ -352,6 +371,9 @@ const saveDraftToServer = async (silent = false) => {
       tags: draft.form.tags.join(',') || undefined,
       coverImage: draft.form.coverImage || undefined,
       isAnonymous: draft.form.isAnonymous,
+      postType: draft.form.postType,
+      commentDeadline: draft.form.postType === 'LOTTERY' && draft.form.commentDeadline ? draft.form.commentDeadline : undefined,
+      commentOncePerUser: draft.form.postType === 'LOTTERY' ? draft.form.commentOncePerUser : false,
     })
 
     if (res.data?.id) {
@@ -519,6 +541,12 @@ watch(() => composerStore.isOpen, async (newVal) => {
         draft.form.sectionId = composerStore.context.sectionId
         draft.form.tags = composerStore.context.tags ? composerStore.context.tags.split(',') : []
         draft.form.coverImage = composerStore.context.coverImage
+        draft.form.postType = composerStore.context.postType === 'LOTTERY' ? 'LOTTERY' : 'NORMAL'
+        draft.form.commentDeadline = composerStore.context.commentDeadline || ''
+        draft.form.commentOncePerUser = composerStore.context.commentOncePerUser !== false
+        if (draft.form.postType === 'LOTTERY') {
+          draft.form.isAnonymous = 0
+        }
         draft.syncSnapshot()
 
         composerStore.context.editId = '' // Song：消费一次性上下文
@@ -704,6 +732,30 @@ onUnmounted(() => {
                 <PollComposerPanel ref="pollPanelRef" />
               </el-form-item>
 
+              <el-form-item label="抽奖贴设置">
+                <div class="lottery-settings">
+                  <div class="lottery-toggle-row">
+                    <div class="lottery-copy">
+                      <span class="lottery-title">作为抽奖参与帖</span>
+                      <span class="lottery-desc">开启后评论会作为抽奖站参与名单来源，并强制实名登录参与</span>
+                    </div>
+                    <el-switch v-model="isLotteryPost" />
+                  </div>
+
+                  <div v-if="isLotteryPost" class="lottery-options">
+                    <el-date-picker
+                      v-model="draft.form.commentDeadline"
+                      type="datetime"
+                      value-format="YYYY-MM-DDTHH:mm:ss"
+                      format="YYYY-MM-DD HH:mm"
+                      placeholder="选择评论截止时间（可选）"
+                      class="lottery-deadline"
+                    />
+                    <el-checkbox v-model="draft.form.commentOncePerUser">每个账号只能评论参与一次</el-checkbox>
+                  </div>
+                </div>
+              </el-form-item>
+
               <!-- Content Editor -->
               <el-form-item class="editor-form-item">
                 <template #label>
@@ -760,7 +812,15 @@ onUnmounted(() => {
           <!-- FOOTER -->
             <div class="composer-footer">
               <div class="footer-left">
-                <el-checkbox v-model="draft.form.isAnonymous" :true-label="1" :false-label="0">匿名发布</el-checkbox>
+                <el-checkbox
+                  v-model="draft.form.isAnonymous"
+                  :true-label="1"
+                  :false-label="0"
+                  :disabled="isLotteryPost"
+                >
+                  匿名发布
+                </el-checkbox>
+                <span v-if="isLotteryPost" class="footer-hint">抽奖贴需要实名账号参与</span>
               </div>
               <div class="footer-right">
                 <span class="content-metrics">
@@ -1007,6 +1067,55 @@ html.dark .title-input :deep(.el-input__inner) {
   line-height: 1.4;
 }
 
+.lottery-settings {
+  width: 100%;
+  border: 1px solid var(--cp-border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--el-color-primary-light-9) 36%, var(--cp-bg-card));
+  padding: 14px 16px;
+}
+
+.lottery-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.lottery-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.lottery-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--cp-text);
+}
+
+.lottery-desc,
+.footer-hint {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  line-height: 1.5;
+}
+
+.lottery-options {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px dashed var(--cp-border);
+}
+
+.lottery-deadline {
+  width: min(100%, 280px);
+}
+
 .editor-form-item {
   margin-bottom: 0;
   flex: 1;
@@ -1061,6 +1170,13 @@ html.dark .composer-footer {
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+.footer-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
 }
 
 .draft-status {

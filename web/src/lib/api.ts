@@ -3,6 +3,8 @@ import { ElMessage } from 'element-plus'
 import { ResultCode } from '@/types'
 import { getOrCreateDeviceId } from '@/utils/device'
 import { useUserStore } from '@/store/user'
+import { finishGlobalProgress, startGlobalProgress } from '@/utils/globalProgress'
+import { getErrorMessage } from '@/utils/errorMessage'
 
 // ─────────────────────────────────────────────────────────
 // 类型定义
@@ -60,7 +62,14 @@ function showErrorMessage(msg: string, key = msg) {
   const now = Date.now()
   if ((recentToastMap.get(key) || 0) + TOAST_DEDUPE_MS > now) return
   recentToastMap.set(key, now)
-  ElMessage.error(msg)
+  ElMessage({
+    type: 'error',
+    message: msg,
+    plain: true,
+    grouping: true,
+    duration: 2600,
+    showClose: false,
+  })
 }
 
 // ─────────────────────────────────────────────────────────
@@ -315,6 +324,7 @@ function syncRenewedAccessToken(headers?: Record<string, unknown>) {
 // 请求拦截器
 // ─────────────────────────────────────────────────────────
 api.interceptors.request.use(async (config) => {
+  startGlobalProgress('正在同步数据')
   const path = normalizePath(config)
   const isPublic = isPublicAuthPath(path)
   let token = getAccessToken()
@@ -360,6 +370,7 @@ api.interceptors.request.use(async (config) => {
 // ─────────────────────────────────────────────────────────
 api.interceptors.response.use(
   (response) => {
+    finishGlobalProgress()
     syncRenewedAccessToken(response.headers as Record<string, unknown> | undefined)
     const res = response.data
     if (response.config.responseType === 'blob' || res instanceof Blob) return res
@@ -372,6 +383,7 @@ api.interceptors.response.use(
     return res
   },
   async (error) => {
+    finishGlobalProgress()
     if (error?.code === 'ERR_CANCELED') return Promise.reject(error)
 
     const originalRequest = error?.config as RetryConfig | undefined
@@ -441,10 +453,8 @@ api.interceptors.response.use(
     }
 
     // ── 错误提示 ──────────────────────────────────────────
-    const errMsg = error?.response?.data?.message
-      || (error?.code === 'ECONNABORTED' ? '请求超时，请重试' : null)
-      || (!error?.response ? '网络连接异常，请检查网络' : null)
-    if (errMsg) showErrorMessage(errMsg, error?.code || errMsg)
+    const errMsg = getErrorMessage(error, '')
+    if (errMsg) showErrorMessage(errMsg, error?.code || error?.response?.status || errMsg)
 
     // 增强错误日志（仅在开发环境或启用调试时）
     if (import.meta.env.DEV || localStorage.getItem('debug_auth') === 'true') {

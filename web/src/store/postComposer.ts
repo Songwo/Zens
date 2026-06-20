@@ -11,10 +11,13 @@ export const usePostComposerStore = defineStore('postComposer', () => {
         tags: '',
         coverImage: '',
         status: 1,
-        auditStatus: ''
+        auditStatus: '',
+        postType: 'NORMAL',
+        commentDeadline: '',
+        commentOncePerUser: true
     })
 
-    const open = (ctx?: { editId?: string, title?: string, content?: string, sectionId?: number, tags?: string, coverImage?: string, status?: number, auditStatus?: string }) => {
+    const open = (ctx?: { editId?: string, title?: string, content?: string, sectionId?: number, tags?: string, coverImage?: string, status?: number, auditStatus?: string, postType?: string, commentDeadline?: string | null, commentOncePerUser?: boolean | number }) => {
         console.log('Pinia: Opening composer')
         if (ctx) {
             context.editId = ctx.editId || ''
@@ -25,6 +28,9 @@ export const usePostComposerStore = defineStore('postComposer', () => {
             context.coverImage = ctx.coverImage || ''
             context.status = ctx.status ?? 1
             context.auditStatus = ctx.auditStatus || ''
+            context.postType = ctx.postType === 'LOTTERY' ? 'LOTTERY' : 'NORMAL'
+            context.commentDeadline = ctx.commentDeadline || ''
+            context.commentOncePerUser = ctx.commentOncePerUser !== false && ctx.commentOncePerUser !== 0
         } else {
             // Song：说明
             context.editId = ''
@@ -35,6 +41,9 @@ export const usePostComposerStore = defineStore('postComposer', () => {
             context.coverImage = ''
             context.status = 1
             context.auditStatus = ''
+            context.postType = 'NORMAL'
+            context.commentDeadline = ''
+            context.commentOncePerUser = true
         }
         isOpen.value = true
         document.body.style.overflow = 'hidden'

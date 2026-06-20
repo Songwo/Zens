@@ -67,6 +67,8 @@ const isReporting = ref(false)
 const isOpeningEditor = ref(false)
 const likeAnimating = ref(false)
 const collectAnimating = ref(false)
+const isLiking = ref(false)
+const isCollecting = ref(false)
 const reportForm = ref({
   reason: '',
   details: ''
@@ -87,7 +89,10 @@ const openEditor = async () => {
       tags: detail.tags || props.post.tags,
       coverImage: detail.coverImage || props.post.coverImage,
       status: detail.status ?? props.post.status,
-      auditStatus: detail.auditStatus || props.post.auditStatus
+      auditStatus: detail.auditStatus || props.post.auditStatus,
+      postType: detail.postType || props.post.postType,
+      commentDeadline: detail.commentDeadline || props.post.commentDeadline,
+      commentOncePerUser: detail.commentOncePerUser ?? props.post.commentOncePerUser
     })
   } catch (error) {
     ElMessage.error('获取帖子详情失败，暂时无法编辑')
@@ -185,39 +190,60 @@ const goToPost = () => {
 
 const handleLike = async (e: Event) => {
   e.stopPropagation()
+  if (isLiking.value) return // 防抖:请求未回前忽略重复点击
+  isLiking.value = true
   likeAnimating.value = true
   setTimeout(() => { likeAnimating.value = false }, 400)
+
+  // 乐观更新:先翻转 UI,失败再回滚——点击即时生效,消除网络往返的卡顿感
+  const prevLiked = props.post.isLiked
+  const prevCount = props.post.likeCount
+  const nextLiked = !prevLiked
+  props.post.isLiked = nextLiked
+  props.post.likeCount = prevCount + (nextLiked ? 1 : -1)
+
   try {
     await postApi.like(props.post.id)
-    props.post.isLiked = !props.post.isLiked
-    props.post.likeCount += props.post.isLiked ? 1 : -1
-
-    if (props.post.isLiked) {
+    if (nextLiked) {
       pulseNotification.like(`你为帖子「${props.post.title}」注入了一次共鸣脉冲！`)
     } else {
       pulseNotification.info(`已取消对该帖子的点赞`)
     }
   } catch (error) {
+    props.post.isLiked = prevLiked
+    props.post.likeCount = prevCount
     pulseNotification.error('点赞脉冲发射失败，请重试')
+  } finally {
+    isLiking.value = false
   }
 }
 
 const handleCollect = async (e: Event) => {
   e.stopPropagation()
+  if (isCollecting.value) return
+  isCollecting.value = true
   collectAnimating.value = true
   setTimeout(() => { collectAnimating.value = false }, 400)
+
+  const prevCollected = props.post.isCollected
+  const prevCount = props.post.collectCount || 0
+  const nextCollected = !prevCollected
+  props.post.isCollected = nextCollected
+  props.post.collectCount = prevCount + (nextCollected ? 1 : -1)
+
   try {
     await postApi.collect(props.post.id)
-    props.post.isCollected = !props.post.isCollected
-    props.post.collectCount = (props.post.collectCount || 0) + (props.post.isCollected ? 1 : -1)
-
-    if (props.post.isCollected) {
+    if (nextCollected) {
       pulseNotification.success(`成功将「${props.post.title}」收纳至你的灵感库`, '收藏成功')
     } else {
       pulseNotification.info(`已将该帖子移出你的灵感库`)
     }
   } catch (error) {
+    props.post.isCollected = prevCollected
+    props.post.collectCount = prevCount
     pulseNotification.error('收藏失败，请重试')
+  } finally {
+    isCollecting.value = false
   }
 }
 

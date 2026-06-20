@@ -4,8 +4,18 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { CopyDocument, Delete, Edit, Refresh, Plus, Connection } from '@element-plus/icons-vue'
 import { ssoApi, type SsoClientItem } from '@/api/sso'
 
+type SsoPreset = {
+    id: string
+    clientId: string
+    clientName: string
+    redirectUris: string[]
+    description: string
+    logoUrl: string
+}
+
 const clients = ref<SsoClientItem[]>([])
 const loading = ref(false)
+const repairingPresetId = ref('')
 const dialogVisible = ref(false)
 const dialogMode = ref<'create' | 'edit'>('create')
 const editingId = ref('')
@@ -21,11 +31,56 @@ const form = ref({
 const newSecret = ref('')
 const showSecretDialog = ref(false)
 
+const cdkSsoPreset: SsoPreset = {
+    id: 'cdk-airdrop',
+    clientId: 'cdk-airdrop',
+    clientName: 'CDK 空投台',
+    redirectUris: [
+        'https://cdk.allinsong.top/login/callback',
+        'http://localhost:5174/login/callback',
+        'http://127.0.0.1:5174/login/callback',
+    ],
+    description: 'ZensPulse 社区 CDK 节点空投平台',
+    logoUrl: '',
+}
+
+const pointShopSsoPreset: SsoPreset = {
+    id: 'zdc-shop',
+    clientId: 'zdc-shop',
+    clientName: 'Zens 积分商城',
+    redirectUris: [
+        'https://shop.allinsong.top/login/callback',
+        'https://mall.allinsong.top/login/callback',
+        'https://points.allinsong.top/login/callback',
+        'https://zdc-shop.allinsong.top/login/callback',
+        'http://localhost:3000/login/callback',
+        'http://127.0.0.1:3000/login/callback',
+        'http://localhost:3001/login/callback',
+        'http://127.0.0.1:3001/login/callback',
+    ],
+    description: 'Zens 社区积分商城，使用主站账号单点登录并同步积分权益。',
+    logoUrl: '/logo.png',
+}
+
+function presetToForm(preset: SsoPreset) {
+    return {
+        clientId: preset.clientId,
+        clientName: preset.clientName,
+        redirectUri: preset.redirectUris.join(', '),
+        description: preset.description,
+        logoUrl: preset.logoUrl,
+    }
+}
+
+async function fetchClients() {
+    const res = await ssoApi.listClients()
+    return res.data || []
+}
+
 async function loadClients() {
     loading.value = true
     try {
-        const res = await ssoApi.listClients()
-        clients.value = res.data || []
+        clients.value = await fetchClients()
     } catch (e: any) {
         ElMessage.error(e.message || '加载失败')
     } finally {
@@ -33,16 +88,10 @@ async function loadClients() {
     }
 }
 
-function openCreateDialog() {
+function openCreateDialog(preset: SsoPreset = cdkSsoPreset) {
     dialogMode.value = 'create'
     editingId.value = ''
-    form.value = { 
-        clientId: 'cdk-airdrop', 
-        clientName: 'CDK 空投台', 
-        redirectUri: 'https://cdk.allinsong.top/login/callback, http://localhost:5174/login/callback', 
-        description: 'ZensPulse 社区 CDK 节点空投平台', 
-        logoUrl: '' 
-    }
+    form.value = presetToForm(preset)
     dialogVisible.value = true
 }
 
@@ -57,6 +106,15 @@ function openEditDialog(client: SsoClientItem) {
         logoUrl: client.logoUrl || '',
     }
     dialogVisible.value = true
+}
+
+function openPresetDialog(preset: SsoPreset) {
+    const existing = clients.value.find(client => client.clientId === preset.clientId)
+    if (existing) {
+        openEditDialog(existing)
+        return
+    }
+    openCreateDialog(preset)
 }
 
 async function submitForm() {
@@ -86,6 +144,35 @@ async function submitForm() {
         loadClients()
     } catch (e: any) {
         ElMessage.error(e.message || '操作失败')
+    }
+}
+
+async function repairPresetClient(preset: SsoPreset) {
+    repairingPresetId.value = preset.id
+    try {
+        if (preset.id === pointShopSsoPreset.id) {
+            const res = await ssoApi.upsertPointShopClient()
+            const repaired = res.data
+            if (repaired?.clientSecret) {
+                newSecret.value = repaired.clientSecret
+                showSecretDialog.value = true
+            }
+            ElMessage.success(`${preset.clientName} SSO 已创建/修复并启用`)
+        } else {
+            const res = await ssoApi.createClient(presetToForm(preset))
+            const created = res.data
+            if (created?.clientSecret) {
+                newSecret.value = created.clientSecret
+                showSecretDialog.value = true
+            }
+            ElMessage.success(`${preset.clientName} SSO 已创建`)
+        }
+
+        await loadClients()
+    } catch (e: any) {
+        ElMessage.error(e.message || `${preset.clientName} SSO 修复失败`)
+    } finally {
+        repairingPresetId.value = ''
     }
 }
 
@@ -151,7 +238,26 @@ onMounted(loadClients)
                 </h2>
                 <p class="header-desc">管理第三方应用的单点登录接入配置，允许外部应用使用社区账号快速登录。</p>
             </div>
-            <el-button type="primary" :icon="Plus" @click="openCreateDialog">新建应用</el-button>
+            <div class="header-actions">
+                <el-button
+                    :icon="Refresh"
+                    :loading="repairingPresetId === pointShopSsoPreset.id"
+                    @click="repairPresetClient(pointShopSsoPreset)"
+                >
+                    一键修复积分商城 SSO
+                </el-button>
+                <el-button type="primary" :icon="Plus" @click="openCreateDialog()">新建应用</el-button>
+            </div>
+        </div>
+
+        <div class="preset-panel">
+            <div>
+                <div class="preset-title">积分商城接入检查</div>
+                <div class="preset-desc">
+                    client_id 固定为 <code>zdc-shop</code>，已覆盖本地 3000/3001 与常用生产子域名回调地址。
+                </div>
+            </div>
+            <el-button link type="primary" @click="openPresetDialog(pointShopSsoPreset)">查看预置配置</el-button>
         </div>
 
         <el-table :data="clients" v-loading="loading" stripe style="width: 100%; margin-top: 20px;">
@@ -293,6 +399,7 @@ onMounted(loadClients)
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
+    gap: 16px;
 }
 
 .page-header h2 {
@@ -308,6 +415,44 @@ onMounted(loadClients)
     color: var(--el-text-color-secondary);
 }
 
+.header-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+.preset-panel {
+    margin-top: 18px;
+    padding: 14px 16px;
+    border: 1px solid var(--el-border-color-lighter);
+    border-radius: 12px;
+    background: linear-gradient(135deg, rgba(246, 168, 0, 0.08), rgba(255, 255, 255, 0.92));
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.preset-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--el-text-color-primary);
+}
+
+.preset-desc {
+    margin-top: 4px;
+    font-size: 13px;
+    color: var(--el-text-color-secondary);
+}
+
+.preset-desc code {
+    padding: 1px 6px;
+    border-radius: 5px;
+    background: rgba(246, 168, 0, 0.12);
+    color: #9a6700;
+}
+
 .empty-state {
     text-align: center;
     padding: 60px 20px;
@@ -316,5 +461,17 @@ onMounted(loadClients)
 
 .empty-state p {
     margin: 8px 0 0;
+}
+
+@media (max-width: 768px) {
+    .page-header,
+    .preset-panel {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .header-actions {
+        justify-content: flex-start;
+    }
 }
 </style>

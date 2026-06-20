@@ -195,7 +195,9 @@ onMounted(fetchAll)
         <div v-if="records.length" class="exp-list">
           <div v-for="rec in records" :key="rec.id" class="exp-row">
             <span class="exp-reason">{{ rec.reason }}</span>
-            <span class="exp-delta">+{{ rec.expDelta }}</span>
+            <span class="exp-delta" :class="{ negative: rec.expDelta < 0 }">
+              {{ rec.expDelta > 0 ? '+' : '' }}{{ rec.expDelta }}
+            </span>
             <span class="exp-time">{{ fmt(rec.createTime) }}</span>
           </div>
         </div>
@@ -666,6 +668,9 @@ onMounted(fetchAll)
   font-size: 14px;
   font-weight: 800;
   color: var(--el-color-success);
+}
+.exp-delta.negative {
+  color: var(--el-color-warning);
 }
 .exp-time {
   font-size: 12px;

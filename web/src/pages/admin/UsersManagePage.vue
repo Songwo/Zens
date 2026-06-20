@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Search, Delete, Lock, Unlock, UserFilled } from '@element-plus/icons-vue'
+import { Search, Delete, Lock, Unlock, UserFilled, Select, RefreshRight } from '@element-plus/icons-vue'
 import api from '@/lib/api'
 import { useUserStore } from '@/store/user'
 import { sectionApi, type Section } from '@/api/section'
@@ -14,6 +14,10 @@ const sections = ref<Section[]>([])
 const loading = ref(true)
 const sectionsLoading = ref(false)
 const searchKeyword = ref('')
+const statusFilter = ref<'all' | 'active' | 'banned'>('all')
+const roleFilter = ref<'all' | 'admin' | 'moderator' | 'user'>('all')
+const selectedUsers = ref<any[]>([])
+const batchLoading = ref(false)
 const roleDialogVisible = ref(false)
 const roleDialogUser = ref<any>(null)
 const selectedRole = ref('')
@@ -86,9 +90,11 @@ const fetchUsers = async () => {
             .filter((id: number) => Number.isFinite(id) && id > 0)
         : []
     }))
+    selectedUsers.value = []
   } catch (error) {
     ElMessage.error('获取用户列表失败')
     users.value = []
+    selectedUsers.value = []
   } finally {
     loading.value = false
   }
@@ -107,16 +113,37 @@ const fetchSections = async () => {
   }
 }
 
-const filteredUsers = () => {
-  if (!searchKeyword.value) return users.value
-  const kw = searchKeyword.value.toLowerCase()
-  return users.value.filter((u: any) =>
-    (u.username || '').toLowerCase().includes(kw) ||
-    (u.nickname || '').toLowerCase().includes(kw) ||
-    (u.email || '').toLowerCase().includes(kw) ||
-    ((kw.includes('版主') || kw.includes('moderator')) && hasSectionModeratorRole(u))
-  )
+const userMatchesRole = (user: any) => {
+  if (roleFilter.value === 'all') return true
+  if (roleFilter.value === 'admin') return (user.roles || []).some((role: string) => role === 'ROLE_ADMIN' || role === 'ROLE_SUPER_ADMIN')
+  if (roleFilter.value === 'moderator') return (user.roles || []).includes('ROLE_MODERATOR') || hasSectionModeratorRole(user)
+  return !((user.roles || []).some((role: string) => role === 'ROLE_ADMIN' || role === 'ROLE_SUPER_ADMIN' || role === 'ROLE_MODERATOR') || hasSectionModeratorRole(user))
 }
+
+const filteredUsers = computed(() => {
+  let result = users.value
+  const kw = searchKeyword.value.toLowerCase()
+  if (kw) {
+    result = result.filter((u: any) =>
+      (u.username || '').toLowerCase().includes(kw) ||
+      (u.nickname || '').toLowerCase().includes(kw) ||
+      (u.email || '').toLowerCase().includes(kw) ||
+      ((kw.includes('版主') || kw.includes('moderator')) && hasSectionModeratorRole(u))
+    )
+  }
+  if (statusFilter.value !== 'all') {
+    result = result.filter((u: any) => statusFilter.value === 'banned' ? u.status === 0 : u.status !== 0)
+  }
+  return result.filter(userMatchesRole)
+})
+
+const selectedOperableUsers = computed(() => selectedUsers.value.filter(canOperateUser))
+const selectedActiveUsers = computed(() => selectedOperableUsers.value.filter(user => user.status !== 0))
+const selectedBannedUsers = computed(() => selectedOperableUsers.value.filter(user => user.status === 0))
+const activeUserCount = computed(() => users.value.filter(user => user.status !== 0).length)
+const bannedUserCount = computed(() => users.value.filter(user => user.status === 0).length)
+const adminUserCount = computed(() => users.value.filter(user => (user.roles || []).some((role: string) => role === 'ROLE_ADMIN' || role === 'ROLE_SUPER_ADMIN')).length)
+const moderatorUserCount = computed(() => users.value.filter(hasSectionModeratorRole).length)
 
 const hasSectionModeratorRole = (user: any) => {
   return Array.isArray(user.moderatedSectionIds) && user.moderatedSectionIds.length > 0
@@ -155,6 +182,46 @@ const handleUnban = async (user: any) => {
   } catch (e: any) {
     ElMessage.error(e?.response?.data?.message || '操作失败')
   }
+}
+
+const handleSelectionChange = (rows: any[]) => {
+  selectedUsers.value = rows
+}
+
+const runBatchUserStatus = async (rows: any[], actionName: string, action: (user: any) => Promise<unknown>) => {
+  if (rows.length === 0) {
+    ElMessage.warning('请先选择可操作的用户')
+    return
+  }
+  try {
+    await ElMessageBox.confirm(`确定批量${actionName}选中的 ${rows.length} 个用户吗？`, `批量${actionName}`, {
+      confirmButtonText: `批量${actionName}`,
+      cancelButtonText: '取消',
+      type: actionName === '封禁' ? 'warning' : 'success',
+    })
+    batchLoading.value = true
+    const results = await Promise.allSettled(rows.map(user => action(user)))
+    const success = results.filter(result => result.status === 'fulfilled').length
+    const failed = results.length - success
+    if (failed > 0) {
+      ElMessage.warning(`批量${actionName}完成：成功 ${success} 个，失败 ${failed} 个`)
+    } else {
+      ElMessage.success(`已批量${actionName} ${success} 个用户`)
+    }
+    await fetchUsers()
+  } catch (e: any) {
+    if (e !== 'cancel') ElMessage.error(`批量${actionName}失败`)
+  } finally {
+    batchLoading.value = false
+  }
+}
+
+const batchBanUsers = () => {
+  runBatchUserStatus(selectedActiveUsers.value, '封禁', user => userApi.ban(user.id))
+}
+
+const batchUnbanUsers = () => {
+  runBatchUserStatus(selectedBannedUsers.value, '解封', user => userApi.unban(user.id))
 }
 
 const handleDelete = async (user: any) => {
@@ -233,17 +300,91 @@ onMounted(() => {
 <template>
   <div class="manage-page">
     <div class="page-header">
-      <h1 class="title">用户管理</h1>
-      <el-input
-        v-model="searchKeyword"
-        placeholder="搜索用户名/昵称/邮箱"
-        :prefix-icon="Search"
-        clearable
-        class="search-input"
-      />
+      <div class="header-info">
+        <h1 class="title">用户管理</h1>
+        <p class="subtitle">集中管理账号状态、角色权限、板块版主和个人徽章。</p>
+      </div>
+      <div class="header-actions">
+        <el-select v-model="roleFilter" class="filter-select" placeholder="角色筛选">
+          <el-option label="全部角色" value="all" />
+          <el-option label="管理员" value="admin" />
+          <el-option label="版主" value="moderator" />
+          <el-option label="普通用户" value="user" />
+        </el-select>
+        <el-select v-model="statusFilter" class="filter-select" placeholder="状态筛选">
+          <el-option label="全部状态" value="all" />
+          <el-option label="正常" value="active" />
+          <el-option label="封禁" value="banned" />
+        </el-select>
+        <el-input
+          v-model="searchKeyword"
+          placeholder="搜索用户名/昵称/邮箱"
+          :prefix-icon="Search"
+          clearable
+          class="search-input"
+        />
+      </div>
     </div>
 
-    <el-table :data="filteredUsers()" v-loading="loading" stripe border class="data-table">
+    <div class="admin-summary-grid">
+      <div class="summary-card success">
+        <span class="summary-label">正常用户</span>
+        <strong>{{ activeUserCount }}</strong>
+      </div>
+      <div class="summary-card danger">
+        <span class="summary-label">封禁用户</span>
+        <strong>{{ bannedUserCount }}</strong>
+      </div>
+      <div class="summary-card">
+        <span class="summary-label">管理员</span>
+        <strong>{{ adminUserCount }}</strong>
+      </div>
+      <div class="summary-card">
+        <span class="summary-label">板块版主</span>
+        <strong>{{ moderatorUserCount }}</strong>
+      </div>
+    </div>
+
+    <div class="bulk-toolbar" :class="{ active: selectedUsers.length > 0 }">
+      <div class="bulk-info">
+        <el-icon><Select /></el-icon>
+        <span>已选择 {{ selectedUsers.length }} 个，可操作 {{ selectedOperableUsers.length }} 个</span>
+      </div>
+      <div class="bulk-actions">
+        <el-button
+          size="small"
+          type="warning"
+          plain
+          :icon="Lock"
+          :disabled="selectedActiveUsers.length === 0"
+          :loading="batchLoading"
+          @click="batchBanUsers"
+        >
+          批量封禁 {{ selectedActiveUsers.length || '' }}
+        </el-button>
+        <el-button
+          size="small"
+          type="success"
+          plain
+          :icon="RefreshRight"
+          :disabled="selectedBannedUsers.length === 0"
+          :loading="batchLoading"
+          @click="batchUnbanUsers"
+        >
+          批量解封 {{ selectedBannedUsers.length || '' }}
+        </el-button>
+      </div>
+    </div>
+
+    <el-table
+      :data="filteredUsers"
+      v-loading="loading"
+      stripe
+      border
+      class="data-table"
+      @selection-change="handleSelectionChange"
+    >
+      <el-table-column type="selection" width="44" :selectable="canOperateUser" />
       <el-table-column prop="id" label="ID" width="180" show-overflow-tooltip />
       <el-table-column prop="username" label="用户名" width="140">
         <template #default="{ row }">
@@ -448,9 +589,10 @@ onMounted(() => {
 }
 .page-header {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: space-between;
   margin-bottom: 24px;
+  gap: 18px;
 }
 .page-header .title {
   margin: 0;
@@ -458,11 +600,104 @@ onMounted(() => {
   font-weight: 800;
   color: var(--el-text-color-primary);
 }
+
+.subtitle {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
+}
+
+.header-info {
+  min-width: 0;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.filter-select {
+  width: 132px;
+}
+
 .search-input {
   width: 280px;
 }
 .data-table {
   border-radius: 8px;
+}
+
+.admin-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.summary-card {
+  min-height: 74px;
+  padding: 14px 16px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 8px;
+  background: var(--cp-bg-card);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 6px;
+}
+
+.summary-card strong {
+  font-size: 26px;
+  line-height: 1;
+  color: var(--el-text-color-primary);
+}
+
+.summary-card.success strong {
+  color: var(--el-color-success);
+}
+
+.summary-card.danger strong {
+  color: var(--el-color-danger);
+}
+
+.summary-label {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+
+.bulk-toolbar {
+  min-height: 46px;
+  margin-bottom: 12px;
+  padding: 8px 10px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 8px;
+  background: var(--el-fill-color-lighter);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.bulk-toolbar.active {
+  border-color: var(--el-color-primary-light-5);
+  background: var(--el-color-primary-light-9);
+}
+
+.bulk-info,
+.bulk-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.bulk-info {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--el-text-color-regular);
 }
 .section-tags {
   display: flex;
@@ -513,5 +748,27 @@ onMounted(() => {
   float: right;
   color: var(--el-text-color-placeholder);
   font-size: 12px;
+}
+
+@media (max-width: 768px) {
+  .page-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .header-actions,
+  .filter-select,
+  .search-input {
+    width: 100%;
+  }
+
+  .admin-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .bulk-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
 }
 </style>

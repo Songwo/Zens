@@ -34,6 +34,9 @@ export interface CreatePostRequest {
     coverImage?: string
     tags: string
     status?: number
+    postType?: 'NORMAL' | 'LOTTERY' | string
+    commentDeadline?: string
+    commentOncePerUser?: boolean
     /** Song：可选附带投票（仅新发帖时支持），见 @/api/poll PollCreateRequest */
     poll?: import('@/api/poll').PollCreateRequest
 }
@@ -47,6 +50,9 @@ export interface SaveDraftRequest {
     tags?: string
     images?: string
     isAnonymous?: number
+    postType?: 'NORMAL' | 'LOTTERY' | string
+    commentDeadline?: string
+    commentOncePerUser?: boolean
     locationName?: string
 }
 
@@ -113,6 +119,9 @@ export interface Post {
     images: string[]
     tags: string
     isAnonymous: number
+    postType?: 'NORMAL' | 'LOTTERY' | string
+    commentDeadline?: string | null
+    commentOncePerUser?: number | boolean
     locationName?: string
     status: number
     auditStatus?: string

@@ -2,7 +2,7 @@
 import { computed, defineAsyncComponent, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { DataLine, Finished, Loading, Refresh } from '@element-plus/icons-vue'
+import { DataLine, Finished, Loading, Refresh, Warning } from '@element-plus/icons-vue'
 import TopicFilters from './TopicFilters.vue'
 import TopicRow from './TopicRow.vue'
 import { postApi } from '@/api/post'
@@ -56,6 +56,9 @@ let observer: IntersectionObserver | null = null
 const INITIAL_SKELETON_COUNT = 5
 
 const isFirstLoading = computed(() => loading.value && topics.value.length === 0)
+// 首屏加载失败:用于区分"真的没内容"和"加载失败",避免把网络错误误显示成空状态
+const loadError = ref(false)
+const isFirstError = computed(() => loadError.value && topics.value.length === 0)
 
 const getCurrentPageSize = () => (firstBatchLoaded.value ? pageSize : initialPageSize)
 
@@ -219,6 +222,7 @@ const fetchDocuments = async (reset = false) => {
 
   const requestToken = ++fetchDocumentsToken
   loading.value = true
+  loadError.value = false
 
   try {
     const currentPageSize = getCurrentPageSize()
@@ -244,7 +248,11 @@ const fetchDocuments = async (reset = false) => {
     }
   } catch {
     if (requestToken === fetchDocumentsToken) {
-      ElMessage.error('加载失败，请重试')
+      loadError.value = true
+      // 首屏失败由页面内"加载失败+重试"承载,不再额外弹 toast;翻页失败才用 toast 提示
+      if (topics.value.length > 0) {
+        ElMessage.error('加载失败，请重试')
+      }
     }
   } finally {
     if (requestToken === fetchDocumentsToken) {
@@ -441,7 +449,13 @@ defineExpose({
         <TopicRow v-for="topic in topics" :key="topic.id" :topic="topic" />
       </transition-group>
 
-      <div v-if="topics.length === 0 && !loading" class="empty-state">
+      <div v-if="isFirstError" class="error-state">
+        <el-icon :size="44" color="#f0a020"><Warning /></el-icon>
+        <p class="error-text">内容加载失败，请检查网络后重试</p>
+        <el-button type="primary" round :loading="loading" @click="fetchDocuments(true)">重新加载</el-button>
+      </div>
+
+      <div v-else-if="topics.length === 0 && !loading" class="empty-state">
         <el-empty description="这里还没有内容，发一篇试试吧" :image-size="120">
           <template #image>
             <el-icon :size="48" color="#dcdfe6"><Finished /></el-icon>
@@ -478,6 +492,21 @@ defineExpose({
 
 .empty-state {
   padding: 40px 0;
+}
+
+.error-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 48px 16px;
+  text-align: center;
+}
+
+.error-state .error-text {
+  margin: 0;
+  font-size: 14px;
+  color: var(--el-text-color-secondary);
 }
 
 .new-content-alert {

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Compass, DataLine, Medal, Menu as IconMenu, Plus, Close, ArrowRight } from '@element-plus/icons-vue'
+import { Compass, Connection, DataLine, Medal, Menu as IconMenu, Plus, Close, ArrowRight, Present } from '@element-plus/icons-vue'
 import { publicDataApi } from '@/api/publicData'
 import { tagApi } from '@/api/tag'
 import { useUserStore } from '@/store/user'
@@ -24,6 +24,8 @@ let searchTimer: ReturnType<typeof setTimeout> | null = null
 const activeMenu = computed(() => {
   if (route.path.startsWith('/hot')) return '/hot'
   if (route.path.startsWith('/featured')) return '/featured'
+  if (route.path.startsWith('/benefits')) return '/benefits'
+  if (route.path.startsWith('/metaverse')) return '/metaverse'
   return '/'
 })
 
@@ -131,6 +133,16 @@ onMounted(async () => {
       <el-menu-item index="/featured" @click="go('/featured')">
         <el-icon><Medal /></el-icon>
         <span>精华汇总</span>
+      </el-menu-item>
+
+      <el-menu-item index="/benefits" @click="go('/benefits')">
+        <el-icon><Present /></el-icon>
+        <span>福利中心</span>
+      </el-menu-item>
+
+      <el-menu-item index="/metaverse" @click="go('/metaverse')">
+        <el-icon><Connection /></el-icon>
+        <span>Zens 星港</span>
       </el-menu-item>
     </el-menu>
 

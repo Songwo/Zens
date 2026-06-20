@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { DataLine, House, Plus, StarFilled, User } from '@element-plus/icons-vue'
+import { Connection, DataLine, House, Plus, Present, User } from '@element-plus/icons-vue'
 import AppTopbar from '@/components/layout/AppTopbar.vue'
 import LeftNav from '@/components/layout/LeftNav.vue'
 import RightRail from '@/components/layout/RightRail.vue'
@@ -18,14 +18,16 @@ const mobileNavItems = [
   { key: '/', label: '首页', icon: House, action: () => router.push('/') },
   { key: '/hot', label: '热榜', icon: DataLine, action: () => router.push('/hot') },
   { key: '/compose', label: '发帖', icon: Plus, action: () => composerStore.open() },
-  { key: '/featured', label: '精华', icon: StarFilled, action: () => router.push('/featured') },
+  { key: '/benefits', label: '福利', icon: Present, action: () => router.push('/benefits') },
+  { key: '/metaverse', label: '星港', icon: Connection, action: () => router.push('/metaverse') },
   { key: '/me', label: '我的', icon: User, action: () => router.push('/me') },
 ]
 
 const activeMobileKey = computed(() => {
   const path = route.path
   if (path.startsWith('/hot')) return '/hot'
-  if (path.startsWith('/featured')) return '/featured'
+  if (path.startsWith('/benefits')) return '/benefits'
+  if (path.startsWith('/metaverse')) return '/metaverse'
   if (path.startsWith('/me') || path.startsWith('/settings')) return '/me'
   if (path.startsWith('/t/') || path.startsWith('/s/') || path.startsWith('/tag/') || path.startsWith('/search')) return '/'
   return '/'
@@ -220,7 +222,7 @@ onMounted(() => {
   }
 
   .shell {
-    padding: 12px 10px calc(var(--cp-mobile-nav-height) + 14px);
+    padding: 12px 10px calc(var(--cp-mobile-nav-height) + var(--cp-mobile-nav-safe, 0px) + 14px);
   }
 
   .mobile-bottom-nav {
@@ -228,13 +230,15 @@ onMounted(() => {
     bottom: 0;
     left: 0;
     right: 0;
-    height: var(--cp-mobile-nav-height);
+    height: calc(var(--cp-mobile-nav-height) + env(safe-area-inset-bottom, 0px));
+    padding-bottom: env(safe-area-inset-bottom, 0px);
     background: rgba(255, 255, 255, 0.96);
     border-top: 1px solid var(--el-border-color-light);
     display: grid;
-    grid-template-columns: repeat(5, 1fr);
+    grid-template-columns: repeat(6, 1fr);
     z-index: 120;
     backdrop-filter: blur(10px);
+    -webkit-tap-highlight-color: transparent;
   }
 
   .mobile-nav-item {
@@ -249,7 +253,12 @@ onMounted(() => {
     font-size: 11px;
     font-weight: 600;
     cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
     transition: color 0.2s ease, transform 0.2s ease;
+  }
+
+  .mobile-nav-item:active {
+    transform: scale(0.92);
   }
 
   .mobile-nav-item :deep(.el-icon) {
@@ -263,6 +272,11 @@ onMounted(() => {
   .mobile-nav-item.compose {
     color: #7a5700;
     transform: translateY(-2px);
+  }
+
+  .mobile-nav-item.compose :deep(.el-icon) {
+    font-size: 22px;
+    color: #f29b24;
   }
 }
 </style>

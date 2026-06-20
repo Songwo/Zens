@@ -9,7 +9,8 @@ import { authApi } from '@/api/auth'
 import { useUiStore } from '@/store/ui'
 import { useUserStore } from '@/store/user'
 import { ensureCurrentUserProfile } from '@/utils/sessionProfile'
-import { loadTurnstileApi } from '@/utils/turnstile'
+import { loadTurnstileApi, resetTurnstileLoader } from '@/utils/turnstile'
+import { getErrorMessage } from '@/utils/errorMessage'
 
 const router = useRouter()
 const route = useRoute()
@@ -46,15 +47,16 @@ const turnstileWidgetId = ref<string | null>(null)
 const turnstileToken = ref('')
 const turnstileScriptReady = ref(false)
 const turnstileScriptLoading = ref(false)
-const turnstileLoadWarningShown = ref(false)
+const turnstileLoadError = ref('')
 const canSubmitLogin = computed(() => (turnstileEnabled ? !!turnstileToken.value : true) && !loading.value)
 const turnstileTheme = computed<'light' | 'dark'>(() => (isDark.value ? 'dark' : 'light'))
 const showTurnstileDisabled = computed(() => !turnstileEnabled)
 const showTurnstileUnavailable = computed(() => turnstileEnabled && !turnstileSiteKey)
 const showTurnstileUsingTestKey = computed(() => turnstileEnabled && !configuredTurnstileSiteKey && import.meta.env.DEV)
 const showTurnstileLoading = computed(
-  () => turnstileEnabled && !!turnstileSiteKey && (turnstileScriptLoading.value || !turnstileScriptReady.value)
+  () => turnstileEnabled && !!turnstileSiteKey && !turnstileLoadError.value && (turnstileScriptLoading.value || !turnstileScriptReady.value)
 )
+const showTurnstileRetry = computed(() => turnstileEnabled && !!turnstileSiteKey && !!turnstileLoadError.value)
 const twoFactorForm = reactive({
   code: ''
 })
@@ -249,6 +251,7 @@ const renderTurnstileWidget = async () => {
     return
   }
 
+  turnstileLoadError.value = ''
   removeTurnstileWidget()
   await nextTick()
 
@@ -268,7 +271,7 @@ const renderTurnstileWidget = async () => {
     },
     'error-callback': () => {
       clearTurnstileTokenState()
-      ElMessage.error('人机验证加载失败，请刷新页面重试')
+      turnstileLoadError.value = '安全验证组件加载异常，请重新加载验证'
     }
   })
 }
@@ -285,14 +288,15 @@ const resetTurnstileWidget = (message?: string) => {
   }
 }
 
-const ensureTurnstileReady = async () => {
+const ensureTurnstileReady = async (options: { force?: boolean } = {}) => {
   if (!turnstileSiteKey) {
     return
   }
 
+  turnstileLoadError.value = ''
   turnstileScriptLoading.value = true
   try {
-    const turnstileApi = await loadTurnstileApi()
+    const turnstileApi = await loadTurnstileApi({ force: options.force })
     if (!turnstileApi?.render) {
       throw new Error('Turnstile API unavailable')
     }
@@ -300,13 +304,20 @@ const ensureTurnstileReady = async () => {
     await renderTurnstileWidget()
   } catch {
     clearTurnstileTokenState()
-    if (!turnstileLoadWarningShown.value) {
-      turnstileLoadWarningShown.value = true
-      ElMessage.warning('Turnstile 脚本加载失败，请检查网络或稍后刷新页面')
-    }
+    turnstileScriptReady.value = false
+    turnstileLoadError.value = 'Cloudflare 安全验证暂时无法加载，请重新加载验证'
   } finally {
     turnstileScriptLoading.value = false
   }
+}
+
+const reloadTurnstileWidget = async () => {
+  if (turnstileScriptLoading.value) return
+  removeTurnstileWidget()
+  resetTurnstileLoader()
+  turnstileScriptReady.value = false
+  await nextTick()
+  await ensureTurnstileReady({ force: true })
 }
 
 // Song：---- 密码登录 ----
@@ -332,14 +343,14 @@ const handlePasswordLogin = async () => {
         'cf-turnstile-response': turnstileEnabled ? turnstileToken.value : ''
       })
       if (res.code !== 2000 || !res.data) {
-        resetTurnstileWidget('人机验证已刷新，请重新完成验证后再试')
+        resetTurnstileWidget()
         ElMessage.error(res.message || '登录失败')
         return
       }
       await processLoginResponse(res.data, pwdForm.rememberMe)
     } catch (e: any) {
-      resetTurnstileWidget('人机验证已刷新，请重新完成验证后再试')
-      ElMessage.error(e.message || '登录失败，请检查账号密码')
+      resetTurnstileWidget()
+      ElMessage.error(getErrorMessage(e, '登录失败，请检查账号密码'))
     } finally {
       loading.value = false
     }
@@ -369,14 +380,14 @@ const handleOtpLogin = async () => {
         'cf-turnstile-response': turnstileEnabled ? turnstileToken.value : ''
       })
       if (res.code !== 2000 || !res.data) {
-        resetTurnstileWidget('人机验证已刷新，请重新完成验证后再试')
+        resetTurnstileWidget()
         ElMessage.error(res.message || '登录失败')
         return
       }
       await processLoginResponse(res.data, otpForm.rememberMe)
     } catch (e: any) {
-      resetTurnstileWidget('人机验证已刷新，请重新完成验证后再试')
-      ElMessage.error(e.message || '验证码错误或已失效')
+      resetTurnstileWidget()
+      ElMessage.error(getErrorMessage(e, '验证码错误或已失效'))
     } finally {
       loading.value = false
     }
@@ -522,7 +533,9 @@ const applyRoutePrefill = () => {
 onMounted(() => {
   applyRoutePrefill()
   handleGithubCallbackIfNeeded()
-  void ensureTurnstileReady()
+  nextTick(() => {
+    void ensureTurnstileReady()
+  })
 })
 
 watch(
@@ -530,6 +543,11 @@ watch(
   () => {
     applyRoutePrefill()
     handleGithubCallbackIfNeeded()
+    nextTick(() => {
+      if (turnstileEnabled && turnstileSiteKey && !turnstileWidgetId.value) {
+        void ensureTurnstileReady({ force: !!turnstileLoadError.value })
+      }
+    })
   }
 )
 
@@ -631,6 +649,12 @@ onUnmounted(() => {
             <p v-if="showTurnstileLoading" class="turnstile-loading">
               正在加载 Cloudflare Turnstile...
             </p>
+            <div v-if="showTurnstileRetry" class="turnstile-retry">
+              <span>{{ turnstileLoadError }}</span>
+              <el-button size="small" text :loading="turnstileScriptLoading" @click="reloadTurnstileWidget">
+                重新加载验证
+              </el-button>
+            </div>
             <p class="turnstile-hint">
               {{ showTurnstileDisabled ? '本地联调请勿沿用到线上环境。' : 'Turnstile token 约 5 分钟内有效，提交失败后需要重新完成验证。' }}
             </p>
@@ -714,6 +738,12 @@ onUnmounted(() => {
             <p v-if="showTurnstileLoading" class="turnstile-loading">
               正在加载 Cloudflare Turnstile...
             </p>
+            <div v-if="showTurnstileRetry" class="turnstile-retry">
+              <span>{{ turnstileLoadError }}</span>
+              <el-button size="small" text :loading="turnstileScriptLoading" @click="reloadTurnstileWidget">
+                重新加载验证
+              </el-button>
+            </div>
             <p class="turnstile-hint">
               {{ showTurnstileDisabled ? '本地联调请勿沿用到线上环境。' : 'Turnstile token 约 5 分钟内有效，提交失败后需要重新完成验证。' }}
             </p>
@@ -893,6 +923,26 @@ onUnmounted(() => {
 
 .turnstile-dev-tip {
   color: var(--el-color-warning-dark-2);
+}
+
+.turnstile-retry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--el-fill-color-light);
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.turnstile-retry .el-button {
+  flex-shrink: 0;
+  padding: 0 2px;
+  font-size: 12px;
 }
 
 .turnstile-hint {

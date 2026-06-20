@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { useUserStore } from '@/store/user'
 import { ChatDotRound, Connection, Document, EditPen, Setting, Star, SwitchButton, User } from '@element-plus/icons-vue'
 import { hasAdminRole, hasBackofficeAccess } from '@/utils/sessionProfile'
+import { triggerSingleLogout } from '@/utils/singleLogout'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -33,17 +34,20 @@ const menuItems = computed<UserMenuItem[]>(() => {
     { key: 'relations', label: '关系', icon: Connection, command: '/me?tab=relations' },
     { key: 'creator', label: '创作管理', icon: EditPen, command: '/me?tab=creator' },
     { key: 'messages', label: '私信会话', icon: ChatDotRound, command: '/messages', divided: true },
+    { key: 'metaverse', label: 'Zens 星港', icon: Connection, command: '/metaverse' },
     { key: 'settings', label: '账户设置', icon: Setting, command: '/settings' },
   ]
   if (canEnterBackoffice.value) {
     items.push({ key: 'admin', label: backofficeLabel.value, icon: Setting, command: '/admin', divided: true })
   }
-  items.push({ key: 'logout', label: '退出登录', icon: SwitchButton, command: 'logout', divided: true })
+  items.push({ key: 'logout', label: '退出登录（含子站）', icon: SwitchButton, command: 'logout', divided: true })
   return items
 })
 
 const handleCommand = (command: string) => {
   if (command === 'logout') {
+    // 单点登出:先触发各子站前端通道登出,再清主站会话并跳登录页
+    triggerSingleLogout()
     userStore.logout()
     router.push('/auth?type=login')
     return

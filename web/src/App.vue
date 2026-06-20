@@ -4,6 +4,7 @@ import { useUserStore } from '@/store/user'
 import { useUiStore } from '@/store/ui'
 import { usePostComposerStore } from '@/store/postComposer'
 import AppearanceDock from '@/components/ui/AppearanceDock.vue'
+import GlobalProgressBar from '@/components/common/GlobalProgressBar.vue'
 import PulseNotification from '@/components/common/PulseNotification.vue'
 import PwaInstallPrompt from '@/components/common/PwaInstallPrompt.vue'
 import { initSessionResilience } from '@/utils/sessionResilience'
@@ -29,6 +30,7 @@ const routePrefetchTimers: number[] = []
 const routePrefetchLoaders = [
   () => import('@/pages/HotPage.vue'),
   () => import('@/pages/FeaturedPage.vue'),
+  () => import('@/pages/MetaversePage.vue'),
   () => import('@/pages/MePage.vue'),
 ]
 const routeDataWarmers = [
@@ -155,6 +157,8 @@ onUnmounted(() => {
 
 <template>
   <div class="app-container">
+    <GlobalProgressBar />
+
     <router-view v-slot="{ Component, route }">
       <div class="route-stage">
       <transition name="route-shell" mode="out-in" appear>

@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory, type RouteLocationNormalized } from 'vue-router'
 import { usePostComposerStore } from '@/store/postComposer'
 import { ensureCurrentUserProfile, hasAdminRole, hasBackofficeAccess } from '@/utils/sessionProfile'
+import { failGlobalProgress, finishRouteProgress, startRouteProgress } from '@/utils/globalProgress'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -70,6 +71,12 @@ const router = createRouter({
       meta: { requiresAuth: true, title: '我的等级', description: '查看等级进度、经验来源与等级特权' }
     },
     {
+      path: '/benefits',
+      name: 'benefits',
+      component: () => import('@/pages/BenefitsPage.vue'),
+      meta: { requiresAuth: true, title: '福利中心', description: '统一查看积分、兑换、CDK、抽奖和子站权益' }
+    },
+    {
       path: '/settings',
       name: 'settings',
       component: () => import('@/pages/SettingsPage.vue'),
@@ -126,6 +133,12 @@ const router = createRouter({
       name: 'featured',
       component: () => import('@/pages/FeaturedPage.vue'),
       meta: { title: '精华汇总', description: '精选优质内容与推荐专题' }
+    },
+    {
+      path: '/metaverse',
+      name: 'metaverse',
+      component: () => import('@/pages/MetaversePage.vue'),
+      meta: { title: 'Zens 星港', description: '连接 Zens 主站、CDK、抽奖、积分商城和媒体服务的统一入口' }
     },
     {
       path: '/feedback',
@@ -265,6 +278,18 @@ const router = createRouter({
           meta: { requiresAdmin: true },
         },
         {
+          path: 'metaverse',
+          name: 'admin-metaverse',
+          component: () => import('@/pages/admin/MetaverseManagePage.vue'),
+          meta: { requiresAdmin: true },
+        },
+        {
+          path: 'subsite-events',
+          name: 'admin-subsite-events',
+          component: () => import('@/pages/admin/MetaverseManagePage.vue'),
+          meta: { requiresAdmin: true },
+        },
+        {
           path: 'trust',
           name: 'admin-trust',
           component: () => import('@/pages/admin/TrustLevelManagePage.vue'),
@@ -350,6 +375,7 @@ function hasOauthCallbackParams(to: RouteLocationNormalized) {
 
 // Song：说明
 router.beforeEach(async (to, _from, next) => {
+  startRouteProgress('正在打开页面')
   const composerStore = usePostComposerStore()
   const accessToken = readToken('access_token')
   const refreshToken = readToken('refresh_token')
@@ -381,8 +407,14 @@ router.beforeEach(async (to, _from, next) => {
       console.error('Failed to check backoffice permission:', error)
       next({ path: '/auth', query: { type: 'login', redirect: to.fullPath } })
     }
-  } else if (to.path === '/auth' && hasSessionToken && !to.query.redirect && !hasOauthCallbackParams(to)) {
-    next({ path: '/' })
+  } else if (to.path === '/auth' && hasSessionToken && !hasOauthCallbackParams(to)) {
+    // 已登录用户落到登录页(常见于登录后点浏览器"返回",历史里残留带 redirect 的 /auth):
+    // 一律弹走——有合法站内 redirect 就回该目标,否则回首页。避免再次渲染登录页。
+    const redirectTarget = typeof to.query.redirect === 'string' ? to.query.redirect : ''
+    const safeRedirect = redirectTarget.startsWith('/') && !redirectTarget.startsWith('//') && !redirectTarget.startsWith('/auth')
+      ? redirectTarget
+      : '/'
+    next({ path: safeRedirect, replace: true })
   } else {
     next()
   }
@@ -415,6 +447,30 @@ router.afterEach((to) => {
   document.title = `${title} - Zens`
   ensureMetaTag('description', description)
   ensureCanonical(to.fullPath || '/')
+  if (import.meta.env.DEV && typeof window !== 'undefined') {
+    sessionStorage.removeItem(`zens:vite-route-reload:${to.fullPath}`)
+  }
+  finishRouteProgress()
+})
+
+router.onError((error, to) => {
+  failGlobalProgress()
+  console.error('Route navigation failed:', error)
+
+  if (!import.meta.env.DEV || typeof window === 'undefined') return
+
+  const message = String(error?.message || error || '')
+  const isViteStaleModule = message.includes('Failed to fetch dynamically imported module')
+    || message.includes('Outdated Optimize Dep')
+    || message.includes('Importing a module script failed')
+
+  if (!isViteStaleModule) return
+
+  const reloadKey = `zens:vite-route-reload:${to.fullPath}`
+  if (sessionStorage.getItem(reloadKey) === '1') return
+
+  sessionStorage.setItem(reloadKey, '1')
+  window.location.assign(to.fullPath)
 })
 
 export default router

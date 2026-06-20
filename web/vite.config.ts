@@ -9,11 +9,13 @@ import path from 'path'
 export default defineConfig({
   plugins: [
     vue(),
-    // Song：Element Plus 按需引入——模板里的 <el-xxx> 自动 import 组件与其 CSS，
-    // 大幅缩减首屏 vue-vendor 体积。指令(v-loading)在 main.ts 全局注册，故 directives:false；
+    // Song：Element Plus 按需引入组件，样式在 main.ts 全局一次性加载。
+    // 开发环境中大量 element-plus/*/style/css 依赖容易触发 Vite Outdated Optimize Dep，
+    // 进而导致后台路由懒加载失败；关闭 resolver 的样式副作用可避免该类 504。
+    // 指令(v-loading)在 main.ts 全局注册，故 directives:false；
     // dirs:[] 关闭对 src/components 的扫描，只按需解析 Element Plus，不接管项目自有组件。
     Components({
-      resolvers: [ElementPlusResolver({ importStyle: 'css' })],
+      resolvers: [ElementPlusResolver({ importStyle: false })],
       directives: false,
       dirs: [],
       dts: 'src/components.d.ts',

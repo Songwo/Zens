@@ -68,6 +68,8 @@ const comments = ref<Comment[]>([])
 const relatedPosts = ref<RecommendPost[]>([])
 const poll = ref<Poll | null>(null)
 const loading = ref(true)
+// 区分"加载失败"和"帖子真的不存在/已删除":网络错误时给重试入口,别误导成已删除
+const postLoadError = ref(false)
 const commentLoading = ref(false)
 const replyingTo = ref<string | null>(null)
 const replyingToName = ref<string | null>(null)
@@ -142,6 +144,38 @@ const moderatedSectionIds = computed(() => {
 })
 
 const isDeletedPost = computed(() => post.value?.auditStatus === 'DELETED')
+const isLotteryPost = computed(() => String(post.value?.postType || '').toUpperCase() === 'LOTTERY')
+const lotteryDeadlineText = computed(() => {
+  if (!post.value?.commentDeadline) return '不限截止时间'
+  return new Date(post.value.commentDeadline).toLocaleString('zh-CN', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+})
+const lotteryCommentClosed = computed(() => {
+  if (!post.value?.commentDeadline) return false
+  return Date.now() > new Date(post.value.commentDeadline).getTime()
+})
+const hasJoinedLottery = computed(() => {
+  if (!isLotteryPost.value || !userStore.userId) return false
+  const findOwnComment = (items: Comment[]): boolean => {
+    return items.some(item => {
+      if (item.userId === userStore.userId && item.auditStatus !== 'DELETED') return true
+      return Array.isArray(item.children) && findOwnComment(item.children)
+    })
+  }
+  return findOwnComment(comments.value)
+})
+const lotteryCommentBlockedReason = computed(() => {
+  if (!isLotteryPost.value) return ''
+  if (!userStore.accessToken) return '请先登录后参与抽奖评论'
+  if (lotteryCommentClosed.value) return '该抽奖贴已截止评论'
+  if (post.value?.commentOncePerUser && hasJoinedLottery.value) return '你已经评论参与过本次抽奖'
+  return ''
+})
+const canSubmitComment = computed(() => !lotteryCommentBlockedReason.value)
 
 const canModerateCurrentSection = computed(() => {
   if (!post.value?.sectionId) return isAdmin.value
@@ -457,8 +491,8 @@ const fetchPost = async () => {
     loading.value = false
     return
   }
-
   loading.value = true
+  postLoadError.value = false
   post.value = null
   comments.value = []
   relatedPosts.value = []
@@ -491,7 +525,8 @@ const fetchPost = async () => {
     dwellTime.start(id)
   } catch (error) {
     post.value = null
-    ElMessage.error('获取详情失败')
+    postLoadError.value = true
+    // 首屏失败由页面内"加载失败+重试"承载,不弹 toast
   } finally {
     loading.value = false
   }
@@ -499,50 +534,67 @@ const fetchPost = async () => {
 
 const handleLike = async () => {
   if (!post.value) return
+  // 乐观更新:先翻转 UI,失败回滚
+  const prevLiked = post.value.isLiked
+  const prevCount = post.value.likeCount
+  const nextLiked = !prevLiked
+  post.value.isLiked = nextLiked
+  post.value.likeCount = prevCount + (nextLiked ? 1 : -1)
   try {
     await postApi.like(post.value.id)
-    post.value.isLiked = !post.value.isLiked
-    post.value.likeCount += post.value.isLiked ? 1 : -1
-    
-    if (post.value.isLiked) {
+    if (nextLiked) {
       pulseNotification.like(`你点赞了「${post.value.title}」！已为该帖子注入一次共鸣脉冲。`)
     } else {
       pulseNotification.info(`已取消对帖子的点赞`)
     }
   } catch (error) {
+    if (post.value) {
+      post.value.isLiked = prevLiked
+      post.value.likeCount = prevCount
+    }
     pulseNotification.error('点赞操作失败，请重试')
   }
 }
 
 const handleCollect = async () => {
   if (!post.value) return
+  const prevCollected = post.value.isCollected
+  const prevCount = post.value.collectCount
+  const nextCollected = !prevCollected
+  post.value.isCollected = nextCollected
+  post.value.collectCount = prevCount + (nextCollected ? 1 : -1)
   try {
     await postApi.collect(post.value.id)
-    post.value.isCollected = !post.value.isCollected
-    post.value.collectCount += post.value.isCollected ? 1 : -1
-    
-    if (post.value.isCollected) {
+    if (nextCollected) {
       pulseNotification.success(`成功收纳「${post.value.title}」至你的灵感库`, '收藏成功')
     } else {
       pulseNotification.info(`已将该帖子移出你的灵感库`)
     }
   } catch (error) {
+    if (post.value) {
+      post.value.isCollected = prevCollected
+      post.value.collectCount = prevCount
+    }
     pulseNotification.error('收藏操作失败，请重试')
   }
 }
 
 const handleCommentLike = async (comment: any) => {
+  const prevLiked = comment.isLiked
+  const prevCount = comment.likeCount || 0
+  const nextLiked = !prevLiked
+  comment.isLiked = nextLiked
+  comment.likeCount = prevCount + (nextLiked ? 1 : -1)
   try {
     await commentApi.like(comment.id)
-    comment.isLiked = !comment.isLiked
-    comment.likeCount = (comment.likeCount || 0) + (comment.isLiked ? 1 : -1)
-    
-    if (comment.isLiked) {
+    if (nextLiked) {
       pulseNotification.like(`你对 @${comment.nickname || '用户'} 的评论产生了共鸣`)
     } else {
       pulseNotification.info(`已取消对该评论的点赞`)
     }
   } catch (error) {
+    comment.isLiked = prevLiked
+    comment.likeCount = prevCount
     pulseNotification.error('点赞评论失败，请重试')
   }
 }
@@ -626,6 +678,10 @@ const handleCommentReport = (comment: any) => {
 }
 
 const submitComment = async (content: string) => {
+  if (lotteryCommentBlockedReason.value) {
+    ElMessage.warning(lotteryCommentBlockedReason.value)
+    return
+  }
   commentLoading.value = true
   try {
     await commentApi.add({
@@ -649,8 +705,8 @@ const submitComment = async (content: string) => {
     const commentRes = await commentApi.getByPostId(postId.value, 1, 120)
     comments.value = commentRes.data.records || []
     scrollToRouteComment()
-  } catch (error) {
-    pulseNotification.error('发送评论失败，请重试')
+  } catch (error: any) {
+    pulseNotification.error(error?.response?.data?.message || '发送评论失败，请重试')
   } finally {
     commentLoading.value = false
   }
@@ -730,7 +786,10 @@ const handleCommand = async (command: string) => {
       content: post.value?.content,
       sectionId: post.value?.sectionId,
       tags: post.value?.tags,
-      coverImage: post.value?.coverImage
+      coverImage: post.value?.coverImage,
+      postType: post.value?.postType,
+      commentDeadline: post.value?.commentDeadline,
+      commentOncePerUser: post.value?.commentOncePerUser
     })
   } else if (command === 'feature') {
     await handleFeature()
@@ -1180,6 +1239,14 @@ onMounted(() => {
               <h1 class="post-title">{{ post.title }}</h1>
             </div>
 
+            <div v-if="isLotteryPost" class="lottery-rule-strip">
+              <span class="lottery-rule-badge">抽奖贴</span>
+              <span>登录账号评论即参与</span>
+              <span v-if="post.commentOncePerUser">每人一次</span>
+              <span>{{ lotteryDeadlineText }}</span>
+              <span v-if="lotteryCommentClosed" class="lottery-rule-warning">已截止</span>
+            </div>
+
             <el-alert
               v-if="isDeletedPost"
               type="warning"
@@ -1471,8 +1538,18 @@ onMounted(() => {
             <h3>评论区</h3>
             <span class="comment-count">{{ visibleCommentCount }} 条评论</span>
           </div>
+
+          <el-alert
+            v-if="lotteryCommentBlockedReason"
+            class="lottery-comment-alert"
+            type="warning"
+            :closable="false"
+            show-icon
+            :title="lotteryCommentBlockedReason"
+          />
           
           <CommentEditor 
+            v-if="canSubmitComment"
             :loading="commentLoading"
             :replying-to="replyingTo"
             :reply-name="replyingToName"
@@ -1502,6 +1579,11 @@ onMounted(() => {
             @canceled="fetchPost"
           />
         </div>
+        </div>
+        <div v-else-if="postLoadError && !loading" key="post-error" class="post-load-error">
+          <el-icon :size="44" color="#f0a020"><Warning /></el-icon>
+          <p class="post-load-error-text">内容加载失败，请检查网络后重试</p>
+          <el-button type="primary" round :loading="loading" @click="fetchPost">重新加载</el-button>
         </div>
         <el-empty v-else-if="!loading" key="post-empty" description="内容不存在或已被删除" />
       </transition>
@@ -1665,12 +1747,23 @@ onMounted(() => {
         <!-- Site Rules / Guidance -->
         <el-card shadow="never" class="sidebar-card rules-card">
           <div class="rules-content">
-            <h4>发布准则</h4>
-            <ul>
-              <li>保持社区友善交流</li>
-              <li>请勿发布虚假信息</li>
-              <li>尊重知识产权</li>
-            </ul>
+            <template v-if="isLotteryPost">
+              <h4>抽奖参与规则</h4>
+              <ul>
+                <li>需要登录主站账号参与</li>
+                <li v-if="post.commentOncePerUser">每个账号仅保留一次有效评论</li>
+                <li>匿名评论不会进入抽奖名单</li>
+                <li v-if="post.commentDeadline">截止时间：{{ lotteryDeadlineText }}</li>
+              </ul>
+            </template>
+            <template v-else>
+              <h4>发布准则</h4>
+              <ul>
+                <li>保持社区友善交流</li>
+                <li>请勿发布虚假信息</li>
+                <li>尊重知识产权</li>
+              </ul>
+            </template>
           </div>
         </el-card>
       </div>
@@ -1689,6 +1782,21 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+.post-load-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 64px 16px;
+  text-align: center;
+}
+
+.post-load-error-text {
+  margin: 0;
+  font-size: 14px;
+  color: var(--el-text-color-secondary);
 }
 
 .skel-card {
@@ -1794,6 +1902,41 @@ onMounted(() => {
 
 .solved-badge-icon {
   font-size: 14px;
+}
+
+.lottery-rule-strip {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: -8px 0 18px;
+  padding: 9px 12px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--el-color-primary-light-9) 70%, var(--cp-bg-card));
+  color: var(--el-text-color-regular);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.lottery-rule-strip span:not(:last-child)::after {
+  content: '';
+}
+
+.lottery-rule-badge {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--el-color-primary);
+  color: #fff;
+  font-weight: 700;
+}
+
+.lottery-rule-warning {
+  color: var(--el-color-danger);
+  font-weight: 700;
+}
+
+.lottery-comment-alert {
+  margin-bottom: 16px;
 }
 
 /* 帖子正文下方：最佳答案预览卡片 */

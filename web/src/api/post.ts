@@ -42,7 +42,7 @@ export const postApi = {
     },
 
     // Song：说明
-    update(data: { postId: string; title?: string; content?: string; tags?: string; sectionId?: number; coverImage?: string; status?: number; publish?: boolean }) {
+    update(data: { postId: string; title?: string; content?: string; tags?: string; sectionId?: number; coverImage?: string; status?: number; publish?: boolean; postType?: string; commentDeadline?: string; commentOncePerUser?: boolean }) {
         return api.post<any, Result<void>>('/post/update-post', data)
     },
 

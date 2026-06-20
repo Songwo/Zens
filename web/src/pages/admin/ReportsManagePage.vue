@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { Check, Close, Select, WarningFilled } from '@element-plus/icons-vue'
 import { reportApi, type ReportManageItem } from '@/api/report'
 import { sectionApi, type Section } from '@/api/section'
 import { useUserStore } from '@/store/user'
@@ -16,6 +17,8 @@ const total = ref(0)
 const pageSize = ref(10)
 const statusFilter = ref<number | undefined>(undefined)
 const allSections = ref<Section[]>([])
+const selectedReports = ref<ReportManageItem[]>([])
+const batchLoading = ref(false)
 const selectedSectionId = ref<number | undefined>(
   route.query.sectionId ? Number(route.query.sectionId) : undefined
 )
@@ -43,6 +46,10 @@ const availableSections = computed(() => {
   if (isAdmin.value || isGlobalModerator.value) return allSections.value
   return allSections.value.filter(section => moderatedSectionIds.value.includes(Number(section.id)))
 })
+const pendingReports = computed(() => reports.value.filter(report => report.status === 0))
+const highRiskReports = computed(() => reports.value.filter(report => (report.flagWeight ?? 1) >= 3 && report.status === 0))
+const commentReports = computed(() => reports.value.filter(report => report.targetType === 'comment'))
+const selectedPendingReports = computed(() => selectedReports.value.filter(report => report.status === 0))
 
 const unwrapPageData = <T,>(res: any): { records: T[]; total: number } => {
   const pageData = res?.data?.records
@@ -91,6 +98,7 @@ const fetchReports = async () => {
     const pageData = unwrapPageData<ReportManageItem>(res)
     reports.value = pageData.records
     total.value = pageData.total
+    selectedReports.value = []
   } catch (error: any) {
     reports.value = []
     ElMessage.error(error?.response?.data?.message || '举报列表加载失败')
@@ -122,6 +130,42 @@ const handleResolve = async (row: ReportManageItem, status: number) => {
     await fetchReports()
   } catch (error: any) {
     ElMessage.error(error?.response?.data?.message || '操作失败')
+  }
+}
+
+const handleSelectionChange = (rows: ReportManageItem[]) => {
+  selectedReports.value = rows
+}
+
+const runBatchResolve = async (status: 1 | 2) => {
+  const rows = selectedPendingReports.value
+  if (rows.length === 0) {
+    ElMessage.warning('请先选择待处理举报')
+    return
+  }
+  const actionName = status === 1 ? '标记已处理' : '忽略'
+  try {
+    await ElMessageBox.confirm(`确定将选中的 ${rows.length} 条待处理举报批量${actionName}吗？`, `批量${actionName}`, {
+      confirmButtonText: `批量${actionName}`,
+      cancelButtonText: '取消',
+      type: status === 1 ? 'success' : 'warning',
+    })
+    batchLoading.value = true
+    const results = await Promise.allSettled(rows.map(row => reportApi.resolve(row.id, status)))
+    const success = results.filter(result => result.status === 'fulfilled').length
+    const failed = results.length - success
+    if (failed > 0) {
+      ElMessage.warning(`批量${actionName}完成：成功 ${success} 条，失败 ${failed} 条`)
+    } else {
+      ElMessage.success(`已批量${actionName} ${success} 条`)
+    }
+    await fetchReports()
+  } catch (error) {
+    if (error !== 'cancel') {
+      ElMessage.error(`批量${actionName}失败`)
+    }
+  } finally {
+    batchLoading.value = false
   }
 }
 
@@ -204,6 +248,8 @@ const canRejectPost = (row: ReportManageItem) => {
   return row.status === 0 && row.targetType === 'post'
 }
 
+const canSelectReport = (row: ReportManageItem) => row.status === 0
+
 const formatDate = (dateStr: string) => {
   if (!dateStr) return '-'
   return new Date(dateStr).toLocaleString('zh-CN')
@@ -268,7 +314,77 @@ onMounted(async () => {
       </div>
     </div>
 
-    <el-table :data="reports" v-loading="loading" stripe border class="data-table">
+    <div class="admin-summary-grid">
+      <div class="summary-card warning">
+        <span class="summary-label">待处理</span>
+        <strong>{{ pendingReports.length }}</strong>
+      </div>
+      <div class="summary-card danger">
+        <span class="summary-label">高权重举报</span>
+        <strong>{{ highRiskReports.length }}</strong>
+      </div>
+      <div class="summary-card">
+        <span class="summary-label">评论举报</span>
+        <strong>{{ commentReports.length }}</strong>
+      </div>
+      <div class="summary-card">
+        <span class="summary-label">当前筛选总数</span>
+        <strong>{{ total }}</strong>
+      </div>
+    </div>
+
+    <div class="bulk-toolbar" :class="{ active: selectedReports.length > 0 }">
+      <div class="bulk-info">
+        <el-icon><Select /></el-icon>
+        <span>已选择 {{ selectedReports.length }} 条，待处理 {{ selectedPendingReports.length }} 条</span>
+      </div>
+      <div class="bulk-actions">
+        <el-button
+          size="small"
+          type="primary"
+          plain
+          :icon="Check"
+          :disabled="selectedPendingReports.length === 0"
+          :loading="batchLoading"
+          @click="runBatchResolve(1)"
+        >
+          批量标记已处理
+        </el-button>
+        <el-button
+          size="small"
+          type="warning"
+          plain
+          :icon="Close"
+          :disabled="selectedPendingReports.length === 0"
+          :loading="batchLoading"
+          @click="runBatchResolve(2)"
+        >
+          批量忽略
+        </el-button>
+      </div>
+    </div>
+
+    <el-alert
+      v-if="highRiskReports.length > 0 && (statusFilter === undefined || statusFilter === 0)"
+      type="warning"
+      :closable="false"
+      class="priority-alert"
+      show-icon
+    >
+      <template #title>
+        当前列表有 {{ highRiskReports.length }} 条来自较高信任等级用户的举报，建议优先处理。
+      </template>
+    </el-alert>
+
+    <el-table
+      :data="reports"
+      v-loading="loading"
+      stripe
+      border
+      class="data-table"
+      @selection-change="handleSelectionChange"
+    >
+      <el-table-column type="selection" width="44" :selectable="canSelectReport" />
       <el-table-column prop="id" label="ID" width="90" />
       <el-table-column prop="reporterId" label="举报人" width="200" show-overflow-tooltip />
       <el-table-column label="举报权重" width="110" align="center">
@@ -278,6 +394,7 @@ onMounted(async () => {
             size="small"
             effect="dark"
           >
+            <el-icon v-if="(row.flagWeight ?? 1) >= 3" class="flag-icon"><WarningFilled /></el-icon>
             {{ row.flagWeight ?? 1 }}x
             <span v-if="row.reporterTrustLevel !== undefined" class="flag-tl">TL{{ row.reporterTrustLevel }}</span>
           </el-tag>
@@ -424,6 +541,81 @@ onMounted(async () => {
   border-radius: 8px;
 }
 
+.admin-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.summary-card {
+  min-height: 74px;
+  padding: 14px 16px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 8px;
+  background: var(--cp-bg-card);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 6px;
+}
+
+.summary-card strong {
+  font-size: 26px;
+  line-height: 1;
+  color: var(--el-text-color-primary);
+}
+
+.summary-card.warning strong {
+  color: var(--el-color-warning);
+}
+
+.summary-card.danger strong {
+  color: var(--el-color-danger);
+}
+
+.summary-label {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+
+.bulk-toolbar {
+  min-height: 46px;
+  margin-bottom: 12px;
+  padding: 8px 10px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 8px;
+  background: var(--el-fill-color-lighter);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.bulk-toolbar.active {
+  border-color: var(--el-color-primary-light-5);
+  background: var(--el-color-primary-light-9);
+}
+
+.bulk-info,
+.bulk-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.bulk-info {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--el-text-color-regular);
+}
+
+.priority-alert {
+  margin-bottom: 12px;
+  border-radius: 8px;
+}
+
 .target-cell {
   display: flex;
   flex-direction: column;
@@ -453,6 +645,11 @@ onMounted(async () => {
   font-weight: 600;
 }
 
+.flag-icon {
+  margin-right: 3px;
+  vertical-align: -2px;
+}
+
 .text-placeholder {
   color: var(--el-text-color-placeholder);
   font-size: 13px;
@@ -462,5 +659,31 @@ onMounted(async () => {
   margin-top: 16px;
   display: flex;
   justify-content: flex-end;
+}
+
+@media (max-width: 768px) {
+  .page-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .header-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .section-filter,
+  .status-filter {
+    width: 100%;
+  }
+
+  .admin-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .bulk-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
 }
 </style>

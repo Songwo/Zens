@@ -21,16 +21,19 @@ export const resolveNotificationRoute = (
     return null
   }
 
-  if (ctx?.type && ['system', 'security_alert', 'new_device_login', 'session_terminated', 'password_changed', 'password_reset', 'two_factor_enabled', 'two_factor_disabled', 'login_failed_burst'].includes(ctx.type)) {
-    return { path: '/notifications' }
-  }
-
   if (relatedId === null || relatedId === undefined) {
     return null
   }
   const raw = String(relatedId).trim()
   if (!raw) {
     return null
+  }
+  if (raw.startsWith('zdc-shop:')) {
+    return { path: '/benefits' }
+  }
+
+  if (ctx?.type && ['system', 'security_alert', 'new_device_login', 'session_terminated', 'password_changed', 'password_reset', 'two_factor_enabled', 'two_factor_disabled', 'login_failed_burst'].includes(ctx.type)) {
+    return { path: '/notifications' }
   }
 
   const hashIndex = raw.indexOf(COMMENT_HASH_PREFIX)

@@ -11,6 +11,7 @@ const redirectUri = computed(() => (route.query.redirect_uri as string) || '')
 
 const loading = ref(true)
 const authorizing = ref(false)
+const autoEntering = ref(false)
 const error = ref('')
 const appInfo = ref<SsoClientPublicInfo | null>(null)
 
@@ -36,8 +37,16 @@ onMounted(async () => {
         appInfo.value = res.data
     } catch (e: any) {
         error.value = e.message || '应用信息加载失败'
-    } finally {
         loading.value = false
+        return
+    }
+    loading.value = false
+
+    // 第一方可信客户端：已登录用户自动授权、跳过同意页（OAuth 第一方免同意惯例）。
+    // 授权失败（如 redirect_uri 不匹配）会落回手动同意 UI。
+    if (appInfo.value?.trusted) {
+        autoEntering.value = true
+        await handleAuthorize()
     }
 })
 
@@ -89,6 +98,12 @@ function handleCancel() {
                 <h3>授权失败</h3>
                 <p>{{ error }}</p>
                 <button class="sso-btn sso-btn--secondary" @click="router.push('/')">返回首页</button>
+            </div>
+
+            <!-- 第一方可信客户端：自动授权过渡态（无错误时不显示同意按钮） -->
+            <div v-else-if="autoEntering && !error" class="sso-loading">
+                <div class="spinner"></div>
+                <p>正在进入 {{ appInfo?.clientName || '应用' }}…</p>
             </div>
 
             <!-- 授权确认 -->

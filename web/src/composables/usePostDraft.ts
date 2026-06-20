@@ -9,6 +9,9 @@ export interface PostFormData {
     tags: string[]
     coverImage: string
     isAnonymous: number
+    postType: 'NORMAL' | 'LOTTERY'
+    commentDeadline: string
+    commentOncePerUser: boolean
 }
 
 // Song：说明
@@ -18,7 +21,10 @@ const getInitialForm = (): PostFormData => ({
     sectionId: null,
     tags: [],
     coverImage: '',
-    isAnonymous: 0
+    isAnonymous: 0,
+    postType: 'NORMAL',
+    commentDeadline: '',
+    commentOncePerUser: true
 })
 
 export function usePostDraft() {
@@ -74,7 +80,10 @@ export function usePostDraft() {
                     sectionId: parsed.sectionId || null,
                     tags: parsed.tags || [],
                     coverImage: parsed.coverImage || '',
-                    isAnonymous: parsed.isAnonymous || 0
+                    isAnonymous: parsed.isAnonymous || 0,
+                    postType: parsed.postType === 'LOTTERY' ? 'LOTTERY' : 'NORMAL',
+                    commentDeadline: parsed.commentDeadline || '',
+                    commentOncePerUser: parsed.commentOncePerUser !== false
                 })
                 lastSavedState.value = JSON.stringify(form)
                 return true

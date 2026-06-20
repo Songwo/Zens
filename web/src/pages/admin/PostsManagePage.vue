@@ -7,7 +7,7 @@ import { useUserStore } from '@/store/user'
 import { ensureCurrentUserProfile, hasAdminRole } from '@/utils/sessionProfile'
 import type { Post } from '@/types'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Search, View, Delete, Top, Medal, CircleCheck, CircleClose, RefreshRight } from '@element-plus/icons-vue'
+import { Search, View, Delete, Top, Medal, CircleCheck, CircleClose, RefreshRight, Select } from '@element-plus/icons-vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 
 const route = useRoute()
@@ -20,6 +20,8 @@ const searchQuery = ref('')
 const page = ref(1)
 const pageSize = ref(10)
 const total = ref(0)
+const selectedPosts = ref<Post[]>([])
+const batchLoading = ref(false)
 
 // 板块筛选
 const allSections = ref<Section[]>([])
@@ -49,6 +51,15 @@ const pageSubtitle = computed(() => isTrashMode.value
   : '按当前账号可管理的板块范围加载内容，管理员可查看全部。')
 const emptyTitle = computed(() => isTrashMode.value ? '回收站暂无内容' : '暂无帖子数据')
 const emptyDescription = computed(() => isTrashMode.value ? '已删除的帖子会在这里集中显示' : '尝试调整搜索关键词')
+const manageablePosts = computed(() => posts.value.filter(canManageRow))
+const pendingCount = computed(() => posts.value.filter(post => post.auditStatus === 'PENDING').length)
+const publishedCount = computed(() => posts.value.filter(post => post.auditStatus === 'APPROVED' || post.status === 1).length)
+const deletedCount = computed(() => posts.value.filter(post => post.auditStatus === 'DELETED').length)
+const featuredCount = computed(() => posts.value.filter(post => post.isFeatured === 1).length)
+const selectedManageablePosts = computed(() => selectedPosts.value.filter(canManageRow))
+const selectedPendingPosts = computed(() => selectedManageablePosts.value.filter(post => post.auditStatus === 'PENDING' || post.auditStatus === 'REJECTED'))
+const selectedActivePosts = computed(() => selectedManageablePosts.value.filter(post => !isDeletedPost(post)))
+const selectedDeletedPosts = computed(() => selectedManageablePosts.value.filter(isDeletedPost))
 
 // 版主只看自己板块；管理员看全部
 const availableSections = computed(() => {
@@ -115,6 +126,7 @@ const fetchPosts = async () => {
     const pageData = unwrapPageData<Post>(res)
     posts.value = pageData.records
     total.value = pageData.total
+    selectedPosts.value = []
   } catch (error) {
     ElMessage.error('获取帖子列表失败')
   } finally {
@@ -146,6 +158,69 @@ const handlePageChange = (val: number) => {
 }
 
 const isDeletedPost = (row: Post) => row.auditStatus === 'DELETED'
+
+const handleSelectionChange = (rows: Post[]) => {
+  selectedPosts.value = rows
+}
+
+const runBatch = async (
+  rows: Post[],
+  actionName: string,
+  action: (post: Post) => Promise<unknown>,
+  confirmText?: string
+) => {
+  if (rows.length === 0) {
+    ElMessage.warning('请先选择可操作的帖子')
+    return
+  }
+  try {
+    if (confirmText) {
+      await ElMessageBox.confirm(confirmText, `批量${actionName}`, {
+        confirmButtonText: `批量${actionName}`,
+        cancelButtonText: '取消',
+        type: 'warning',
+      })
+    }
+    batchLoading.value = true
+    const results = await Promise.allSettled(rows.map(row => action(row)))
+    const success = results.filter(result => result.status === 'fulfilled').length
+    const failed = results.length - success
+    if (failed > 0) {
+      ElMessage.warning(`批量${actionName}完成：成功 ${success} 条，失败 ${failed} 条`)
+    } else {
+      ElMessage.success(`已批量${actionName} ${success} 条`)
+    }
+    await fetchPosts()
+  } catch (error) {
+    if (error !== 'cancel') {
+      ElMessage.error(`批量${actionName}失败`)
+    }
+  } finally {
+    batchLoading.value = false
+  }
+}
+
+const batchApprovePosts = () => {
+  runBatch(selectedPendingPosts.value, '通过审核', post => postApi.approve(post.id))
+}
+
+const batchDeletePosts = () => {
+  runBatch(
+    selectedActivePosts.value,
+    '移入回收站',
+    post => postApi.delete(post.id),
+    `确定将选中的 ${selectedActivePosts.value.length} 篇帖子移入回收站吗？7 天内可恢复。`
+  )
+}
+
+const batchRestorePosts = () => {
+  runBatch(
+    selectedDeletedPosts.value,
+    '恢复',
+    post => postApi.restore(post.id),
+    `确定恢复选中的 ${selectedDeletedPosts.value.length} 篇帖子吗？`
+  )
+}
 
 const deletePost = async (postId: string) => {
   const target = posts.value.find(post => post.id === postId)
@@ -366,13 +441,78 @@ watch(
       </div>
     </div>
 
+    <div class="admin-summary-grid">
+      <div class="summary-card">
+        <span class="summary-label">当前页可管理</span>
+        <strong>{{ manageablePosts.length }}</strong>
+      </div>
+      <div class="summary-card warning">
+        <span class="summary-label">待审核</span>
+        <strong>{{ pendingCount }}</strong>
+      </div>
+      <div class="summary-card success">
+        <span class="summary-label">已发布</span>
+        <strong>{{ publishedCount }}</strong>
+      </div>
+      <div class="summary-card">
+        <span class="summary-label">{{ isTrashMode ? '已删除' : '精华内容' }}</span>
+        <strong>{{ isTrashMode ? deletedCount : featuredCount }}</strong>
+      </div>
+    </div>
+
     <el-card shadow="never" class="table-card">
+      <div class="bulk-toolbar" :class="{ active: selectedPosts.length > 0 }">
+        <div class="bulk-info">
+          <el-icon><Select /></el-icon>
+          <span>已选择 {{ selectedPosts.length }} 条，可操作 {{ selectedManageablePosts.length }} 条</span>
+        </div>
+        <div class="bulk-actions">
+          <el-button
+            v-if="!isTrashMode"
+            size="small"
+            type="success"
+            plain
+            :disabled="selectedPendingPosts.length === 0"
+            :loading="batchLoading"
+            :icon="CircleCheck"
+            @click="batchApprovePosts"
+          >
+            批量通过 {{ selectedPendingPosts.length || '' }}
+          </el-button>
+          <el-button
+            v-if="!isTrashMode"
+            size="small"
+            type="danger"
+            plain
+            :disabled="selectedActivePosts.length === 0"
+            :loading="batchLoading"
+            :icon="Delete"
+            @click="batchDeletePosts"
+          >
+            批量移入回收站 {{ selectedActivePosts.length || '' }}
+          </el-button>
+          <el-button
+            v-else
+            size="small"
+            type="success"
+            plain
+            :disabled="selectedDeletedPosts.length === 0"
+            :loading="batchLoading"
+            :icon="RefreshRight"
+            @click="batchRestorePosts"
+          >
+            批量恢复 {{ selectedDeletedPosts.length || '' }}
+          </el-button>
+        </div>
+      </div>
       <el-table 
         v-loading="loading" 
         :data="posts" 
         style="width: 100%"
         :header-cell-style="{ backgroundColor: 'var(--el-fill-color-light)', fontWeight: '800' }"
+        @selection-change="handleSelectionChange"
       >
+        <el-table-column type="selection" width="44" :selectable="canManageRow" />
         <el-table-column label="标题" min-width="250">
           <template #default="{ row }">
             <el-link 
@@ -422,9 +562,9 @@ watch(
         <el-table-column label="互动数据" width="180">
           <template #default="{ row }">
             <div class="stat-tags">
-              <span class="stat-pill">👀 {{ row.viewCount }}</span>
-              <span class="stat-pill">❤️ {{ row.likeCount }}</span>
-              <span class="stat-pill">💬 {{ row.commentCount }}</span>
+              <span class="stat-pill">阅 {{ row.viewCount }}</span>
+              <span class="stat-pill">赞 {{ row.likeCount }}</span>
+              <span class="stat-pill">评 {{ row.commentCount }}</span>
             </div>
           </template>
         </el-table-column>
@@ -557,6 +697,7 @@ watch(
   justify-content: space-between;
   align-items: flex-end;
   margin-bottom: 24px;
+  gap: 18px;
 }
 
 .header-info .title {
@@ -577,6 +718,8 @@ watch(
   display: flex;
   gap: 10px;
   align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .search-input {
@@ -585,6 +728,76 @@ watch(
 
 .table-card {
   border-radius: 12px;
+}
+
+.admin-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.summary-card {
+  min-height: 74px;
+  padding: 14px 16px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 8px;
+  background: var(--cp-bg-card);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 6px;
+}
+
+.summary-card strong {
+  font-size: 26px;
+  line-height: 1;
+  color: var(--el-text-color-primary);
+}
+
+.summary-card.warning strong {
+  color: var(--el-color-warning);
+}
+
+.summary-card.success strong {
+  color: var(--el-color-success);
+}
+
+.summary-label {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+
+.bulk-toolbar {
+  min-height: 46px;
+  margin-bottom: 12px;
+  padding: 8px 10px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 8px;
+  background: var(--el-fill-color-lighter);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.bulk-toolbar.active {
+  border-color: var(--el-color-primary-light-5);
+  background: var(--el-color-primary-light-9);
+}
+
+.bulk-info,
+.bulk-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.bulk-info {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--el-text-color-regular);
 }
 
 .post-title {
@@ -651,5 +864,26 @@ watch(
   font-size: 11px;
   color: var(--el-color-danger);
   margin-top: 3px;
+}
+
+@media (max-width: 768px) {
+  .page-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .header-actions,
+  .search-input {
+    width: 100%;
+  }
+
+  .admin-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .bulk-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
 }
 </style>
