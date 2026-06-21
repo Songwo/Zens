@@ -127,7 +127,12 @@ export default defineConfig({
           if (id.includes('/sockjs-client/') || id.includes('/@stomp/stompjs/')) {
             return 'ws-vendor'
           }
-          if (id.includes('/echarts/') || id.includes('/vue-echarts/')) {
+          // 仅把 echarts 本体钉进 chart-vendor；不要 vue-echarts。
+          // vue-echarts 静态依赖 vue，强制分块会把共享的 Vue runtime co-locate 进
+          // chart-vendor，导致入口需 Vue 而静态依赖此 chunk，645k echarts 被白拖上首屏。
+          // echarts 本体不依赖 vue，仅被两个异步组件引用，自然落进异步链；
+          // vue-echarts 交还 Rollup 自动放置，其 Vue 依赖留在入口。
+          if (id.includes('/echarts/')) {
             return 'chart-vendor'
           }
           if (id.includes('/axios/') || id.includes('/date-fns/')) {
