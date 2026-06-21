@@ -76,6 +76,7 @@ tmp*/
 .next/
 *.tsbuildinfo
 .codex-work/
+.codex/
 .playwright-mcp/
 *.log
 ~$*

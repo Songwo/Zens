@@ -275,8 +275,14 @@ campus-pulse/
 │   ├── web/ (templates + static)     # 内嵌管理面板
 │   ├── deployments/ (nginx · systemd)
 │   └── config.yaml · Dockerfile · docker-compose.yml
+├── zdc-shop/                         # 积分商城子站（Next.js + Prisma）
+├── campus-lottery-station/           # 抽奖站子站（React + Go）
+├── cdk-airdrop-station/              # CDK 空投站（React + Go + PostgreSQL）
+├── docs/
+│   └── PROJECTS_AND_DOCKER_DEPLOY.md # 项目清单与 Docker 部署总览
+├── deploy-subsites.sh                # 子站 Docker 一键部署脚本（不重启主站）
 └── scripts/
-    ├── deploy.sh            # 一键部署脚本
+    ├── deploy.sh            # 主站 Jar 部署脚本
     ├── rollback.sh          # 回滚脚本
     └── backup.sh            # 数据库备份脚本
 ```
@@ -446,17 +452,17 @@ server {
 }
 ```
 
-**使用部署脚本：**
+**使用主站 Jar 部署脚本：**
 
 ```bash
-bash scripts/deploy.sh
+bash scripts/deploy.sh target/campus-pulse-0.0.1-SNAPSHOT.jar
 ```
 
-### 方式二：脚本一键部署
+### 方式二：主站脚本运维
 
 ```bash
-# 部署
-bash scripts/deploy.sh
+# 部署主站 Jar
+bash scripts/deploy.sh target/campus-pulse-0.0.1-SNAPSHOT.jar
 
 # 回滚到上一版本
 bash scripts/rollback.sh
@@ -464,6 +470,49 @@ bash scripts/rollback.sh
 # 数据库备份
 bash scripts/backup.sh
 ```
+
+### 方式三：子站 Docker 一键部署
+
+主站已经在线时，子站可以用根目录脚本统一部署。该脚本只读取主站配置，不会重启主站；它会自动补齐 `zens_shop` 数据库、主站 `sys_sso_client` SSO 应用记录，生成三个子站 `.env`，并重建积分商城 / 抽奖站 / CDK 空投站容器。
+
+```bash
+cd /www/wwwroot/campus-pulse
+chmod +x deploy-subsites.sh
+
+# 读取生产配置，部署三个子站
+MAIN_ENV_FILE=.env.production \
+MAIN_SITE_BACKEND_URL=https://allinsong.top \
+bash deploy-subsites.sh
+```
+
+默认域名与宝塔反代目标：
+
+| 子站 | 默认域名 | 本机反代目标 |
+|------|----------|--------------|
+| 积分商城 | `https://shop.allinsong.top` | `http://127.0.0.1:3000` |
+| 抽奖站 | `https://lottery.allinsong.top` | `http://127.0.0.1:8093` |
+| CDK 空投站 | `https://cdk.allinsong.top` | `http://127.0.0.1:8088` |
+
+常用覆盖项：
+
+```bash
+# 指定子域名 / 端口
+SHOP_DOMAIN=shop.allinsong.top \
+LOTTERY_DOMAIN=lottery.allinsong.top \
+CDK_DOMAIN=cdk.allinsong.top \
+SHOP_PORT=3000 \
+LOTTERY_PORT=8093 \
+CDK_AIRDROP_PORT=8088 \
+bash deploy-subsites.sh
+
+# 首次部署后顺便初始化积分商城种子数据
+RUN_SHOP_SEED=true bash deploy-subsites.sh
+
+# 只生成配置并启动容器，不修数据库/SSO
+SKIP_DB=true bash deploy-subsites.sh
+```
+
+更多子站清单、环境变量和 Docker 说明见 [`docs/PROJECTS_AND_DOCKER_DEPLOY.md`](docs/PROJECTS_AND_DOCKER_DEPLOY.md)。
 
 ---
 
@@ -597,6 +646,7 @@ GET /actuator/prometheus
 - [x] 更丰富的用户等级权益体系（信任等级 TL0-TL4）
 - [x] 移动端 PWA 支持
 - [x] 子站生态接入（积分商城 / 抽奖站 / CDK 空投站 / 导航站）
+- [x] 子站 Docker 一键部署（商城 / 抽奖 / CDK）
 - [ ] Docker Compose 全栈一键启动
 - [ ] 管理后台数据大屏
 - [ ] 元宇宙空间 / 积分福利体系深化

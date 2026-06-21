@@ -23,13 +23,6 @@ ensure_env "POSTGRES_USER" "cdk_airdrop"
 ensure_env "POSTGRES_PASSWORD" "cdk_airdrop_change_me"
 ensure_env "CDK_POSTGRES_DSN" "postgres://cdk_airdrop:cdk_airdrop_change_me@postgres:5432/cdk_airdrop?sslmode=disable"
 
-if [ ! -f "web/dist/index.html" ]; then
-    echo "[ERROR] 未找到 web/dist/index.html。"
-    echo "[ERROR] 当前 Dockerfile 不在镜像内执行 npm install/build，请先在服务器执行："
-    echo "        cd web && npm install && npm run build && cd .."
-    exit 1
-fi
-
 echo "[INFO] 正在构建并启动 Docker 容器..."
 docker compose up -d --build
 

@@ -2,13 +2,22 @@ services:
   miukey:
     build:
       context: .
+      dockerfile: Dockerfile
+      args:
+        VITE_HCAPTCHA_SITE_KEY: ${VITE_HCAPTCHA_SITE_KEY:-10000000-ffff-ffff-ffff-000000000001}
     image: cdk-zens-miukey:latest
+    container_name: cdk-airdrop
     restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
     depends_on:
       postgres:
         condition: service_healthy
     ports:
-      - "${CDK_AIRDROP_PORT:-8088}:8088"
+      - "${CDK_AIRDROP_BIND:-127.0.0.1}:${CDK_AIRDROP_PORT:-8088}:8088"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       - CDK_AIRDROP_ADDR=:8088
       - CDK_AIRDROP_DATA_FILE=/app/data/state.json
@@ -23,10 +32,17 @@ services:
       - CDK_COMMUNITY_CLIENT_ID=${CDK_COMMUNITY_CLIENT_ID:-cdk-airdrop}
       - CDK_COMMUNITY_JWT_SECRET=${CDK_COMMUNITY_JWT_SECRET:?CDK_COMMUNITY_JWT_SECRET 必须由环境提供}
     volumes:
-      - ./server/data:/app/data
+      - cdk_airdrop_data:/app/data
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8088/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
   postgres:
     image: postgres:16-alpine
+    container_name: cdk-airdrop-postgres
     restart: unless-stopped
     environment:
       - POSTGRES_DB=${POSTGRES_DB:-cdk_airdrop}
@@ -60,3 +76,4 @@ services:
 
 volumes:
   postgres_data:
+  cdk_airdrop_data:

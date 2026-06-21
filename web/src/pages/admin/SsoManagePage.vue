@@ -11,6 +11,7 @@ type SsoPreset = {
     redirectUris: string[]
     description: string
     logoUrl: string
+    helperText: string
 }
 
 const clients = ref<SsoClientItem[]>([])
@@ -34,14 +35,16 @@ const showSecretDialog = ref(false)
 const cdkSsoPreset: SsoPreset = {
     id: 'cdk-airdrop',
     clientId: 'cdk-airdrop',
-    clientName: 'CDK 空投台',
+    clientName: 'CDK 空投站',
     redirectUris: [
         'https://cdk.allinsong.top/login/callback',
-        'http://localhost:5174/login/callback',
-        'http://127.0.0.1:5174/login/callback',
+        'https://airdrop.allinsong.top/login/callback',
+        'http://localhost:8088/login/callback',
+        'http://127.0.0.1:8088/login/callback',
     ],
-    description: 'ZensPulse 社区 CDK 节点空投平台',
-    logoUrl: '',
+    description: 'Zens 社区 CDK 空投领取站，使用主站账号单点登录并发放兑换码与活动权益。',
+    logoUrl: '/logo.png',
+    helperText: 'client_id 固定为 cdk-airdrop，默认覆盖 cdk/airdrop 子域名与本地 8088 回调。',
 }
 
 const pointShopSsoPreset: SsoPreset = {
@@ -60,7 +63,25 @@ const pointShopSsoPreset: SsoPreset = {
     ],
     description: 'Zens 社区积分商城，使用主站账号单点登录并同步积分权益。',
     logoUrl: '/logo.png',
+    helperText: 'client_id 固定为 zdc-shop，已覆盖本地 3000/3001 与常用生产子域名回调地址。',
 }
+
+const lotterySsoPreset: SsoPreset = {
+    id: 'campus-lottery-station',
+    clientId: 'campus-lottery-station',
+    clientName: 'Zens 抽奖站',
+    redirectUris: [
+        'https://lottery.allinsong.top/api/auth/sso/callback',
+        'https://draw.allinsong.top/api/auth/sso/callback',
+        'http://localhost:8093/api/auth/sso/callback',
+        'http://127.0.0.1:8093/api/auth/sso/callback',
+    ],
+    description: 'Zens 社区原帖评论抽奖工具，使用主站账号登录，可同步评论、执行抽奖并把开奖结果回写原帖。',
+    logoUrl: '/logo.png',
+    helperText: 'client_id 固定为 campus-lottery-station，默认覆盖 lottery/draw 子域名与本地 8093 回调。',
+}
+
+const ssoPresets = [pointShopSsoPreset, lotterySsoPreset, cdkSsoPreset]
 
 function presetToForm(preset: SsoPreset) {
     return {
@@ -88,10 +109,16 @@ async function loadClients() {
     }
 }
 
-function openCreateDialog(preset: SsoPreset = cdkSsoPreset) {
+function openCreateDialog(preset?: SsoPreset) {
     dialogMode.value = 'create'
     editingId.value = ''
-    form.value = presetToForm(preset)
+    form.value = preset ? presetToForm(preset) : {
+        clientId: '',
+        clientName: '',
+        redirectUri: '',
+        description: '',
+        logoUrl: '',
+    }
     dialogVisible.value = true
 }
 
@@ -152,6 +179,22 @@ async function repairPresetClient(preset: SsoPreset) {
     try {
         if (preset.id === pointShopSsoPreset.id) {
             const res = await ssoApi.upsertPointShopClient()
+            const repaired = res.data
+            if (repaired?.clientSecret) {
+                newSecret.value = repaired.clientSecret
+                showSecretDialog.value = true
+            }
+            ElMessage.success(`${preset.clientName} SSO 已创建/修复并启用`)
+        } else if (preset.id === lotterySsoPreset.id) {
+            const res = await ssoApi.upsertLotteryClient()
+            const repaired = res.data
+            if (repaired?.clientSecret) {
+                newSecret.value = repaired.clientSecret
+                showSecretDialog.value = true
+            }
+            ElMessage.success(`${preset.clientName} SSO 已创建/修复并启用`)
+        } else if (preset.id === cdkSsoPreset.id) {
+            const res = await ssoApi.upsertCdkAirdropClient()
             const repaired = res.data
             if (repaired?.clientSecret) {
                 newSecret.value = repaired.clientSecret
@@ -240,24 +283,28 @@ onMounted(loadClients)
             </div>
             <div class="header-actions">
                 <el-button
+                    v-for="preset in ssoPresets"
+                    :key="preset.id"
                     :icon="Refresh"
-                    :loading="repairingPresetId === pointShopSsoPreset.id"
-                    @click="repairPresetClient(pointShopSsoPreset)"
+                    :loading="repairingPresetId === preset.id"
+                    @click="repairPresetClient(preset)"
                 >
-                    一键修复积分商城 SSO
+                    修复{{ preset.clientName }}
                 </el-button>
                 <el-button type="primary" :icon="Plus" @click="openCreateDialog()">新建应用</el-button>
             </div>
         </div>
 
-        <div class="preset-panel">
-            <div>
-                <div class="preset-title">积分商城接入检查</div>
-                <div class="preset-desc">
-                    client_id 固定为 <code>zdc-shop</code>，已覆盖本地 3000/3001 与常用生产子域名回调地址。
+        <div class="preset-grid">
+            <div v-for="preset in ssoPresets" :key="preset.id" class="preset-panel">
+                <div>
+                    <div class="preset-title">{{ preset.clientName }}接入检查</div>
+                    <div class="preset-desc">
+                        <code>{{ preset.clientId }}</code> {{ preset.helperText }}
+                    </div>
                 </div>
+                <el-button link type="primary" @click="openPresetDialog(preset)">查看预置配置</el-button>
             </div>
-            <el-button link type="primary" @click="openPresetDialog(pointShopSsoPreset)">查看预置配置</el-button>
         </div>
 
         <el-table :data="clients" v-loading="loading" stripe style="width: 100%; margin-top: 20px;">
@@ -422,8 +469,13 @@ onMounted(loadClients)
     gap: 10px;
 }
 
-.preset-panel {
+.preset-grid {
     margin-top: 18px;
+    display: grid;
+    gap: 12px;
+}
+
+.preset-panel {
     padding: 14px 16px;
     border: 1px solid var(--el-border-color-lighter);
     border-radius: 12px;
