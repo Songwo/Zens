@@ -21,6 +21,7 @@ import './styles/prose.css'
 import App from './App.vue'
 import { installCodeBlockCopy } from './utils/codeBlockCopy'
 import { cleanupDevServiceWorker } from './utils/devServiceWorkerCleanup'
+import { installWebVitals } from './utils/webVitals'
 
 const app = createApp(App)
 const pinia = createPinia()
@@ -45,7 +46,25 @@ app.use(router)
 // Song：注册 v-loading 指令 + ElLoading 服务（按需模式下需手动注册）
 app.use(ElLoading)
 
-installCodeBlockCopy()
-cleanupDevServiceWorker()
-
 app.mount('#app')
+
+const scheduleNonCriticalStartup = (callback: () => void) => {
+  const win = window as Window & {
+    requestIdleCallback?: (cb: IdleRequestCallback, opts?: { timeout: number }) => number
+  }
+
+  if (typeof win.requestIdleCallback === 'function') {
+    win.requestIdleCallback(callback, { timeout: 1800 })
+    return
+  }
+
+  window.setTimeout(callback, 800)
+}
+
+if (typeof window !== 'undefined') {
+  scheduleNonCriticalStartup(() => {
+    installCodeBlockCopy()
+    cleanupDevServiceWorker()
+    installWebVitals()
+  })
+}

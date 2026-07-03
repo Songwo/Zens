@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { Refresh, Search } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-import { performanceApi, type PerformanceSummary, type SlowRequestEvent, type SlowSqlEvent } from '@/api/performance'
+import { performanceApi, type PerformanceSummary, type SlowRequestEvent, type SlowSqlEvent, type WebVitalEvent } from '@/api/performance'
 
 const loading = ref(false)
 const keyword = ref('')
@@ -11,9 +11,14 @@ const limit = ref(80)
 const summary = ref<PerformanceSummary>({})
 const slowRequests = ref<SlowRequestEvent[]>([])
 const slowSql = ref<SlowSqlEvent[]>([])
+const webVitals = ref<WebVitalEvent[]>([])
 
 const hikari = computed(() => summary.value.hikari || {})
 const jvm = computed(() => summary.value.jvm || {})
+const webVitalMetrics = computed(() => summary.value.webVitals?.metrics || {})
+const webVitalTotal = computed(() => summary.value.webVitals?.total || 0)
+const lcpP75 = computed(() => webVitalMetrics.value.LCP?.p75 ?? '-')
+const clsP75 = computed(() => webVitalMetrics.value.CLS?.p75 ?? '-')
 
 const formatTime = (value?: string) => {
   if (!value) return '-'
@@ -28,14 +33,16 @@ const loadData = async () => {
       minMs: minMs.value || undefined,
       limit: limit.value,
     }
-    const [summaryRes, requestsRes, sqlRes] = await Promise.all([
+    const [summaryRes, requestsRes, sqlRes, vitalsRes] = await Promise.all([
       performanceApi.summary(),
       performanceApi.slowRequests(params),
       performanceApi.slowSql(params),
+      performanceApi.webVitals({ limit: limit.value }),
     ])
     summary.value = summaryRes.data || {}
     slowRequests.value = requestsRes.data || []
     slowSql.value = sqlRes.data || []
+    webVitals.value = vitalsRes.data || []
   } catch (error: any) {
     ElMessage.error(error?.message || '性能数据加载失败')
   } finally {
@@ -51,7 +58,7 @@ onMounted(loadData)
     <div class="page-head">
       <div>
         <h2>性能观测</h2>
-        <p>慢接口、慢 SQL、连接池与 JVM 快照</p>
+        <p>慢接口、慢 SQL、连接池、JVM 与真实用户 Web Vitals 快照</p>
       </div>
       <el-button type="primary" :icon="Refresh" @click="loadData">刷新</el-button>
     </div>
@@ -73,9 +80,9 @@ onMounted(loadData)
         <div class="metric-sub">当前筛选结果，内存最多保留最近 200 条</div>
       </el-card>
       <el-card shadow="never">
-        <div class="metric-title">慢 SQL</div>
-        <div class="metric-main">{{ slowSql.length }}</div>
-        <div class="metric-sub">当前筛选结果，内存最多保留最近 200 条</div>
+        <div class="metric-title">Web Vitals</div>
+        <div class="metric-main">{{ webVitalTotal }}</div>
+        <div class="metric-sub">LCP P75 {{ lcpP75 }}ms，CLS P75 {{ clsP75 }}</div>
       </el-card>
     </div>
 
@@ -94,6 +101,17 @@ onMounted(loadData)
         <el-option :value="150" label="最近 150 条" />
       </el-select>
       <el-button type="primary" @click="loadData">筛选</el-button>
+    </el-card>
+
+    <el-card shadow="never" class="web-vitals-card">
+      <template #header>真实用户体验指标</template>
+      <div class="vitals-grid">
+        <div v-for="(metric, name) in webVitalMetrics" :key="name" class="vital-item">
+          <span>{{ name }}</span>
+          <strong>{{ metric.p75 ?? '-' }}</strong>
+          <small>P75 / 平均 {{ metric.avg ?? '-' }} / 差 {{ metric.poor ?? 0 }}</small>
+        </div>
+      </div>
     </el-card>
 
     <el-row :gutter="16">
@@ -125,6 +143,20 @@ onMounted(loadData)
         </el-card>
       </el-col>
     </el-row>
+
+    <el-card shadow="never" class="table-card">
+      <template #header>Web Vitals 明细</template>
+      <el-table :data="webVitals" height="360" empty-text="暂无前端体验指标">
+        <el-table-column prop="time" label="时间" width="170">
+          <template #default="{ row }">{{ formatTime(row.time) }}</template>
+        </el-table-column>
+        <el-table-column prop="name" label="指标" width="90" />
+        <el-table-column prop="value" label="数值" width="110" sortable />
+        <el-table-column prop="rating" label="评级" width="150" />
+        <el-table-column prop="route" label="页面" min-width="220" show-overflow-tooltip />
+        <el-table-column prop="navigationType" label="导航类型" width="120" />
+      </el-table>
+    </el-card>
   </div>
 </template>
 
@@ -191,14 +223,55 @@ onMounted(loadData)
   height: 100%;
 }
 
+.web-vitals-card :deep(.el-card__body) {
+  padding: 14px;
+}
+
+.vitals-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.vital-item {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 10px;
+  background: var(--el-fill-color-extra-light);
+}
+
+.vital-item span {
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.vital-item strong {
+  color: var(--el-text-color-primary);
+  font-size: 22px;
+  line-height: 1;
+}
+
+.vital-item small {
+  color: var(--el-text-color-placeholder);
+  font-size: 11px;
+}
+
 @media (max-width: 1100px) {
   .metrics-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .vitals-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 760px) {
   .metrics-grid,
+  .vitals-grid,
   .filter-card :deep(.el-card__body) {
     grid-template-columns: 1fr;
   }

@@ -62,6 +62,10 @@ public class SecurityWhitelist {
                         "/short-link/**",
                         "/sso/clients/public/**",
                         "/onebox/preview",
+                        "/performance/web-vitals/summary",
+                        "/performance/web-vitals/events",
+                        "/api/performance/web-vitals/summary",
+                        "/api/performance/web-vitals/events",
                         "/actuator/health",
                         "/actuator/info",
                         "/actuator/prometheus",
@@ -70,6 +74,8 @@ public class SecurityWhitelist {
         public static final String[] PUBLIC_POST_URLS = {
                         "/post/search-lists",
                         "/documents/list",
+                        "/performance/web-vitals",
+                        "/api/performance/web-vitals",
                         "/comment/create",
                         "/short-link/comment",
         };

@@ -48,7 +48,9 @@ public class RequestSecurityFilter extends OncePerRequestFilter {
             "/api/auth/reset-password",
             "/api/auth/github/authorize-url",
             "/api/auth/github/login",
-            "/api/auth/2fa/verify-login");
+            "/api/auth/2fa/verify-login",
+            "/performance/web-vitals",
+            "/api/performance/web-vitals");
 
     private final StringRedisTemplate redisTemplate;
     private final JwtUtil jwtUtil;

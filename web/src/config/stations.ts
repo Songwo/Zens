@@ -11,11 +11,11 @@
 
 export type StationKey = 'shop' | 'lottery' | 'cdk' | 'media'
 
-const DEV_FALLBACK: Record<StationKey, string> = {
-  shop: 'http://localhost:3000',
-  lottery: 'http://localhost:8093',
-  cdk: 'http://localhost:8088',
-  media: 'http://localhost:8090',
+const DEFAULT_PUBLIC_URL: Record<StationKey, string> = {
+  shop: 'https://shop.allinsong.top',
+  lottery: 'https://lottery.allinsong.top',
+  cdk: 'https://cdk.allinsong.top',
+  media: 'https://media.allinsong.top',
 }
 
 const ENV_KEY: Record<StationKey, string> = {
@@ -48,7 +48,7 @@ function trimSlash(url: string): string {
 /** 子站根地址(无尾斜杠)。 */
 export function stationBase(key: StationKey): string {
   const fromEnv = (import.meta.env[ENV_KEY[key]] as string | undefined)?.trim()
-  return trimSlash(fromEnv || DEV_FALLBACK[key])
+  return trimSlash(fromEnv || DEFAULT_PUBLIC_URL[key])
 }
 
 /** 拼子站某路径的完整地址。 */

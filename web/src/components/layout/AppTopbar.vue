@@ -45,8 +45,17 @@ const currentPageLabel = computed(() => {
   if (path.startsWith('/s/')) return '板块详情'
   if (path.startsWith('/t/')) return '帖子详情'
   if (path === '/me') return '个人中心'
-  return '校园脉搏'
+  return '社区中枢'
 })
+
+const mobileSearchShortcuts = [
+  { label: '热门排行', path: '/hot' },
+  { label: '精华文档', path: '/featured' },
+  { label: '福利中心', path: '/benefits' },
+  { label: 'Zens 星港', path: '/metaverse' },
+]
+
+const mobileSearchTags = ['架构设计', 'Spring Boot', 'Vue', '性能优化', '项目复盘']
 
 const goCompose = () => {
   composerStore.open()
@@ -62,6 +71,20 @@ const handleSearch = () => {
 
 const toggleMobileSearch = () => {
   showMobileSearch.value = !showMobileSearch.value
+}
+
+const closeMobileSearch = () => {
+  showMobileSearch.value = false
+}
+
+const goMobileSearchShortcut = (path: string) => {
+  showMobileSearch.value = false
+  router.push(path)
+}
+
+const searchByTag = (tag: string) => {
+  searchQuery.value = tag
+  handleSearch()
 }
 
 const updateUnreadCount = (value: number) => {
@@ -400,7 +423,7 @@ onUnmounted(() => {
 
         <el-button
           text
-          class="metaverse-shortcut"
+          class="metaverse-shortcut mobile-hidden-action"
           :class="{ active: route.path.startsWith('/benefits') }"
           @click="router.push('/benefits')"
         >
@@ -410,7 +433,7 @@ onUnmounted(() => {
 
         <el-button
           text
-          class="metaverse-shortcut"
+          class="metaverse-shortcut mobile-hidden-action"
           :class="{ active: route.path.startsWith('/metaverse') }"
           @click="router.push('/metaverse')"
         >
@@ -418,9 +441,11 @@ onUnmounted(() => {
           <span class="metaverse-label">星港</span>
         </el-button>
 
-        <AppLauncher class="ecosystem-launcher" />
+        <span class="ecosystem-launcher mobile-hidden-action">
+          <AppLauncher />
+        </span>
 
-        <el-button type="primary" @click="goCompose" class="compose-btn">
+        <el-button type="primary" @click="goCompose" class="compose-btn mobile-hidden-action">
           <el-icon><EditPen /></el-icon>
           <span class="compose-label">发帖</span>
         </el-button>
@@ -487,15 +512,49 @@ onUnmounted(() => {
     </div>
 
     <transition name="slide-fade">
-      <div v-if="showMobileSearch" class="mobile-search-wrap">
-        <el-input
-          v-model="searchQuery"
-          placeholder="搜索帖子、标签、用户"
-          :prefix-icon="Search"
-          class="nav-search-input"
-          @keyup.enter="handleSearch"
-          clearable
-        />
+      <div v-if="showMobileSearch" class="mobile-search-layer">
+        <button class="mobile-search-backdrop" type="button" aria-label="关闭搜索" @click="closeMobileSearch"></button>
+        <section class="mobile-search-panel" aria-label="移动端搜索">
+          <el-input
+            v-model="searchQuery"
+            placeholder="搜索帖子、标签、用户"
+            :prefix-icon="Search"
+            class="nav-search-input mobile-search-input"
+            autofocus
+            @keyup.enter="handleSearch"
+            clearable
+          />
+
+          <div class="mobile-search-section">
+            <span class="mobile-search-heading">快捷入口</span>
+            <div class="mobile-search-grid">
+              <button
+                v-for="item in mobileSearchShortcuts"
+                :key="item.path"
+                class="mobile-search-shortcut"
+                type="button"
+                @click="goMobileSearchShortcut(item.path)"
+              >
+                {{ item.label }}
+              </button>
+            </div>
+          </div>
+
+          <div class="mobile-search-section">
+            <span class="mobile-search-heading">热门搜索</span>
+            <div class="mobile-search-tags">
+              <button
+                v-for="tag in mobileSearchTags"
+                :key="tag"
+                class="mobile-search-tag"
+                type="button"
+                @click="searchByTag(tag)"
+              >
+                {{ tag }}
+              </button>
+            </div>
+          </div>
+        </section>
       </div>
     </transition>
   </header>
@@ -720,12 +779,6 @@ onUnmounted(() => {
   border-top: 1px solid var(--el-border-color-lighter);
 }
 
-.mobile-search-wrap {
-  border-top: 1px solid var(--el-border-color-lighter);
-  padding: 10px 14px 12px;
-  background: var(--el-bg-color);
-}
-
 .slide-fade-enter-active,
 .slide-fade-leave-active {
   transition: all 0.2s ease;
@@ -737,9 +790,25 @@ onUnmounted(() => {
   transform: translateY(-6px);
 }
 
+.mobile-search-layer {
+  display: none;
+}
+
 @media (max-width: 980px) {
+  .app-topbar {
+    background: color-mix(in srgb, var(--el-bg-color) 96%, transparent);
+    backdrop-filter: blur(14px) saturate(126%);
+  }
+
+  .topbar-container {
+    height: 54px;
+    padding: 0 12px;
+    gap: 8px;
+  }
+
   .topbar-left {
     width: auto;
+    min-width: 48px;
   }
 
   .desktop-search {
@@ -748,38 +817,164 @@ onUnmounted(() => {
 
   .mobile-title {
     display: inline-flex;
+    min-width: 0;
+    max-width: 34vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .mobile-only {
     display: inline-flex;
   }
 
-  .compose-label {
+  .mobile-hidden-action {
     display: none;
   }
 
-  .metaverse-shortcut {
-    width: 36px;
-    padding: 0;
+  .topbar-right {
+    gap: 6px;
   }
 
-  .metaverse-shortcut :deep(.el-icon) {
-    margin-right: 0;
+  .icon-btn {
+    width: 34px;
+    height: 34px;
+    font-size: 17px;
   }
 
-  .metaverse-label {
-    display: none;
+  .notification-badge :deep(.el-badge__content) {
+    transform: translateY(-2px) translateX(4px);
   }
 
-  .compose-btn {
-    padding: 8px 10px;
+  .mobile-search-layer {
+    position: fixed;
+    inset: 54px 0 0;
+    z-index: 130;
+    display: block;
+  }
+
+  .mobile-search-backdrop {
+    position: absolute;
+    inset: 0;
+    border: none;
+    background: rgba(15, 23, 42, 0.18);
+    backdrop-filter: blur(4px);
+  }
+
+  .mobile-search-panel {
+    position: relative;
+    margin: 10px;
+    padding: 12px;
+    border: 1px solid color-mix(in srgb, var(--el-border-color-light) 72%, transparent);
+    border-radius: 18px;
+    background: color-mix(in srgb, var(--el-bg-color) 96%, transparent);
+    box-shadow: 0 18px 42px rgba(15, 23, 42, 0.18);
+    backdrop-filter: blur(18px) saturate(128%);
+  }
+
+  .mobile-search-input :deep(.el-input__wrapper) {
+    min-height: 42px;
+  }
+
+  .mobile-search-section {
+    margin-top: 14px;
+  }
+
+  .mobile-search-heading {
+    display: block;
+    margin-bottom: 8px;
+    color: var(--el-text-color-secondary);
+    font-size: 12px;
+    font-weight: 800;
+  }
+
+  .mobile-search-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .mobile-search-shortcut,
+  .mobile-search-tag {
+    border: 1px solid var(--el-border-color-lighter);
+    background: var(--el-fill-color-lighter);
+    color: var(--el-text-color-regular);
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  .mobile-search-shortcut {
+    min-height: 38px;
+    border-radius: 12px;
+    font-size: 13px;
+  }
+
+  .mobile-search-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .mobile-search-tag {
+    min-height: 32px;
+    border-radius: 999px;
+    padding: 0 11px;
+    font-size: 12px;
+  }
+
+  .mobile-search-shortcut:active,
+  .mobile-search-tag:active {
+    transform: scale(0.98);
   }
 }
 
 @media (max-width: 768px) {
   .topbar-container {
     padding: 0 10px;
-    gap: 8px;
+  }
+
+  .topbar-left :deep(.logo-img) {
+    width: 34px;
+    height: 34px;
+    border-radius: 7px;
+  }
+
+  .topbar-left :deep(.logo-text) {
+    display: none;
+  }
+
+  .topbar-center {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 430px) {
+  .topbar-container {
+    gap: 6px;
+  }
+
+  .topbar-left {
+    min-width: 36px;
+  }
+
+  .mobile-title {
+    max-width: 28vw;
+    font-size: 13px;
+  }
+
+  .topbar-right {
+    gap: 4px;
+  }
+
+  .icon-btn {
+    width: 32px;
+    height: 32px;
+    font-size: 16px;
+  }
+
+  .mobile-search-panel {
+    margin: 8px;
+    padding: 10px;
   }
 }
 </style>

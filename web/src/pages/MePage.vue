@@ -117,7 +117,7 @@ watch(() => route.query.tab, t => { if (t && typeof t === 'string') activeTab.va
 
       <el-tabs v-model="activeTab" class="me-tabs" @tab-change="onTab">
         <el-tab-pane name="posts" label="动态">
-          <ProfilePostList :fetcher="postsFetcher" empty-title="还没有发布动态" empty-description="快去分享你的第一篇校园见闻吧！" />
+          <ProfilePostList :fetcher="postsFetcher" empty-title="还没有发布动态" empty-description="去分享你的第一篇项目经验、方案复盘或技术观察吧！" />
         </el-tab-pane>
         <el-tab-pane name="favorites" label="收藏">
           <ProfilePostList :fetcher="favFetcher" empty-title="暂无收藏" empty-description="去发现感兴趣的内容并收藏吧！" />

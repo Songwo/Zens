@@ -182,7 +182,7 @@ const fetchHotSuggestions = async () => {
       .filter((name): name is string => Boolean(name))
       .slice(0, 12)
   } catch {
-    hotSuggestions.value = ['学习打卡', '校园生活', '求职实习', '开源项目', '社团活动', '二手交易']
+    hotSuggestions.value = ['架构设计', '性能优化', '项目复盘', '开源项目', '系统监控', '最佳实践']
   }
 }
 
@@ -485,11 +485,11 @@ onUnmounted(() => {
     <div class="search-page-container">
       <div class="search-hero">
         <PageBackButton class="search-back-button" fallback="/" />
-        <h1 class="search-title">探索校园</h1>
+        <h1 class="search-title">探索社区</h1>
         <div class="search-bar-wrapper">
           <el-input
             v-model="searchQuery"
-            placeholder="搜索话题、用户、甚至是奇思妙想..."
+            placeholder="搜索话题、用户、项目经验或解决方案..."
             size="large"
             clearable
             :prefix-icon="Search"
@@ -654,7 +654,7 @@ onUnmounted(() => {
         <EmptyState
           v-if="!loading && !normalizedQuery"
           title="想搜点什么？"
-          description="在这里输入你感兴趣的话题、标签或同学"
+          description="在这里输入你感兴趣的话题、标签或协作者"
         >
           <div class="search-examples">
             <el-tag

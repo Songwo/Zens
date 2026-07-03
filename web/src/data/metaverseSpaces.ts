@@ -75,7 +75,7 @@ export const metaverseSpaces: MetaverseSpace[] = [
   {
     id: 'main-home',
     title: 'Zens 社区主站',
-    subtitle: '校园社区的信息流核心',
+    subtitle: '开发者社区的信息流核心',
     description: '进入主社区首页，浏览最新帖子、热门讨论、精选内容和社区动态。',
     category: 'core',
     status: 'open',

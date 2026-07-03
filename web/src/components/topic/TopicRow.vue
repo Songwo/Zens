@@ -25,6 +25,7 @@ type TopicItem = {
   isSolved?: boolean
   trendLevel?: string
   sentimentLabel?: string
+  recommendReason?: string
 }
 
 const router = useRouter()
@@ -85,6 +86,7 @@ const aiBadgeClass = computed(() => {
 })
 
 const aiBadge = computed(() => !!aiBadgeText.value)
+const recommendReason = computed(() => (props.topic.recommendReason || '').trim())
 
 const formatMetric = (value: number) => {
   if (!Number.isFinite(value)) return '0'
@@ -142,7 +144,7 @@ const formatMetric = (value: number) => {
         </div>
         <div class="sp-header-right">
           <span v-if="topic.isSolved" class="state-tag solved">已解决</span>
-          <span class="sp-category-pill" :style="{ '--cat-color': topic.category.color || '#409EFF' }">
+          <span class="sp-category-pill" :style="{ '--sp-cat-color': topic.category.color || '#409EFF' }">
             {{ topic.category.name }}
           </span>
         </div>
@@ -150,7 +152,7 @@ const formatMetric = (value: number) => {
 
       <div class="sp-content-body">
         <div class="sp-content-card">
-          <span class="sp-micro-tag">💬 微动态</span>
+          <span class="sp-micro-tag">微动态</span>
           <span class="sp-text">{{ topic.excerpt }}</span>
         </div>
       </div>
@@ -162,10 +164,10 @@ const formatMetric = (value: number) => {
         
         <div class="sp-actions-metrics">
           <span v-if="aiBadge" class="sp-ai-badge" :class="aiBadgeClass">
-            🤖 {{ aiBadgeText }}
+            AI {{ aiBadgeText }}
           </span>
-          <span class="sp-metric">💬 {{ formatMetric(topic.replies) }} 回应</span>
-          <span class="sp-metric">👁️ {{ formatMetric(topic.views) }} 浏览</span>
+          <span class="sp-metric">{{ formatMetric(topic.replies) }} 回应</span>
+          <span class="sp-metric">{{ formatMetric(topic.views) }} 浏览</span>
         </div>
       </div>
     </div>
@@ -212,6 +214,10 @@ const formatMetric = (value: number) => {
 
       <h3 class="topic-title">{{ topic.title }}</h3>
       <p class="topic-excerpt">{{ topic.excerpt }}</p>
+      <div v-if="recommendReason" class="recommend-reason">
+        <span class="reason-label">推荐理由</span>
+        <span>{{ recommendReason }}</span>
+      </div>
 
       <div class="meta-line">
         <span class="category-pill">
@@ -226,7 +232,7 @@ const formatMetric = (value: number) => {
 
         <!-- AI Insight Premium Badge -->
         <span v-if="aiBadge" class="ai-badge" :class="aiBadgeClass">
-          <span class="ai-badge-icon">🤖</span>
+          <span class="ai-badge-icon">AI</span>
           <span class="ai-badge-text">{{ aiBadgeText }}</span>
         </span>
       </div>
@@ -710,48 +716,229 @@ const formatMetric = (value: number) => {
 
 @media (max-width: 768px) {
   .topic-row {
-    padding: 12px;
-    gap: 8px;
+    padding: 12px 14px;
+    gap: 6px;
+    border-left-width: 0;
+    transition: background-color 0.18s ease, transform 0.14s ease;
+    will-change: auto;
+  }
+
+  .topic-row::after {
+    display: none;
+  }
+
+  .topic-row:hover {
+    transform: none;
+    box-shadow: none;
+  }
+
+  .topic-row:active {
+    transform: scale(0.99);
   }
 
   .headline {
     gap: 8px;
   }
 
+  .regular-post-container {
+    gap: 7px;
+  }
+
+  .author-header {
+    gap: 8px;
+    align-items: flex-start;
+  }
+
+  .rp-avatar,
+  .sp-avatar {
+    width: 30px !important;
+    height: 30px !important;
+    font-size: 12px;
+  }
+
+  .author-name-row,
+  .sp-name-row {
+    gap: 4px;
+    flex-wrap: nowrap;
+    overflow: hidden;
+  }
+
+  .author-name,
+  .sp-author-name {
+    max-width: 118px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 12px;
+  }
+
+  .author-name-row :deep(.user-role-badge),
+  .author-name-row :deep(.trust-level-badge),
+  .author-name-row :deep(.user-badge),
+  .sp-name-row :deep(.user-role-badge),
+  .sp-name-row :deep(.trust-level-badge),
+  .sp-name-row :deep(.user-badge) {
+    display: none;
+  }
+
+  .rp-time,
+  .sp-time {
+    font-size: 11px;
+  }
+
+  .state-tags {
+    gap: 4px;
+    max-width: 42%;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .state-tag {
+    padding: 3px 6px;
+    font-size: 10px;
+  }
+
   .topic-title {
-    font-size: 15px;
+    font-size: 15.5px;
+    line-height: 1.38;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
   }
 
   .topic-excerpt {
-    -webkit-line-clamp: 1;
-    line-clamp: 1;
+    font-size: 12.5px;
+    line-height: 1.45;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
   }
 
   .meta-line {
-    flex-wrap: wrap;
-    gap: 8px;
+    gap: 6px;
+    overflow: hidden;
+    flex-wrap: nowrap;
+  }
+
+  .category-pill,
+  .tag-chip,
+  .ai-badge {
+    padding: 2px 7px;
+    font-size: 11px;
+  }
+
+  .category-pill {
+    max-width: 94px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .tags-line {
+    gap: 4px;
+    flex: 1;
+  }
+
+  .tag-chip:nth-child(n + 3) {
+    display: none;
+  }
+
+  .ai-badge {
+    display: none;
   }
 
   .foot-line {
-    flex-direction: column;
-    align-items: flex-start;
+    flex-direction: row;
+    align-items: center;
     gap: 8px;
   }
 
   .stats-line {
     justify-content: flex-start;
+    gap: 12px;
+    font-size: 11.5px;
+  }
+
+  .short-post-container {
+    gap: 8px;
+  }
+
+  .sp-header {
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .sp-header-right {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 4px;
+    max-width: 44%;
+  }
+
+  .sp-category-pill {
+    padding: 3px 7px;
+    max-width: 92px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .sp-content-card {
+    padding: 10px 12px;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  .sp-micro-tag,
+  .sp-ai-badge {
+    display: none;
   }
 
   .sp-footer {
     flex-direction: column;
     align-items: flex-start;
-    gap: 8px;
+    gap: 6px;
   }
 
   .sp-actions-metrics {
     margin-left: 0;
     width: 100%;
     justify-content: flex-start;
+    gap: 12px;
   }
+
+  .sp-tags {
+    gap: 4px;
+    max-width: 100%;
+    overflow: hidden;
+    flex-wrap: nowrap;
+  }
+
+  .sp-tag-chip {
+    font-size: 11px;
+    white-space: nowrap;
+  }
+
+  .sp-tag-chip:nth-child(n + 3) {
+    display: none;
+  }
+}
+
+.recommend-reason {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 8px;
+  background: var(--el-fill-color-extra-light);
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.reason-label {
+  flex: 0 0 auto;
+  color: #8a5a00;
+  font-weight: 800;
 }
 </style>

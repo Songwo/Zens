@@ -304,7 +304,7 @@ const publish = async () => {
         status: 1,
         poll: pollPayload || undefined
       })
-      pulseNotification.post(`「${title}」已成功广播至校园大厅，激荡你的校园回声！`, '发布话题成功')
+      pulseNotification.post(`「${title}」已成功发布到社区内容流，等待更多成员参与讨论。`, '发布话题成功')
     }
 
     draft.clearDraft() // Song：重要: 成功后清空草稿

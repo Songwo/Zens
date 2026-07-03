@@ -1,4 +1,5 @@
 import { hasAuthSession, warmupSession } from '@/lib/api'
+import { shouldReduceBackgroundWork } from '@/utils/network'
 import { emitNotificationUnreadSync } from '@/utils/notificationSync'
 import { wsClient } from '@/utils/websocket'
 
@@ -30,6 +31,9 @@ export function initSessionResilience() {
 
   const runWarmup = (force = false) => {
     if (!hasAuthSession()) {
+      return Promise.resolve()
+    }
+    if (!force && shouldReduceBackgroundWork()) {
       return Promise.resolve()
     }
 
@@ -113,7 +117,7 @@ export function initSessionResilience() {
   document.addEventListener('visibilitychange', handleVisibilityChange)
 
   const timer = window.setInterval(() => {
-    if (!document.hidden) {
+    if (!document.hidden && !shouldReduceBackgroundWork()) {
       void runWarmup(false)
     }
   }, PERIODIC_WARMUP_MS)

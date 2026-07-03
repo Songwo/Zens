@@ -1,10 +1,10 @@
 <div align="center">
 
-# 🎓 Campus Pulse
+# Campus Pulse
 
-**校园智能内容社区与趋势决策平台**
+**智能内容社区与趋势分析平台**
 
-*A campus-grade intelligent community platform with trend analysis, AI-assisted moderation, and real-time interactions*
+*An intelligent community platform with trend analysis, AI-assisted moderation, and real-time interactions*
 
 [![Java](https://img.shields.io/badge/Java-17-orange?logo=openjdk)](https://openjdk.org/)
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.5-brightgreen?logo=springboot)](https://spring.io/projects/spring-boot)
@@ -14,7 +14,7 @@
 [![Redis](https://img.shields.io/badge/Redis-6%2B-dc382d?logo=redis&logoColor=white)](https://redis.io/)
 [![License](https://img.shields.io/badge/License-MIT-blue)](LICENSE)
 
-[在线演示 Demo](https://allinsong.top) · [后端 API 文档](#api-overview) · [快速开始](#quick-start) · [部署指南](#deployment)
+[在线预览](https://allinsong.top) · [后端 API 文档](#api-overview) · [快速开始](#quick-start) · [部署指南](#deployment)
 
 </div>
 
@@ -22,7 +22,7 @@
 
 ## ✨ 项目亮点
 
-Campus Pulse 不是一个普通的论坛系统。它以**行为驱动洞察**为核心，将传统校园社区与 AI 辅助决策、实时热度引擎深度结合，面向高校师生打造的全功能内容治理与趋势分析平台。
+Campus Pulse 不是一个普通的论坛系统。它以**行为驱动洞察**为核心，将内容社区、AI 辅助决策与实时热度引擎深度结合，适用于开发者交流、内容协作与趋势洞察等场景，强调可扩展的内容治理与分析能力。
 
 | 亮点 | 说明 |
 |------|------|

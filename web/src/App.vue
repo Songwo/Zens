@@ -3,14 +3,13 @@ import { computed, defineAsyncComponent, onMounted, onUnmounted, ref, watch } fr
 import { useUserStore } from '@/store/user'
 import { useUiStore } from '@/store/ui'
 import { usePostComposerStore } from '@/store/postComposer'
-import AppearanceDock from '@/components/ui/AppearanceDock.vue'
 import GlobalProgressBar from '@/components/common/GlobalProgressBar.vue'
-import PulseNotification from '@/components/common/PulseNotification.vue'
-import PwaInstallPrompt from '@/components/common/PwaInstallPrompt.vue'
 import { initSessionResilience } from '@/utils/sessionResilience'
 import { ensureCurrentUserProfile } from '@/utils/sessionProfile'
 import { publicDataApi } from '@/api/publicData'
 import { wsClient } from '@/utils/websocket'
+import { shouldReduceBackgroundWork } from '@/utils/network'
+import { setRouteMeta } from '@/utils/seo'
 import { ElMessage } from 'element-plus'
 import { useRouter } from 'vue-router'
 
@@ -21,7 +20,12 @@ const router = useRouter()
 let unsubForceLogout: (() => void) | null = null
 
 const AsyncPostComposerModal = defineAsyncComponent(() => import('@/components/compose/PostComposerModal.vue'))
+const AsyncAppearanceDock = defineAsyncComponent(() => import('@/components/ui/AppearanceDock.vue'))
+const AsyncPulseNotification = defineAsyncComponent(() => import('@/components/common/PulseNotification.vue'))
+const AsyncPwaInstallPrompt = defineAsyncComponent(() => import('@/components/common/PwaInstallPrompt.vue'))
+const AsyncNetworkStatusBanner = defineAsyncComponent(() => import('@/components/common/NetworkStatusBanner.vue'))
 const shouldMountComposer = ref(false)
+const shouldMountDeferredUi = ref(false)
 const showComposer = computed(() => shouldMountComposer.value)
 let stopSessionResilience: (() => void) | null = null
 let idlePrefetchHandle: number | null = null
@@ -58,6 +62,10 @@ const clearRoutePrefetch = () => {
 }
 
 const runRoutePrefetch = () => {
+  if (document.visibilityState === 'hidden' || shouldReduceBackgroundWork()) {
+    return
+  }
+
   routePrefetchLoaders.forEach((load, index) => {
     const timer = window.setTimeout(() => {
       void load().catch(() => {
@@ -78,6 +86,10 @@ const runRoutePrefetch = () => {
 }
 
 const scheduleRoutePrefetch = () => {
+  if (shouldReduceBackgroundWork()) {
+    return
+  }
+
   const win = window as Window & {
     requestIdleCallback?: (callback: IdleRequestCallback, options?: { timeout: number }) => number
   }
@@ -90,6 +102,23 @@ const scheduleRoutePrefetch = () => {
   }
 
   routePrefetchTimers.push(window.setTimeout(runRoutePrefetch, 1200))
+}
+
+const scheduleDeferredUiMount = () => {
+  const win = window as Window & {
+    requestIdleCallback?: (callback: IdleRequestCallback, options?: { timeout: number }) => number
+  }
+
+  const mount = () => {
+    shouldMountDeferredUi.value = true
+  }
+
+  if (typeof win.requestIdleCallback === 'function') {
+    win.requestIdleCallback(mount, { timeout: 1600 })
+    return
+  }
+
+  window.setTimeout(mount, 900)
 }
 
 watch(
@@ -106,6 +135,7 @@ onMounted(async () => {
   // Song：说明
   uiStore.applyUiSettings()
   stopSessionResilience = initSessionResilience()
+  scheduleDeferredUiMount()
   scheduleRoutePrefetch()
 
   if ((userStore.accessToken || userStore.refreshToken) && !userStore.userInfo) {
@@ -130,6 +160,12 @@ onMounted(async () => {
     })
   }
 })
+
+watch(
+  () => router.currentRoute.value.fullPath,
+  () => setRouteMeta(router.currentRoute.value),
+  { immediate: true }
+)
 
 // 用户登录后动态订阅
 watch(() => userStore.userId, (uid, oldUid) => {
@@ -172,12 +208,13 @@ onUnmounted(() => {
       </div>
     </router-view>
 
-    <!-- Global Appearance Dock -->
-    <AppearanceDock />
+    <AsyncAppearanceDock v-if="shouldMountDeferredUi" />
 
-    <PulseNotification />
+    <AsyncPulseNotification v-if="shouldMountDeferredUi" />
 
-    <PwaInstallPrompt />
+    <AsyncPwaInstallPrompt v-if="shouldMountDeferredUi" />
+
+    <AsyncNetworkStatusBanner v-if="shouldMountDeferredUi" />
 
     <AsyncPostComposerModal v-if="showComposer" />
   </div>

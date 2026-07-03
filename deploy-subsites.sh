@@ -26,6 +26,7 @@ CDK_DIR="${ROOT_DIR}/cdk-airdrop-station"
 
 declare -A MAIN_ENV=()
 MAIN_ENV_FILES=()
+MAIN_ENV_BACKUP_FILE=""
 
 MAIN_DB_NAME=""
 MYSQL_HOST=""
@@ -112,19 +113,78 @@ dotenv_get() {
 }
 
 cfg() {
-  local key="$1" fallback="${2:-}" env_value="${!key-}"
+  local key="$1" fallback="${2:-}" env_value=""
+  env_value="$(printenv "$key" 2>/dev/null || true)"
   if [[ -n "$env_value" ]]; then printf '%s' "$env_value"; return 0; fi
   if [[ ${MAIN_ENV[$key]+_} ]]; then printf '%s' "${MAIN_ENV[$key]}"; return 0; fi
   printf '%s' "$fallback"
 }
 
 cfg_keep() {
-  local key="$1" file="$2" fallback="${3:-}" env_value="${!key-}" old=""
+  local key="$1" file="$2" fallback="${3:-}" env_value="" old=""
+  env_value="$(printenv "$key" 2>/dev/null || true)"
   if [[ -n "$env_value" ]]; then printf '%s' "$env_value"; return 0; fi
   if [[ ${MAIN_ENV[$key]+_} && -n "${MAIN_ENV[$key]}" ]]; then printf '%s' "${MAIN_ENV[$key]}"; return 0; fi
   old="$(dotenv_get "$file" "$key" 2>/dev/null || true)"
   if [[ -n "$old" ]]; then printf '%s' "$old"; return 0; fi
   printf '%s' "$fallback"
+}
+
+is_weak_service_secret() {
+  local value="${1:-}"
+  [[ -z "$value" || "$value" == *CHANGE_ME* || "$value" == dev-* || ${#value} -lt 32 ]]
+}
+
+backup_main_env_once() {
+  local file="$1"
+  [[ -f "$file" ]] || return 0
+  [[ "$MAIN_ENV_BACKUP_FILE" == "$file" ]] && return 0
+  cp "$file" "${file}.bak.${STAMP}"
+  MAIN_ENV_BACKUP_FILE="$file"
+  log "backup main config: ${file#${ROOT_DIR}/} -> ${file#${ROOT_DIR}/}.bak.${STAMP}" >&2
+}
+
+dotenv_upsert_raw() {
+  local file="$1" key="$2" value="$3"
+  local tmp="${file}.tmp.${STAMP}.${key}"
+  mkdir -p "$(dirname "$file")"
+  if [[ -f "$file" ]]; then
+    awk -v key="$key" -v value="$value" '
+      $0 ~ "^[[:space:]]*(export[[:space:]]+)?" key "[[:space:]]*=" {
+        print key "=" value
+        done = 1
+        next
+      }
+      { print }
+      END {
+        if (!done) print key "=" value
+      }
+    ' "$file" > "$tmp"
+  else
+    printf '%s=%s\n' "$key" "$value" > "$tmp"
+  fi
+  mv "$tmp" "$file"
+  MAIN_ENV["$key"]="$value"
+}
+
+ensure_main_service_secret() {
+  local key="$1" current="${2:-}" env_value="" file="" generated=""
+  env_value="$(printenv "$key" 2>/dev/null || true)"
+  if [[ -n "$env_value" ]]; then
+    printf '%s' "$env_value"
+    return 0
+  fi
+  if ! is_weak_service_secret "$current"; then
+    printf '%s' "$current"
+    return 0
+  fi
+
+  file="${MAIN_ENV_FILES[0]}"
+  generated="s2s_$(rand_hex 32)"
+  backup_main_env_once "$file"
+  dotenv_upsert_raw "$file" "$key" "$generated"
+  log "generated ${key} and wrote it to ${file#${ROOT_DIR}/}" >&2
+  printf '%s' "$generated"
 }
 
 rand_hex() {
@@ -164,7 +224,8 @@ env_line() {
 }
 
 write_env() {
-  local file="$1" tmp="${file}.tmp.${STAMP}"
+  local file="$1"
+  local tmp="${file}.tmp.${STAMP}"
   mkdir -p "$(dirname "$file")"
   cat > "$tmp"
   if [[ -f "$file" ]]; then
@@ -321,9 +382,105 @@ SET @redirect_sql := IF(
 PREPARE redirect_stmt FROM @redirect_sql;
 EXECUTE redirect_stmt;
 DEALLOCATE PREPARE redirect_stmt;
+
+SET @post_type_count := (
+  SELECT COUNT(*)
+  FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'sys_post'
+    AND COLUMN_NAME = 'post_type'
+);
+SET @post_type_sql := IF(
+  @post_type_count = 0,
+  'ALTER TABLE `sys_post` ADD COLUMN `post_type` varchar(32) NOT NULL DEFAULT ''NORMAL'' COMMENT ''帖子类型 NORMAL/LOTTERY'' AFTER `is_anonymous`',
+  'SELECT 1'
+);
+PREPARE post_type_stmt FROM @post_type_sql;
+EXECUTE post_type_stmt;
+DEALLOCATE PREPARE post_type_stmt;
+
+SET @comment_deadline_count := (
+  SELECT COUNT(*)
+  FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'sys_post'
+    AND COLUMN_NAME = 'comment_deadline'
+);
+SET @comment_deadline_sql := IF(
+  @comment_deadline_count = 0,
+  'ALTER TABLE `sys_post` ADD COLUMN `comment_deadline` datetime DEFAULT NULL COMMENT ''抽奖帖评论截止时间'' AFTER `post_type`',
+  'SELECT 1'
+);
+PREPARE comment_deadline_stmt FROM @comment_deadline_sql;
+EXECUTE comment_deadline_stmt;
+DEALLOCATE PREPARE comment_deadline_stmt;
+
+SET @comment_once_count := (
+  SELECT COUNT(*)
+  FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'sys_post'
+    AND COLUMN_NAME = 'comment_once_per_user'
+);
+SET @comment_once_sql := IF(
+  @comment_once_count = 0,
+  'ALTER TABLE `sys_post` ADD COLUMN `comment_once_per_user` tinyint(1) NOT NULL DEFAULT 0 COMMENT ''抽奖帖是否限制每人评论一次'' AFTER `comment_deadline`',
+  'SELECT 1'
+);
+PREPARE comment_once_stmt FROM @comment_once_sql;
+EXECUTE comment_once_stmt;
+DEALLOCATE PREPARE comment_once_stmt;
+
+SET @location_name_count := (
+  SELECT COUNT(*)
+  FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'sys_post'
+    AND COLUMN_NAME = 'location_name'
+);
+SET @location_name_sql := IF(
+  @location_name_count = 0,
+  'ALTER TABLE `sys_post` ADD COLUMN `location_name` varchar(100) DEFAULT NULL COMMENT ''位置名称'' AFTER `comment_once_per_user`',
+  'SELECT 1'
+);
+PREPARE location_name_stmt FROM @location_name_sql;
+EXECUTE location_name_stmt;
+DEALLOCATE PREPARE location_name_stmt;
+
+SET @avg_dwell_sec_count := (
+  SELECT COUNT(*)
+  FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'sys_post'
+    AND COLUMN_NAME = 'avg_dwell_sec'
+);
+SET @avg_dwell_sec_sql := IF(
+  @avg_dwell_sec_count = 0,
+  'ALTER TABLE `sys_post` ADD COLUMN `avg_dwell_sec` int DEFAULT 0 COMMENT ''平均阅读时长(秒),热度加权用'' AFTER `heat_score`',
+  'SELECT 1'
+);
+PREPARE avg_dwell_sec_stmt FROM @avg_dwell_sec_sql;
+EXECUTE avg_dwell_sec_stmt;
+DEALLOCATE PREPARE avg_dwell_sec_stmt;
+
+SET @post_type_deadline_index_count := (
+  SELECT COUNT(*)
+  FROM information_schema.STATISTICS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'sys_post'
+    AND INDEX_NAME = 'idx_post_type_deadline'
+);
+SET @post_type_deadline_index_sql := IF(
+  @post_type_deadline_index_count = 0,
+  'ALTER TABLE `sys_post` ADD KEY `idx_post_type_deadline` (`post_type`, `comment_deadline`)',
+  'SELECT 1'
+);
+PREPARE post_type_deadline_index_stmt FROM @post_type_deadline_index_sql;
+EXECUTE post_type_deadline_index_stmt;
+DEALLOCATE PREPARE post_type_deadline_index_stmt;
 SQL
 
-  log "database ready: zens_shop + ${MAIN_DB_NAME}.sys_sso_client"
+  log "database ready: zens_shop + ${MAIN_DB_NAME}.sys_sso_client + lottery post rules"
 }
 
 existing_sso_secret() {
@@ -428,6 +585,8 @@ main() {
 
   [[ -n "$jwt_secret" ]] || die "JWT_SECRET is required for SSO"
   [[ ${#jwt_secret} -ge 32 ]] || warn "JWT_SECRET is short; production should use at least 32 chars"
+  shop_service_secret="$(ensure_main_service_secret SHOP_SERVICE_SECRET "$shop_service_secret")"
+  lottery_service_secret="$(ensure_main_service_secret LOTTERY_SERVICE_SECRET "$lottery_service_secret")"
   [[ "$shop_service_secret" != *CHANGE_ME* && "$shop_service_secret" != dev-* ]] || warn "SHOP_SERVICE_SECRET looks like a dev value"
   [[ "$lottery_service_secret" != *CHANGE_ME* && "$lottery_service_secret" != dev-* ]] || warn "LOTTERY_SERVICE_SECRET looks like a dev value"
 

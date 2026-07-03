@@ -754,7 +754,7 @@ const applyPostSeo = () => {
   if (!post.value) return
   const canonicalPath = `/t/${encodePostId(post.value.id)}`
   const title = `${post.value.title} - Zens`
-  const description = (aiSummaryText.value || generateSummary(post.value.content || '', 160) || '校园社区帖子详情').slice(0, 160)
+  const description = (aiSummaryText.value || generateSummary(post.value.content || '', 160) || '开发者社区帖子详情').slice(0, 160)
 
   document.title = title
   ensureMetaByName('description', description)

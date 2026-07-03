@@ -46,6 +46,9 @@ public class PostSearchReq {
     // Song：是否只看置顶帖
     private Boolean pinnedOnly;
 
+    // all / unsolved / solved：问题帖解答状态筛选，用于首页和板块流的阅读效率优化。
+    private String answerState;
+
     private LocalDateTime cursor;
 
     private String cursorId;

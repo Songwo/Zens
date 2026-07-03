@@ -6,9 +6,11 @@ import { DataLine, Finished, Loading, Refresh, Warning } from '@element-plus/ico
 import TopicFilters from './TopicFilters.vue'
 import TopicRow from './TopicRow.vue'
 import { postApi } from '@/api/post'
+import { recommendApi } from '@/api/recommend'
 import type { PostSearchRequest } from '@/types'
 import { wsClient, type PostEvent } from '@/utils/websocket'
 import { isTruthyFlag } from '@/utils/flags'
+import { isOffline, shouldReduceBackgroundWork } from '@/utils/network'
 
 const PulseDashboardDialog = defineAsyncComponent(() => import('./PulseDashboardDialog.vue'))
 
@@ -38,7 +40,7 @@ const cursorId = ref<string | null>(null)
 const loading = ref(false)
 const noMore = ref(false)
 
-type NavType = 'latest' | 'hot' | 'essence'
+type NavType = 'latest' | 'recommend' | 'hot' | 'essence' | 'unsolved' | 'solved' | 'pinned'
 
 const activeNav = ref<NavType>('latest')
 const activeCategory = ref('all')
@@ -59,27 +61,52 @@ const isFirstLoading = computed(() => loading.value && topics.value.length === 0
 // 首屏加载失败:用于区分"真的没内容"和"加载失败",避免把网络错误误显示成空状态
 const loadError = ref(false)
 const isFirstError = computed(() => loadError.value && topics.value.length === 0)
+const getFirstErrorText = () => (
+  isOffline()
+    ? '当前处于离线状态，可查看缓存内容，联网后再试'
+    : '内容加载失败，请检查网络后重试'
+)
 
 const getCurrentPageSize = () => (firstBatchLoaded.value ? pageSize : initialPageSize)
 
-const resolveNavType = (): NavType => {
-  const defaultQuery = props.defaultQuery || {}
-  const requestedNav = String(defaultQuery.navType || '').toLowerCase()
+const normalizeNavType = (value: unknown): NavType | null => {
+  const normalized = String(value || '').toLowerCase()
+  return ['latest', 'recommend', 'hot', 'essence', 'unsolved', 'solved', 'pinned'].includes(normalized)
+    ? normalized as NavType
+    : null
+}
 
-  if (requestedNav === 'latest' || requestedNav === 'hot' || requestedNav === 'essence') {
-    return requestedNav as NavType
-  }
+const resolveDefaultNavType = (): NavType | null => {
+  const defaultQuery = props.defaultQuery || {}
+  const requestedNav = normalizeNavType(defaultQuery.navType)
+
+  if (requestedNav) return requestedNav
   if (Boolean(defaultQuery.isFeatured)) return 'essence'
   if (defaultQuery.orderBy === 'hot') return 'hot'
-  if (route.query.sort === 'hot' || route.query.sort === 'top') return 'hot'
-  if (route.query.sort === 'essence' || route.query.sort === 'featured') return 'essence'
-  if (route.query.sort === 'latest') return 'latest'
+  return null
+}
+
+const resolveRouteNavType = (): NavType => {
+  const defaultNav = resolveDefaultNavType()
+  if (defaultNav) return defaultNav
+
+  const routeSort = String(route.query.sort || '').toLowerCase()
+  if (routeSort === 'top') return 'hot'
+  if (routeSort === 'featured') return 'essence'
+  const routeNav = normalizeNavType(routeSort)
+  if (routeNav) return routeNav
 
   return activeNav.value
 }
 
+const resolveNavType = (): NavType => {
+  const defaultNav = resolveDefaultNavType()
+  if (defaultNav) return defaultNav
+  return activeNav.value
+}
+
 const resolveOrderBy = (navType = resolveNavType()): 'new' | 'hot' => {
-  return navType === 'hot' ? 'hot' : 'new'
+  return navType === 'hot' || navType === 'recommend' ? 'hot' : 'new'
 }
 
 const resolveCategory = () => {
@@ -142,6 +169,20 @@ const buildSearchReq = (): PostSearchRequest => {
     category,
   }
 
+  if (navType === 'unsolved') {
+    req.answerState = 'unsolved'
+    req.orderBy = 'new'
+    req.navType = 'latest'
+  } else if (navType === 'solved') {
+    req.answerState = 'solved'
+    req.orderBy = 'new'
+    req.navType = 'latest'
+  } else if (navType === 'pinned') {
+    req.pinnedOnly = true
+    req.orderBy = 'new'
+    req.navType = 'latest'
+  }
+
   if (orderBy === 'new' && cursor.value) {
     req.cursor = cursor.value
     req.cursorId = cursorId.value || undefined
@@ -175,11 +216,12 @@ const mapPost = (p: any) => ({
   replies: toFiniteMetric(p.commentCount) ?? 0,
   views: toFiniteMetric(p.viewCount) ?? 0,
   heatScore: p.heatScore,
-  isPinned: p.isPinned === 1,
+  isPinned: p.isPinned === 1 || p.globalPin === 1 || p.categoryPin === 1,
   isFeatured: p.isFeatured === 1,
   isSolved: isTruthyFlag(p.hasAdoptedAnswer),
   trendLevel: p.trendLevel,
   sentimentLabel: p.sentimentLabel,
+  recommendReason: p.recommendReason || '',
 })
 
 const pulseInsight = computed(() => {
@@ -197,6 +239,23 @@ const pulseInsight = computed(() => {
   parts.push(`平均浏览 ${avgViews}`)
 
   return `AI 数据脉冲: ${parts.join(' · ')}`
+})
+
+const feedNotice = computed(() => {
+  const navType = resolveNavType()
+  if (navType === 'recommend') {
+    return '为你推荐会结合兴趣标签、近期互动和社区热度生成，可随时切回最新时间线。'
+  }
+  if (navType === 'unsolved') {
+    return '待解决列表只展示还没有采纳答案的帖子，适合快速找到可以帮忙的问题。'
+  }
+  if (navType === 'solved') {
+    return '已解决列表展示已经采纳答案的讨论，适合复盘经验和沉淀知识。'
+  }
+  if (navType === 'pinned') {
+    return '置顶列表由管理员或版主维护，通常包含公告、规则和重要专题。'
+  }
+  return ''
 })
 
 // Interactive AI Pulse Dashboard State & Computed Charts
@@ -227,7 +286,10 @@ const fetchDocuments = async (reset = false) => {
   try {
     const currentPageSize = getCurrentPageSize()
     const orderBy = resolveOrderBy()
-    const res = await postApi.searchList(buildSearchReq())
+    const navType = resolveNavType()
+    const res = navType === 'recommend' && !props.defaultQuery?.sectionId && resolveCategory() === 'all'
+      ? await recommendApi.getHybridList(page.value, currentPageSize)
+      : await postApi.searchList(buildSearchReq())
     if (requestToken !== fetchDocumentsToken) return
 
     const records = res.data?.records || []
@@ -237,7 +299,9 @@ const fetchDocuments = async (reset = false) => {
     topics.value.push(...records.map(mapPost))
     firstBatchLoaded.value = true
 
-    if (orderBy === 'new') {
+    if (navType === 'recommend') {
+      page.value++
+    } else if (orderBy === 'new') {
       const last = records[records.length - 1]
       if (last?.createTime) {
         cursor.value = last.createTime
@@ -321,7 +385,7 @@ const startNewContentPolling = () => {
     if (wsClient.isConnected()) return
     if (window.scrollY <= 300 || hasNewContent.value) return
     if (typeof document !== 'undefined' && document.hidden) return
-    if (typeof navigator !== 'undefined' && !navigator.onLine) return
+    if (isOffline()) return
     if (resolveNavType() !== 'latest') return
 
     try {
@@ -342,12 +406,17 @@ const startNewContentPolling = () => {
     } catch {
       // Song：说明
     }
-  }, 30000)
+  }, shouldReduceBackgroundWork() ? 90000 : 30000)
 }
 
 const initRealtimeUpdates = () => {
   if (realtimeInitialized) return
   realtimeInitialized = true
+
+  if (shouldReduceBackgroundWork()) {
+    startNewContentPolling()
+    return
+  }
 
   try {
     if (props.defaultQuery?.sectionId) {
@@ -373,11 +442,12 @@ const scheduleRealtimeInit = () => {
 }
 
 watch(() => route.query.sort, () => {
-  activeNav.value = resolveNavType()
+  activeNav.value = resolveRouteNavType()
   refreshLatest()
 })
 
 onMounted(() => {
+  activeNav.value = resolveRouteNavType()
   if (topics.value.length === 0) {
     loadMore().finally(() => scheduleRealtimeInit())
   } else {
@@ -415,7 +485,12 @@ defineExpose({
 
 <template>
   <div class="topic-list-container">
-    <TopicFilters v-if="!hideFilters" :hide-categories="hideCategories" @filter-change="handleFilterChange" />
+    <TopicFilters
+      v-if="!hideFilters"
+      :hide-categories="hideCategories"
+      :model-value="activeNav"
+      @filter-change="handleFilterChange"
+    />
 
     <transition name="el-zoom-in-top">
       <div v-if="hasNewContent" class="new-content-alert" @click="refreshLatest">
@@ -428,6 +503,10 @@ defineExpose({
       <el-icon class="pulse-icon"><DataLine /></el-icon>
       <span class="pulse-text">{{ pulseInsight }}</span>
       <span class="pulse-action-hint">查看趋势大屏 ➜</span>
+    </div>
+
+    <div v-if="feedNotice" class="feed-notice">
+      {{ feedNotice }}
     </div>
 
     <PulseDashboardDialog
@@ -451,7 +530,7 @@ defineExpose({
 
       <div v-if="isFirstError" class="error-state">
         <el-icon :size="44" color="#f0a020"><Warning /></el-icon>
-        <p class="error-text">内容加载失败，请检查网络后重试</p>
+        <p class="error-text">{{ getFirstErrorText() }}</p>
         <el-button type="primary" round :loading="loading" @click="fetchDocuments(true)">重新加载</el-button>
       </div>
 
@@ -595,6 +674,17 @@ defineExpose({
   transform: translateX(2px);
 }
 
+.feed-notice {
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 10px;
+  background: var(--el-fill-color-extra-light);
+  color: var(--el-text-color-secondary);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
 
 
 .topic-skeleton {
@@ -663,6 +753,44 @@ defineExpose({
 
 .footer-state.no-more {
   color: var(--el-text-color-placeholder);
+}
+
+@media (max-width: 768px) {
+  .topic-list {
+    border-radius: 14px;
+    box-shadow: none;
+  }
+
+  .pulse-strip {
+    margin-bottom: 10px;
+    padding: 8px 10px;
+    border-radius: 12px;
+    font-size: 12px;
+  }
+
+  .pulse-text {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .pulse-action-hint {
+    flex: 0 0 auto;
+    max-width: 72px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .topic-skeleton {
+    padding: 12px 14px;
+  }
+
+  .list-footer {
+    min-height: 42px;
+    padding: 14px 0;
+  }
 }
 </style>
 

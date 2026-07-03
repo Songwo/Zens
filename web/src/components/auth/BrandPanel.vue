@@ -11,7 +11,7 @@ import { Connection, Opportunity, Guide, Medal, User } from '@element-plus/icons
         <h1 class="brand-title">Zens</h1>
       </div>
 
-      <!-- Slogans (Others: "连接年轻开发者的脉搏，构建真实的校园工程师网络", "用代码重塑校园，极客精神从这里向外生长") -->
+      <!-- Slogans (Others: "连接真实的工程实践，构建长期主义的开发者网络", "让经验沉淀成为团队协作的基础设施") -->
       <p class="brand-slogan">
         汇聚纯粹的创造力，在技术洪流中保持独立思考。
       </p>
@@ -43,7 +43,7 @@ import { Connection, Opportunity, Guide, Medal, User } from '@element-plus/icons
           </div>
           <div class="benefit-card">
             <el-icon class="b-icon"><User /></el-icon>
-            <div class="b-text">高质量的同辈学习圈子</div>
+            <div class="b-text">高质量的同行协作网络</div>
           </div>
         </div>
       </div>

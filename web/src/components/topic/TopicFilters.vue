@@ -1,17 +1,25 @@
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { publicDataApi, type PublicSectionItem } from '@/api/publicData'
 
 const props = defineProps<{
   hideCategories?: boolean
+  modelValue?: NavType
 }>()
 
-type NavType = 'latest' | 'hot' | 'essence'
+type NavType = 'latest' | 'recommend' | 'hot' | 'essence' | 'unsolved' | 'solved' | 'pinned'
 
 const activeNav = ref<NavType>('latest')
 const activeCategory = ref('all')
 const categories = ref<PublicSectionItem[]>([])
 const categoryLoading = ref(false)
+const navItems = computed(() => [
+  { key: 'latest' as NavType, label: '最新' },
+  { key: 'recommend' as NavType, label: '为你' },
+  { key: 'hot' as NavType, label: '热门' },
+  { key: 'unsolved' as NavType, label: '待解决' },
+  { key: 'essence' as NavType, label: '精华' },
+])
 
 const emit = defineEmits<{
   (e: 'filter-change', payload: { navType: NavType; category: string }): void
@@ -56,17 +64,30 @@ watch(() => props.hideCategories, (hideCategories) => {
   loadCategories()
 })
 
+watch(() => props.modelValue, (value) => {
+  if (value && activeNav.value !== value) {
+    activeNav.value = value
+  }
+}, { immediate: true })
+
 onMounted(() => {
   loadCategories()
 })
 </script>
 
 <template>
-  <div class="topic-filters">
+  <div class="topic-filters" aria-label="帖子流筛选">
     <div class="filters-main">
-      <button class="tab-btn" :class="{ active: activeNav === 'latest' }" @click="setNav('latest')">最新发布</button>
-      <button class="tab-btn" :class="{ active: activeNav === 'hot' }" @click="setNav('hot')">热门排行</button>
-      <button class="tab-btn" :class="{ active: activeNav === 'essence' }" @click="setNav('essence')">精华文档</button>
+      <button
+        v-for="item in navItems"
+        :key="item.key"
+        class="tab-btn"
+        :class="{ active: activeNav === item.key }"
+        type="button"
+        @click="setNav(item.key)"
+      >
+        {{ item.label }}
+      </button>
     </div>
 
     <div v-if="!hideCategories" class="filters-side">
@@ -153,19 +174,45 @@ onMounted(() => {
 
 @media (max-width: 768px) {
   .topic-filters {
-    padding: 10px;
+    position: sticky;
+    top: 54px;
+    z-index: 80;
+    padding: 8px;
     flex-direction: column;
     align-items: stretch;
-    gap: 10px;
+    gap: 8px;
+    margin-bottom: 10px;
+    border-radius: 14px;
+    background: color-mix(in srgb, var(--el-bg-color-overlay) 94%, transparent);
+    backdrop-filter: blur(14px) saturate(126%);
+  }
+
+  .filters-main {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .tab-btn {
+    min-width: 0;
+    padding: 7px 4px;
+    font-size: 11.5px;
+    line-height: 1;
+    white-space: nowrap;
   }
 
   .filters-side {
     justify-content: space-between;
+    gap: 10px;
   }
 
   .filter-select {
     flex: 1;
-    max-width: 220px;
+    max-width: none;
+  }
+
+  .sort-label {
+    flex: 0 0 auto;
   }
 }
 </style>

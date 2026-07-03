@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Connection, DataLine, House, Plus, Present, User } from '@element-plus/icons-vue'
+import { Connection, DataLine, House, Plus, Present } from '@element-plus/icons-vue'
 import AppTopbar from '@/components/layout/AppTopbar.vue'
 import LeftNav from '@/components/layout/LeftNav.vue'
 import RightRail from '@/components/layout/RightRail.vue'
@@ -17,10 +17,9 @@ const shellReady = ref(false)
 const mobileNavItems = [
   { key: '/', label: '首页', icon: House, action: () => router.push('/') },
   { key: '/hot', label: '热榜', icon: DataLine, action: () => router.push('/hot') },
-  { key: '/compose', label: '发帖', icon: Plus, action: () => composerStore.open() },
+  { key: '/compose', label: '发帖', icon: Plus, action: () => composerStore.open(), compose: true },
   { key: '/benefits', label: '福利', icon: Present, action: () => router.push('/benefits') },
   { key: '/metaverse', label: '星港', icon: Connection, action: () => router.push('/metaverse') },
-  { key: '/me', label: '我的', icon: User, action: () => router.push('/me') },
 ]
 
 const activeMobileKey = computed(() => {
@@ -28,7 +27,6 @@ const activeMobileKey = computed(() => {
   if (path.startsWith('/hot')) return '/hot'
   if (path.startsWith('/benefits')) return '/benefits'
   if (path.startsWith('/metaverse')) return '/metaverse'
-  if (path.startsWith('/me') || path.startsWith('/settings')) return '/me'
   if (path.startsWith('/t/') || path.startsWith('/s/') || path.startsWith('/tag/') || path.startsWith('/search')) return '/'
   return '/'
 })
@@ -89,11 +87,14 @@ onMounted(() => {
         v-for="item in mobileNavItems"
         :key="item.key"
         class="mobile-nav-item"
-        :class="{ active: activeMobileKey === item.key, compose: item.key === '/compose' }"
+        :class="{ active: activeMobileKey === item.key, compose: item.compose }"
         @click="item.action()"
       >
-        <el-icon><component :is="item.icon" /></el-icon>
-        <span>{{ item.label }}</span>
+        <span v-if="item.compose" class="compose-orb">
+          <el-icon><component :is="item.icon" /></el-icon>
+        </span>
+        <el-icon v-else><component :is="item.icon" /></el-icon>
+        <span class="mobile-nav-label">{{ item.label }}</span>
       </button>
     </nav>
   </div>
@@ -222,22 +223,24 @@ onMounted(() => {
   }
 
   .shell {
-    padding: 12px 10px calc(var(--cp-mobile-nav-height) + var(--cp-mobile-nav-safe, 0px) + 14px);
+    padding: 10px 10px calc(var(--cp-mobile-nav-height) + env(safe-area-inset-bottom, 0px) + 18px);
   }
 
   .mobile-bottom-nav {
     position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    height: calc(var(--cp-mobile-nav-height) + env(safe-area-inset-bottom, 0px));
-    padding-bottom: env(safe-area-inset-bottom, 0px);
-    background: rgba(255, 255, 255, 0.96);
-    border-top: 1px solid var(--el-border-color-light);
+    bottom: max(8px, env(safe-area-inset-bottom, 0px));
+    left: max(10px, env(safe-area-inset-left, 0px));
+    right: max(10px, env(safe-area-inset-right, 0px));
+    height: var(--cp-mobile-nav-height);
+    padding: 6px;
+    background: color-mix(in srgb, var(--el-bg-color) 94%, transparent);
+    border: 1px solid color-mix(in srgb, var(--el-border-color-light) 82%, transparent);
+    border-radius: 24px;
     display: grid;
-    grid-template-columns: repeat(6, 1fr);
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     z-index: 120;
-    backdrop-filter: blur(10px);
+    box-shadow: 0 14px 34px rgba(15, 23, 42, 0.16);
+    backdrop-filter: blur(18px) saturate(128%);
     -webkit-tap-highlight-color: transparent;
   }
 
@@ -249,34 +252,79 @@ onMounted(() => {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 2px;
-    font-size: 11px;
-    font-weight: 600;
+    gap: 3px;
+    min-width: 0;
+    min-height: 50px;
+    border-radius: 18px;
+    font-size: 10px;
+    line-height: 1;
+    font-weight: 700;
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
-    transition: color 0.2s ease, transform 0.2s ease;
+    transition: color 0.2s ease, background-color 0.2s ease, transform 0.2s ease;
   }
 
   .mobile-nav-item:active {
-    transform: scale(0.92);
+    transform: scale(0.94);
   }
 
   .mobile-nav-item :deep(.el-icon) {
-    font-size: 18px;
+    font-size: 19px;
   }
 
   .mobile-nav-item.active {
     color: #7a5700;
+    background: var(--accept-bg-soft);
   }
 
   .mobile-nav-item.compose {
+    position: relative;
     color: #7a5700;
-    transform: translateY(-2px);
+    transform: translateY(-12px);
   }
 
-  .mobile-nav-item.compose :deep(.el-icon) {
-    font-size: 22px;
-    color: #f29b24;
+  .mobile-nav-item.compose:active {
+    transform: translateY(-12px) scale(0.94);
+  }
+
+  .mobile-nav-item.compose .mobile-nav-label {
+    margin-top: 1px;
+    color: var(--accept-text);
+  }
+
+  .compose-orb {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    background: linear-gradient(135deg, #f6b800 0%, #f29b24 100%);
+    box-shadow: 0 12px 24px rgba(230, 154, 0, 0.34);
+  }
+
+  .compose-orb :deep(.el-icon) {
+    font-size: 23px;
+  }
+
+  .mobile-nav-label {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+@media (max-width: 380px) {
+  .mobile-bottom-nav {
+    left: max(8px, env(safe-area-inset-left, 0px));
+    right: max(8px, env(safe-area-inset-right, 0px));
+    border-radius: 22px;
+  }
+
+  .mobile-nav-item {
+    font-size: 9px;
   }
 }
 </style>

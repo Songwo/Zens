@@ -104,6 +104,7 @@ export interface PostSearchRequest {
     likedBy?: string
     collectedBy?: string
     pinnedOnly?: boolean
+    answerState?: 'all' | 'unsolved' | 'solved' | string
     cursor?: string
     cursorId?: string
     auditStatus?: string

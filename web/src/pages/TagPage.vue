@@ -203,7 +203,7 @@ onBeforeUnmount(() => {
           </div>
           <div class="tag-info">
             <h1 class="tag-name">#{{ tagName }}</h1>
-            <p class="tag-meta">聚合属于这个关键词的校园瞬间</p>
+            <p class="tag-meta">聚合与这个关键词相关的社区讨论与经验沉淀</p>
             <div class="tag-stats">
                <el-tag size="small" effect="dark" round>{{ posts.length }} 份内容</el-tag>
             </div>

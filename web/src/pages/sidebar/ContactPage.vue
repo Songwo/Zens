@@ -89,7 +89,7 @@ function openEmailClient() {
           </el-avatar>
           <div class="admin-detail">
             <div class="admin-name">Song</div>
-            <div class="admin-role">超级管理员 · Zens 校园社区</div>
+            <div class="admin-role">平台负责人 · Zens 开发者社区</div>
             <div class="admin-email">
               <el-icon><Message /></el-icon>
               <span>zhaoqsnyah@gmail.com</span>

@@ -21,7 +21,7 @@ const router = useRouter()
           </div>
           <div class="title-text">
             <h1>用户协议 <span>(Terms of Service)</span></h1>
-            <p class="subtitle">请在使用 Zens 校园社区前仔细阅读以下条款。</p>
+            <p class="subtitle">请在使用 Zens 开发者社区前仔细阅读以下条款。</p>
           </div>
         </div>
       </div>
@@ -31,7 +31,7 @@ const router = useRouter()
 
         <section>
           <h2>1. 接受条款</h2>
-          <p>欢迎使用 Zens 校园社区（以下简称「本站」）。当您注册账号或以任何方式使用本站时，即视为您已阅读、理解并同意本协议的所有条款。若您不同意任何条款，请立即停止使用本站。</p>
+          <p>欢迎使用 Zens 开发者社区（以下简称「本站」）。当您注册账号或以任何方式使用本站时，即视为您已阅读、理解并同意本协议的所有条款。若您不同意任何条款，请立即停止使用本站。</p>
         </section>
 
         <section>

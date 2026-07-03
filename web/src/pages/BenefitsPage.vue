@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import MainLayout from '@/layouts/MainLayout.vue'
 import PageBackButton from '@/components/common/PageBackButton.vue'
 import { ensureCurrentUserProfile } from '@/utils/sessionProfile'
+import { stationUrl } from '@/config/stations'
 import { levelApi, type LevelExpRecord } from '@/api/level'
 import { subsiteEventApi, type SubsiteEvent } from '@/api/subsiteEvent'
 import { timeAgo } from '@/utils/timeAgo'
@@ -28,10 +29,10 @@ const events = ref<SubsiteEvent[]>([])
 const points = computed(() => Number(profile.value?.points ?? 0))
 const displayName = computed(() => profile.value?.nickname || profile.value?.username || 'Zens 用户')
 
-const shopUrl = 'http://localhost:3000'
-const shopOrdersUrl = 'http://localhost:3000/orders'
-const cdkUrl = 'http://localhost:8088/local-claim'
-const lotteryUrl = 'http://localhost:8093'
+const shopUrl = stationUrl('shop')
+const shopOrdersUrl = stationUrl('shop', '/orders')
+const cdkUrl = stationUrl('cdk', '/local-claim')
+const lotteryUrl = stationUrl('lottery')
 
 const quickEntries = [
   {

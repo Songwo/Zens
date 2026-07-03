@@ -45,8 +45,8 @@ onMounted(() => {
   <MainLayout>
     <div class="sections-overview">
       <div class="page-header">
-        <h1 class="page-title">🏫 板块全景</h1>
-        <p class="page-desc">探索校园社区的每一个角落，发现你感兴趣的内容</p>
+        <h1 class="page-title">板块全景</h1>
+        <p class="page-desc">探索开发者社区的内容矩阵，快速进入你关注的主题与协作场景</p>
       </div>
 
       <div v-loading="loading" class="sections-grid">

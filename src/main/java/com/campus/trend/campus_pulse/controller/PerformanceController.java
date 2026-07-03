@@ -5,6 +5,7 @@ import com.campus.trend.campus_pulse.monitor.CacheMonitor;
 import com.campus.trend.campus_pulse.monitor.HikariMonitor;
 import com.campus.trend.campus_pulse.monitor.JvmMonitor;
 import com.campus.trend.campus_pulse.monitor.PerformanceEventRecorder;
+import com.campus.trend.campus_pulse.monitor.WebVitalRecorder;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -30,6 +31,7 @@ public class PerformanceController {
     private final CacheMonitor cacheMonitor;
     private final JvmMonitor jvmMonitor;
     private final PerformanceEventRecorder performanceEventRecorder;
+    private final WebVitalRecorder webVitalRecorder;
 
     @Operation(summary = "获取数据库连接池状态")
     @GetMapping("/hikari")
@@ -89,6 +91,7 @@ public class PerformanceController {
         summary.put("cache", cacheInfo);
         summary.put("slowRequests", performanceEventRecorder.listSlowRequests(null, null, 10));
         summary.put("slowSql", performanceEventRecorder.listSlowSql(null, null, 10));
+        summary.put("webVitals", webVitalRecorder.summary());
 
         // JVM信息
         JvmMonitor.JvmStatus jvmStatus = jvmMonitor.getJvmStatus();
@@ -122,5 +125,13 @@ public class PerformanceController {
                                      @RequestParam(required = false) Long minMs,
                                      @RequestParam(required = false) Integer limit) {
         return Result.success(performanceEventRecorder.listSlowSql(keyword, minMs, limit));
+    }
+
+    @Operation(summary = "查询 Web Vitals 明细")
+    @GetMapping("/web-vitals")
+    public Result<Object> getWebVitals(@RequestParam(required = false) String metric,
+                                       @RequestParam(required = false) String route,
+                                       @RequestParam(required = false) Integer limit) {
+        return Result.success(webVitalRecorder.list(metric, route, limit));
     }
 }

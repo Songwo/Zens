@@ -5,8 +5,11 @@ import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
 import { VitePWA } from 'vite-plugin-pwa'
 import path from 'path'
 
+const rootDir = path.resolve(__dirname)
+
 // Song：构建配置参考链接
 export default defineConfig({
+  root: rootDir,
   plugins: [
     vue(),
     // Song：Element Plus 按需引入组件，样式在 main.ts 全局一次性加载。
@@ -55,8 +58,15 @@ export default defineConfig({
         ],
       },
       workbox: {
-        // 预缓存所有构建产物 → 完整离线可用（最大 chunk < 2MB Workbox 默认上限）
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        // 只预缓存 App Shell 与首页关键块。编辑器、图表、代码高亮语言包等重型异步块改为按需缓存，
+        // 避免移动端首次安装/更新 SW 时一次性下载数 MB 的非首屏资源。
+        globPatterns: [
+          '**/*.{html,ico,png,svg,woff2}',
+          'assets/index-*.{js,css}',
+          'assets/MainLayout-*.{js,css}',
+          'assets/HomePage-*.{js,css}',
+          'assets/TopicList-*.{js,css}',
+        ],
         // SPA 导航回退到 index.html，但绝不劫持后端路由
         navigateFallback: 'index.html',
         navigateFallbackDenylist: [
@@ -68,6 +78,17 @@ export default defineConfig({
         cleanupOutdatedCaches: true,
         clientsClaim: true,
         runtimeCaching: [
+          {
+            // 构建产物都带内容 hash，首次访问对应功能后缓存，后续直接复用。
+            urlPattern: ({ url }) =>
+              /^\/assets\/.+\.(?:js|css)$/.test(url.pathname),
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'cp-build-assets',
+              expiration: { maxEntries: 96, maxAgeSeconds: 60 * 60 * 24 * 14 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
           {
             // 用户上传 / 后端静态图片：看过的离线可见，后台静默更新
             urlPattern: ({ url }) =>
@@ -92,7 +113,7 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, './src'),
+      '@': path.resolve(rootDir, 'src'),
     },
   },
   build: {

@@ -164,4 +164,33 @@ const handleThemeChange = (value: string) => {
   height: 24px;
   background-color: var(--el-border-color-lighter);
 }
+
+@media (max-width: 900px) {
+  .appearance-dock {
+    left: 10px;
+    bottom: calc(var(--cp-mobile-nav-height, 62px) + env(safe-area-inset-bottom, 0px) + 18px);
+    border-radius: 999px;
+    width: 38px;
+    height: 38px;
+    max-width: none;
+    opacity: 0.82;
+  }
+
+  .appearance-dock.collapsed,
+  .appearance-dock:not(:hover):not(:focus-within) {
+    transform: none;
+  }
+
+  .dock-toggle {
+    width: 38px;
+    height: 38px;
+    border-radius: 999px;
+    order: 1;
+    background-color: transparent;
+  }
+
+  .dock-content {
+    display: none;
+  }
+}
 </style>

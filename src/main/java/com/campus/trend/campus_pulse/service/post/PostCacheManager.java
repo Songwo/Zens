@@ -244,6 +244,9 @@ public class PostCacheManager {
             keyParts.put("tag", StringUtils.hasText(request.getTag()) ? request.getTag().trim() : "");
             keyParts.put("isFeatured", Boolean.TRUE.equals(request.getIsFeatured()) ? 1 : 0);
             keyParts.put("pinnedOnly", Boolean.TRUE.equals(request.getPinnedOnly()) ? 1 : 0);
+            keyParts.put("answerState", StringUtils.hasText(request.getAnswerState())
+                    ? request.getAnswerState().trim().toLowerCase()
+                    : "");
             keyParts.put("cursor", request.getCursor() != null ? request.getCursor().toString() : "");
             keyParts.put("cursorId", StringUtils.hasText(request.getCursorId()) ? request.getCursorId() : "");
             keyParts.put("needTotal", Boolean.TRUE.equals(request.getNeedTotal()) ? 1 : 0);

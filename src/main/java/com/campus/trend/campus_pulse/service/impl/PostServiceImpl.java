@@ -1004,6 +1004,15 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
             wrapper.and(w -> w.eq(Post::getGlobalPin, 1).or().eq(Post::getCategoryPin, 1));
         }
 
+        if (StringUtils.hasText(request.getAnswerState())) {
+            String answerState = request.getAnswerState().trim().toLowerCase();
+            if ("unsolved".equals(answerState)) {
+                wrapper.and(w -> w.isNull(Post::getHasAdoptedAnswer).or().ne(Post::getHasAdoptedAnswer, 1));
+            } else if ("solved".equals(answerState)) {
+                wrapper.eq(Post::getHasAdoptedAnswer, 1);
+            }
+        }
+
         // Song：Meilisearch 路径 —— 用检索返回的 postId 列表做 in() 限定，跳过 FULLTEXT 关键词查询
         if (request.getMeiliPostIds() != null) {
             if (request.getMeiliPostIds().isEmpty()) {
