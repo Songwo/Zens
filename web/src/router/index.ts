@@ -53,6 +53,12 @@ const router = createRouter({
       meta: { keepAlive: true, title: '搜索', description: '搜索帖子、标签与用户内容' }
     },
     {
+      path: '/agent',
+      name: 'agent',
+      component: () => import('@/pages/AgentPage.vue'),
+      meta: { title: 'Agent 问答', description: '基于社区帖子和评论的引用式智能问答' }
+    },
+    {
       path: '/compose',
       name: 'compose',
       redirect: '/',
@@ -69,6 +75,12 @@ const router = createRouter({
       name: 'level',
       component: () => import('@/pages/LevelPage.vue'),
       meta: { requiresAuth: true, title: '我的等级', description: '查看等级进度、经验来源与等级特权' }
+    },
+    {
+      path: '/points',
+      name: 'points',
+      component: () => import('@/pages/PointsPage.vue'),
+      meta: { requiresAuth: true, title: '积分明细', description: '查看积分余额与全渠道流水账本' }
     },
     {
       path: '/benefits',
@@ -263,6 +275,12 @@ const router = createRouter({
           path: 'media',
           name: 'admin-media',
           component: () => import('@/pages/admin/MediaStatusPage.vue'),
+          meta: { requiresAdmin: true },
+        },
+        {
+          path: 'agent',
+          name: 'admin-agent',
+          component: () => import('@/pages/admin/AgentStatusPage.vue'),
           meta: { requiresAdmin: true },
         },
         {

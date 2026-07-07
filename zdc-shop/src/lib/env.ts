@@ -5,41 +5,61 @@ import { z } from "zod";
  * 在启动期或第一次访问时调用 getEnv() 触发一次性校验。
  * 缺失的非必填项不会抛错，而是给出 warning（通过 zod 的 .optional() 体现）。
  */
-const Schema = z.object({
-  NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
+const Schema = z
+  .object({
+    NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
 
-  // 数据库
-  DATABASE_URL: z.string().min(1, "DATABASE_URL 必填"),
+    // 数据库
+    DATABASE_URL: z.string().min(1, "DATABASE_URL 必填"),
 
-  // 与主站共享的密钥
-  JWT_SECRET: z.string().min(32, "JWT_SECRET 必须至少 32 字符且与主站一致"),
-  SHOP_SERVICE_SECRET: z.string().min(16, "SHOP_SERVICE_SECRET 必须至少 16 字符"),
-  SHOP_SERVICE_ID: z.string().default("zdc-shop"),
+    // 与主站共享的密钥(生态统一命名 MAIN_SITE_JWT_SECRET 优先,JWT_SECRET 为旧名兼容)
+    JWT_SECRET: z.string().min(32, "JWT_SECRET 必须至少 32 字符且与主站一致").optional(),
+    MAIN_SITE_JWT_SECRET: z.string().min(32).optional(),
+    SHOP_SERVICE_SECRET: z.string().min(16, "SHOP_SERVICE_SECRET 必须至少 16 字符"),
+    SHOP_SERVICE_ID: z.string().default("zdc-shop"),
 
-  // 主站地址
-  MAIN_SITE_BACKEND_URL: z.string().url("MAIN_SITE_BACKEND_URL 必须为 URL"),
-  NEXT_PUBLIC_COMMUNITY_URL: z.string().url().default("http://localhost:5173"),
-  NEXT_PUBLIC_SSO_CLIENT_ID: z.string().default("zdc-shop"),
+    // 主站地址(生态统一命名 MAIN_SITE_API_URL 优先,MAIN_SITE_BACKEND_URL 为旧名兼容)
+    MAIN_SITE_API_URL: z.string().url().optional(),
+    MAIN_SITE_WEB_URL: z.string().url().optional(),
+    MAIN_SITE_BACKEND_URL: z.string().url("MAIN_SITE_BACKEND_URL 必须为 URL").optional(),
+    NEXT_PUBLIC_COMMUNITY_URL: z.string().url().default("http://localhost:5173"),
+    NEXT_PUBLIC_SSO_CLIENT_ID: z.string().default("zdc-shop"),
 
-  // session
-  SESSION_PASSWORD: z.string().min(32, "SESSION_PASSWORD 必须至少 32 字符"),
-  SESSION_COOKIE_NAME: z.string().default("zs_session"),
+    // session
+    SESSION_PASSWORD: z.string().min(32, "SESSION_PASSWORD 必须至少 32 字符"),
+    SESSION_COOKIE_NAME: z.string().default("zs_session"),
 
-  // 站点元
-  NEXT_PUBLIC_SITE_NAME: z.string().default("Zens · 积分商城"),
-  NEXT_PUBLIC_SITE_URL: z.string().url().default("http://localhost:3000"),
+    // 站点元
+    NEXT_PUBLIC_SITE_NAME: z.string().default("Zens · 积分商城"),
+    NEXT_PUBLIC_SITE_URL: z.string().url().default("http://localhost:3000"),
 
-  // Cloudflare R2 (图片对象存储,S3 兼容)
-  R2_ACCOUNT_ID: z.string().min(1, "R2_ACCOUNT_ID 必填"),
-  R2_ACCESS_KEY_ID: z.string().min(1, "R2_ACCESS_KEY_ID 必填"),
-  R2_SECRET_ACCESS_KEY: z.string().min(1, "R2_SECRET_ACCESS_KEY 必填"),
-  R2_BUCKET: z.string().min(1, "R2_BUCKET 必填"),
-  // 自定义域名,如 https://cdn.zens.community,结尾不要带 /
-  R2_PUBLIC_BASE_URL: z
-    .string()
-    .url("R2_PUBLIC_BASE_URL 必须是完整 URL,如 https://cdn.zens.community")
-    .refine((v) => !v.endsWith("/"), "R2_PUBLIC_BASE_URL 结尾不要带 /"),
-});
+    // Cloudflare R2 (图片对象存储,S3 兼容)
+    R2_ACCOUNT_ID: z.string().min(1, "R2_ACCOUNT_ID 必填"),
+    R2_ACCESS_KEY_ID: z.string().min(1, "R2_ACCESS_KEY_ID 必填"),
+    R2_SECRET_ACCESS_KEY: z.string().min(1, "R2_SECRET_ACCESS_KEY 必填"),
+    R2_BUCKET: z.string().min(1, "R2_BUCKET 必填"),
+    // 自定义域名,如 https://cdn.zens.community,结尾不要带 /
+    R2_PUBLIC_BASE_URL: z
+      .string()
+      .url("R2_PUBLIC_BASE_URL 必须是完整 URL,如 https://cdn.zens.community")
+      .refine((v) => !v.endsWith("/"), "R2_PUBLIC_BASE_URL 结尾不要带 /"),
+  })
+  .superRefine((env, ctx) => {
+    if (!env.MAIN_SITE_API_URL && !env.MAIN_SITE_BACKEND_URL) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["MAIN_SITE_API_URL"],
+        message: "必须配置 MAIN_SITE_API_URL(或旧名 MAIN_SITE_BACKEND_URL)",
+      });
+    }
+    if (!env.MAIN_SITE_JWT_SECRET && !env.JWT_SECRET) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["MAIN_SITE_JWT_SECRET"],
+        message: "必须配置 MAIN_SITE_JWT_SECRET(或旧名 JWT_SECRET),且至少 32 字符与主站一致",
+      });
+    }
+  });
 
 export type AppEnv = z.infer<typeof Schema>;
 
@@ -78,4 +98,13 @@ export function requireEnv<K extends keyof AppEnv>(key: K): string {
     throw new Error(`缺少必需的环境变量: ${key}`);
   }
   return v;
+}
+
+/** 新名优先、旧名回落:依次取第一个非空环境变量，全部缺失才抛错。 */
+export function requireEnvFirst(...keys: (keyof AppEnv)[]): string {
+  for (const key of keys) {
+    const v = process.env[key];
+    if (v) return v;
+  }
+  throw new Error(`缺少必需的环境变量(以下任一): ${keys.join(", ")}`);
 }

@@ -7,8 +7,10 @@ import { buildSignedHeaders } from "./hmac";
  *   POST /api/internal/user/{userId}/points/consume
  */
 
-const BASE = (process.env.MAIN_SITE_BACKEND_URL || "http://localhost:7800").replace(/\/$/, "");
+const BASE = (process.env.MAIN_SITE_API_URL || process.env.MAIN_SITE_BACKEND_URL || "http://localhost:7800").replace(/\/$/, "");
 const SUCCESS_CODES = new Set([0, 200, 2000]);
+const REQUEST_TIMEOUT_MS = 8000;
+const RETRY_BACKOFF_MS = 200;
 
 export interface PointsInfo {
   userId: string;
@@ -67,18 +69,49 @@ export class MainSiteApiError extends Error {
 
 async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
   const bodyStr = body === undefined ? "" : JSON.stringify(body);
+
+  try {
+    return await callOnce<T>(method, path, bodyStr);
+  } catch (e) {
+    // 网络错误(fetch reject/超时)或 5xx:重试一次。4xx 与业务错误不重试。
+    // 重试前必须重新签名——timestamp/nonce 不可复用,幂等键保证重试安全。
+    if (!isRetryable(e)) throw e;
+    await sleep(RETRY_BACKOFF_MS);
+    return callOnce<T>(method, path, bodyStr);
+  }
+}
+
+function isRetryable(e: unknown): boolean {
+  if (e instanceof MainSiteApiError) {
+    return e.status >= 500 || e.status === 0;
+  }
+  return true; // fetch 网络层异常(含 AbortError 超时)
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function callOnce<T>(method: string, path: string, bodyStr: string): Promise<T> {
   const headers: Record<string, string> = {
     Accept: "application/json",
     ...buildSignedHeaders({ method, path, body: bodyStr }),
   };
   if (bodyStr) headers["Content-Type"] = "application/json";
 
-  const res = await fetch(`${BASE}${path}`, {
-    method,
-    headers,
-    body: bodyStr || undefined,
-    cache: "no-store",
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${BASE}${path}`, {
+      method,
+      headers,
+      body: bodyStr || undefined,
+      cache: "no-store",
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "网络请求失败";
+    throw new MainSiteApiError("MAIN_SITE_UNREACHABLE", message, 0);
+  }
 
   const text = await res.text();
   let data: unknown;

@@ -260,7 +260,7 @@ onMounted(fetchAll)
           <div v-if="pointRecords.length" class="mini-ledger">
             <div class="mini-ledger-head">
               <span>最近积分流水</span>
-              <button type="button" @click="router.push('/level')">完整流水</button>
+              <button type="button" @click="router.push('/points')">完整账本</button>
             </div>
             <div v-for="item in pointRecords.slice(0, 4)" :key="item.id" class="mini-ledger-row">
               <span>{{ formatReason(item.reason) }}</span>

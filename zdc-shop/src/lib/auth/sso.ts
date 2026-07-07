@@ -1,5 +1,5 @@
 import { jwtVerify } from "jose";
-import { requireEnv } from "@/lib/env";
+import { requireEnvFirst } from "@/lib/env";
 
 /**
  * 主站 SsoController 颁发的 SSO Token 的 claims 形状。
@@ -30,7 +30,7 @@ export interface SsoClaims {
  * - exp 由 jose 自动校验
  */
 export async function verifySsoToken(token: string): Promise<SsoClaims> {
-  const jwtSecret = requireEnv("JWT_SECRET");
+  const jwtSecret = requireEnvFirst("MAIN_SITE_JWT_SECRET", "JWT_SECRET");
   const expectedClientId = process.env.NEXT_PUBLIC_SSO_CLIENT_ID || "zdc-shop";
 
   const secretKey = new TextEncoder().encode(jwtSecret);
