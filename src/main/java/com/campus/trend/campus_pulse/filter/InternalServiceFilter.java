@@ -7,7 +7,6 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -22,7 +21,6 @@ import java.io.UnsupportedEncodingException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -50,21 +48,17 @@ public class InternalServiceFilter extends OncePerRequestFilter {
     private final StringRedisTemplate redisTemplate;
     private final ObjectMapper objectMapper;
     private final com.campus.trend.campus_pulse.monitor.EcosystemMetrics ecosystemMetrics;
-    /** serviceId -> 共享密钥。白名单即本 map 的 keySet。 */
+    /** serviceId -> 共享密钥。白名单即本 map 的 keySet,来自 internal.service.clients 配置。 */
     private final Map<String, String> serviceSecrets;
 
     public InternalServiceFilter(StringRedisTemplate redisTemplate,
                                  ObjectMapper objectMapper,
                                  com.campus.trend.campus_pulse.monitor.EcosystemMetrics ecosystemMetrics,
-                                 @Value("${internal.service.shop-secret:dev-shop-secret-change-me}") String shopSecret,
-                                 @Value("${internal.service.lottery-secret:dev-lottery-secret-change-me}") String lotterySecret) {
+                                 com.campus.trend.campus_pulse.config.properties.InternalServiceProperties properties) {
         this.redisTemplate = redisTemplate;
         this.objectMapper = objectMapper;
         this.ecosystemMetrics = ecosystemMetrics;
-        Map<String, String> secrets = new LinkedHashMap<>();
-        secrets.put("zdc-shop", shopSecret);
-        secrets.put("campus-lottery-station", lotterySecret);
-        this.serviceSecrets = Map.copyOf(secrets);
+        this.serviceSecrets = properties.asSecretMap();
     }
 
     @Override

@@ -192,13 +192,17 @@ jwt:
   remember-refresh-multiplier: 4
   sliding-renew-threshold: 900000
 
-# 5.1 内部 s2s API 配置 (供 zdc-shop 等 Zens 子站调用)
+# 5.1 内部 s2s API 白名单 (Zens 子站经 InternalServiceFilter 调 /api/internal/**)
+# 新增子站:在 clients 加一项即可,无需改 Java 代码。secret 生产环境必须经环境变量注入。
 internal:
   service:
-    # 与 zdc-shop 共享的 HMAC 密钥;子站 .env 中 SHOP_SERVICE_SECRET 必须一致
-    shop-secret: ${SHOP_SERVICE_SECRET:dev-shop-service-secret-CHANGE_ME_at_least_16_chars}
-    # 与 campus-lottery-station 共享的 HMAC 密钥;抽奖站 LOTTERY_SERVICE_SECRET 必须一致
-    lottery-secret: ${LOTTERY_SERVICE_SECRET:dev-lottery-service-secret-CHANGE_ME_at_least_16_chars}
+    clients:
+      - id: zdc-shop
+        secret: ${SHOP_SERVICE_SECRET:dev-shop-service-secret-CHANGE_ME_at_least_16_chars}
+      - id: campus-lottery-station
+        secret: ${LOTTERY_SERVICE_SECRET:dev-lottery-service-secret-CHANGE_ME_at_least_16_chars}
+      - id: cdk-airdrop
+        secret: ${CDK_SERVICE_SECRET:dev-cdk-service-secret-CHANGE_ME_at_least_16_chars}
 
 # 6.Web Url 配置
 Web:
@@ -267,7 +271,7 @@ campus:
     imagebed-threshold-mb: ${IMAGEBED_THRESHOLD_MB:3}
   security:
     # 生产环境请替换为前端域名
-    allowed-origin-patterns: ${ALLOWED_ORIGIN_PATTERNS:http://localhost:5173,http://127.0.0.1:5173,http://localhost:4173,http://127.0.0.1:4173,https://allinsong.top,https://www.allinsong.top}
+    allowed-origin-patterns: ${ALLOWED_ORIGIN_PATTERNS:http://localhost,http://127.0.0.1,http://localhost:5173,http://127.0.0.1:5173,http://localhost:4173,http://127.0.0.1:4173,https://allinsong.top,https://www.allinsong.top}
     # 开发环境默认关闭，生产环境请在 application-prod.yml 或 .env 中显式配置
     request-signature-required: ${REQUEST_SIGNATURE_REQUIRED:false}
     # IP黑名单防刷（1分钟200次以上自动封禁30分钟）
@@ -328,6 +332,11 @@ campus:
     posts-index: ${MEILISEARCH_POSTS_INDEX:posts}
     connect-timeout-ms: ${MEILISEARCH_CONNECT_TIMEOUT:3000}
     read-timeout-ms: ${MEILISEARCH_READ_TIMEOUT:5000}
+  agent:
+    enabled: ${AGENT_GATEWAY_ENABLED:true}
+    base-url: ${AGENT_SERVICE_BASE_URL:http://127.0.0.1:7810}
+    connect-timeout-ms: ${AGENT_GATEWAY_CONNECT_TIMEOUT_MS:2000}
+    read-timeout-ms: ${AGENT_GATEWAY_READ_TIMEOUT_MS:20000}
   # 信任等级 TL0-TL4（借鉴 Discourse 社区自治模型，阈值均可调）
   trust-level:
     tl1:
