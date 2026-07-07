@@ -30,6 +30,11 @@ type Config struct {
 	CommunityURL      string
 	CommunityClientID string
 
+	// 主站内部 s2s API(事件回流)。未配置 ServiceSecret 时优雅降级:跳过回流。
+	MainSiteAPIURL string
+	ServiceID      string
+	ServiceSecret  string
+
 	// 安全配置
 	HSTSEnabled           bool
 	HSTSDuration          time.Duration
@@ -76,8 +81,14 @@ func Load() (Config, error) {
 		MySQLDSN:    envOrDefault("CDK_MYSQL_DSN", ""),
 
 		// 社区 SSO
-		CommunityURL:      envOrDefault("CDK_COMMUNITY_URL", "http://localhost:5173"),
+		// MAIN_SITE_WEB_URL 为生态统一命名,旧名 CDK_COMMUNITY_URL 长期兼容
+		CommunityURL:      firstEnvOrDefault("http://localhost:5173", "MAIN_SITE_WEB_URL", "CDK_COMMUNITY_URL"),
 		CommunityClientID: envOrDefault("CDK_COMMUNITY_CLIENT_ID", "cdk-airdrop"),
+
+		// 主站内部 s2s API(事件回流)
+		MainSiteAPIURL: firstEnvOrDefault("http://localhost:7800", "MAIN_SITE_API_URL"),
+		ServiceID:      envOrDefault("CDK_SERVICE_ID", "cdk-airdrop"),
+		ServiceSecret:  envOrDefault("CDK_SERVICE_SECRET", ""),
 
 		// 安全配置默认值
 		HSTSEnabled:         envOrDefault("CDK_AIRDROP_HSTS_ENABLED", "true") == "true",
@@ -131,6 +142,14 @@ func firstEnv(keys ...string) string {
 		}
 	}
 	return ""
+}
+
+// firstEnvOrDefault 依序取第一个非空环境变量,全空用默认值(新名优先旧名回落)。
+func firstEnvOrDefault(fallback string, keys ...string) string {
+	if v := firstEnv(keys...); v != "" {
+		return v
+	}
+	return fallback
 }
 
 func splitCSV(value string) []string {

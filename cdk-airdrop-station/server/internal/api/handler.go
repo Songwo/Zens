@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"cdk-airdrop-station/server/internal/hcaptcha"
+	"cdk-airdrop-station/server/internal/mainsite"
 	"cdk-airdrop-station/server/internal/model"
 	"cdk-airdrop-station/server/internal/store"
 
@@ -24,6 +25,7 @@ type Handler struct {
 	hcaptcha          hcaptcha.Verifier
 	communityURL      string
 	communityClientID string
+	mainSite          *mainsite.Client
 }
 
 func New(store *store.Store, logger *slog.Logger) *Handler {
@@ -36,6 +38,9 @@ func (h *Handler) SetCommunityConfig(communityURL, communityClientID string) {
 }
 
 func (h *Handler) SetHCaptchaVerifier(verifier hcaptcha.Verifier) { h.hcaptcha = verifier }
+
+// SetMainSiteClient 注入主站内部 API 客户端(事件回流)。nil 或未启用时静默跳过回流。
+func (h *Handler) SetMainSiteClient(client *mainsite.Client) { h.mainSite = client }
 
 func (h *Handler) Health(w http.ResponseWriter, r *http.Request) {
 	s := h.store.Settings()
@@ -454,6 +459,9 @@ func (h *Handler) PublicClaimRouter(w http.ResponseWriter, r *http.Request) {
 			captchaPassed = true
 		}
 		res, err := h.store.ClaimNodeReward(slug, userID, req.Fingerprint, clientIP(r), r.UserAgent(), captchaPassed)
+		if err == nil && res != nil && res.Success {
+			h.reportClaimEvent(userID, slug, res)
+		}
 		respond(w, res, err)
 	default:
 		writeError(w, methodErr())
@@ -1021,6 +1029,43 @@ try{['cdk_token','token','access_token'].forEach(function(k){localStorage.remove
 </script></body></html>`))
 }
 
+// reportClaimEvent 领取成功后把事件异步回流主站(写账本 + 站内通知)。
+// 仅 SSO 用户(有 CommunityUserID)回流;未配置密钥或失败只记日志,绝不阻断领取。
+// eventId 用 claimId 幂等:重复请求(ClaimNodeReward 幂等返回旧记录)不会在主站重复记账。
+func (h *Handler) reportClaimEvent(localUserID, slug string, res *model.ClaimResponse) {
+	if h.mainSite == nil || !h.mainSite.Enabled() {
+		return
+	}
+	user := h.store.FindUserByID(localUserID)
+	if user == nil || strings.TrimSpace(user.CommunityUserID) == "" {
+		return // 本地账号/无主站映射,无处通知
+	}
+	communityUserID := user.CommunityUserID
+	claimID := res.ClaimID
+	go func() {
+		ev := mainsite.SubsiteEvent{
+			EventID:    mainsite.SanitizeEventID("cdk:claim:" + claimID),
+			EventType:  "cdk.claim.success",
+			UserID:     communityUserID,
+			Title:      "CDK 领取成功",
+			Content:    "你已在 CDK 空投站成功领取奖励,兑换码可在空投站「我的领取」中查看。",
+			RelatedID:  "cdk-airdrop:claim:" + claimID,
+			Severity:   "success",
+			Status:     "claimed",
+			NotifyUser: true,
+			Payload: map[string]any{
+				"slug":    slug,
+				"claimId": claimID,
+			},
+		}
+		if err := h.mainSite.ReportEvent(ev); err != nil {
+			if h.logger != nil {
+				h.logger.Warn("CDK 领取事件回流主站失败", "claimId", claimID, "err", err)
+			}
+		}
+	}()
+}
+
 func (h *Handler) parseJWTUser(r *http.Request) (string, string) {
 	authHeader := r.Header.Get("Authorization")
 	if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
@@ -1088,8 +1133,12 @@ func (h *Handler) generateJWT(userID, username string) (string, error) {
 }
 
 // communityJWTSecret 从环境变量解析 JWT 密钥，绝不内置兜底密钥（避免共享密钥落进源码/历史）。
+// 生态统一命名 MAIN_SITE_JWT_SECRET 优先,旧名 CDK_COMMUNITY_JWT_SECRET 长期兼容回落。
 func communityJWTSecret() ([]byte, bool) {
-	s := os.Getenv("CDK_COMMUNITY_JWT_SECRET")
+	s := os.Getenv("MAIN_SITE_JWT_SECRET")
+	if s == "" {
+		s = os.Getenv("CDK_COMMUNITY_JWT_SECRET")
+	}
 	if s == "" {
 		return nil, false
 	}

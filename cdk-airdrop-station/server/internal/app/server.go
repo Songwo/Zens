@@ -13,6 +13,7 @@ import (
 	"cdk-airdrop-station/server/internal/api"
 	"cdk-airdrop-station/server/internal/config"
 	"cdk-airdrop-station/server/internal/hcaptcha"
+	"cdk-airdrop-station/server/internal/mainsite"
 	"cdk-airdrop-station/server/internal/store"
 )
 
@@ -20,6 +21,12 @@ func New(cfg config.Config, stateStore *store.Store, logger *slog.Logger) *http.
 	handler := api.New(stateStore, logger)
 	handler.SetHCaptchaVerifier(hcaptcha.New(cfg.HCaptchaSecret, cfg.HCaptchaVerifyURL, cfg.HCaptchaSiteKey))
 	handler.SetCommunityConfig(cfg.CommunityURL, cfg.CommunityClientID)
+	// 主站事件回流:未配 CDK_SERVICE_SECRET 时 Enabled()=false,领取照常、回流跳过
+	mainSiteClient := mainsite.New(cfg.MainSiteAPIURL, cfg.ServiceID, cfg.ServiceSecret, logger)
+	if !mainSiteClient.Enabled() {
+		logger.Info("未配置 CDK_SERVICE_SECRET/MAIN_SITE_API_URL,跳过主站事件回流")
+	}
+	handler.SetMainSiteClient(mainSiteClient)
 	mux := http.NewServeMux()
 
 	// 健康检查
