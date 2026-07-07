@@ -8,6 +8,7 @@ import com.campus.trend.campus_pulse.entity.User;
 import com.campus.trend.campus_pulse.mapper.CheckInMapper;
 import com.campus.trend.campus_pulse.service.CheckInService;
 import com.campus.trend.campus_pulse.service.LevelService;
+import com.campus.trend.campus_pulse.service.UserPointsService;
 import com.campus.trend.campus_pulse.service.UserService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -18,6 +19,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @Slf4j
@@ -26,6 +28,7 @@ public class CheckInServiceImpl extends ServiceImpl<CheckInMapper, CheckIn> impl
 
     private final UserService userService;
     private final LevelService levelService;
+    private final UserPointsService userPointsService;
 
     // 签到奖励：基础值 + 每满 N 天的连续加成
     private static final int BASE_EXP = 5;
@@ -79,16 +82,10 @@ public class CheckInServiceImpl extends ServiceImpl<CheckInMapper, CheckIn> impl
                 .setCreateTime(LocalDateTime.now());
         save(record);
 
-        // 2) 写积分（此前 points 无写入逻辑，此处首次写入）
-        User user = userService.getById(userId);
-        int totalPoints = 0;
-        if (user != null) {
-            int cur = user.getPoints() != null ? user.getPoints() : 0;
-            totalPoints = cur + rewardPoints;
-            user.setPoints(totalPoints);
-            user.setUpdateTime(LocalDateTime.now());
-            userService.updateById(user);
-        }
+        // 2) 写积分:统一走积分收口(原子更新 + sys_point_txn 账本,幂等键=签到日期,天然防重复入账)
+        Map<String, Object> earnResult = userPointsService.earn(
+                userId, rewardPoints, "checkin", today.toString(), "每日签到");
+        int totalPoints = earnResult.get("pointsAfter") instanceof Number n ? n.intValue() : 0;
 
         // 3) 发经验并触发升级（复用现有等级服务）
         levelService.addExperience(userId, rewardExp, "每日签到");

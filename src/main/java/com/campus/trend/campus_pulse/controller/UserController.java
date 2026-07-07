@@ -10,12 +10,16 @@ import com.campus.trend.campus_pulse.dto.request.UserDetailUpdateReq;
 import com.campus.trend.campus_pulse.dto.request.UserModeratedSectionsUpdateReq;
 import com.campus.trend.campus_pulse.dto.request.UserPasswordUpdateReq;
 import com.campus.trend.campus_pulse.dto.response.NotificationSettingsResp;
+import com.campus.trend.campus_pulse.dto.response.PointSummaryResp;
+import com.campus.trend.campus_pulse.dto.response.PointTxnResp;
+import com.campus.trend.campus_pulse.dto.response.SimplePageResp;
 import com.campus.trend.campus_pulse.dto.response.SupportContactResp;
 import com.campus.trend.campus_pulse.dto.response.UserProfileResp;
 import com.campus.trend.campus_pulse.dto.response.UserSearchItemResp;
 import com.campus.trend.campus_pulse.dto.response.UserStatsResp;
 import com.campus.trend.campus_pulse.entity.User;
 import com.campus.trend.campus_pulse.service.AuthService;
+import com.campus.trend.campus_pulse.service.UserPointsService;
 import com.campus.trend.campus_pulse.service.UserService;
 import com.campus.trend.campus_pulse.utils.PermissionUtils;
 import com.campus.trend.campus_pulse.utils.SecurityUtils;
@@ -35,6 +39,7 @@ public class UserController {
     private final UserService userService;
     private final AuthService authService;
     private final SupportContactProperties supportContactProperties;
+    private final UserPointsService userPointsService;
 
     @GetMapping("/profile")
     public Result<?> getProfile() {
@@ -44,6 +49,22 @@ public class UserController {
     @GetMapping("/simple-profile")
     public Result<?> getSimpleProfile() {
         return Result.success(userService.getSimpleProfile());
+    }
+
+    /** 积分概览:当前余额 + 本月收支合计 */
+    @GetMapping("/points/summary")
+    public Result<PointSummaryResp> getPointsSummary() {
+        String userId = SecurityUtils.getAuthenticatedUser().getUser().getId();
+        return Result.success(userPointsService.getSummary(userId));
+    }
+
+    /** 积分明细:分页流水(签到/子站消费/退款等全量来源) */
+    @GetMapping("/points/transactions")
+    public Result<SimplePageResp<PointTxnResp>> getPointsTransactions(
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "20") int pageSize) {
+        String userId = SecurityUtils.getAuthenticatedUser().getUser().getId();
+        return Result.success(userPointsService.pageTransactions(userId, page, pageSize));
     }
 
     @GetMapping("/public/{userId}")

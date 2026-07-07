@@ -39,26 +39,28 @@ public class InternalUserController {
      * POST /api/internal/user/{userId}/points/consume
      *
      * 原子扣减积分,失败回 INSUFFICIENT_POINTS。
-     * 幂等性: 相同 idempotencyKey 在 TTL 内返回上次结果。
+     * 幂等性: 相同 idempotencyKey 重复请求返回上次结果(DB 唯一索引兜底)。
      */
     @PostMapping("/{userId}/points/consume")
     public Result<?> consumePoints(@PathVariable @NotBlank String userId,
-                                   @RequestBody @Valid ConsumeRequest req) {
+                                   @RequestBody @Valid ConsumeRequest req,
+                                   @RequestAttribute(name = "internal.serviceId", required = false) String serviceId) {
         return Result.success(userPointsService.consume(
-                userId, req.amount, req.reason, req.orderId, req.idempotencyKey));
+                userId, req.amount, req.reason, req.orderId, req.idempotencyKey, serviceId));
     }
 
     /**
      * POST /api/internal/user/{userId}/points/credit
      *
      * 返还积分 (退款 / 补偿 / 奖励发放)。
-     * 幂等性: 相同 idempotencyKey 在 TTL 内返回上次结果。
+     * 幂等性: 相同 idempotencyKey 重复请求返回上次结果(DB 唯一索引兜底)。
      */
     @PostMapping("/{userId}/points/credit")
     public Result<?> creditPoints(@PathVariable @NotBlank String userId,
-                                  @RequestBody @Valid ConsumeRequest req) {
+                                  @RequestBody @Valid ConsumeRequest req,
+                                  @RequestAttribute(name = "internal.serviceId", required = false) String serviceId) {
         return Result.success(userPointsService.credit(
-                userId, req.amount, req.reason, req.orderId, req.idempotencyKey));
+                userId, req.amount, req.reason, req.orderId, req.idempotencyKey, serviceId));
     }
 
     /**
