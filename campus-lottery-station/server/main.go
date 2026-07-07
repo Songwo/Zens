@@ -352,8 +352,10 @@ func main() {
 func loadConfig() Config {
 	addr := env("LOTTERY_ADDR", ":8093")
 	publicURL := strings.TrimRight(env("LOTTERY_PUBLIC_URL", "http://localhost"+addr), "/")
-	communityBase := strings.TrimRight(env("COMMUNITY_BASE_URL", "http://localhost:8080"), "/")
-	communityAPI := strings.TrimRight(env("COMMUNITY_API_BASE_URL", "http://localhost:7800"), "/")
+	// 生态统一命名 MAIN_SITE_WEB_URL/MAIN_SITE_API_URL/MAIN_SITE_JWT_SECRET 优先,
+	// 旧名 COMMUNITY_BASE_URL/COMMUNITY_API_BASE_URL/COMMUNITY_JWT_SECRET 长期兼容回落。
+	communityBase := strings.TrimRight(envFirst("http://localhost:8080", "MAIN_SITE_WEB_URL", "COMMUNITY_BASE_URL"), "/")
+	communityAPI := strings.TrimRight(envFirst("http://localhost:7800", "MAIN_SITE_API_URL", "COMMUNITY_API_BASE_URL"), "/")
 	return Config{
 		Addr:                 addr,
 		DataPath:             env("LOTTERY_DATA", filepath.Join("data", "state.json")),
@@ -365,7 +367,7 @@ func loadConfig() Config {
 		SSOTokenURL:          env("COMMUNITY_SSO_TOKEN_URL", communityBase+"/api/sso/token"),
 		SSOClientID:          env("SSO_CLIENT_ID", "campus-lottery-station"),
 		SSOClientSecret:      env("SSO_CLIENT_SECRET", "change-me"),
-		CommunityJWTSecret:   env("COMMUNITY_JWT_SECRET", ""),
+		CommunityJWTSecret:   envFirst("", "MAIN_SITE_JWT_SECRET", "COMMUNITY_JWT_SECRET"),
 		SessionSecret:        env("LOTTERY_SESSION_SECRET", "campus-lottery-dev-secret"),
 		BotAccessToken:       env("LOTTERY_BOT_ACCESS_TOKEN", ""),
 		BotUsername:          env("LOTTERY_BOT_USERNAME", "zens-lottery-bot"),
@@ -375,6 +377,16 @@ func loadConfig() Config {
 		AllowDemoSSOFallback: envBool("LOTTERY_ALLOW_DEMO_SSO_FALLBACK", false),
 		CommentMaxPages:      envInt("LOTTERY_COMMENT_MAX_PAGES", 50),
 	}
+}
+
+// envFirst 依序取第一个非空环境变量,全空用 fallback(新名优先、旧名回落)。
+func envFirst(fallback string, keys ...string) string {
+	for _, key := range keys {
+		if v := strings.TrimSpace(os.Getenv(key)); v != "" {
+			return v
+		}
+	}
+	return fallback
 }
 
 func env(key, fallback string) string {
@@ -775,6 +787,8 @@ func canJoin(draw Draw, user *User) error {
 	if user.Level < draw.MinLevel {
 		return fmt.Errorf("社区等级需要达到 %d 级", draw.MinLevel)
 	}
+	// 注意:本地 Points 只是显示缓存,付费抽奖的权威余额判定在主站 consume(见 joinDraw)。
+	// 这里保留预检仅为友好提示,可能因缓存过期而放行,最终仍以主站扣减结果为准。
 	if user.Points < draw.CostPoints {
 		return fmt.Errorf("积分不足，需要 %d 积分", draw.CostPoints)
 	}
@@ -791,6 +805,26 @@ func canJoin(draw Draw, user *User) error {
 
 func (app *App) me(w http.ResponseWriter, r *http.Request) {
 	user, _ := app.currentUser(r)
+	// ?refresh=1:经内部 API 拉主站权威余额,刷新本地显示缓存。
+	// 失败静默降级(仍返回缓存值)——刷新是尽力而为,不能因主站抖动打断用户会话。
+	if user != nil && r.URL.Query().Get("refresh") == "1" && app.pointsIntegrationEnabled() {
+		if points, err := app.fetchMainSitePoints(user.ID); err == nil && points != user.Points {
+			user.Points = points
+			if err := app.store.update(func(state *State) error {
+				u, ok := state.Users[user.ID]
+				if !ok {
+					return nil
+				}
+				u.Points = points
+				state.Users[user.ID] = u
+				return nil
+			}); err != nil {
+				log.Printf("刷新积分缓存落盘失败 userId=%s: %v", user.ID, err)
+			}
+		} else if err != nil {
+			log.Printf("刷新主站积分失败(降级用缓存) userId=%s: %v", user.ID, err)
+		}
+	}
 	writeJSON(w, http.StatusOK, APIResponse{OK: true, Data: user})
 }
 
@@ -1348,17 +1382,92 @@ func (app *App) joinDraw(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id := r.PathValue("id")
+
+	// ── 预检(不收费的快速失败):抽奖存在性/状态/等级/名额/是否已参与 ──────
+	var draw Draw
+	found := false
+	snapshot := app.store.snapshot()
+	for _, d := range snapshot.Draws {
+		if d.ID == id {
+			draw, found = d, true
+			break
+		}
+	}
+	if !found {
+		writeError(w, http.StatusNotFound, "抽奖不存在")
+		return
+	}
+	for _, p := range draw.Participants {
+		if p.UserID == user.ID {
+			// 幂等:已参与直接返回成功(扣减幂等键保证只收过一次费)
+			writeJSON(w, http.StatusOK, APIResponse{OK: true, Data: draw})
+			return
+		}
+	}
+	if preUser, okU := snapshot.Users[user.ID]; okU {
+		if err := canJoin(draw, &preUser); err != nil &&
+			!strings.Contains(err.Error(), "积分不足") { // 余额预检交给主站权威判定
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+	}
+
+	// ── 付费抽奖:先经主站真实扣减,成功才落参与记录 ──────────────────────
+	// 本地 Points 只是显示缓存;权威余额在主站 sys_user.points。
+	// 幂等键 = drawId+userId:重复请求/崩溃重试都只会收一次费。
+	consumed := 0
+	if draw.CostPoints > 0 {
+		if !app.pointsIntegrationEnabled() {
+			// 绝不本地假扣:未接入主站积分时付费抽奖不可参与
+			writeError(w, http.StatusServiceUnavailable, "本站未接入主站积分,暂不能参与付费抽奖")
+			return
+		}
+		idemKey := sanitizeEventID(fmt.Sprintf("lottery:join:%s:%s", draw.ID, user.ID))
+		after, err := app.consumeMainSitePoints(
+			user.ID, draw.CostPoints,
+			"lottery:join:"+draw.ID, draw.ID, idemKey)
+		if err != nil {
+			var bizErr *mainSitePointsError
+			switch {
+			case errors.As(err, &bizErr) && bizErr.Code == "INSUFFICIENT_POINTS":
+				writeError(w, http.StatusBadRequest, "主站积分不足,需要 "+strconv.Itoa(draw.CostPoints)+" 积分")
+			case errors.Is(err, errMainSiteUnreachable):
+				writeError(w, http.StatusBadGateway, "主站暂时不可达,请稍后重试")
+			default:
+				log.Printf("参与抽奖扣分失败 drawId=%s userId=%s: %v", draw.ID, user.ID, err)
+				writeError(w, http.StatusBadGateway, "积分扣减失败,请稍后重试")
+			}
+			return
+		}
+		consumed = draw.CostPoints
+		user.Points = after // 显示缓存 = 主站扣减后余额
+	}
+
 	var result Draw
+	alreadyJoined := false
 	err := app.store.update(func(state *State) error {
 		for i := range state.Draws {
 			if state.Draws[i].ID != id {
 				continue
 			}
+			// 并发重复参与:视为幂等成功,禁止走退款(费用只收过一次)
+			for _, p := range state.Draws[i].Participants {
+				if p.UserID == user.ID {
+					alreadyJoined = true
+					result = state.Draws[i]
+					return nil
+				}
+			}
 			freshUser := state.Users[user.ID]
+			if consumed > 0 {
+				freshUser.Points = user.Points + consumed // 余额预检必过:权威判定已由主站扣减完成
+			}
 			if err := canJoin(state.Draws[i], &freshUser); err != nil {
 				return err
 			}
-			freshUser.Points -= state.Draws[i].CostPoints
+			if consumed > 0 {
+				freshUser.Points = user.Points
+			}
 			state.Users[freshUser.ID] = freshUser
 			state.Draws[i].Participants = append(state.Draws[i].Participants, Participation{
 				ID:          "p-" + randomID(12),
@@ -1384,8 +1493,23 @@ func (app *App) joinDraw(w http.ResponseWriter, r *http.Request) {
 		return errors.New("抽奖不存在")
 	})
 	if err != nil {
+		// 已扣分但参与未落地(如名额被并发抢完):saga 补偿退回。
+		// 已参与的幂等分支不会走到这里,不存在白嫖退款。
+		if consumed > 0 {
+			refundKey := sanitizeEventID(fmt.Sprintf("lottery:refund:%s:%s", draw.ID, user.ID))
+			if _, creditErr := app.creditMainSitePoints(
+				user.ID, consumed, "lottery:refund:"+draw.ID, draw.ID, refundKey); creditErr != nil {
+				log.Printf("[ERROR] 参与失败且补偿退分失败,需人工对账 drawId=%s userId=%s amount=%d refundKey=%s joinErr=%v creditErr=%v",
+					draw.ID, user.ID, consumed, refundKey, err, creditErr)
+			} else {
+				log.Printf("参与失败已自动退分 drawId=%s userId=%s amount=%d", draw.ID, user.ID, consumed)
+			}
+		}
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
+	}
+	if alreadyJoined {
+		log.Printf("重复参与请求(幂等返回) drawId=%s userId=%s", id, user.ID)
 	}
 	writeJSON(w, http.StatusOK, APIResponse{OK: true, Data: result})
 }
@@ -2532,27 +2656,153 @@ func (app *App) reportLotteryWinEvent(winner LotteryWinner, result LotteryDrawRe
 // postSignedInternal 向主站内部接口发一次签名 POST。
 // 返回 retryable:网络错误/5xx 为 true(值得重试),4xx 为 false(请求本身有问题)。
 func (app *App) postSignedInternal(path, bodyStr string) (retryable bool, err error) {
-	req, err := http.NewRequest(http.MethodPost, app.communityURL(path), strings.NewReader(bodyStr))
+	status, _, err := app.callSignedInternal(http.MethodPost, path, bodyStr)
 	if err != nil {
-		return false, err
+		return status == 0 || status >= 500, err
+	}
+	return false, nil
+}
+
+// callSignedInternal 向主站 /api/internal/** 发一次签名请求,返回状态码与响应体。
+// status==0 表示网络层失败(连接不上/超时)。
+func (app *App) callSignedInternal(method, path, bodyStr string) (status int, respBody []byte, err error) {
+	var reader io.Reader
+	if bodyStr != "" {
+		reader = strings.NewReader(bodyStr)
+	}
+	req, err := http.NewRequest(method, app.communityURL(path), reader)
+	if err != nil {
+		return 0, nil, err
 	}
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("Content-Type", "application/json")
-	for k, v := range app.signedInternalHeaders(http.MethodPost, path, bodyStr) {
+	if bodyStr != "" {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	for k, v := range app.signedInternalHeaders(method, path, bodyStr) {
 		req.Header.Set(k, v)
 	}
 	client := http.Client{Timeout: 12 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		return true, fmt.Errorf("无法连接主站内部接口：%w", err) // 网络层错误可重试
+		return 0, nil, fmt.Errorf("无法连接主站内部接口：%w", err)
 	}
 	defer resp.Body.Close()
-	respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	respBody, _ = io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
-		return false, nil
+		return resp.StatusCode, respBody, nil
 	}
-	canRetry := resp.StatusCode >= 500 // 5xx 可重试,4xx 不重试
-	return canRetry, fmt.Errorf("主站内部接口返回错误：%s %s", resp.Status, strings.TrimSpace(string(respBody)))
+	return resp.StatusCode, respBody, fmt.Errorf("主站内部接口返回错误：%s %s", resp.Status, strings.TrimSpace(string(respBody)))
+}
+
+// ─── 内部 s2s API：主站积分(真实划转) ────────────────────────────────────
+//
+// 参与付费抽奖时经主站 consume 真实扣减 sys_user.points;本地 User.Points 仅为显示缓存。
+// 错误契约与 zdc-shop 一致:主站 Result.message 前缀码 INSUFFICIENT_POINTS / USER_NOT_FOUND 等。
+
+var errMainSiteUnreachable = errors.New("主站暂时不可达")
+
+// mainSitePointsError 保留主站返回的业务错误前缀码(如 INSUFFICIENT_POINTS)。
+type mainSitePointsError struct {
+	Code    string
+	Message string
+}
+
+func (e *mainSitePointsError) Error() string { return e.Code + ": " + e.Message }
+
+var pointsErrCodePattern = regexp.MustCompile(`^([A-Z][A-Z0-9_]+):\s*(.*)$`)
+
+func parseMainSiteResult(respBody []byte) (code string, message string, data map[string]any) {
+	var parsed struct {
+		Code    int             `json:"code"`
+		Message string          `json:"message"`
+		Data    map[string]any  `json:"data"`
+	}
+	if json.Unmarshal(respBody, &parsed) != nil {
+		return "", "", nil
+	}
+	if m := pointsErrCodePattern.FindStringSubmatch(strings.TrimSpace(parsed.Message)); m != nil {
+		return m[1], m[2], parsed.Data
+	}
+	return "", parsed.Message, parsed.Data
+}
+
+// pointsIntegrationEnabled 是否已接入主站积分(配置了 HMAC 密钥)。
+// 未接入时付费抽奖必须拒绝参与——绝不允许本地假扣减。
+func (app *App) pointsIntegrationEnabled() bool {
+	return strings.TrimSpace(app.cfg.ServiceSecret) != ""
+}
+
+// mutateMainSitePoints 调主站 consume/credit,成功返回变动后余额。
+func (app *App) mutateMainSitePoints(op, userID string, amount int, reason, orderID, idemKey string) (pointsAfter int, err error) {
+	reqBody, _ := json.Marshal(map[string]any{
+		"amount":         amount,
+		"reason":         reason,
+		"orderId":        orderID,
+		"idempotencyKey": idemKey,
+	})
+	path := "/api/internal/user/" + url.PathEscape(userID) + "/points/" + op
+	status, respBody, callErr := app.callSignedInternal(http.MethodPost, path, string(reqBody))
+	if callErr != nil {
+		if status == 0 || status >= 500 {
+			log.Printf("主站积分 %s 网络/服务错误 userId=%s idemKey=%s: %v", op, userID, idemKey, callErr)
+			return 0, errMainSiteUnreachable
+		}
+		code, message, _ := parseMainSiteResult(respBody)
+		if code == "" {
+			code = fmt.Sprintf("HTTP_%d", status)
+			message = callErr.Error()
+		}
+		return 0, &mainSitePointsError{Code: code, Message: message}
+	}
+	// 2xx 也可能是业务失败(主站 Result 包装,code!=2000 时 message 带前缀码)
+	code, message, data := parseMainSiteResult(respBody)
+	if code != "" {
+		return 0, &mainSitePointsError{Code: code, Message: message}
+	}
+	if after, ok := data["pointsAfter"].(float64); ok {
+		return int(after), nil
+	}
+	return 0, fmt.Errorf("主站积分 %s 响应缺少 pointsAfter", op)
+}
+
+func (app *App) consumeMainSitePoints(userID string, amount int, reason, orderID, idemKey string) (int, error) {
+	return app.mutateMainSitePoints("consume", userID, amount, reason, orderID, idemKey)
+}
+
+// creditMainSitePoints 补偿退回,网络错/5xx 指数退避重试。
+func (app *App) creditMainSitePoints(userID string, amount int, reason, orderID, idemKey string) (int, error) {
+	const maxAttempts = 3
+	var lastErr error
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		after, err := app.mutateMainSitePoints("credit", userID, amount, reason, orderID, idemKey)
+		if err == nil {
+			return after, nil
+		}
+		lastErr = err
+		if !errors.Is(err, errMainSiteUnreachable) || attempt == maxAttempts {
+			break
+		}
+		backoff := time.Duration(200*(1<<(attempt-1))) * time.Millisecond
+		time.Sleep(backoff)
+	}
+	return 0, lastErr
+}
+
+// fetchMainSitePoints 读主站真实余额(刷新显示缓存)。
+func (app *App) fetchMainSitePoints(userID string) (int, error) {
+	path := "/api/internal/user/" + url.PathEscape(userID) + "/points"
+	status, respBody, err := app.callSignedInternal(http.MethodGet, path, "")
+	if err != nil {
+		if status == 0 || status >= 500 {
+			return 0, errMainSiteUnreachable
+		}
+		return 0, err
+	}
+	_, _, data := parseMainSiteResult(respBody)
+	if points, ok := data["points"].(float64); ok {
+		return int(points), nil
+	}
+	return 0, errors.New("主站积分响应缺少 points")
 }
 
 func (app *App) communityURL(path string) string {
