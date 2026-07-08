@@ -326,28 +326,28 @@ ensure_mysql() {
   main_exists="$(mysql_scalar information_schema "SELECT COUNT(*) FROM SCHEMATA WHERE SCHEMA_NAME = $(sql_quote "$MAIN_DB_NAME");")"
   [[ "$main_exists" == "1" ]] || die "Main database not found: $MAIN_DB_NAME"
 
-  mysql_exec <<SQL
-CREATE DATABASE IF NOT EXISTS \`zens_shop\`
+  mysql_exec <<'SQL'
+CREATE DATABASE IF NOT EXISTS `zens_shop`
   DEFAULT CHARACTER SET utf8mb4
   DEFAULT COLLATE utf8mb4_unicode_ci;
+SQL
 
-USE $(sql_ident "$MAIN_DB_NAME");
-
-CREATE TABLE IF NOT EXISTS \`sys_sso_client\` (
-  \`id\` varchar(64) NOT NULL,
-  \`client_id\` varchar(100) NOT NULL COMMENT '应用标识（唯一）',
-  \`client_name\` varchar(200) NOT NULL COMMENT '应用名称',
-  \`client_secret\` varchar(200) NOT NULL COMMENT '应用密钥',
-  \`redirect_uri\` text NOT NULL COMMENT '回调地址',
-  \`description\` varchar(500) DEFAULT NULL COMMENT '应用描述',
-  \`logo_url\` varchar(500) DEFAULT NULL COMMENT '应用Logo URL',
-  \`enabled\` tinyint(1) DEFAULT 1 COMMENT '是否启用 1:是 0:否',
-  \`trusted\` tinyint(1) NOT NULL DEFAULT 1 COMMENT '第一方可信:1 自动授权跳过同意页,0 需手动同意',
-  \`create_time\` datetime DEFAULT CURRENT_TIMESTAMP,
-  \`update_time\` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  PRIMARY KEY (\`id\`),
-  UNIQUE KEY \`uk_client_id\` (\`client_id\`),
-  KEY \`idx_sso_client_enabled\` (\`enabled\`, \`create_time\`)
+  mysql_exec "$MAIN_DB_NAME" <<'SQL'
+CREATE TABLE IF NOT EXISTS `sys_sso_client` (
+  `id` varchar(64) NOT NULL,
+  `client_id` varchar(100) NOT NULL COMMENT '应用标识（唯一）',
+  `client_name` varchar(200) NOT NULL COMMENT '应用名称',
+  `client_secret` varchar(200) NOT NULL COMMENT '应用密钥',
+  `redirect_uri` text NOT NULL COMMENT '回调地址',
+  `description` varchar(500) DEFAULT NULL COMMENT '应用描述',
+  `logo_url` varchar(500) DEFAULT NULL COMMENT '应用Logo URL',
+  `enabled` tinyint(1) DEFAULT 1 COMMENT '是否启用 1:是 0:否',
+  `trusted` tinyint(1) NOT NULL DEFAULT 1 COMMENT '第一方可信:1 自动授权跳过同意页,0 需手动同意',
+  `create_time` datetime DEFAULT CURRENT_TIMESTAMP,
+  `update_time` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_client_id` (`client_id`),
+  KEY `idx_sso_client_enabled` (`enabled`, `create_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='SSO 应用注册表';
 
 SET @trusted_count := (
@@ -359,7 +359,7 @@ SET @trusted_count := (
 );
 SET @trusted_sql := IF(
   @trusted_count = 0,
-  'ALTER TABLE \`sys_sso_client\` ADD COLUMN \`trusted\` tinyint(1) NOT NULL DEFAULT 0 COMMENT ''第一方可信:1 自动授权跳过同意页,0 需手动同意'' AFTER \`enabled\`',
+  'ALTER TABLE `sys_sso_client` ADD COLUMN `trusted` tinyint(1) NOT NULL DEFAULT 0 COMMENT ''第一方可信:1 自动授权跳过同意页,0 需手动同意'' AFTER `enabled`',
   'SELECT 1'
 );
 PREPARE trusted_stmt FROM @trusted_sql;
@@ -376,7 +376,7 @@ SET @redirect_type := (
 );
 SET @redirect_sql := IF(
   @redirect_type IN ('varchar', 'char'),
-  'ALTER TABLE \`sys_sso_client\` MODIFY COLUMN \`redirect_uri\` text NOT NULL COMMENT ''回调地址''',
+  'ALTER TABLE `sys_sso_client` MODIFY COLUMN `redirect_uri` text NOT NULL COMMENT ''回调地址''',
   'SELECT 1'
 );
 PREPARE redirect_stmt FROM @redirect_sql;
@@ -622,7 +622,7 @@ main() {
   log "SSO clients ready: zdc-shop / campus-lottery-station / cdk-airdrop"
 
   local docker_mysql_host db_user_encoded db_pass_encoded shop_database_url
-  docker_mysql_host="${DOCKER_MYSQL_HOST:-host.docker.internal}"
+  docker_mysql_host="${DOCKER_MYSQL_HOST:-127.0.0.1}"
   db_user_encoded="$(urlencode "$MYSQL_USER")"
   db_pass_encoded="$(urlencode "$MYSQL_PASSWORD")"
   shop_database_url="mysql://${db_user_encoded}:${db_pass_encoded}@${docker_mysql_host}:${MYSQL_PORT}/zens_shop"
