@@ -21,7 +21,8 @@ import {
   Odometer,
   ArrowRight,
   Operation,
-  Notebook
+  Notebook,
+  MagicStick
 } from '@element-plus/icons-vue'
 import { useUserStore } from '@/store/user'
 import { hasAdminRole, hasModeratorCapability } from '@/utils/sessionProfile'
@@ -57,6 +58,7 @@ const allMenuItems: AdminMenuItem[] = [
   { id: 'cache', name: '缓存管理', desc: 'Redis 快捷维护', icon: SetUp, path: '/admin/cache', access: 'admin', group: 'system' },
   { id: 'performance', name: '性能观测', desc: '慢请求与慢 SQL', icon: Odometer, path: '/admin/performance', access: 'admin', group: 'system' },
   { id: 'logs', name: '日志管理', desc: '排障与归档', icon: Reading, path: '/admin/logs', access: 'admin', group: 'system' },
+  { id: 'agent', name: 'Agent 状态', desc: '问答链路与可用性', icon: MagicStick, path: '/admin/agent', access: 'admin', group: 'system' },
   { id: 'media', name: '媒体存储', desc: '上传链路状态', icon: Cpu, path: '/admin/media', access: 'admin', group: 'system' },
   { id: 'sso', name: 'SSO 应用', desc: '外部登录配置', icon: Connection, path: '/admin/sso', access: 'admin', group: 'system' },
   { id: 'subsite-events', name: '事件账本', desc: '子站闭环审计', icon: Notebook, path: '/admin/subsite-events', access: 'admin', group: 'system' },

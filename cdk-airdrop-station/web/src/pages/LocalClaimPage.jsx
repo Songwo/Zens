@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { claimApi, devApi, setAuthToken, userApi } from "../lib/api";
+import { claimApi, devApi, setAuthToken, userApi, communityApi } from "../lib/api";
 import { DEFAULT_BRAND, normalizeBrand, setAppTitle } from "../lib/brand";
 import { getFingerprint } from "../lib/storage";
 
@@ -47,6 +47,11 @@ export default function LocalClaimPage() {
   useEffect(() => {
     setAppTitle(DEFAULT_BRAND);
     fetchBrand();
+    // SSO 回跳回本页后，用已存 token 拉当前用户，让右侧状态显示社区账号
+    userApi.getMe().then((data) => {
+      const user = data?.user || data?.data?.user || data?.data || null;
+      if (user?.username) setCurrentUser(user);
+    }).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -84,6 +89,23 @@ export default function LocalClaimPage() {
     const user = data?.user || data?.data?.user || (await userApi.getMe()).user;
     setCurrentUser(user);
     return user;
+  }
+
+  // 走主站 SSO 用社区账号登录，回调后跳回本页
+  async function loginWithCommunity() {
+    setError("");
+    try {
+      const config = await communityApi.config();
+      const cfg = config?.data || config;
+      const communityUrl = cfg?.communityUrl;
+      const clientId = cfg?.clientId;
+      if (!communityUrl || !clientId) throw new Error("社区 SSO 配置未就绪，请联系管理员");
+      try { sessionStorage.setItem("sso_return_url", "/local-claim"); } catch { /* ignore */ }
+      const callbackUrl = `${window.location.origin}/login/callback`;
+      window.location.href = `${communityUrl}/sso/authorize?client_id=${encodeURIComponent(clientId)}&redirect_uri=${encodeURIComponent(callbackUrl)}`;
+    } catch (err) {
+      setError(err.message || "无法跳转到社区登录");
+    }
   }
 
   async function checkNode() {
@@ -204,6 +226,12 @@ export default function LocalClaimPage() {
               </button>
               <button type="button" className="btn btn--secondary" disabled={checking || loading} onClick={checkNode}>
                 {checking ? "读取中..." : "只登录并检查节点"}
+              </button>
+            </div>
+
+            <div className="local-claim-actions" style={{ marginTop: 8 }}>
+              <button type="button" className="btn btn--secondary" style={{ width: "100%" }} onClick={loginWithCommunity}>
+                使用 Zens 社区账号登录
               </button>
             </div>
           </form>

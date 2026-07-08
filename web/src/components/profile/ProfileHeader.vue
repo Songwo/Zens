@@ -98,8 +98,8 @@ const clickableStats = computed(() => isSelf.value)
         <UserRoleBadge :roles="profile.roles || []" />
         <TrustLevelBadge :trust-level="profile.trustLevel ?? 0" />
         <UserBadge :text="profile.badgeText || ''" :color="profile.badgeColor" :effect="profile.badgeStyle" />
-        <el-tooltip content="资历等级（经验值驱动，仅展示）" placement="top" effect="dark">
-          <span v-if="profile.level != null" class="ph-level-pill">Lv.{{ profile.level }}</span>
+        <el-tooltip v-if="profile.level != null" content="资历等级（经验值驱动，仅展示）" placement="top" effect="dark">
+          <span class="ph-level-pill">Lv.{{ profile.level }}</span>
         </el-tooltip>
       </div>
       <div class="ph-handle">@{{ profile.username }}</div>

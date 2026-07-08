@@ -1,4 +1,5 @@
 import api from '@/lib/api'
+import type { AxiosRequestConfig } from 'axios'
 import type { Result } from '@/types'
 
 export interface SiteStats {
@@ -42,9 +43,11 @@ export const statsApi = {
     /**
      * Song：说明
      */
-    getHotRank(timeRange?: 'TODAY' | 'WEEK' | 'MONTH' | string, limit = 10) {
+    getHotRank(timeRange?: 'TODAY' | 'WEEK' | 'MONTH' | string, limit = 10, config?: AxiosRequestConfig) {
         return api.get<any, Result<HotPost[]>>('/heat-rank/top', {
+            ...config,
             params: {
+                ...(config?.params || {}),
                 timeRange,
                 limit,
             }

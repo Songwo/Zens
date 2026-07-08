@@ -32,18 +32,18 @@ export const postApi = {
         return api.get<any, Result<Post>>(`/post/${id}`)
     },
 
-    // Song：说明
+    // Song：创建帖子，返回落库后的审核状态（APPROVED 直接公开 / PENDING 待人工审核）
     create(data: CreatePostRequest) {
-        return api.post<any, Result<void>>('/post/create-post', data)
+        return api.post<any, Result<{ auditStatus?: string }>>('/post/create-post', data)
     },
 
     saveDraft(data: SaveDraftRequest) {
         return api.post<any, Result<Post>>('/post/save-draft', data)
     },
 
-    // Song：说明
+    // Song：更新帖子，返回落库后的审核状态（发布动作可能进 PENDING 人工审核）
     update(data: { postId: string; title?: string; content?: string; tags?: string; sectionId?: number; coverImage?: string; status?: number; publish?: boolean; postType?: string; commentDeadline?: string; commentOncePerUser?: boolean }) {
-        return api.post<any, Result<void>>('/post/update-post', data)
+        return api.post<any, Result<{ auditStatus?: string }>>('/post/update-post', data)
     },
 
     // Song：说明

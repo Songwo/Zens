@@ -228,8 +228,8 @@ const goToProfile = () => {
               <UserBadge :text="displayBadge" :color="displayBadgeColor" :effect="displayBadgeEffect" />
             </div>
             <div class="username" v-if="displayUsername">@{{ displayUsername }}</div>
-            <el-tooltip content="资历等级（经验值驱动，仅展示）" placement="top" effect="dark">
-              <div class="level level-secondary" v-if="profile?.level">Lv.{{ profile.level }}</div>
+            <el-tooltip v-if="profile?.level" content="资历等级（经验值驱动，仅展示）" placement="top" effect="dark">
+              <div class="level level-secondary">Lv.{{ profile.level }}</div>
             </el-tooltip>
           </div>
         </div>

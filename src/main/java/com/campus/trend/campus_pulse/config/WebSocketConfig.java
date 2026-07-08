@@ -14,7 +14,7 @@ import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerCo
 @RequiredArgsConstructor
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
-    @Value("${campus.security.allowed-origin-patterns:http://localhost:5173,http://127.0.0.1:5173}")
+    @Value("${campus.security.allowed-origin-patterns:http://localhost,http://127.0.0.1,http://localhost:5173,http://127.0.0.1:5173}")
     private String allowedOriginPatterns;
 
     private final WebSocketAuthInterceptor webSocketAuthInterceptor;

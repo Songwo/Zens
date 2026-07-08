@@ -13,6 +13,7 @@ import { CollectionTag, Star, StarFilled } from '@element-plus/icons-vue'
 import { useUserStore } from '@/store/user'
 import { cachedRequest } from '@/utils/requestCache'
 import { useInfiniteScroll } from '@/composables/useInfiniteScroll'
+import { invalidateCommunityContentCaches } from '@/utils/communityCache'
 
 const route = useRoute()
 const userStore = useUserStore()
@@ -156,6 +157,7 @@ const toggleFollow = async () => {
   try {
     const res = await tagApi.toggleFollow(tagId.value)
     isFollowing.value = res.data?.isFollowing ?? !isFollowing.value
+    invalidateCommunityContentCaches()
     ElMessage.success(isFollowing.value ? '已关注该话题，有新帖子时将收到通知' : '已取消关注')
   } catch {
     ElMessage.error('操作失败，请稍后重试')
@@ -222,7 +224,7 @@ onBeforeUnmount(() => {
       <!-- Feed Controls -->
       <div class="feed-controls">
          <el-radio-group v-model="sortMode" @change="changeSort" size="default">
-           <el-radio-button label="hot" value="hot">热门话题</el-radio-button>
+           <el-radio-button label="hot" value="hot">热门主题</el-radio-button>
            <el-radio-button label="new" value="new">时间顺序</el-radio-button>
          </el-radio-group>
       </div>

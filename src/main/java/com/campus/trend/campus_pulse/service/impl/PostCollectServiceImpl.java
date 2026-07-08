@@ -78,7 +78,7 @@ public class PostCollectServiceImpl extends ServiceImpl<PostCollectMapper, PostC
 
         // Song：4. 批量查询帖子信息（只查询状态正常的帖子）
         List<Post> posts = postMapper.selectBatchIds(postIds).stream()
-                .filter(post -> post.getStatus() != null && post.getStatus() == 1)
+                .filter(this::isCollectable)
                 .collect(Collectors.toList());
 
         // Song：5. 封装为分页结果
@@ -158,6 +158,9 @@ public class PostCollectServiceImpl extends ServiceImpl<PostCollectMapper, PostC
             postMapper.decrementCollectCount(postId);
             invalidatePostCache(post);
             log.info("用户 [{}] 取消收藏帖子 [{}] 成功", userId, postId);
+
+            // Song：对称扣回被收藏经验，堵住"收藏↔取消"循环刷经验
+            levelService.addExperience(post.getUserId(), -3, "取消收藏");
         }
 
         return removed;
@@ -204,7 +207,6 @@ public class PostCollectServiceImpl extends ServiceImpl<PostCollectMapper, PostC
         }
         String auditStatus = post.getAuditStatus();
         return !StringUtils.hasText(auditStatus)
-                || "PENDING".equalsIgnoreCase(auditStatus)
                 || "APPROVED".equalsIgnoreCase(auditStatus);
     }
 

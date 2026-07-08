@@ -36,6 +36,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Check } from '@element-plus/icons-vue'
 import { answerAdoptionApi } from '@/api/enhancement'
 import { useUserStore } from '@/store/user'
+import { notifyCommunityContentChanged } from '@/utils/communityCache'
 
 const props = defineProps<{
     postId: string
@@ -140,6 +141,7 @@ const handleAdopt = async () => {
 
         await answerAdoptionApi.adopt(props.postId, props.commentId)
 
+        notifyCommunityContentChanged()
         ElMessage.success('采纳成功！')
         emit('adopted')
     } catch (error: any) {
@@ -171,6 +173,7 @@ const handleCancelAdoption = async () => {
 
         await answerAdoptionApi.cancel(props.postId)
 
+        notifyCommunityContentChanged()
         ElMessage.success('已取消采纳')
         emit('canceled')
     } catch (error: any) {

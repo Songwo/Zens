@@ -34,7 +34,7 @@ const menuItems = computed<UserMenuItem[]>(() => {
     { key: 'relations', label: '关系', icon: Connection, command: '/me?tab=relations' },
     { key: 'creator', label: '创作管理', icon: EditPen, command: '/me?tab=creator' },
     { key: 'messages', label: '私信会话', icon: ChatDotRound, command: '/messages', divided: true },
-    { key: 'metaverse', label: 'Zens 星港', icon: Connection, command: '/metaverse' },
+    { key: 'metaverse', label: '星港', icon: Connection, command: '/metaverse' },
     { key: 'settings', label: '账户设置', icon: Setting, command: '/settings' },
   ]
   if (canEnterBackoffice.value) {

@@ -134,10 +134,12 @@ onMounted(() => {
   top: calc(var(--header-height) + 16px);
   max-height: calc(100vh - var(--header-height) - 32px);
   overflow-y: auto;
-  background: var(--el-bg-color-overlay);
-  border: 1px solid var(--el-border-color-lighter);
-  border-radius: 12px;
-  padding: 12px 8px;
+  background: color-mix(in srgb, var(--el-bg-color-overlay) 78%, transparent);
+  border: 1px solid color-mix(in srgb, var(--el-border-color-lighter) 70%, transparent);
+  border-radius: 14px;
+  padding: 10px 8px;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.04);
+  backdrop-filter: blur(10px);
 }
 
 .main {

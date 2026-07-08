@@ -40,6 +40,8 @@ public class SearchServiceImpl implements SearchService {
     private final ObjectProvider<Client> meilisearchClientProvider;
 
     private volatile boolean indexInitialized = false;
+    private static final int POST_STATUS_PUBLISHED = 1;
+    private static final String AUDIT_STATUS_APPROVED = "APPROVED";
 
     @Override
     public boolean isAvailable() {
@@ -96,6 +98,10 @@ public class SearchServiceImpl implements SearchService {
     @Override
     public void indexPost(Post post) {
         if (post == null || !StringUtils.hasText(post.getId()) || !props.isEnabled()) {
+            return;
+        }
+        if (!isIndexablePost(post)) {
+            deletePost(post.getId());
             return;
         }
         Client client = meilisearchClientProvider.getIfAvailable();
@@ -197,5 +203,13 @@ public class SearchServiceImpl implements SearchService {
 
     private String nullToEmpty(String s) {
         return s == null ? "" : s;
+    }
+
+    private boolean isIndexablePost(Post post) {
+        if (post == null || !Integer.valueOf(POST_STATUS_PUBLISHED).equals(post.getStatus())) {
+            return false;
+        }
+        String auditStatus = post.getAuditStatus();
+        return !StringUtils.hasText(auditStatus) || AUDIT_STATUS_APPROVED.equalsIgnoreCase(auditStatus);
     }
 }

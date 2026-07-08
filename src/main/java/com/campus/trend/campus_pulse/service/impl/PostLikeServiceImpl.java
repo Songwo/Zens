@@ -3,6 +3,8 @@ package com.campus.trend.campus_pulse.service.impl;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.campus.trend.campus_pulse.common.api.ResultCode;
+import com.campus.trend.campus_pulse.common.exception.BusinessException;
 import com.campus.trend.campus_pulse.entity.Post;
 import com.campus.trend.campus_pulse.entity.PostLike;
 import com.campus.trend.campus_pulse.mapper.PostLikeMapper;
@@ -11,8 +13,10 @@ import com.campus.trend.campus_pulse.service.PostLikeService;
 import com.campus.trend.campus_pulse.service.UserService;
 import com.campus.trend.campus_pulse.service.LevelService;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -21,6 +25,9 @@ import java.util.stream.Collectors;
 @Service
 @Slf4j
 public class PostLikeServiceImpl extends ServiceImpl<PostLikeMapper, PostLike> implements PostLikeService {
+
+    private static final int POST_STATUS_PUBLISHED = 1;
+    private static final String AUDIT_STATUS_APPROVED = "APPROVED";
 
     private final PostMapper postMapper;
     private final UserService userService;
@@ -71,7 +78,7 @@ public class PostLikeServiceImpl extends ServiceImpl<PostLikeMapper, PostLike> i
 
         // Song：4. 批量查询帖子信息（只查询状态正常的帖子）
         List<Post> posts = postMapper.selectBatchIds(postIds).stream()
-                .filter(post -> post.getStatus() != null && post.getStatus() == 1)
+                .filter(this::isPubliclyVisiblePost)
                 .collect(Collectors.toList());
 
         // Song：5. 封装为分页结果
@@ -94,39 +101,43 @@ public class PostLikeServiceImpl extends ServiceImpl<PostLikeMapper, PostLike> i
     @Override
     @Transactional(rollbackFor = Exception.class)
     public boolean likePost(String postId, String userId) {
+        // Song：0. 校验帖子存在且公开可见（PENDING/REJECTED/DELETED/草稿帖不可点赞，防止绕过详情页直调接口刷经验）
+        Post post = getLikablePost(postId);
+
         // Song：1. 检查是否已点赞
         if (isLike(postId, userId)) {
             log.warn("用户 [{}] 已经点赞过帖子 [{}]", userId, postId);
             return false;
         }
 
-        // Song：2. 创建点赞记录
+        // Song：2. 创建点赞记录（唯一约束 uk_post_like_user_post 兜底并发重复提交）
         PostLike postLike = new PostLike()
                 .setPostId(postId)
                 .setUserId(userId)
                 .setCreateTime(LocalDateTime.now());
 
-        boolean saved = save(postLike);
+        boolean saved;
+        try {
+            saved = save(postLike);
+        } catch (DuplicateKeyException e) {
+            log.debug("点赞记录已存在: userId={}, postId={}", userId, postId);
+            return false;
+        }
 
-        // Song：3. 更新帖子的点赞数
+        // Song：3. 原子更新帖子点赞数（不整行回写，避免并发丢失更新/覆盖其它计数字段）
         if (saved) {
-            Post post = postMapper.selectById(postId);
-            if (post != null) {
-                int currentLikeCount = post.getLikeCount() != null ? post.getLikeCount() : 0;
-                post.setLikeCount(currentLikeCount + 1);
-                postMapper.updateById(post);
-                log.info("用户 [{}] 点赞帖子 [{}] 成功，当前点赞数: {}", userId, postId, currentLikeCount + 1);
+            postMapper.incrementLikeCount(postId);
+            log.info("用户 [{}] 点赞帖子 [{}] 成功", userId, postId);
 
-                // Song：增加帖子作者获赞数
-                userService.incrementLikesReceived(post.getUserId());
+            // Song：增加帖子作者获赞数
+            userService.incrementLikesReceived(post.getUserId());
 
-                // Song：被点赞经验 +2（给帖子作者）
-                levelService.addExperience(post.getUserId(), 2, "被点赞");
+            // Song：被点赞经验 +2（给帖子作者）
+            levelService.addExperience(post.getUserId(), 2, "被点赞");
 
-                // Song：发送点赞通知（不给自己发通知）
-                if (!post.getUserId().equals(userId)) {
-                    notificationService.sendLikeNotification(post.getUserId(), userId, postId);
-                }
+            // Song：发送点赞通知（不给自己发通知）
+            if (!post.getUserId().equals(userId)) {
+                notificationService.sendLikeNotification(post.getUserId(), userId, postId);
             }
         }
 
@@ -152,17 +163,18 @@ public class PostLikeServiceImpl extends ServiceImpl<PostLikeMapper, PostLike> i
                 .eq(PostLike::getUserId, userId)
                 .remove();
 
-        // Song：3. 更新帖子的点赞数
+        // Song：3. 原子更新帖子的点赞数
         if (removed) {
+            postMapper.decrementLikeCount(postId);
             Post post = postMapper.selectById(postId);
             if (post != null) {
-                int currentLikeCount = post.getLikeCount() != null ? post.getLikeCount() : 0;
-                post.setLikeCount(Math.max(0, currentLikeCount - 1));
-                postMapper.updateById(post);
-                log.info("用户 [{}] 取消点赞帖子 [{}] 成功，当前点赞数: {}", userId, postId, Math.max(0, currentLikeCount - 1));
+                log.info("用户 [{}] 取消点赞帖子 [{}] 成功", userId, postId);
 
                 // Song：减少帖子作者获赞数
                 userService.decrementLikesReceived(post.getUserId());
+
+                // Song：对称扣回被点赞经验，堵住"点赞↔取消"循环刷经验
+                levelService.addExperience(post.getUserId(), -2, "取消点赞");
             }
         }
 
@@ -176,6 +188,8 @@ public class PostLikeServiceImpl extends ServiceImpl<PostLikeMapper, PostLike> i
     @Override
     @Transactional(rollbackFor = Exception.class)
     public boolean toggleLike(String postId, String userId) {
+        // Song：先校验帖子可点赞（存在 + 公开可见），取消点赞也要求帖子存在
+        getLikablePost(postId);
         if (isLike(postId, userId)) {
             unlikePost(postId, userId);
             return false;
@@ -183,5 +197,27 @@ public class PostLikeServiceImpl extends ServiceImpl<PostLikeMapper, PostLike> i
             likePost(postId, userId);
             return true;
         }
+    }
+
+    private Post getLikablePost(String postId) {
+        if (!StringUtils.hasText(postId)) {
+            throw new BusinessException(ResultCode.PARAM_ERROR, "帖子ID不能为空");
+        }
+        Post post = postMapper.selectById(postId);
+        if (post == null) {
+            throw new BusinessException(ResultCode.POST_NOT_FOUND);
+        }
+        if (!isPubliclyVisiblePost(post)) {
+            throw new BusinessException(ResultCode.NO_PERMISSION, "该帖子当前不可点赞");
+        }
+        return post;
+    }
+
+    private boolean isPubliclyVisiblePost(Post post) {
+        if (post == null || !Integer.valueOf(POST_STATUS_PUBLISHED).equals(post.getStatus())) {
+            return false;
+        }
+        String auditStatus = post.getAuditStatus();
+        return !StringUtils.hasText(auditStatus) || AUDIT_STATUS_APPROVED.equalsIgnoreCase(auditStatus);
     }
 }

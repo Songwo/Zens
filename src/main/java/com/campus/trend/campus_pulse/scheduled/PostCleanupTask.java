@@ -3,11 +3,23 @@ package com.campus.trend.campus_pulse.scheduled;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.campus.trend.campus_pulse.entity.Post;
+import com.campus.trend.campus_pulse.entity.AnswerAdoption;
 import com.campus.trend.campus_pulse.entity.Comment;
-import com.campus.trend.campus_pulse.entity.PostLike;
+import com.campus.trend.campus_pulse.entity.Poll;
+import com.campus.trend.campus_pulse.entity.PollOption;
+import com.campus.trend.campus_pulse.entity.PollVote;
 import com.campus.trend.campus_pulse.entity.PostCollect;
+import com.campus.trend.campus_pulse.entity.PostLike;
+import com.campus.trend.campus_pulse.entity.PostSubscription;
+import com.campus.trend.campus_pulse.entity.PostVersionHistory;
 import com.campus.trend.campus_pulse.entity.ViewLog;
+import com.campus.trend.campus_pulse.mapper.AnswerAdoptionMapper;
+import com.campus.trend.campus_pulse.mapper.PollMapper;
+import com.campus.trend.campus_pulse.mapper.PollOptionMapper;
+import com.campus.trend.campus_pulse.mapper.PollVoteMapper;
 import com.campus.trend.campus_pulse.mapper.PostMapper;
+import com.campus.trend.campus_pulse.mapper.PostSubscriptionMapper;
+import com.campus.trend.campus_pulse.mapper.PostVersionHistoryMapper;
 import com.campus.trend.campus_pulse.service.CommentService;
 import com.campus.trend.campus_pulse.service.PostCollectService;
 import com.campus.trend.campus_pulse.service.PostLikeService;
@@ -37,6 +49,12 @@ public class PostCleanupTask {
     private final PostCollectService postCollectService;
     private final PostMediaService postMediaService;
     private final ViewLogService viewLogService;
+    private final PollMapper pollMapper;
+    private final PollOptionMapper pollOptionMapper;
+    private final PollVoteMapper pollVoteMapper;
+    private final PostSubscriptionMapper postSubscriptionMapper;
+    private final AnswerAdoptionMapper answerAdoptionMapper;
+    private final PostVersionHistoryMapper postVersionHistoryMapper;
 
     /**
      * 每天凌晨 4 点执行清理任务
@@ -78,7 +96,20 @@ public class PostCleanupTask {
                 // 5. 删除浏览日志
                 viewLogService.remove(Wrappers.<ViewLog>lambdaQuery().eq(ViewLog::getPostId, postId));
 
-                // 6. 删除帖子记录本身
+                // 6. 级联删除投票（poll → poll_option / poll_vote）
+                Poll poll = pollMapper.selectOne(Wrappers.<Poll>lambdaQuery().eq(Poll::getPostId, postId));
+                if (poll != null && poll.getId() != null) {
+                    pollVoteMapper.delete(Wrappers.<PollVote>lambdaQuery().eq(PollVote::getPollId, poll.getId()));
+                    pollOptionMapper.delete(Wrappers.<PollOption>lambdaQuery().eq(PollOption::getPollId, poll.getId()));
+                    pollMapper.deleteById(poll.getId());
+                }
+
+                // 7. 删除主题订阅、采纳记录、版本历史
+                postSubscriptionMapper.delete(Wrappers.<PostSubscription>lambdaQuery().eq(PostSubscription::getPostId, postId));
+                answerAdoptionMapper.delete(Wrappers.<AnswerAdoption>lambdaQuery().eq(AnswerAdoption::getPostId, postId));
+                postVersionHistoryMapper.delete(Wrappers.<PostVersionHistory>lambdaQuery().eq(PostVersionHistory::getPostId, postId));
+
+                // 8. 删除帖子记录本身
                 postMapper.deleteById(postId);
 
                 log.info("[定时任务] 帖子 {} 及其级联数据已被成功永久硬删除。", postId);

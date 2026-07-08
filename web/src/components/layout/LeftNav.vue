@@ -6,6 +6,9 @@ import { publicDataApi } from '@/api/publicData'
 import { tagApi } from '@/api/tag'
 import { useUserStore } from '@/store/user'
 import { ElMessage } from 'element-plus'
+import { formatDiscoveryTagName, pickCuratedDiscoveryTags } from '@/utils/communityDiscovery'
+import { formatSectionIcon, formatSectionName } from '@/utils/communitySections'
+import { invalidateCommunityContentCaches } from '@/utils/communityCache'
 
 const router = useRouter()
 const route = useRoute()
@@ -19,7 +22,10 @@ const addTagVisible = ref(false)
 const addTagKeyword = ref('')
 const searchResults = ref<any[]>([])
 const searching = ref(false)
+const showAllMyTags = ref(false)
+const showAllTopTags = ref(false)
 let searchTimer: ReturnType<typeof setTimeout> | null = null
+const TAG_DISPLAY_LIMIT = 8
 
 const activeMenu = computed(() => {
   if (route.path.startsWith('/hot')) return '/hot'
@@ -31,10 +37,16 @@ const activeMenu = computed(() => {
 
 const activeSectionId = computed(() => (route.name === 'section' ? String(route.params.id || '') : ''))
 const activeTag = computed(() => (route.name === 'tag' ? decodeURIComponent(String(route.params.name || '')) : ''))
+const visibleMyTags = computed(() => showAllMyTags.value ? myTags.value : myTags.value.slice(0, TAG_DISPLAY_LIMIT))
+const visibleTopTags = computed(() => showAllTopTags.value ? topTags.value : topTags.value.slice(0, TAG_DISPLAY_LIMIT))
+const hasMoreMyTags = computed(() => myTags.value.length > TAG_DISPLAY_LIMIT)
+const hasMoreTopTags = computed(() => topTags.value.length > TAG_DISPLAY_LIMIT)
 
 const go = (path: string) => router.push(path)
 const isSectionActive = (id: number | string) => activeSectionId.value === String(id)
 const isTagActive = (tag: string) => activeTag.value === tag
+const getSectionLabel = (section: { name?: string }) => formatSectionName(section.name || '')
+const getSectionIcon = (section: { icon?: string; name?: string }) => formatSectionIcon(section.icon, section.name || '')
 
 const loadMyTags = async () => {
   if (!userStore.isLoggedIn) return
@@ -72,6 +84,7 @@ const followTag = async (tag: any) => {
   try {
     await tagApi.follow(tag.id)
     myTags.value.push(tag)
+    invalidateCommunityContentCaches()
     searchResults.value = searchResults.value.filter(t => t.id !== tag.id)
     addTagKeyword.value = ''
     searchResults.value = []
@@ -87,6 +100,7 @@ const unfollowTag = async (tag: any, e: Event) => {
   try {
     await tagApi.unfollow(tag.id)
     myTags.value = myTags.value.filter((t: any) => t.id !== tag.id)
+    invalidateCommunityContentCaches()
   } catch (e: any) {
     ElMessage.error(e?.message || '移除失败')
   }
@@ -100,16 +114,18 @@ const closeAddTag = () => {
 
 onMounted(async () => {
   try {
-    const res = await publicDataApi.getHomeBootstrapCached(10, 5, 'WEEK')
-    if (res.code === 2000 && res.data) {
-      categories.value = res.data.activeSections || []
-      const extractedTags = Array.isArray(res.data.hotTags)
-        ? res.data.hotTags.map((item: any) => (typeof item === 'string' ? item : item.name)).filter(Boolean)
-        : []
-      const splitTags = extractedTags.flatMap((item: string) =>
-        item.split(',').map((p) => p.trim()).filter(Boolean)
-      )
-      topTags.value = Array.from(new Set(splitTags)).slice(0, 10)
+    const [sectionRes, hotTagRes] = await Promise.all([
+      publicDataApi.getActiveSectionsCached(),
+      publicDataApi.getHotTagsCached(30),
+    ])
+    if ((sectionRes.code === 2000 || sectionRes.code === 200) && Array.isArray(sectionRes.data)) {
+      categories.value = sectionRes.data || []
+    }
+    if (hotTagRes.code === 2000 && Array.isArray(hotTagRes.data)) {
+      const extractedTags = pickCuratedDiscoveryTags(hotTagRes.data, { limit: 10 })
+        .map((item: any) => item.name)
+        .filter(Boolean)
+      topTags.value = Array.from(new Set(extractedTags)).slice(0, 10)
     }
   } catch { /* ignore */ }
 
@@ -142,7 +158,7 @@ onMounted(async () => {
 
       <el-menu-item index="/metaverse" @click="go('/metaverse')">
         <el-icon><Connection /></el-icon>
-        <span>Zens 星港</span>
+        <span>星港</span>
       </el-menu-item>
     </el-menu>
 
@@ -164,8 +180,8 @@ onMounted(async () => {
           @click="go(`/s/${cat.id}`)"
         >
           <div class="cat-left">
-            <span class="cat-icon">{{ cat.icon || '#' }}</span>
-            <span class="cat-name">{{ cat.name }}</span>
+            <span class="cat-icon">{{ getSectionIcon(cat) }}</span>
+            <span class="cat-name">{{ getSectionLabel(cat) }}</span>
           </div>
           <span v-if="isSectionActive(cat.id)" class="active-mark">当前</span>
         </li>
@@ -216,7 +232,7 @@ onMounted(async () => {
       </div>
       <div v-else class="tags-container">
         <div
-          v-for="tag in myTags"
+          v-for="tag in visibleMyTags"
           :key="tag.id"
           class="my-tag-item"
           :class="{ active: isTagActive(tag.name) }"
@@ -226,23 +242,39 @@ onMounted(async () => {
           <el-icon class="my-tag-remove" @click="unfollowTag(tag, $event)"><Close /></el-icon>
         </div>
       </div>
+      <button
+        v-if="hasMoreMyTags"
+        class="tag-expand-button"
+        type="button"
+        @click="showAllMyTags = !showAllMyTags"
+      >
+        {{ showAllMyTags ? '收起标签' : `展开 ${myTags.length - TAG_DISPLAY_LIMIT} 个` }}
+      </button>
     </div>
 
     <!-- 热门标签 -->
     <div class="nav-group" v-if="topTags.length > 0">
-      <div class="menu-group-title">热门标签</div>
+      <div class="menu-group-title">推荐主题</div>
       <div class="tags-container">
         <el-tag
-          v-for="tag in topTags"
+          v-for="tag in visibleTopTags"
           :key="tag"
           size="small"
           class="nav-tag"
           :class="{ active: isTagActive(tag) }"
           @click="go(`/tag/${encodeURIComponent(tag)}`)"
         >
-          # {{ tag }}
+          # {{ formatDiscoveryTagName(tag) }}
         </el-tag>
       </div>
+      <button
+        v-if="hasMoreTopTags"
+        class="tag-expand-button"
+        type="button"
+        @click="showAllTopTags = !showAllTopTags"
+      >
+        {{ showAllTopTags ? '收起主题' : `展开 ${topTags.length - TAG_DISPLAY_LIMIT} 个` }}
+      </button>
     </div>
   <!-- 邀请好友入口（已登录显示） -->
     <div v-if="userStore.isLoggedIn" class="nav-group invite-entry" @click="go('/invite')">
@@ -262,7 +294,8 @@ onMounted(async () => {
 .left-nav {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 14px;
+  min-height: calc(100vh - var(--header-height) - 54px);
 }
 
 .nav-menu {
@@ -271,9 +304,9 @@ onMounted(async () => {
 }
 
 .nav-menu .el-menu-item {
-  height: 40px;
-  line-height: 40px;
-  border-radius: 8px;
+  height: 38px;
+  line-height: 38px;
+  border-radius: 10px;
   margin-bottom: 4px;
   font-weight: 600;
   color: var(--cp-text);
@@ -288,21 +321,23 @@ onMounted(async () => {
 
 .invite-entry {
   cursor: pointer;
+  margin-top: auto;
+  padding-top: 12px;
 }
 
 .invite-banner {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 10px 12px;
+  padding: 10px;
   border-radius: 10px;
-  background: linear-gradient(135deg, var(--el-color-primary-light-8), var(--el-color-primary-light-9));
-  border: 1px solid var(--el-color-primary-light-5);
+  background: color-mix(in srgb, var(--cp-primary) 10%, var(--el-bg-color));
+  border: 1px solid color-mix(in srgb, var(--cp-primary) 34%, var(--el-border-color-light));
   transition: all 0.2s ease;
 }
 
 .invite-banner:hover {
-  background: linear-gradient(135deg, var(--el-color-primary-light-7), var(--el-color-primary-light-8));
+  background: color-mix(in srgb, var(--cp-primary) 15%, var(--el-bg-color));
   transform: translateY(-1px);
 }
 
@@ -344,11 +379,11 @@ onMounted(async () => {
 
 .menu-group-title {
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 800;
   color: var(--cp-text-muted);
-  margin-bottom: 10px;
+  margin-bottom: 8px;
   padding: 0 8px;
-  letter-spacing: 0.5px;
+  letter-spacing: 0;
 }
 
 .flex-between {
@@ -358,7 +393,8 @@ onMounted(async () => {
 }
 
 .nav-group {
-  padding: 0 6px;
+  padding: 10px 6px 0;
+  border-top: 1px solid color-mix(in srgb, var(--el-border-color-lighter) 80%, transparent);
 }
 
 .category-list {
@@ -372,7 +408,7 @@ onMounted(async () => {
   align-items: center;
   justify-content: space-between;
   padding: 8px 10px;
-  border-radius: 8px;
+  border-radius: 10px;
   cursor: pointer;
   transition: background-color 0.2s ease, transform 0.2s ease;
   margin-bottom: 4px;
@@ -411,7 +447,7 @@ onMounted(async () => {
 .active-mark {
   font-size: 11px;
   color: #7a5700;
-  background: #ffe7a6;
+  background: #fff0be;
   border-radius: 999px;
   padding: 2px 6px;
   font-weight: 700;
@@ -483,7 +519,7 @@ onMounted(async () => {
   align-items: center;
   gap: 3px;
   padding: 3px 8px 3px 8px;
-  border-radius: 999px;
+  border-radius: 9px;
   border: 1px solid var(--cp-border);
   background: var(--cp-bg-surface);
   cursor: pointer;
@@ -532,7 +568,7 @@ onMounted(async () => {
   border: 1px solid var(--cp-border);
   background-color: var(--cp-bg-surface);
   color: var(--cp-text);
-  border-radius: 999px;
+  border-radius: 9px;
   margin: 0 4px 6px 0;
 }
 
@@ -547,5 +583,24 @@ onMounted(async () => {
   border-color: #f4b400;
   color: #7a5700;
   font-weight: 700;
+}
+
+.tag-expand-button {
+  width: calc(100% - 8px);
+  min-height: 28px;
+  margin: 2px 4px 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--cp-text-muted);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  transition: background-color 0.18s ease, color 0.18s ease;
+}
+
+.tag-expand-button:hover {
+  background: var(--cp-hover);
+  color: var(--cp-primary-dark);
 }
 </style>

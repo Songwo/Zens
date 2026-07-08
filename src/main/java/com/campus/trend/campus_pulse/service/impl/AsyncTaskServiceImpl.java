@@ -182,9 +182,10 @@ public class AsyncTaskServiceImpl implements AsyncTaskService {
                 searchService.deletePost(postId);
                 return;
             }
-            // Song：草稿/删除态帖子不索引（查询时也不会返回）
+            // Song：非公开帖子不索引（PENDING/REJECTED/DRAFT/DELETED 都应从搜索移除）
             String audit = post.getAuditStatus();
-            if ("DRAFT".equalsIgnoreCase(audit) || "DELETED".equalsIgnoreCase(audit)) {
+            if (!Integer.valueOf(1).equals(post.getStatus())
+                    || (StringUtils.hasText(audit) && !"APPROVED".equalsIgnoreCase(audit))) {
                 searchService.deletePost(postId);
                 return;
             }

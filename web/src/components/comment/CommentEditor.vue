@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { defineAsyncComponent, ref, nextTick, watch } from 'vue'
+import { defineAsyncComponent, ref, computed, nextTick, watch } from 'vue'
 import { Close } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
 
 const props = defineProps<{
   loading?: boolean
@@ -13,13 +14,23 @@ const emit = defineEmits<{
   (e: 'cancel'): void
 }>()
 
+// 与后端 CommentCreateReq @Size(max=2000) 保持一致
+const COMMENT_MAX_LENGTH = 2000
+
 const content = ref('')
 const MarkdownEditor = defineAsyncComponent(() => import('@/components/markdown/MarkdownEditor.vue'))
 const editorRef = ref<{ focus?: () => void } | null>(null)
 
+const contentLength = computed(() => content.value.length)
+const isOverLimit = computed(() => contentLength.value > COMMENT_MAX_LENGTH)
+
 function handleSubmit() {
   const text = content.value.trim()
   if (!text || props.loading) return
+  if (content.value.length > COMMENT_MAX_LENGTH) {
+    ElMessage.warning(`评论内容不能超过 ${COMMENT_MAX_LENGTH} 字，当前 ${content.value.length} 字`)
+    return
+  }
   emit('submit', content.value)
   content.value = ''
 }
@@ -55,10 +66,13 @@ watch(() => props.replyingTo, async (val) => {
         <span class="editor-hint">输入 <code>@</code> 提及用户 · <code>Ctrl+B</code> 加粗 · <code>Ctrl+Shift+K</code> 代码块</span>
       </div>
       <div class="actions-right">
+        <span v-if="contentLength > 1800" class="char-counter" :class="{ 'is-over': isOverLimit }">
+          {{ contentLength }}/2000
+        </span>
         <el-button
           type="primary"
           :loading="loading"
-          :disabled="!content.trim()"
+          :disabled="!content.trim() || isOverLimit"
           @click="handleSubmit"
         >
           {{ replyingTo ? '回复评论' : '回复主题' }}
@@ -113,6 +127,22 @@ watch(() => props.replyingTo, async (val) => {
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+.actions-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.char-counter {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+
+.char-counter.is-over {
+  color: var(--el-color-danger);
+  font-weight: 600;
 }
 
 .editor-hint {

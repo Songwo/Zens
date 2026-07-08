@@ -74,8 +74,10 @@ export default function App() {
       {/* 独立领取页 — 普通用户唯一入口 */}
       <Route path="/claim/:projectCode" element={<ClaimPage />} />
 
-      {/* 默认进入本地领取测试页，方便开发联调账号/CDK */}
-      <Route path="*" element={<Navigate to="/local-claim" replace />} />
+      {/* 默认进入正式领取页（社区福利），未登录也会展示好看的领取页并引导登录；
+          /local-claim 仅作为开发联调入口，需手动访问，不再作为默认落地页 */}
+      <Route path="/" element={<Navigate to="/claim/freshman-2026" replace />} />
+      <Route path="*" element={<Navigate to="/claim/freshman-2026" replace />} />
     </Routes>
   );
 }

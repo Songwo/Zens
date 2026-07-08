@@ -36,13 +36,13 @@ public class PostController {
         return Result.success(postService.getPostWithAuthor(id));
     }
 
-    /* Song：创建新帖子 */
+    /* Song：创建新帖子（返回落库后的审核状态，前端据此准确提示"已发布/待审核"） */
     @PostMapping("/create-post")
     @RateLimit(key = "create_post", limit = 10, windowSeconds = 60)
     public Result<?> createPost(@Valid @RequestBody PostCreateReq createPostRequest) {
         AuthUser authUser = SecurityUtils.getAuthenticatedUser();
-        postService.createPost(createPostRequest, authUser.getUser().getId());
-        return Result.success();
+        String auditStatus = postService.createPost(createPostRequest, authUser.getUser().getId());
+        return Result.success(java.util.Map.of("auditStatus", auditStatus != null ? auditStatus : ""));
     }
 
     @PostMapping("/save-draft")
@@ -166,14 +166,14 @@ public class PostController {
         return Result.success();
     }
 
-    /* Song：更新帖子内容（管理员或作者本人） */
+    /* Song：更新帖子内容（管理员或作者本人；返回落库后的审核状态） */
     @PostMapping("/update-post")
     @RateLimit(key = "update_post", limit = 20, windowSeconds = 60)
     public Result<?> updatePost(
             @Valid @RequestBody com.campus.trend.campus_pulse.dto.request.PostUpdateReq updatePostRequest) {
         AuthUser authUser = SecurityUtils.getAuthenticatedUser();
-        postService.updatePost(updatePostRequest, authUser.getUser().getId());
-        return Result.success();
+        String auditStatus = postService.updatePost(updatePostRequest, authUser.getUser().getId());
+        return Result.success(java.util.Map.of("auditStatus", auditStatus != null ? auditStatus : ""));
     }
 
     /* Song：删除帖子（管理员或作者本人） */

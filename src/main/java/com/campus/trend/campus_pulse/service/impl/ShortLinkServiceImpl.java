@@ -26,6 +26,7 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
 
     private static final String TARGET_COMMENT = "comment";
     private static final String AUDIT_STATUS_DELETED = "DELETED";
+    private static final String AUDIT_STATUS_APPROVED = "APPROVED";
     private static final int POST_STATUS_PUBLISHED = 1;
     private static final char[] CODE_CHARS = "23456789abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ".toCharArray();
     private static final SecureRandom RANDOM = new SecureRandom();
@@ -100,7 +101,9 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
     private boolean isPublicPost(Post post) {
         return post != null
                 && Integer.valueOf(POST_STATUS_PUBLISHED).equals(post.getStatus())
-                && !AUDIT_STATUS_DELETED.equalsIgnoreCase(post.getAuditStatus());
+                && !AUDIT_STATUS_DELETED.equalsIgnoreCase(post.getAuditStatus())
+                && (!StringUtils.hasText(post.getAuditStatus())
+                || AUDIT_STATUS_APPROVED.equalsIgnoreCase(post.getAuditStatus()));
     }
 
     private String generateCode() {

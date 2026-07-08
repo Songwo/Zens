@@ -30,6 +30,7 @@ public class AsyncReportWorkflowProcessor {
     private final PostMapper postMapper;
     private final NotificationService notificationService;
     private final com.campus.trend.campus_pulse.service.post.PostCacheManager postCacheManager;
+    private final com.campus.trend.campus_pulse.service.AsyncTaskService asyncTaskService;
 
     @Async("taskExecutor")
     @Transactional(rollbackFor = Exception.class)
@@ -77,6 +78,8 @@ public class AsyncReportWorkflowProcessor {
         post.setUpdateTime(LocalDateTime.now());
         postMapper.updateById(post);
         invalidatePostCache(post.getSectionId(), post.getId());
+        // Song：同步 Meilisearch —— 打回后帖子不再可公开索引，触发索引删除，避免搜索结果残留
+        asyncTaskService.syncPostToSearchAsync(post.getId());
 
         report.setStatus(STATUS_REJECTED);
         report.setUpdateTime(LocalDateTime.now());

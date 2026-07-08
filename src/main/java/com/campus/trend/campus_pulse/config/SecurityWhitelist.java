@@ -1,6 +1,26 @@
 package com.campus.trend.campus_pulse.config;
 
+import java.util.LinkedHashSet;
+import java.util.Set;
+
 public class SecurityWhitelist {
+
+        private static String[] withApiAliases(String... paths) {
+                        Set<String> results = new LinkedHashSet<>();
+                        for (String path : paths) {
+                                        if (path == null || path.isBlank()) {
+                                                        continue;
+                                        }
+                                        results.add(path);
+                                        if (path.startsWith("/api/")
+                                                        || path.startsWith("/actuator/")
+                                                        || "/".equals(path)) {
+                                                        continue;
+                                        }
+                                        results.add("/api" + path);
+                        }
+                        return results.toArray(new String[0]);
+        }
 
         public static final String[] AUTH_WHITELIST = {
                         // Song：用户认证相关接口
@@ -36,10 +56,11 @@ public class SecurityWhitelist {
                         "/ws/**",
         };
 
-        public static final String[] PUBLIC_GET_URLS = {
-                        "/post/**",
+        public static final String[] PUBLIC_GET_URLS = withApiAliases(
+                        "/post/*",
                         "/category/**",
                         "/categories/**",
+                        "/agent/health",
                         "/tag/hot",
                         "/tag/hot/**",
                         "/tag/search",
@@ -58,25 +79,22 @@ public class SecurityWhitelist {
                         "/level/thresholds",
                         "/trust-level/thresholds",
                         "/changelog/list",
-                        "/api/changelog/list",
                         "/short-link/**",
                         "/sso/clients/public/**",
                         "/onebox/preview",
                         "/performance/web-vitals/summary",
                         "/performance/web-vitals/events",
-                        "/api/performance/web-vitals/summary",
-                        "/api/performance/web-vitals/events",
                         "/actuator/health",
                         "/actuator/info",
-                        "/actuator/prometheus",
-        };
+                        "/actuator/prometheus");
 
-        public static final String[] PUBLIC_POST_URLS = {
+        public static final String[] PUBLIC_POST_URLS = withApiAliases(
                         "/post/search-lists",
                         "/documents/list",
+                        "/agent/community-qa/ask",
+                        "/agent/community-qa/ask-stream",
+                        "/agent/community-qa/search",
                         "/performance/web-vitals",
-                        "/api/performance/web-vitals",
                         "/comment/create",
-                        "/short-link/comment",
-        };
+                        "/short-link/comment");
 }

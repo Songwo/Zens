@@ -70,7 +70,9 @@ public class ViewLogServiceImpl extends ServiceImpl<ViewLogMapper, ViewLog>
 
         Post post = postMapper.selectById(postId);
         if (post != null) {
-            invalidatePostFeedCache(post.getSectionId(), postId);
+            // Song：浏览只失效详情缓存版本；feed 缓存靠 120s TTL 自然过期即可。
+            //      此前每次浏览 bump 全局 feed 版本导致 feed 缓存基本无法命中。
+            postCacheManager.bumpPostDetailCacheVersion(postId);
             try {
                 postEventService.pushPostViewed(postId, post.getSectionId(), post.getViewCount(), post.getLastActivityAt());
             } catch (Exception e) {
@@ -262,10 +264,6 @@ public class ViewLogServiceImpl extends ServiceImpl<ViewLogMapper, ViewLog>
         }
 
         return count;
-    }
-
-    private void invalidatePostFeedCache(Long sectionId, String postId) {
-        postCacheManager.invalidatePostCaches(sectionId, postId);
     }
 
 }

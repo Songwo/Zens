@@ -15,9 +15,17 @@ defineProps<{
       <el-icon :size="48" class="empty-icon-el"><component :is="icon" /></el-icon>
     </div>
     <el-empty
-      :description="description || '暂无数据'"
+      :description="undefined"
       :image-size="icon ? 0 : (imageSize || 120)"
-    />
+    >
+      <template #description>
+        <div class="empty-copy">
+          <strong v-if="title" class="empty-title">{{ title }}</strong>
+          <p class="empty-desc">{{ description || '暂无数据' }}</p>
+        </div>
+      </template>
+      <slot />
+    </el-empty>
   </div>
 </template>
 
@@ -37,5 +45,24 @@ defineProps<{
 }
 .empty-icon-el {
   color: var(--el-text-color-placeholder);
+}
+
+.empty-copy {
+  display: grid;
+  gap: 8px;
+  text-align: center;
+}
+
+.empty-title {
+  color: var(--el-text-color-primary);
+  font-size: 18px;
+  line-height: 1.4;
+}
+
+.empty-desc {
+  margin: 0;
+  color: var(--el-text-color-secondary);
+  font-size: 14px;
+  line-height: 1.7;
 }
 </style>

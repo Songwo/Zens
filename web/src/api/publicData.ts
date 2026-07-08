@@ -1,11 +1,16 @@
 import api from '@/lib/api'
 import { tagApi } from '@/api/tag'
 import { statsApi } from '@/api/stats'
+import { useUserStore } from '@/store/user'
 import { cachedRequest } from '@/utils/requestCache'
 import type { Result } from '@/types'
 
 const FIVE_MINUTES = 5 * 60 * 1000
 const ONE_MINUTE = 60 * 1000
+const QUIET_PUBLIC_REQUEST = {
+  skipGlobalProgress: true,
+  silentError: true,
+}
 
 export interface PublicSectionItem {
   id: number
@@ -43,14 +48,20 @@ export interface HomeBootstrapPayload {
   hotTags: PublicTagItem[]
   hotRank: PublicHotRankItem[]
   siteStats: PublicSiteStats
+  unsolvedQaCount?: number
+  todaySolvedQaCount?: number
+  followedTagUpdateCount?: number
 }
 
 export const publicDataApi = {
   getHomeBootstrapCached(hotTagLimit = 10, hotRankLimit = 5, timeRange: 'TODAY' | 'WEEK' | 'MONTH' | string = 'WEEK') {
+    const userStore = useUserStore()
+    const userScope = userStore.isLoggedIn ? `user:${userStore.userId || 'session'}` : 'guest'
     return cachedRequest(
-      `public:home-bootstrap:${hotTagLimit}:${hotRankLimit}:${timeRange}`,
+      `public:home-bootstrap:${userScope}:${hotTagLimit}:${hotRankLimit}:${timeRange}`,
       ONE_MINUTE,
       () => api.get<any, Result<HomeBootstrapPayload>>('/public/home-bootstrap', {
+        ...QUIET_PUBLIC_REQUEST,
         params: { hotTagLimit, hotRankLimit, timeRange },
       })
     )
@@ -60,7 +71,7 @@ export const publicDataApi = {
     return cachedRequest(
       'public:sections:active',
       FIVE_MINUTES,
-      () => api.get<any, any>('/section/active')
+      () => api.get<any, any>('/section/active', QUIET_PUBLIC_REQUEST)
     )
   },
 
@@ -68,7 +79,7 @@ export const publicDataApi = {
     return cachedRequest(
       `public:tags:hot:${limit}`,
       FIVE_MINUTES,
-      () => tagApi.getHotList(limit)
+      () => tagApi.getHotList(limit, QUIET_PUBLIC_REQUEST)
     )
   },
 
@@ -76,7 +87,7 @@ export const publicDataApi = {
     return cachedRequest(
       `public:hot-rank:${timeRange}:${limit}`,
       ONE_MINUTE,
-      () => statsApi.getHotRank(timeRange, limit)
+      () => statsApi.getHotRank(timeRange, limit, QUIET_PUBLIC_REQUEST)
     )
   },
 }

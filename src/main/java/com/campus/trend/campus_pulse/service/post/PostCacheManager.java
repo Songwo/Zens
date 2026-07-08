@@ -15,8 +15,10 @@ import org.springframework.util.StringUtils;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.TreeMap;
 import java.util.concurrent.ThreadLocalRandom;
 
@@ -241,6 +243,12 @@ public class PostCacheManager {
                     : "");
             keyParts.put("status", request.getStatus() != null ? request.getStatus() : -1);
             keyParts.put("sectionId", request.getSectionId() != null ? request.getSectionId() : 0L);
+            keyParts.put("sectionIds", request.getSectionIds() != null
+                    ? request.getSectionIds().stream()
+                            .filter(Objects::nonNull)
+                            .sorted()
+                            .toList()
+                    : Collections.emptyList());
             keyParts.put("tag", StringUtils.hasText(request.getTag()) ? request.getTag().trim() : "");
             keyParts.put("isFeatured", Boolean.TRUE.equals(request.getIsFeatured()) ? 1 : 0);
             keyParts.put("pinnedOnly", Boolean.TRUE.equals(request.getPinnedOnly()) ? 1 : 0);

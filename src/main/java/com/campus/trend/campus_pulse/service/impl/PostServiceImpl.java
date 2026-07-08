@@ -78,6 +78,9 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
     private static final String AUDIT_STATUS_DELETED = "DELETED";
     private static final String POST_TYPE_NORMAL = "NORMAL";
     private static final String POST_TYPE_LOTTERY = "LOTTERY";
+    private static final String QA_SECTION_NAME = "答疑解惑";
+    private static final String ANSWER_STATE_UNSOLVED = "unsolved";
+    private static final String ANSWER_STATE_SOLVED = "solved";
     private static final int RESTORE_GRACE_DAYS = 7;
 
     private final PostLikeService postLikeService;
@@ -166,7 +169,7 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public void createPost(PostCreateReq createPostRequest, String userId) {
+    public String createPost(PostCreateReq createPostRequest, String userId) {
         if (createPostRequest.getSectionId() != null) {
             Section section = sectionService.getSectionById(createPostRequest.getSectionId());
             if (section == null) {
@@ -274,12 +277,9 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
             log.warn("发帖自动订阅失败: postId={}, userId={}", sysPost.getId(), userId);
         }
 
-        // 异步：推送新帖创建事件
-        asyncTaskService.pushPostCreatedAsync(sysPost);
-
-        // 异步：处理标签 + 通知标签关注者
-        asyncTaskService.processPostTagsAsync(createPostRequest.getTags());
-        asyncTaskService.notifyTagFollowersAsync(userId, sysPost.getId(), sysPost.getTitle(), createPostRequest.getTags());
+        if (isPubliclyVisible(sysPost)) {
+            publishPostSideEffects(sysPost);
+        }
 
         // 同步：更新帖子计数（影响用户主页展示，需即时）
         userService.incrementTotalPosts(userId);
@@ -305,6 +305,7 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
         asyncTaskService.syncPostToSearchAsync(sysPost.getId());
 
         postCacheManager.invalidatePostFeedCache(null, sysPost.getSectionId());
+        return sysPost.getAuditStatus();
     }
 
     /**
@@ -329,6 +330,23 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
             return AUDIT_STATUS_PENDING;
         }
         return AUDIT_STATUS_APPROVED;
+    }
+
+    private String resolvePublishAuditStatus(Post post) {
+        if (post != null && (AUDIT_STATUS_PENDING.equalsIgnoreCase(post.getAuditStatus())
+                || AUDIT_STATUS_REJECTED.equalsIgnoreCase(post.getAuditStatus()))) {
+            return AUDIT_STATUS_PENDING;
+        }
+        return resolveCreatePostAuditStatus(post != null ? post.getUserId() : null);
+    }
+
+    private void publishPostSideEffects(Post post) {
+        if (post == null || !isPubliclyVisible(post)) {
+            return;
+        }
+        asyncTaskService.pushPostCreatedAsync(post);
+        asyncTaskService.processPostTagsAsync(post.getTags());
+        asyncTaskService.notifyTagFollowersAsync(post.getUserId(), post.getId(), post.getTitle(), post.getTags());
     }
 
     @Override
@@ -546,7 +564,7 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public void updatePost(com.campus.trend.campus_pulse.dto.request.PostUpdateReq request, String userId) {
+    public String updatePost(com.campus.trend.campus_pulse.dto.request.PostUpdateReq request, String userId) {
         Post post = getById(request.getPostId());
         if (post == null) {
             throw new BusinessException(ResultCode.POST_NOT_FOUND);
@@ -591,7 +609,8 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
             post.setSentimentScore(BigDecimal.valueOf(sentimentScore));
             post.setSummary(buildSummary(post.getContent()));
 
-            if (Integer.valueOf(POST_STATUS_PUBLISHED).equals(post.getStatus())) {
+            if (Integer.valueOf(POST_STATUS_PUBLISHED).equals(post.getStatus())
+                    && isPublicAuditStatus(post.getAuditStatus())) {
                 post.setAuditStatus(AUDIT_STATUS_APPROVED);
             }
         }
@@ -633,9 +652,11 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
         if (publishAction) {
             validatePostForPublish(post);
             post.setStatus(POST_STATUS_PUBLISHED);
-            post.setAuditStatus(AUDIT_STATUS_APPROVED);
+            post.setAuditStatus(resolvePublishAuditStatus(post));
             post.setRejectReason(null);
-            processPostTags(post.getTags());
+            if (isPubliclyVisible(post)) {
+                processPostTags(post.getTags());
+            }
         } else if (Integer.valueOf(POST_STATUS_DRAFT).equals(request.getStatus())) {
             post.setStatus(POST_STATUS_DRAFT);
             if (!AUDIT_STATUS_REJECTED.equalsIgnoreCase(post.getAuditStatus())) {
@@ -677,6 +698,7 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
         postCacheManager.bumpPostDetailCacheVersion(post.getId());
         // Song：异步同步更新后的帖子到 Meilisearch
         asyncTaskService.syncPostToSearchAsync(post.getId());
+        return post.getAuditStatus();
     }
 
     @Override
@@ -715,6 +737,9 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
             throw new BusinessException(ResultCode.NO_PERMISSION, "无权删除该帖子");
         }
 
+        // Song：软删前快照当前状态，恢复时按删前状态还原，避免 REJECTED/PENDING/DRAFT 被"洗白"成已发布
+        post.setPreDeleteStatus(post.getStatus());
+        post.setPreDeleteAuditStatus(post.getAuditStatus());
         post.setStatus(POST_STATUS_DRAFT);
         post.setAuditStatus(AUDIT_STATUS_DELETED);
         post.setRejectReason(null);
@@ -745,16 +770,42 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
             throw new BusinessException(ResultCode.NO_PERMISSION, "已超过7天冷静期，无法恢复");
         }
 
-        validatePostForPublish(post);
-        post.setStatus(POST_STATUS_PUBLISHED);
-        post.setAuditStatus(AUDIT_STATUS_APPROVED);
-        post.setRejectReason(null);
+        // Song：按删前快照还原状态，杜绝 REJECTED/PENDING/DRAFT 帖删除→恢复被"洗白"成公开已发布。
+        //      存量数据（无快照）回退到发布审核判定：PENDING/REJECTED→PENDING，其余按信任等级判定。
+        Integer restoredStatus = post.getPreDeleteStatus();
+        String restoredAuditStatus = post.getPreDeleteAuditStatus();
+        if (restoredStatus == null) {
+            restoredStatus = POST_STATUS_PUBLISHED;
+            restoredAuditStatus = resolvePublishAuditStatus(
+                    new Post().setUserId(post.getUserId()).setAuditStatus(restoredAuditStatus));
+        } else if (!StringUtils.hasText(restoredAuditStatus)) {
+            restoredAuditStatus = Integer.valueOf(POST_STATUS_PUBLISHED).equals(restoredStatus)
+                    ? AUDIT_STATUS_APPROVED
+                    : AUDIT_STATUS_DRAFT;
+        }
+
+        post.setStatus(restoredStatus);
+        post.setAuditStatus(restoredAuditStatus);
+        boolean restoredAsPublic = isPubliclyVisible(post);
+        if (restoredAsPublic) {
+            // Song：仅恢复为公开帖时做发布校验；恢复草稿/待审帖不强校验标题标签
+            validatePostForPublish(post);
+            post.setRejectReason(null);
+        }
         post.setUpdateTime(LocalDateTime.now());
         this.updateById(post);
-        addPostIdToBloomFilter(postId);
+        // Song：快照列清空（updateById 跳过 null 字段，需显式 set null）
+        lambdaUpdate()
+                .set(Post::getPreDeleteStatus, null)
+                .set(Post::getPreDeleteAuditStatus, null)
+                .eq(Post::getId, postId)
+                .update();
+        if (restoredAsPublic) {
+            addPostIdToBloomFilter(postId);
+        }
         postCacheManager.invalidatePostFeedCache(null, post.getSectionId());
         postCacheManager.bumpPostDetailCacheVersion(postId);
-        // Song：恢复后重新索引到 Meilisearch
+        // Song：恢复后重新同步 Meilisearch（不可索引状态会触发索引删除，公开状态会重建索引）
         asyncTaskService.syncPostToSearchAsync(postId);
 
     }
@@ -789,6 +840,7 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
         this.updateById(post);
         postCacheManager.invalidatePostFeedCache(post.getSectionId(), post.getSectionId());
         postCacheManager.bumpPostDetailCacheVersion(post.getId());
+        asyncTaskService.syncPostToSearchAsync(post.getId());
         // 异步通知作者
         if (post.getUserId() != null) {
             String notifyTitle = "您的帖子被打回修改";
@@ -803,6 +855,7 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
         Post post = getById(postId);
         if (post == null) throw new BusinessException(ResultCode.POST_NOT_FOUND);
         ensureModerationPermission(post, operatorId);
+        boolean wasPublic = isPubliclyVisible(post);
         post.setAuditStatus(AUDIT_STATUS_APPROVED);
         post.setStatus(POST_STATUS_PUBLISHED);
         post.setRejectReason(null);
@@ -811,6 +864,10 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
         addPostIdToBloomFilter(postId);
         postCacheManager.invalidatePostFeedCache(post.getSectionId(), post.getSectionId());
         postCacheManager.bumpPostDetailCacheVersion(post.getId());
+        asyncTaskService.syncPostToSearchAsync(post.getId());
+        if (!wasPublic && isPubliclyVisible(post)) {
+            publishPostSideEffects(post);
+        }
     }
 
     @Override
@@ -849,7 +906,13 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
         }
         if (StringUtils.hasText(request.getNavType())) {
             String navType = request.getNavType().trim().toLowerCase();
-            if ("latest".equals(navType) || "hot".equals(navType) || "essence".equals(navType)) {
+            if ("latest".equals(navType)
+                    || "recommend".equals(navType)
+                    || "hot".equals(navType)
+                    || "essence".equals(navType)
+                    || "unsolved".equals(navType)
+                    || "solved".equals(navType)
+                    || "pinned".equals(navType)) {
                 return navType;
             }
         }
@@ -866,7 +929,11 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
         if ("hot".equals(navType)) {
             return "hot";
         }
-        if ("latest".equals(navType) || "essence".equals(navType)) {
+        if ("latest".equals(navType)
+                || "essence".equals(navType)
+                || "unsolved".equals(navType)
+                || "solved".equals(navType)
+                || "pinned".equals(navType)) {
             return "new";
         }
         return request != null && StringUtils.hasText(request.getOrderBy())
@@ -891,6 +958,39 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
             return sectionId > 0 ? sectionId : null;
         } catch (NumberFormatException e) {
             return null;
+        }
+    }
+
+    private String resolveAnswerState(PostSearchReq request, String navType) {
+        if (ANSWER_STATE_UNSOLVED.equals(navType) || ANSWER_STATE_SOLVED.equals(navType)) {
+            return navType;
+        }
+        if (request == null || !StringUtils.hasText(request.getAnswerState())) {
+            return null;
+        }
+        String normalized = request.getAnswerState().trim().toLowerCase();
+        return ANSWER_STATE_UNSOLVED.equals(normalized) || ANSWER_STATE_SOLVED.equals(normalized)
+                ? normalized
+                : null;
+    }
+
+    private List<Long> resolveQaSectionIds(String answerState) {
+        if (!ANSWER_STATE_UNSOLVED.equals(answerState) && !ANSWER_STATE_SOLVED.equals(answerState)) {
+            return null;
+        }
+        try {
+            return sectionMapper.selectList(Wrappers.lambdaQuery(Section.class)
+                            .select(Section::getId)
+                            .eq(Section::getStatus, 1)
+                            .eq(Section::getName, QA_SECTION_NAME))
+                    .stream()
+                    .map(Section::getId)
+                    .filter(Objects::nonNull)
+                    .distinct()
+                    .toList();
+        } catch (Exception e) {
+            log.debug("查询{}板块失败，待解决筛选返回空列表: {}", QA_SECTION_NAME, e.getMessage());
+            return Collections.emptyList();
         }
     }
 
@@ -932,19 +1032,35 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
 
         String navType = resolveNavType(request);
         String orderBy = resolveOrderBy(request, navType);
+        String answerState = resolveAnswerState(request, navType);
         Long categorySectionId = resolveCategorySectionId(request.getCategory());
         boolean invalidCategory = hasConcreteCategory(request.getCategory()) && categorySectionId == null;
         Long effectiveSectionId = request.getSectionId() != null ? request.getSectionId() : categorySectionId;
+        List<Long> qaSectionIds = resolveQaSectionIds(answerState);
+        boolean qaOnly = qaSectionIds != null;
 
-        if (invalidCategory) {
+        if (invalidCategory && !qaOnly) {
             wrapper.eq(Post::getId, "__EMPTY__");
         }
 
-        if (request.getSectionIds() != null && !request.getSectionIds().isEmpty()) {
-            wrapper.in(Post::getSectionId, request.getSectionIds());
+        if (qaOnly) {
+            if (qaSectionIds.isEmpty()) {
+                wrapper.eq(Post::getId, "__EMPTY__");
+            } else {
+                wrapper.in(Post::getSectionId, qaSectionIds);
+            }
+        } else if (request.getSectionIds() != null && !request.getSectionIds().isEmpty()) {
+            List<Long> scopedSectionIds = request.getSectionIds();
+            if (scopedSectionIds.isEmpty()) {
+                wrapper.eq(Post::getId, "__EMPTY__");
+            } else {
+                wrapper.in(Post::getSectionId, scopedSectionIds);
+            }
             wrapper.eq(categorySectionId != null, Post::getSectionId, categorySectionId);
         } else {
-            wrapper.eq(effectiveSectionId != null, Post::getSectionId, effectiveSectionId);
+            if (effectiveSectionId != null) {
+                wrapper.eq(Post::getSectionId, effectiveSectionId);
+            }
         }
 
         if (Boolean.TRUE.equals(request.getIsFeatured()) || "essence".equals(navType)) {
@@ -1004,11 +1120,10 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
             wrapper.and(w -> w.eq(Post::getGlobalPin, 1).or().eq(Post::getCategoryPin, 1));
         }
 
-        if (StringUtils.hasText(request.getAnswerState())) {
-            String answerState = request.getAnswerState().trim().toLowerCase();
-            if ("unsolved".equals(answerState)) {
+        if (StringUtils.hasText(answerState)) {
+            if (ANSWER_STATE_UNSOLVED.equals(answerState)) {
                 wrapper.and(w -> w.isNull(Post::getHasAdoptedAnswer).or().ne(Post::getHasAdoptedAnswer, 1));
-            } else if ("solved".equals(answerState)) {
+            } else if (ANSWER_STATE_SOLVED.equals(answerState)) {
                 wrapper.eq(Post::getHasAdoptedAnswer, 1);
             }
         }
@@ -1197,8 +1312,12 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
         if (!StringUtils.hasText(currentUserId)) {
             PostCacheManager.CachedDetail cachedDetail = postCacheManager.readPostDetailCache(postId);
             if (cachedDetail.isHit()) {
-                hydratePostAdoptionStatus(cachedDetail.getValue());
-                return cachedDetail.getValue();
+                PostResp cachedPost = cachedDetail.getValue();
+                if (cachedPost == null || isPubliclyVisible(cachedPost)) {
+                    hydratePostAdoptionStatus(cachedPost);
+                    return cachedPost;
+                }
+                postCacheManager.bumpPostDetailCacheVersion(postId);
             }
         }
 
@@ -1227,6 +1346,8 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
         IPage<PostResp> cachedPage = postCacheManager.readPostFeedCache(postSearchRequest);
         if (cachedPage != null) {
             hydratePostFeedAdoptionStatus(cachedPage.getRecords());
+            // Song：缓存不含用户态（feed 缓存 Key 无用户维度），命中后按当前用户回填，避免 isLiked/isCollected 串号
+            hydratePostFeedUserState(cachedPage.getRecords());
             return cachedPage;
         }
 
@@ -1288,30 +1409,6 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
             }
         }
 
-        String currentUserId = com.campus.trend.campus_pulse.utils.SecurityUtils.getCurrentUserId();
-        Set<String> likedPostIds = Collections.emptySet();
-        Set<String> collectedPostIds = Collections.emptySet();
-        if (StringUtils.hasText(currentUserId) && !postIds.isEmpty()) {
-            likedPostIds = new HashSet<>(postLikeService.lambdaQuery()
-                    .select(PostLike::getPostId)
-                    .eq(PostLike::getUserId, currentUserId)
-                    .in(PostLike::getPostId, postIds)
-                    .list()
-                    .stream()
-                    .map(PostLike::getPostId)
-                    .filter(StringUtils::hasText)
-                    .toList());
-            collectedPostIds = new HashSet<>(postCollectService.lambdaQuery()
-                    .select(PostCollect::getPostId)
-                    .eq(PostCollect::getUserId, currentUserId)
-                    .in(PostCollect::getPostId, postIds)
-                    .list()
-                    .stream()
-                    .map(PostCollect::getPostId)
-                    .filter(StringUtils::hasText)
-                    .toList());
-        }
-
         // Song：批量查询媒体，避免 N+1
         Map<String, List<MediaObject>> mediaByPost = new HashMap<>();
         if (!postIds.isEmpty()) {
@@ -1331,8 +1428,6 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
 
         List<PostResp> responseList = new ArrayList<>();
         for (Post post : posts) {
-            post.setIsLiked(likedPostIds.contains(post.getId()));
-            post.setIsCollected(collectedPostIds.contains(post.getId()));
             PostResp resp = convertToPostResp(post, userMap, sectionMap);
             List<MediaObject> postMedia = mediaByPost.get(post.getId());
             if (postMedia != null && !postMedia.isEmpty()) {
@@ -1349,8 +1444,63 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
                 postPage.getTotal());
         responsePage.setRecords(responseList);
 
+        // Song：先写缓存（不含用户态），再按当前用户回填 isLiked/isCollected。
+        //      feed 缓存 Key 无用户维度，写入用户态会造成不同用户间点赞/收藏状态串号。
         postCacheManager.writePostFeedCache(postSearchRequest, responsePage);
+        hydratePostFeedUserState(responseList);
         return responsePage;
+    }
+
+    /**
+     * Song：按当前登录用户批量回填 feed 记录的 isLiked/isCollected。
+     * 游客置 false。必须在写 feed 缓存之后调用（缓存本体不含用户态）。
+     */
+    private void hydratePostFeedUserState(List<PostResp> records) {
+        if (records == null || records.isEmpty()) {
+            return;
+        }
+        String currentUserId = com.campus.trend.campus_pulse.utils.SecurityUtils.getCurrentUserId();
+        List<String> postIds = records.stream()
+                .filter(Objects::nonNull)
+                .map(PostResp::getId)
+                .filter(StringUtils::hasText)
+                .distinct()
+                .toList();
+
+        Set<String> likedPostIds = Collections.emptySet();
+        Set<String> collectedPostIds = Collections.emptySet();
+        if (StringUtils.hasText(currentUserId) && !postIds.isEmpty()) {
+            try {
+                likedPostIds = new HashSet<>(postLikeService.lambdaQuery()
+                        .select(PostLike::getPostId)
+                        .eq(PostLike::getUserId, currentUserId)
+                        .in(PostLike::getPostId, postIds)
+                        .list()
+                        .stream()
+                        .map(PostLike::getPostId)
+                        .filter(StringUtils::hasText)
+                        .toList());
+                collectedPostIds = new HashSet<>(postCollectService.lambdaQuery()
+                        .select(PostCollect::getPostId)
+                        .eq(PostCollect::getUserId, currentUserId)
+                        .in(PostCollect::getPostId, postIds)
+                        .list()
+                        .stream()
+                        .map(PostCollect::getPostId)
+                        .filter(StringUtils::hasText)
+                        .toList());
+            } catch (Exception e) {
+                log.debug("批量回填 feed 用户态失败, err={}", e.getMessage());
+            }
+        }
+
+        for (PostResp record : records) {
+            if (record == null) {
+                continue;
+            }
+            record.setIsLiked(likedPostIds.contains(record.getId()));
+            record.setIsCollected(collectedPostIds.contains(record.getId()));
+        }
     }
 
     @Override
@@ -1926,8 +2076,6 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
                 .or()
                 .eq(Post::getAuditStatus, "")
                 .or()
-                .eq(Post::getAuditStatus, AUDIT_STATUS_PENDING)
-                .or()
                 .eq(Post::getAuditStatus, AUDIT_STATUS_APPROVED));
     }
 
@@ -1984,12 +2132,18 @@ public class PostServiceImpl extends ServiceImpl<PostMapper, Post> implements Po
         return post != null
                 && !isDeletedPost(post)
                 && Integer.valueOf(POST_STATUS_PUBLISHED).equals(post.getStatus())
-                && isApprovedAuditStatus(post.getAuditStatus());
+                && isPublicAuditStatus(post.getAuditStatus());
     }
 
-    private boolean isApprovedAuditStatus(String auditStatus) {
+    private boolean isPubliclyVisible(PostResp post) {
+        return post != null
+                && !AUDIT_STATUS_DELETED.equalsIgnoreCase(post.getAuditStatus())
+                && Integer.valueOf(POST_STATUS_PUBLISHED).equals(post.getStatus())
+                && isPublicAuditStatus(post.getAuditStatus());
+    }
+
+    private boolean isPublicAuditStatus(String auditStatus) {
         return !StringUtils.hasText(auditStatus)
-                || AUDIT_STATUS_PENDING.equalsIgnoreCase(auditStatus)
                 || AUDIT_STATUS_APPROVED.equalsIgnoreCase(auditStatus);
     }
 

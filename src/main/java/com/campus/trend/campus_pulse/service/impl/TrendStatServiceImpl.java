@@ -22,7 +22,6 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class TrendStatServiceImpl implements TrendStatService {
 
-    private static final String AUDIT_STATUS_PENDING = "PENDING";
     private static final String AUDIT_STATUS_APPROVED = "APPROVED";
     private static final int KEYWORD_SOURCE_LIMIT = 100;
     private static final int KEYWORD_RESULT_LIMIT = 30;
@@ -507,8 +506,6 @@ public class TrendStatServiceImpl implements TrendStatService {
                 .and(w -> w.isNull("audit_status")
                         .or()
                         .eq("audit_status", "")
-                        .or()
-                        .eq("audit_status", AUDIT_STATUS_PENDING)
                         .or()
                         .eq("audit_status", AUDIT_STATUS_APPROVED));
     }

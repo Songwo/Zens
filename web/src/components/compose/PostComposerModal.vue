@@ -19,6 +19,7 @@ import MarkdownTutorial from './MarkdownTutorial.vue'
 import PollComposerPanel from '@/components/poll/PollComposerPanel.vue'
 import type { PollCreateRequest } from '@/api/poll'
 import { uploadApi } from '@/api/upload'
+import { formatSectionName } from '@/utils/communitySections'
 import {
   UPLOAD_VIDEO_MAX_SIZE_BYTES,
   UPLOAD_VIDEO_MAX_SIZE_MB
@@ -27,6 +28,7 @@ import { usePostComposerStore } from '@/store/postComposer'
 import { usePostDraft } from '@/composables/usePostDraft'
 import { canPostLinks, containsExternalLink } from '@/utils/trustLevel'
 import { trustLevelApi } from '@/api/trustLevel'
+import { notifyCommunityContentChanged } from '@/utils/communityCache'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -251,6 +253,12 @@ const publish = async () => {
     return
   }
 
+  // Song：与后端 validatePostForPublish 对齐——标签必填，前端先拦截减少无效请求
+  if (!draft.form.tags.length) {
+    ElMessage.warning('请至少添加一个标签（可用 AI 智能提取）')
+    return
+  }
+
   // Song：TL0 新用户硬拦截 —— 发布前强制刷新信任等级，避免登录态缓存缺失时把 TL4 误判成 TL0。
   if (containsExternalLink(content)) {
     const trustLevel = await resolveCurrentTrustLevel({ force: true })
@@ -275,7 +283,7 @@ const publish = async () => {
   try {
     if (isEditing.value) {
       const wasDraftLikeEditing = isDraftLikeEditing.value
-      await postApi.update({
+      const updateRes = await postApi.update({
         postId: editId.value,
         title,
         content,
@@ -288,11 +296,17 @@ const publish = async () => {
         status: 1,
         publish: true
       })
+      // Song：用后端返回的真实审核状态提示——信任用户直接 APPROVED，新用户/被打回帖进 PENDING
+      const nextAuditStatus = updateRes.data?.auditStatus || 'APPROVED'
       editStatus.value = 1
-      editAuditStatus.value = 'PENDING'
-      pulseNotification.success(wasDraftLikeEditing ? '已重新提交至人工审核，请静候佳音' : '话题内容更新成功，已完美同步', '内容更新完毕')
+      editAuditStatus.value = nextAuditStatus
+      if (nextAuditStatus === 'PENDING') {
+        pulseNotification.success('内容已提交人工审核，通过后将公开显示', wasDraftLikeEditing ? '已重新提交审核' : '更新已提交审核')
+      } else {
+        pulseNotification.success('话题内容更新成功，已完美同步', '内容更新完毕')
+      }
     } else {
-      await postApi.create({
+      const createRes = await postApi.create({
         title,
         content,
         sectionId: draft.form.sectionId,
@@ -304,18 +318,25 @@ const publish = async () => {
         status: 1,
         poll: pollPayload || undefined
       })
-      pulseNotification.post(`「${title}」已成功发布到社区内容流，等待更多成员参与讨论。`, '发布话题成功')
+      if (createRes.data?.auditStatus === 'PENDING') {
+        pulseNotification.success(`「${title}」已提交人工审核，通过后将公开显示在社区内容流。`, '已提交审核')
+      } else {
+        pulseNotification.post(`「${title}」已成功发布到社区内容流，等待更多成员参与讨论。`, '发布话题成功')
+      }
     }
 
     draft.clearDraft() // Song：重要: 成功后清空草稿
     pollPanelRef.value?.reset() // 重置投票面板，避免下次发帖残留
     handleClose(true) // Song：无需二次确认直接关闭
+    notifyCommunityContentChanged()
     
-    // Song：说明
     if (router.currentRoute.value.path === '/') {
-      window.location.reload()
+      await router.replace({
+        path: '/',
+        query: isEditing.value ? router.currentRoute.value.query : { sort: 'latest' },
+      })
     } else {
-      router.push('/')
+      await router.push('/')
     }
   } catch (error: any) {
     if (error?.response) {
@@ -687,7 +708,7 @@ onUnmounted(() => {
                     <el-option
                       v-for="cat in categories"
                       :key="cat.id"
-                      :label="cat.name"
+                      :label="formatSectionName(cat.name || '')"
                       :value="cat.id"
                     />
                   </el-select>

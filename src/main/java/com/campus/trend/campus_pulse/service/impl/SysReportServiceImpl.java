@@ -20,11 +20,14 @@ import com.campus.trend.campus_pulse.service.SectionModeratorService;
 import com.campus.trend.campus_pulse.service.SysReportService;
 import com.campus.trend.campus_pulse.service.TrustLevelService;
 import com.campus.trend.campus_pulse.config.properties.TrustLevelProperties;
+import com.campus.trend.campus_pulse.service.post.PostCacheManager;
 import com.campus.trend.campus_pulse.utils.PermissionUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.util.StringUtils;
 
 import java.util.ArrayList;
@@ -48,6 +51,7 @@ public class SysReportServiceImpl extends ServiceImpl<SysReportMapper, SysReport
     private final TrustLevelService trustLevelService;
     private final TrustLevelProperties trustLevelProperties;
     private final AsyncTaskService asyncTaskService;
+    private final PostCacheManager postCacheManager;
 
     private static final String AUDIT_STATUS_DELETED = "DELETED";
     private static final String AUDIT_STATUS_PENDING = "PENDING";
@@ -113,6 +117,11 @@ public class SysReportServiceImpl extends ServiceImpl<SysReportMapper, SysReport
         post.setAuditStatus(AUDIT_STATUS_PENDING);
         post.setUpdateTime(java.time.LocalDateTime.now());
         postMapper.updateById(post);
+        afterCommit(() -> {
+            postCacheManager.invalidatePostFeedCache(post.getSectionId(), post.getSectionId());
+            postCacheManager.bumpPostDetailCacheVersion(post.getId());
+            asyncTaskService.syncPostToSearchAsync(post.getId());
+        });
         log.info("自治隐藏触发: postId={}, 累计权重={}, 阈值={}", targetId, totalWeight,
                 trustLevelProperties.getFlag().getAutoHideThreshold());
 
@@ -131,7 +140,7 @@ public class SysReportServiceImpl extends ServiceImpl<SysReportMapper, SysReport
     private void validateReportTarget(String targetType, String targetId, String reporterId) {
         if ("post".equals(targetType)) {
             Post post = postMapper.selectById(targetId);
-            if (post == null || isDeletedPost(post) || !Integer.valueOf(POST_STATUS_PUBLISHED).equals(post.getStatus())) {
+            if (!isPublicPost(post)) {
                 throw new BusinessException(ResultCode.PARAM_ERROR, "举报对象不存在或已不可见");
             }
             if (reporterId.equals(post.getUserId())) {
@@ -148,7 +157,7 @@ public class SysReportServiceImpl extends ServiceImpl<SysReportMapper, SysReport
             throw new BusinessException(ResultCode.PARAM_ERROR, "不能举报自己发布的内容");
         }
         Post post = postMapper.selectById(comment.getPostId());
-        if (post == null || isDeletedPost(post) || !Integer.valueOf(POST_STATUS_PUBLISHED).equals(post.getStatus())) {
+        if (!isPublicPost(post)) {
             throw new BusinessException(ResultCode.PARAM_ERROR, "评论所属帖子不存在或已不可见");
         }
     }
@@ -167,6 +176,27 @@ public class SysReportServiceImpl extends ServiceImpl<SysReportMapper, SysReport
 
     private boolean isDeletedPost(Post post) {
         return post != null && AUDIT_STATUS_DELETED.equalsIgnoreCase(post.getAuditStatus());
+    }
+
+    private boolean isPublicPost(Post post) {
+        if (post == null || isDeletedPost(post) || !Integer.valueOf(POST_STATUS_PUBLISHED).equals(post.getStatus())) {
+            return false;
+        }
+        String auditStatus = post.getAuditStatus();
+        return !StringUtils.hasText(auditStatus) || AUDIT_STATUS_APPROVED.equalsIgnoreCase(auditStatus);
+    }
+
+    private void afterCommit(Runnable action) {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    action.run();
+                }
+            });
+            return;
+        }
+        action.run();
     }
 
     @Override

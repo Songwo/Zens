@@ -39,6 +39,12 @@ export interface NotificationEvent {
 export type PostEventHandler = (event: PostEvent) => void
 export type NotificationEventHandler = (event: NotificationEvent) => void
 
+const wsDebug = (...args: unknown[]) => {
+  if (import.meta.env.DEV) {
+    console.log(...args)
+  }
+}
+
 class WebSocketClient {
   private client: CompatClient | null = null
   private connected = false
@@ -138,7 +144,7 @@ class WebSocketClient {
     }
 
     const delay = immediate ? 0 : this.nextReconnectDelay()
-    console.log(`[WebSocket] ${delay === 0 ? '立即' : `${delay}ms 后`}尝试重连...`)
+    wsDebug(`[WebSocket] ${delay === 0 ? '立即' : `${delay}ms 后`}尝试重连...`)
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null
       if (!this.shouldReconnect || this.connected || this.connectingPromise) {
@@ -201,7 +207,7 @@ class WebSocketClient {
             this.connected = true
             this.reconnectAttempts = 0
             this.clearReconnectTimer()
-            console.log('[WebSocket] 连接成功')
+            wsDebug('[WebSocket] 连接成功')
 
             // Song：等待下一个事件循环再重新订阅，确保连接完全就绪
             setTimeout(() => {
@@ -236,7 +242,7 @@ class WebSocketClient {
 
     if (this.client) {
       this.client.disconnect(() => {
-        console.log('[WebSocket] 已断开连接')
+        wsDebug('[WebSocket] 已断开连接')
       })
     }
 
@@ -295,7 +301,7 @@ class WebSocketClient {
     })
 
     this.subscriptions.set(topic, subscription)
-    console.log('[WebSocket] 已订阅:', topic)
+    wsDebug('[WebSocket] 已订阅:', topic)
   }
 
   private notifyHandlers(topic: string, event: PostEvent | NotificationEvent) {
@@ -380,7 +386,7 @@ class WebSocketClient {
           if (subscription) {
             subscription.unsubscribe()
             this.subscriptions.delete(topic)
-            console.log('[WebSocket] 已取消订阅:', topic)
+            wsDebug('[WebSocket] 已取消订阅:', topic)
           }
         }
       }
@@ -398,4 +404,3 @@ class WebSocketClient {
 
 // Song：单例实例
 export const wsClient = new WebSocketClient()
-

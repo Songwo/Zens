@@ -7,33 +7,21 @@ import {
   MagicStick,
   Medal,
   Reading,
-  TrendCharts,
 } from '@element-plus/icons-vue'
 import { publicDataApi, type HomeBootstrapPayload } from '@/api/publicData'
 import { usePostComposerStore } from '@/store/postComposer'
+import { useUserStore } from '@/store/user'
 import { encodePostId } from '@/utils/shortId'
+import { hasBackofficeAccess } from '@/utils/sessionProfile'
 
 const router = useRouter()
 const composerStore = usePostComposerStore()
+const userStore = useUserStore()
 
 const bootstrap = ref<HomeBootstrapPayload | null>(null)
 const loading = ref(true)
 
-const stats = computed(() => bootstrap.value?.siteStats || {
-  totalPosts: 0,
-  totalUsers: 0,
-  totalComments: 0,
-  todayPosts: 0,
-})
-
 const hotPosts = computed(() => (bootstrap.value?.hotRank || []).slice(0, 5))
-const hotTags = computed(() => (bootstrap.value?.hotTags || []).slice(0, 8))
-
-const briefingItems = computed(() => [
-  { label: '今日新帖', value: stats.value.todayPosts, hint: '适合快速巡检新讨论' },
-  { label: '累计互动', value: stats.value.totalComments, hint: '评论和回复沉淀' },
-  { label: '活跃成员', value: stats.value.totalUsers, hint: '社区用户规模' },
-])
 
 const tasks = [
   { label: '选择兴趣标签', path: '/onboarding' },
@@ -42,12 +30,25 @@ const tasks = [
   { label: '查看本周热榜', path: '/hot' },
 ]
 
-const quickActions = [
-  { label: '阅读指南', icon: Reading, path: '/guide' },
-  { label: '精华主题', icon: Document, path: '/featured' },
-  { label: '举报处理', icon: Flag, path: '/admin/reports' },
-  { label: '福利中心', icon: Medal, path: '/benefits' },
-]
+const quickActions = computed(() => {
+  const actions = [
+    { label: '发布帖子', icon: Document, action: 'compose' },
+    { label: '阅读指南', icon: Reading, path: '/guide' },
+    { label: '精华主题', icon: Document, path: '/featured' },
+    { label: '福利中心', icon: Medal, path: '/benefits' },
+  ]
+  if (hasBackofficeAccess(userStore.userInfo as any)) {
+    actions.splice(3, 0, { label: '举报处理', icon: Flag, path: '/admin/reports' })
+  }
+  return actions
+})
+
+const currentLevel = computed(() => {
+  const level = Number(userStore.userInfo?.level ?? 1)
+  return Number.isFinite(level) && level > 0 ? level : 1
+})
+
+const showNewUserPath = computed(() => !userStore.isLoggedIn || currentLevel.value <= 1)
 
 const formatMetric = (value: unknown) => {
   const num = Number(value) || 0
@@ -58,6 +59,16 @@ const formatMetric = (value: unknown) => {
 
 const goPost = (postId: string) => {
   router.push(`/t/${encodePostId(postId)}`)
+}
+
+const runQuickAction = (item: { path?: string; action?: string }) => {
+  if (item.action === 'compose') {
+    composerStore.open()
+    return
+  }
+  if (item.path) {
+    router.push(item.path)
+  }
 }
 
 onMounted(async () => {
@@ -74,28 +85,7 @@ onMounted(async () => {
 
 <template>
   <div class="right-rail">
-    <section class="rail-section briefing-section">
-      <div class="section-head">
-        <div>
-          <span class="eyebrow">社区简报</span>
-          <h3>本周运营脉搏</h3>
-        </div>
-        <el-icon><TrendCharts /></el-icon>
-      </div>
-
-      <div v-if="loading" class="briefing-loading">
-        <el-skeleton :rows="3" animated />
-      </div>
-      <div v-else class="briefing-grid">
-        <div v-for="item in briefingItems" :key="item.label" class="briefing-item">
-          <strong>{{ formatMetric(item.value) }}</strong>
-          <span>{{ item.label }}</span>
-          <small>{{ item.hint }}</small>
-        </div>
-      </div>
-    </section>
-
-    <section class="rail-section">
+    <section v-if="showNewUserPath" class="rail-section">
       <div class="section-head compact">
         <div>
           <span class="eyebrow">新人路径</span>
@@ -118,13 +108,13 @@ onMounted(async () => {
         </div>
         <el-icon><MagicStick /></el-icon>
       </div>
-      <div class="action-grid">
+      <div class="action-list">
         <button
           v-for="item in quickActions"
           :key="item.label"
           class="action-btn"
           type="button"
-          @click="router.push(item.path)"
+          @click="runQuickAction(item)"
         >
           <el-icon><component :is="item.icon" /></el-icon>
           <span>{{ item.label }}</span>
@@ -167,20 +157,6 @@ onMounted(async () => {
       </div>
     </section>
 
-    <section v-if="hotTags.length" class="rail-section tags-section">
-      <div class="section-head compact">
-        <div>
-          <span class="eyebrow">发现话题</span>
-          <h3>热门标签</h3>
-        </div>
-      </div>
-      <div class="tags-cloud">
-        <router-link v-for="tag in hotTags" :key="tag.id || tag.name" :to="`/tag/${tag.name}`">
-          #{{ tag.name }}
-        </router-link>
-      </div>
-    </section>
-
     <div class="rail-footer">
       <router-link to="/about">关于我们</router-link>
       <router-link to="/terms">用户协议</router-link>
@@ -203,11 +179,6 @@ onMounted(async () => {
   border-radius: 12px;
   background: var(--el-bg-color-overlay);
   padding: 16px;
-}
-
-.briefing-section {
-  background:
-    linear-gradient(135deg, color-mix(in srgb, var(--el-color-primary-light-9) 70%, transparent), var(--el-bg-color-overlay));
 }
 
 .section-head {
@@ -241,36 +212,10 @@ onMounted(async () => {
   font-size: 20px;
 }
 
-.briefing-grid {
-  display: grid;
-  gap: 9px;
-}
-
-.briefing-item {
-  display: grid;
-  gap: 2px;
-  padding: 10px;
-  border: 1px solid color-mix(in srgb, var(--el-border-color-light) 72%, transparent);
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--el-bg-color) 86%, transparent);
-}
-
-.briefing-item strong {
-  color: var(--el-text-color-primary);
-  font-size: 22px;
-  line-height: 1;
-}
-
-.briefing-item span,
 .task-item span,
 .action-btn span {
   color: var(--el-text-color-regular);
   font-size: 13px;
-}
-
-.briefing-item small {
-  color: var(--el-text-color-secondary);
-  font-size: 11px;
 }
 
 .compose-mini {
@@ -309,29 +254,29 @@ onMounted(async () => {
   font-size: 18px;
 }
 
-.action-grid {
+.action-list {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
 }
 
 .action-btn {
-  display: flex;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
   min-width: 0;
-  min-height: 58px;
-  flex-direction: column;
+  min-height: 40px;
   align-items: center;
-  justify-content: center;
-  gap: 6px;
+  gap: 10px;
   border: 1px solid var(--el-border-color-lighter);
   border-radius: 8px;
-  background: var(--el-bg-color);
+  background: var(--el-fill-color-extra-light);
   cursor: pointer;
+  padding: 0 11px;
+  text-align: left;
 }
 
 .action-btn .el-icon {
   color: var(--el-color-primary);
-  font-size: 18px;
+  font-size: 17px;
 }
 
 .trending-list {
@@ -413,26 +358,6 @@ onMounted(async () => {
 
 .empty-panel strong {
   color: var(--el-text-color-primary);
-}
-
-.tags-cloud {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.tags-cloud a {
-  border-radius: 999px;
-  background: var(--el-fill-color-light);
-  color: var(--el-text-color-regular);
-  font-size: 12px;
-  padding: 4px 9px;
-  text-decoration: none;
-}
-
-.tags-cloud a:hover {
-  background: var(--el-color-primary-light-9);
-  color: var(--el-color-primary);
 }
 
 .rail-footer {

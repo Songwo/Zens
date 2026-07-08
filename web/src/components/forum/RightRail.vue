@@ -11,16 +11,6 @@ const hotPosts = ref([
   { id: 4, title: 'Element Plus 最佳实践指南', views: 1950, comments: 76 },
   { id: 5, title: '记一次线上内存泄漏排查全过程', views: 1800, comments: 55 }
 ])
-
-const hotTags = ref([
-  { name: '前端', weight: 98 },
-  { name: 'Vue.js', weight: 87 },
-  { name: '求职面经', weight: 76 },
-  { name: '后端开发', weight: 65 },
-  { name: '吐槽', weight: 54 },
-  { name: '考研', weight: 43 },
-  { name: '二手闲置', weight: 32 }
-])
 </script>
 
 <template>
@@ -46,44 +36,6 @@ const hotTags = ref([
               <span><el-icon><ChatDotRound /></el-icon> {{ post.comments }}</span>
             </div>
           </div>
-        </div>
-      </div>
-    </el-card>
-
-    <!-- Hot Tags -->
-    <el-card class="rail-card" shadow="never">
-      <template #header>
-        <div class="card-header">
-          <span class="title">热门标签</span>
-        </div>
-      </template>
-      <div class="tags-cloud">
-        <router-link 
-          v-for="tag in hotTags" 
-          :key="tag.name" 
-          :to="`/tag/${tag.name}`"
-          class="tag-item"
-        >
-          #{{ tag.name }}
-        </router-link>
-      </div>
-    </el-card>
-
-    <!-- Site Stats -->
-    <el-card class="rail-card" shadow="never">
-      <template #header>
-        <div class="card-header">
-          <span class="title">站点统计</span>
-        </div>
-      </template>
-      <div style="display: flex; justify-content: space-between;">
-        <div style="text-align: center;">
-          <div style="font-size: 18px; font-weight: bold; color: var(--el-text-color-primary);">12.5k</div>
-          <div style="font-size: 12px; color: var(--el-text-color-secondary);">帖子总数</div>
-        </div>
-        <div style="text-align: center;">
-          <div style="font-size: 18px; font-weight: bold; color: var(--el-text-color-primary);">3,402</div>
-          <div style="font-size: 12px; color: var(--el-text-color-secondary);">活跃用户</div>
         </div>
       </div>
     </el-card>
@@ -195,29 +147,6 @@ const hotTags = ref([
   display: flex;
   align-items: center;
   gap: 4px;
-}
-
-/* Song：说明 */
-.tags-cloud {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.tag-item {
-  display: inline-block;
-  padding: 4px 10px;
-  background-color: var(--el-fill-color-light);
-  color: var(--el-text-color-regular);
-  border-radius: 12px;
-  font-size: 12px;
-  text-decoration: none;
-  transition: all 0.2s;
-}
-
-.tag-item:hover {
-  background-color: var(--el-color-primary-light-9);
-  color: var(--el-color-primary);
 }
 
 /* Song：说明 */

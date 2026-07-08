@@ -11,13 +11,19 @@ export interface Tag {
 
 export const tagApi = {
     // Song：说明
-    getHotTags(limit = 10) {
-        return api.get<any, Result<Tag[]>>('/tag/hot', { params: { limit } })
+    getHotTags(limit = 10, config?: AxiosRequestConfig) {
+        return api.get<any, Result<Tag[]>>('/tag/hot', {
+            ...config,
+            params: { limit, ...(config?.params || {}) }
+        })
     },
 
     // Song：说明
-    getHotList(limit = 10) {
-        return api.get<any, Result<Tag[]>>('/tag/hot', { params: { limit } })
+    getHotList(limit = 10, config?: AxiosRequestConfig) {
+        return api.get<any, Result<Tag[]>>('/tag/hot', {
+            ...config,
+            params: { limit, ...(config?.params || {}) }
+        })
     },
 
     // Song：说明

@@ -2,6 +2,7 @@ package com.campus.trend.campus_pulse.config;
 
 import com.campus.trend.campus_pulse.common.api.Result;
 import com.campus.trend.campus_pulse.common.api.ResultCode;
+import com.campus.trend.campus_pulse.filter.ApiPrefixRewriteFilter;
 import com.campus.trend.campus_pulse.filter.InternalServiceFilter;
 import com.campus.trend.campus_pulse.filter.JwtAuthenticationFilter;
 import com.campus.trend.campus_pulse.filter.RequestSecurityFilter;
@@ -40,7 +41,7 @@ import java.util.stream.Collectors;
 public class SecurityConfig {
 
     private final ObjectMapper objectMapper;
-    @Value("${campus.security.allowed-origin-patterns:http://localhost:5173,http://127.0.0.1:5173,http://localhost:4173,http://127.0.0.1:4173}")
+    @Value("${campus.security.allowed-origin-patterns:http://localhost,http://127.0.0.1,http://localhost:5173,http://127.0.0.1:5173,http://localhost:4173,http://127.0.0.1:4173}")
     private String allowedOriginPatterns;
     @Value("${campus.security.request-signature-required:false}")
     private boolean requestSignatureRequired;
@@ -71,6 +72,7 @@ public class SecurityConfig {
      */
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http,
+            ApiPrefixRewriteFilter apiPrefixRewriteFilter,
             JwtAuthenticationFilter jwtAuthenticationFilter,
             RequestSecurityFilter requestSecurityFilter,
             InternalServiceFilter internalServiceFilter) throws Exception {
@@ -121,8 +123,9 @@ public class SecurityConfig {
                 .exceptionHandling(exceptions -> exceptions
                         .authenticationEntryPoint(authenticationEntryPoint())
                         .accessDeniedHandler(accessDeniedHandler()))
+                .addFilterBefore(apiPrefixRewriteFilter, UsernamePasswordAuthenticationFilter.class)
                 // InternalServiceFilter 必须先于 JwtAuthenticationFilter,且会自己在 /api/internal/** 上做 HMAC 校验
-                .addFilterBefore(internalServiceFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterAfter(internalServiceFilter, ApiPrefixRewriteFilter.class)
                 .addFilterAfter(jwtAuthenticationFilter, InternalServiceFilter.class)
                 .addFilterAfter(requestSecurityFilter, JwtAuthenticationFilter.class);
 
@@ -165,7 +168,7 @@ public class SecurityConfig {
                 .filter(s -> !s.isEmpty())
                 .collect(Collectors.toList());
         List<String> finalOrigins = origins.isEmpty()
-                ? List.of("http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:4173", "http://127.0.0.1:4173")
+                ? List.of("http://localhost", "http://127.0.0.1", "http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:4173", "http://127.0.0.1:4173")
                 : origins;
         configuration.setAllowedOriginPatterns(finalOrigins);
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));

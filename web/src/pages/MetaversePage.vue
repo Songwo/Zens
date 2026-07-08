@@ -20,7 +20,6 @@ import {
   Medal,
   Monitor,
   Network,
-  Orbit,
   Settings,
   Shield,
   ShieldCheck,
@@ -32,6 +31,7 @@ import {
   Video,
   Wrench,
 } from 'lucide-vue-next'
+import MainLayout from '@/layouts/MainLayout.vue'
 import { useUserStore } from '@/store/user'
 import {
   metaverseAccessMeta,
@@ -62,15 +62,6 @@ interface BannerConfig {
   secondaryAction?: PortalAction
 }
 
-interface TopoNode {
-  id: string
-  label: string
-  icon: string
-  x: number
-  y: number
-  targetEntryId?: string
-}
-
 interface PortalEntry {
   id: string
   title: string
@@ -99,7 +90,6 @@ interface PortalGroup {
 
 interface PortalConfig {
   banner: BannerConfig
-  topoNodes: TopoNode[]
   quickEntryIds: string[]
   groups: PortalGroup[]
   entries: PortalEntry[]
@@ -185,23 +175,14 @@ const backendEntries: PortalEntry[] = metaverseSpaces.map(space => ({
 
 const mockBackendPortalConfig: PortalConfig = {
   banner: {
-    eyebrow: 'Zens Universe Portal',
+    eyebrow: '社区生态工作台',
     title: 'Zens 星港',
-    subtitle: '连接社区里的每一个子宇宙',
-    description: '从这里进入 CDK、抽奖、积分商城、媒体服务、后台工具与社区治理空间。',
-    statsText: `${backendEntries.length} 个入口 · ${backendEntries.filter(item => item.status !== 'coming' && item.status !== 'maintenance').length} 个可访问 · ${backendEntries.filter(item => item.status === 'beta').length} 个内测项目 · ${backendEntries.filter(item => item.access === 'admin' || item.access === 'backoffice').length} 个治理入口`,
-    primaryAction: { label: '进入主站', entryId: 'main-home' },
-    secondaryAction: { label: '配置星港', url: '/admin/metaverse', adminOnly: true },
+    subtitle: '把福利、活动、积分和治理入口收进同一个社区语境',
+    description: '星港不再像一个独立站点，而是 Zens 社区的工具抽屉：常用入口优先，受限空间按登录态、信任等级和后台身份自然展示。',
+    statsText: `${backendEntries.length} 个入口 · ${backendEntries.filter(item => item.status !== 'coming' && item.status !== 'maintenance').length} 个在线入口 · ${backendEntries.filter(item => item.status === 'beta').length} 个内测项目 · ${backendEntries.filter(item => item.access === 'admin' || item.access === 'backoffice').length} 个治理入口`,
+    primaryAction: { label: '回到社区首页', entryId: 'main-home' },
+    secondaryAction: { label: '星港配置', url: '/admin/metaverse', adminOnly: true },
   },
-  topoNodes: [
-    { id: 'zens', label: 'Zens', icon: 'orbit', x: 50, y: 50, targetEntryId: 'main-home' },
-    { id: 'cdk', label: 'CDK', icon: 'gift', x: 24, y: 28, targetEntryId: 'cdk-claim' },
-    { id: 'lottery', label: 'Lottery', icon: 'trophy', x: 75, y: 26, targetEntryId: 'lottery-tool' },
-    { id: 'shop', label: 'Shop', icon: 'store', x: 20, y: 72, targetEntryId: 'shop-home' },
-    { id: 'media', label: 'Media', icon: 'video', x: 78, y: 70, targetEntryId: 'media-panel' },
-    { id: 'admin', label: 'Admin', icon: 'shield', x: 50, y: 18, targetEntryId: 'admin-dashboard' },
-    { id: 'docs', label: 'Guide', icon: 'book', x: 50, y: 84, targetEntryId: 'guide' },
-  ],
   quickEntryIds: ['main-home', 'cdk-claim', 'lottery-tool', 'shop-home'],
   groups: [
     {
@@ -255,7 +236,6 @@ const iconComponents: Record<string, Component> = {
   medal: Medal,
   monitor: Monitor,
   network: Network,
-  orbit: Orbit,
   settings: Settings,
   shield: Shield,
   sparkles: Sparkles,
@@ -290,6 +270,41 @@ const visibleGroups = computed(() =>
     entries: group.entryIds.map(id => entryMap.value.get(id)).filter(Boolean) as PortalEntry[],
   }))
 )
+
+const portalPulseCards = computed(() => [
+  {
+    label: '可访问入口',
+    value: portalConfig.value.entries.filter(entry => canAccessEntry(entry)).length,
+    desc: '当前身份可直接进入',
+    icon: Compass,
+    tone: 'green',
+    targetId: 'quick',
+  },
+  {
+    label: '活动福利',
+    value: portalConfig.value.entries.filter(entry => entry.groupId === 'reward').length,
+    desc: 'CDK、抽奖、积分商城',
+    icon: Gift,
+    tone: 'orange',
+    targetId: 'reward',
+  },
+  {
+    label: '治理入口',
+    value: portalConfig.value.entries.filter(entry => entry.access === 'admin' || entry.access === 'backoffice').length,
+    desc: canEnterBackoffice.value ? '按权限展示后台' : '登录后按权限展示',
+    icon: Shield,
+    tone: 'purple',
+    targetId: 'governance',
+  },
+  {
+    label: '统一登录',
+    value: 'SSO',
+    desc: '子站沿用社区身份',
+    icon: KeyRound,
+    tone: 'blue',
+    targetId: 'account',
+  },
+])
 
 const passLabel = computed(() => {
   if (!isLoggedIn.value) return '访客'
@@ -391,9 +406,8 @@ const openAdmin = (entry: PortalEntry) => {
   openHref(entry.adminUrl)
 }
 
-const handleTopoNode = (node: TopoNode) => {
-  const entry = node.targetEntryId ? entryMap.value.get(node.targetEntryId) : null
-  if (entry) openEntry(entry)
+const jumpToSection = (id: string) => {
+  document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 
 const syncSelectedFromQuery = () => {
@@ -418,60 +432,8 @@ watch(() => route.query.space, syncSelectedFromQuery)
 </script>
 
 <template>
-  <div class="zens-port min-h-[100dvh] bg-[#f7f7f5] text-gray-900">
-    <header class="zens-port__topbar sticky top-0 z-30 border-b border-gray-100/80 bg-white/75 backdrop-blur-xl">
-      <div class="zens-port__topbar-inner mx-auto flex min-h-16 items-center justify-between gap-4 px-5">
-        <button
-          type="button"
-          class="zens-port__brand group inline-flex min-w-0 items-center gap-3 rounded-md px-1 py-2 text-left transition hover:bg-gray-50"
-          aria-label="返回社区首页"
-          @click="router.push('/')"
-        >
-          <img
-            class="zens-port__logo h-[36px] w-[36px] shrink-0 rounded-xl bg-amber-50 object-cover ring-1 ring-amber-100 [content-visibility:visible]"
-            src="/logo.png"
-            alt=""
-          />
-          <span class="zens-port__brand-text truncate text-[19px] font-semibold tracking-normal text-gray-900">Zens 星港</span>
-        </button>
-
-        <div class="zens-port__actions flex items-center gap-2">
-          <button
-            type="button"
-            class="zens-port__nav-button rounded-md px-3.5 py-2 text-sm font-medium text-gray-600 transition hover:bg-gray-50 hover:text-gray-900"
-            @click="router.push('/')"
-          >
-            返回主站
-          </button>
-          <button
-            v-if="isAdmin"
-            type="button"
-            class="zens-port__nav-button zens-port__nav-button--primary rounded-md bg-[#f6a800] px-3.5 py-2 text-sm font-medium text-white transition hover:bg-[#e99a00] active:scale-[0.98]"
-            @click="router.push('/admin/metaverse')"
-          >
-            配置星港
-          </button>
-        </div>
-      </div>
-    </header>
-
-    <div class="zens-port__layout mx-auto grid grid-cols-1 gap-10 px-5 py-8 xl:grid-cols-[180px_minmax(0,1fr)]">
-      <aside class="zens-port__side hidden xl:block">
-        <nav class="zens-port__side-nav sticky top-24 space-y-1 text-sm text-gray-500" aria-label="星港页面导航">
-          <a class="zens-port__side-link block rounded-md px-3 py-2 transition hover:bg-gray-50 hover:text-gray-900" href="#quick">常用入口</a>
-          <a
-            v-for="group in portalConfig.groups"
-            :key="group.id"
-            class="zens-port__side-link block rounded-md px-3 py-2 transition hover:bg-gray-50 hover:text-gray-900"
-            :href="`#${group.id}`"
-          >
-            {{ group.title }}
-          </a>
-          <p class="zens-port__side-pass px-3 pt-4 text-xs leading-5 text-gray-400">当前通行：{{ passLabel }}</p>
-        </nav>
-      </aside>
-
-      <main class="zens-port__main min-w-0 space-y-12">
+  <MainLayout>
+    <div class="zens-port">
         <section
           class="zens-port__hero overflow-hidden rounded-[28px] border border-amber-100/70 bg-[radial-gradient(circle_at_78%_18%,rgba(246,168,0,0.18),transparent_34%),linear-gradient(135deg,#fffaf0,#ffffff)] px-6 py-8 md:grid md:min-h-[260px] md:grid-cols-[minmax(0,1fr)_360px] md:items-center md:gap-8 md:px-9"
           aria-labelledby="metaverse-title"
@@ -513,34 +475,34 @@ watch(() => route.query.space, syncSelectedFromQuery)
             <p class="zens-port__stats mb-0 mt-7 text-xs leading-5 text-gray-500">{{ portalConfig.banner.statsText }}</p>
           </div>
 
-          <div class="zens-port__topology relative mt-9 h-[260px] md:mt-0" aria-label="Zens 子系统拓扑图">
-            <svg class="zens-port__topology-lines absolute inset-0 h-full w-full" viewBox="0 0 100 100" aria-hidden="true" preserveAspectRatio="none">
-              <line
-                v-for="node in portalConfig.topoNodes.filter(item => item.id !== 'zens')"
-                :key="node.id"
-                x1="50"
-                y1="50"
-                :x2="node.x"
-                :y2="node.y"
-                stroke="rgba(156, 163, 175, 0.42)"
-                stroke-width="0.35"
-                vector-effect="non-scaling-stroke"
-              />
-            </svg>
+          <div class="zens-port__pulse-board" aria-label="星港数据概览">
             <button
-              v-for="node in portalConfig.topoNodes"
-              :key="node.id"
+              v-for="item in portalPulseCards"
+              :key="item.label"
               type="button"
-              class="zens-port__topology-node absolute inline-flex -translate-x-1/2 -translate-y-1/2 items-center gap-1.5 rounded-full bg-white/80 px-3 py-1.5 text-xs font-medium text-gray-700 ring-1 ring-gray-200/80 backdrop-blur transition hover:bg-gray-50 hover:text-gray-950"
-              :class="node.id === 'zens' ? 'zens-port__topology-node--core px-4 py-2 text-sm font-semibold ring-amber-200' : ''"
-              :style="{ left: `${node.x}%`, top: `${node.y}%` }"
-              @click="handleTopoNode(node)"
+              class="zens-port__pulse-card"
+              :class="`tone-${item.tone}`"
+              @click="jumpToSection(item.targetId)"
             >
-              <component :is="resolveIcon(node.icon)" class="zens-port__topology-icon h-3.5 w-3.5 text-amber-600" aria-hidden="true" />
-              {{ node.label }}
+              <span class="zens-port__pulse-icon">
+                <component :is="item.icon" aria-hidden="true" />
+              </span>
+              <span class="zens-port__pulse-copy">
+                <small>{{ item.label }}</small>
+                <strong>{{ item.value }}</strong>
+                <em>{{ item.desc }}</em>
+              </span>
             </button>
           </div>
         </section>
+
+        <nav class="zens-port__channel-strip" aria-label="星港内容分组">
+          <a href="#quick">常用入口</a>
+          <a v-for="group in portalConfig.groups" :key="group.id" :href="`#${group.id}`">
+            {{ group.title }}
+          </a>
+          <span>当前通行：{{ passLabel }}</span>
+        </nav>
 
         <section id="quick" class="zens-port__section scroll-mt-24 space-y-4" aria-labelledby="quick-title">
           <div class="zens-port__section-head flex flex-wrap items-end justify-between gap-4">
@@ -548,9 +510,6 @@ watch(() => route.query.space, syncSelectedFromQuery)
               <h2 id="quick-title" class="zens-port__section-title m-0 text-2xl font-semibold tracking-normal text-gray-950">常用入口</h2>
               <p class="zens-port__section-desc mb-0 mt-2 text-sm text-gray-500">最常进入的社区空间与活动工具。</p>
             </div>
-            <span class="zens-port__pass rounded-md bg-gray-100 px-2.5 py-1.5 text-xs font-medium text-gray-500">
-              当前通行：{{ passLabel }}
-            </span>
           </div>
 
           <div class="zens-port__list divide-y divide-gray-100">
@@ -645,8 +604,6 @@ watch(() => route.query.space, syncSelectedFromQuery)
           <ShieldCheck class="zens-port__footer-icon mt-0.5 h-4 w-4 shrink-0 text-gray-400" aria-hidden="true" />
           <span>受限空间会按登录态、信任等级、徽章和后台身份判断；右键入口可查看空间详情。</span>
         </footer>
-      </main>
-    </div>
 
     <el-drawer v-model="detailVisible" size="400px" :title="selectedEntry?.title || '空间详情'">
       <template v-if="selectedEntry">
@@ -694,16 +651,19 @@ watch(() => route.query.space, syncSelectedFromQuery)
         </p>
       </template>
     </el-drawer>
-  </div>
+    </div>
+  </MainLayout>
 </template>
 
 <style scoped>
 .zens-port {
-  min-height: 100dvh;
-  background:
-    radial-gradient(820px 340px at 86% -120px, rgba(246, 168, 0, 0.12), transparent 60%),
-    linear-gradient(180deg, #fbfbfa 0%, #f7f7f5 44%, #f5f6f7 100%);
-  color: #111827;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  color: var(--el-text-color-primary);
 }
 
 .zens-port,
@@ -715,259 +675,115 @@ watch(() => route.query.space, syncSelectedFromQuery)
   font: inherit;
 }
 
-.zens-port__topbar {
-  position: sticky;
-  top: 0;
-  z-index: 30;
-  border-bottom: 1px solid rgba(243, 244, 246, 0.9);
-  background: rgba(255, 255, 255, 0.78);
-  backdrop-filter: blur(18px);
-}
-
-.zens-port__topbar-inner,
-.zens-port__layout {
-  width: min(calc(100% - 48px), 1680px);
-  margin: 0 auto;
-  padding-right: 0;
-  padding-left: 0;
-}
-
-.zens-port__topbar-inner {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  min-height: 64px;
-  gap: 16px;
-}
-
-.zens-port__brand,
-.zens-port__actions,
 .zens-port__hero-actions,
 .zens-port__hero-button,
-.zens-port__topology-node,
 .zens-port__entry-meta,
 .zens-port__footer {
   display: inline-flex;
   align-items: center;
 }
 
-.zens-port__brand {
-  min-width: 0;
-  gap: 12px;
-  padding: 8px 4px;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: #111827;
-  cursor: pointer;
-  text-align: left;
-  transition: background-color 0.18s ease;
-}
-
-.zens-port__brand:hover {
-  background: rgba(249, 250, 251, 0.9);
-}
-
-.zens-port__logo {
-  flex: 0 0 36px;
-  width: 36px !important;
-  height: 36px !important;
-  max-width: 36px !important;
-  max-height: 36px !important;
-  border-radius: 12px;
-  background: #fffbeb;
-  object-fit: cover;
-  content-visibility: visible !important;
-  contain-intrinsic-size: 36px 36px;
-  box-shadow: 0 0 0 1px #fde68a;
-}
-
-.zens-port__brand-text {
-  overflow: hidden;
-  color: #111827;
-  font-size: 19px;
-  font-weight: 650;
-  letter-spacing: 0;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.zens-port__actions {
-  flex: 0 0 auto;
-  gap: 8px;
-}
-
-.zens-port__nav-button {
-  min-height: 36px;
-  padding: 8px 14px;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: #4b5563;
-  cursor: pointer;
-  font-size: 14px;
-  font-weight: 550;
-  transition: background-color 0.18s ease, color 0.18s ease, transform 0.18s ease;
-}
-
-.zens-port__nav-button:hover {
-  background: #f9fafb;
-  color: #111827;
-}
-
-.zens-port__nav-button--primary {
-  background: #f6a800;
-  color: #fff;
-}
-
-.zens-port__nav-button--primary:hover {
-  background: #e99a00;
-  color: #fff;
-}
-
-.zens-port__nav-button:active,
 .zens-port__hero-button:active {
   transform: scale(0.98);
-}
-
-.zens-port__layout {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 40px;
-  padding-top: 32px;
-  padding-bottom: 64px;
-}
-
-.zens-port__side {
-  display: none;
-}
-
-.zens-port__side-nav {
-  position: sticky;
-  top: 96px;
-  display: grid;
-  gap: 4px;
-  color: #6b7280;
-  font-size: 14px;
-}
-
-.zens-port__side-link {
-  display: block;
-  padding: 8px 12px;
-  border-radius: 8px;
-  color: inherit;
-  text-decoration: none;
-  transition: background-color 0.18s ease, color 0.18s ease;
-}
-
-.zens-port__side-link:hover {
-  background: #f9fafb;
-  color: #111827;
-}
-
-.zens-port__side-pass {
-  margin: 10px 0 0;
-  padding: 12px;
-  color: #9ca3af;
-  font-size: 12px;
-  line-height: 1.65;
-}
-
-.zens-port__main {
-  min-width: 0;
-  display: grid;
-  gap: 48px;
 }
 
 .zens-port__hero {
   overflow: hidden;
   display: grid;
-  grid-template-columns: 1fr;
-  gap: 32px;
-  min-height: 260px;
-  padding: 32px 24px;
-  border: 1px solid rgba(253, 230, 138, 0.72);
-  border-radius: 28px;
+  grid-template-columns: minmax(0, 0.95fr) minmax(360px, 1.05fr);
+  gap: 18px;
+  padding: 18px;
+  border: 1px solid rgba(234, 179, 74, 0.28);
+  border-radius: 18px;
   background:
-    radial-gradient(circle at 78% 18%, rgba(246, 168, 0, 0.18), transparent 34%),
-    linear-gradient(135deg, #fffaf0, #ffffff);
+    linear-gradient(135deg, rgba(255, 248, 229, 0.98) 0%, rgba(255, 255, 255, 0.98) 56%),
+    var(--el-bg-color-overlay);
+  box-shadow: 0 14px 34px rgba(156, 105, 26, 0.08);
 }
 
 .zens-port__hero-copy {
-  max-width: 672px;
+  min-width: 0;
+  max-width: 640px;
 }
 
 .zens-port__eyebrow {
+  display: inline-flex;
+  width: fit-content;
   margin: 0;
-  color: rgba(180, 83, 9, 0.86);
+  padding: 5px 10px;
+  border: 1px solid rgba(242, 165, 41, 0.24);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.68);
+  color: #9a6211;
   font-size: 12px;
-  font-weight: 650;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
+  font-weight: 800;
+  letter-spacing: 0;
 }
 
 .zens-port__title {
-  margin: 20px 0 0;
-  color: #030712;
-  font-size: clamp(40px, 6vw, 52px);
-  font-weight: 650;
-  line-height: 1.04;
+  max-width: 520px;
+  margin: 10px 0 8px;
+  color: #1f2937;
+  font-size: 30px;
+  font-weight: 800;
+  line-height: 1.16;
   letter-spacing: 0;
 }
 
 .zens-port__subtitle {
-  margin: 16px 0 0;
-  color: #111827;
-  font-size: clamp(20px, 3vw, 24px);
-  font-weight: 600;
-  line-height: 1.3;
+  margin: 0;
+  color: #6b5a3f;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.45;
 }
 
 .zens-port__desc {
-  max-width: 58ch;
-  margin: 16px 0 0;
-  color: #6b7280;
-  font-size: 15px;
-  line-height: 1.85;
+  max-width: 620px;
+  margin: 8px 0 0;
+  color: #6b5a3f;
+  font-size: 14px;
+  line-height: 1.58;
 }
 
 .zens-port__hero-actions {
   flex-wrap: wrap;
   gap: 10px;
-  margin-top: 28px;
+  margin-top: 15px;
 }
 
 .zens-port__hero-button {
   justify-content: center;
   gap: 8px;
-  min-height: 40px;
-  padding: 10px 16px;
-  border: 0;
-  border-radius: 8px;
+  min-height: 38px;
+  padding: 0 16px;
+  border: 1px solid transparent;
+  border-radius: 999px;
   cursor: pointer;
   font-size: 14px;
-  font-weight: 600;
-  transition: background-color 0.18s ease, color 0.18s ease, transform 0.18s ease;
+  font-weight: 800;
+  transition: transform 0.18s ease, box-shadow 0.22s ease, border-color 0.2s ease, background-color 0.2s ease;
 }
 
 .zens-port__hero-button--primary {
-  background: #111827;
+  background: linear-gradient(135deg, #f6b800 0%, #f29b24 100%);
   color: #fff;
+  box-shadow: 0 12px 24px rgba(242, 155, 36, 0.24);
 }
 
 .zens-port__hero-button--primary:hover {
-  background: #1f2937;
+  transform: translateY(-1px);
 }
 
 .zens-port__hero-button--secondary {
-  background: rgba(255, 255, 255, 0.76);
-  color: #374151;
-  box-shadow: 0 0 0 1px rgba(253, 230, 138, 0.95);
+  border-color: rgba(231, 174, 79, 0.42);
+  background: rgba(255, 255, 255, 0.78);
+  color: #8a5a00;
+  box-shadow: none;
 }
 
 .zens-port__hero-button--secondary:hover {
-  background: #fff;
-  color: #030712;
+  transform: translateY(-1px);
 }
 
 .zens-port__button-icon,
@@ -979,73 +795,156 @@ watch(() => route.query.space, syncSelectedFromQuery)
 }
 
 .zens-port__stats {
-  margin: 28px 0 0;
-  color: #6b7280;
+  margin: 16px 0 0;
+  color: var(--el-text-color-secondary);
   font-size: 12px;
   line-height: 1.65;
 }
 
-.zens-port__topology {
-  position: relative;
-  min-height: 230px;
+.zens-port__pulse-board {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
 }
 
-.zens-port__topology-lines {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-}
-
-.zens-port__topology-node {
-  position: absolute;
-  transform: translate(-50%, -50%);
-  gap: 6px;
-  padding: 6px 12px;
-  border: 0;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.82);
-  color: #374151;
+.zens-port__pulse-card {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
+  min-height: 118px;
+  padding: 14px;
+  border: 1px solid rgba(228, 189, 122, 0.22);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.76);
+  color: var(--el-text-color-primary);
+  text-align: left;
   cursor: pointer;
+  box-shadow: 0 10px 22px rgba(106, 74, 28, 0.055);
+  transition: transform 0.18s ease, border-color 0.18s ease, background-color 0.18s ease;
+}
+
+.zens-port__pulse-card:hover {
+  border-color: rgba(244, 180, 0, 0.42);
+  background: #fff;
+  transform: translateY(-1px);
+}
+
+.zens-port__pulse-icon {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+}
+
+.zens-port__pulse-icon svg {
+  width: 19px;
+  height: 19px;
+  stroke-width: 2.4;
+}
+
+.zens-port__pulse-copy {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.zens-port__pulse-copy small {
+  color: #6b5a3f;
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 800;
+}
+
+.zens-port__pulse-copy strong {
+  color: #1f2937;
+  font-size: 25px;
   line-height: 1;
-  white-space: nowrap;
-  backdrop-filter: blur(12px);
-  box-shadow: 0 0 0 1px rgba(229, 231, 235, 0.92);
-  transition: background-color 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
 }
 
-.zens-port__topology-node:hover {
-  background: #f9fafb;
-  color: #030712;
+.zens-port__pulse-copy em {
+  overflow: hidden;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+  font-style: normal;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
 }
 
-.zens-port__topology-node--core {
-  padding: 9px 16px;
-  color: #111827;
-  font-size: 14px;
-  font-weight: 700;
-  box-shadow: 0 0 0 1px rgba(251, 191, 36, 0.5);
+.tone-green .zens-port__pulse-icon {
+  color: #26a269;
+  background: #e8f8ef;
 }
 
-.zens-port__topology-icon {
-  width: 14px;
-  height: 14px;
-  flex: 0 0 14px;
-  color: #d97706;
+.tone-orange .zens-port__pulse-icon {
+  color: #e68a1f;
+  background: #fff1d7;
+}
+
+.tone-blue .zens-port__pulse-icon {
+  color: #3f8ed8;
+  background: #eaf4ff;
+}
+
+.tone-purple .zens-port__pulse-icon {
+  color: #8e63d9;
+  background: #f2ecff;
+}
+
+.zens-port__channel-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--el-bg-color-overlay) 82%, transparent);
+}
+
+.zens-port__channel-strip a,
+.zens-port__channel-strip span {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0 11px;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.zens-port__channel-strip a {
+  border: 1px solid transparent;
+  background: transparent;
+}
+
+.zens-port__channel-strip a:hover {
+  border-color: rgba(244, 180, 0, 0.28);
+  background: #fff8e5;
+  color: #8a5a00;
+}
+
+.zens-port__channel-strip span {
+  margin-left: auto;
+  border: 1px solid rgba(228, 189, 122, 0.22);
+  background: rgba(255, 255, 255, 0.72);
+  color: #8a5a00;
 }
 
 .zens-port__section,
 .zens-port__all {
   display: grid;
-  gap: 16px;
+  gap: 14px;
   scroll-margin-top: 96px;
 }
 
 .zens-port__all {
-  gap: 40px;
+  gap: 18px;
 }
 
 .zens-port__section-head,
@@ -1058,9 +957,9 @@ watch(() => route.query.space, syncSelectedFromQuery)
 
 .zens-port__section-title {
   margin: 0;
-  color: #030712;
-  font-size: 24px;
-  font-weight: 650;
+  color: var(--el-text-color-primary);
+  font-size: 18px;
+  font-weight: 800;
   line-height: 1.25;
   letter-spacing: 0;
 }
@@ -1068,24 +967,17 @@ watch(() => route.query.space, syncSelectedFromQuery)
 .zens-port__section-desc,
 .zens-port__group-desc {
   margin: 8px 0 0;
-  color: #6b7280;
+  color: var(--el-text-color-secondary);
   font-size: 14px;
   line-height: 1.65;
 }
 
-.zens-port__pass {
-  flex: 0 0 auto;
-  padding: 6px 10px;
-  border-radius: 8px;
-  background: #f3f4f6;
-  color: #6b7280;
-  font-size: 12px;
-  font-weight: 600;
-}
-
 .zens-port__list {
   display: grid;
-  border-top: 1px solid #f3f4f6;
+  overflow: hidden;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 12px;
+  background: var(--el-bg-color-overlay);
 }
 
 .zens-port__entry {
@@ -1094,19 +986,23 @@ watch(() => route.query.space, syncSelectedFromQuery)
   align-items: center;
   width: 100%;
   gap: 16px;
-  padding: 16px 8px;
+  padding: 14px;
   border: 0;
-  border-bottom: 1px solid #f3f4f6;
-  border-radius: 8px;
+  border-bottom: 1px solid var(--el-border-color-lighter);
+  border-radius: 0;
   background: transparent;
-  color: #111827;
+  color: var(--el-text-color-primary);
   cursor: pointer;
   text-align: left;
   transition: background-color 0.18s ease;
 }
 
 .zens-port__entry:hover {
-  background: #f9fafb;
+  background: var(--el-fill-color-extra-light);
+}
+
+.zens-port__entry:last-child {
+  border-bottom: 0;
 }
 
 .zens-port__entry-icon {
@@ -1115,8 +1011,8 @@ watch(() => route.query.space, syncSelectedFromQuery)
   width: 36px;
   height: 36px;
   border-radius: 8px;
-  background: #f3f4f6;
-  color: #4b5563;
+  background: var(--el-fill-color-light);
+  color: var(--el-text-color-secondary);
   transition: background-color 0.18s ease, color 0.18s ease;
 }
 
@@ -1142,16 +1038,16 @@ watch(() => route.query.space, syncSelectedFromQuery)
 
 .zens-port__entry-title {
   display: block;
-  color: #030712;
+  color: var(--el-text-color-primary);
   font-size: 15px;
-  font-weight: 600;
+  font-weight: 800;
   line-height: 1.35;
 }
 
 .zens-port__entry-desc {
   display: block;
   margin-top: 4px;
-  color: #6b7280;
+  color: var(--el-text-color-secondary);
   font-size: 14px;
   line-height: 1.65;
 }
@@ -1222,15 +1118,15 @@ watch(() => route.query.space, syncSelectedFromQuery)
 
 .zens-port__group {
   display: grid;
-  gap: 12px;
+  gap: 10px;
   scroll-margin-top: 96px;
 }
 
 .zens-port__group-title {
   margin: 0;
-  color: #030712;
-  font-size: 18px;
-  font-weight: 650;
+  color: var(--el-text-color-primary);
+  font-size: 16px;
+  font-weight: 800;
   line-height: 1.3;
   letter-spacing: 0;
 }
@@ -1243,10 +1139,10 @@ watch(() => route.query.space, syncSelectedFromQuery)
 
 .zens-port__footer {
   gap: 8px;
-  padding-top: 20px;
-  border-top: 1px solid #f3f4f6;
-  color: #6b7280;
-  font-size: 14px;
+  padding: 14px 4px 4px;
+  border-top: 1px solid var(--el-border-color-lighter);
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
   line-height: 1.7;
 }
 
@@ -1271,97 +1167,87 @@ watch(() => route.query.space, syncSelectedFromQuery)
 
 @media (min-width: 768px) {
   .zens-port__hero {
-    grid-template-columns: minmax(0, 1fr) minmax(360px, 0.42fr);
+    grid-template-columns: minmax(0, 0.95fr) minmax(360px, 1.05fr);
     align-items: center;
-    padding: 36px;
-  }
-}
-
-@media (min-width: 1280px) {
-  .zens-port__layout {
-    grid-template-columns: clamp(180px, 12vw, 220px) minmax(0, 1fr);
-  }
-
-  .zens-port__side {
-    display: block;
-  }
-}
-
-@media (min-width: 1440px) {
-  .zens-port__layout {
-    gap: clamp(48px, 4vw, 72px);
-  }
-
-  .zens-port__hero {
-    grid-template-columns: minmax(0, 1fr) minmax(420px, 0.46fr);
-    padding: 44px;
-  }
-
-  .zens-port__hero-copy {
-    max-width: 760px;
-  }
-
-  .zens-port__topology {
-    min-height: 300px;
-  }
-}
-
-@media (min-width: 1800px) {
-  .zens-port__topbar-inner,
-  .zens-port__layout {
-    width: min(calc(100% - 72px), 1760px);
-  }
-
-  .zens-port__hero {
-    grid-template-columns: minmax(0, 1fr) minmax(480px, 0.5fr);
   }
 }
 
 @media (max-width: 700px) {
-  .zens-port__topbar-inner,
-  .zens-port__layout {
-    width: min(calc(100% - 24px), 1680px);
-  }
-
-  .zens-port__topbar-inner {
-    min-height: 0;
-    align-items: flex-start;
-    padding-top: 12px;
-    padding-bottom: 12px;
-  }
-
-  .zens-port__actions {
-    flex-direction: column;
-    align-items: flex-end;
-    gap: 6px;
-  }
-
-  .zens-port__nav-button {
-    min-height: 32px;
-    padding: 6px 10px;
-    font-size: 12px;
-  }
-
-  .zens-port__layout {
-    gap: 32px;
-    padding: 20px 0 46px;
+  .zens-port {
+    gap: 10px;
   }
 
   .zens-port__hero {
-    padding: 26px 18px;
-    border-radius: 22px;
+    grid-template-columns: 1fr;
+    gap: 12px;
+    padding: 14px;
+    border-radius: 16px;
   }
 
   .zens-port__title {
-    font-size: 40px;
+    margin: 8px 0 6px;
+    font-size: 23px;
+    line-height: 1.18;
+  }
+
+  .zens-port__subtitle {
+    font-size: 13px;
+  }
+
+  .zens-port__desc {
+    overflow: hidden;
+    font-size: 13px;
+    line-height: 1.45;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
+  }
+
+  .zens-port__hero-actions {
+    margin-top: 10px;
   }
 
   .zens-port__hero-button {
-    width: 100%;
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 34px;
+    padding: 0 12px;
+    font-size: 13px;
   }
 
-  .zens-port__topology {
-    min-height: 210px;
+  .zens-port__pulse-board {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .zens-port__pulse-card {
+    grid-template-columns: 1fr;
+    min-height: 112px;
+    gap: 8px;
+    padding: 10px;
+    border-radius: 12px;
+  }
+
+  .zens-port__pulse-icon {
+    width: 30px;
+    height: 30px;
+    border-radius: 10px;
+  }
+
+  .zens-port__pulse-icon svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  .zens-port__pulse-copy strong {
+    font-size: 21px;
+  }
+
+  .zens-port__channel-strip span {
+    width: 100%;
+    margin-left: 0;
+    justify-content: center;
   }
 
   .zens-port__section-head,

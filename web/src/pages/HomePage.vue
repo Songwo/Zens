@@ -5,23 +5,20 @@ import MainLayout from '@/layouts/MainLayout.vue'
 import TopicList from '@/components/topic/TopicList.vue'
 import { publicDataApi, type PublicSiteStats } from '@/api/publicData'
 import { usePostComposerStore } from '@/store/postComposer'
+import { useUserStore } from '@/store/user'
 import {
-  Code2,
-  FileText,
+  CheckCircle2,
   Flame,
   Hash,
   Heart,
-  CheckCircle2,
-  Compass,
   MessageCircle,
   PencilLine,
-  Smile,
-  Sparkles,
   Users,
 } from 'lucide-vue-next'
 
 const router = useRouter()
 const composerStore = usePostComposerStore()
+const userStore = useUserStore()
 const siteStats = ref<PublicSiteStats>({
   totalPosts: 0,
   totalUsers: 0,
@@ -29,39 +26,50 @@ const siteStats = ref<PublicSiteStats>({
   todayPosts: 0,
 })
 const hotTopicCount = ref(8)
+const unsolvedQaCount = ref(0)
+const todaySolvedQaCount = ref(0)
+const followedTagUpdateCount = ref(0)
 
-const heroStats = computed(() => [
+const pulseCards = computed(() => [
   {
     label: '今日新帖',
     value: siteStats.value.todayPosts,
+    desc: '快速扫过今天的新讨论',
     icon: MessageCircle,
     tone: 'green',
+    path: '/',
   },
   {
-    label: '活跃用户',
-    value: siteStats.value.totalUsers,
-    icon: Users,
-    tone: 'orange',
-  },
-  {
-    label: '累计互动',
-    value: siteStats.value.totalComments,
-    icon: Heart,
+    label: '待解决',
+    value: unsolvedQaCount.value,
+    desc: '答疑解惑里等待回答',
+    icon: CheckCircle2,
     tone: 'blue',
+    path: '/?sort=unsolved',
   },
   {
-    label: '热门话题',
+    label: '热门主题',
     value: hotTopicCount.value,
+    desc: '本周被反复讨论的话题',
     icon: Hash,
     tone: 'purple',
+    path: '/hot',
+  },
+  {
+    label: '关注更新',
+    value: userStore.isLoggedIn ? followedTagUpdateCount.value : '登录',
+    desc: userStore.isLoggedIn ? '关注标签今日新帖' : '登录后同步兴趣',
+    icon: Heart,
+    tone: 'orange',
+    path: userStore.isLoggedIn ? '/me' : '/auth',
   },
 ])
 
-const discoveryLinks = [
-  { label: '为你推荐', desc: '按兴趣和热度发现内容', path: '/?sort=recommend', icon: Compass },
-  { label: '待解决问题', desc: '协同推进团队里的开发难题', path: '/?sort=unsolved', icon: MessageCircle },
-  { label: '精华沉淀', desc: '沉淀可复用的经验与方案', path: '/featured', icon: CheckCircle2 },
-]
+const communitySignals = computed(() => [
+  { label: '活跃用户', value: siteStats.value.totalUsers, icon: Users },
+  { label: '累计帖子', value: siteStats.value.totalPosts, icon: Flame },
+  { label: '今日解决', value: todaySolvedQaCount.value, icon: CheckCircle2 },
+])
 
 onMounted(async () => {
   try {
@@ -72,6 +80,11 @@ onMounted(async () => {
     if (res.code === 2000 && Array.isArray(res.data?.hotTags)) {
       hotTopicCount.value = res.data.hotTags.length
     }
+    if (res.code === 2000 && res.data) {
+      unsolvedQaCount.value = Number(res.data.unsolvedQaCount || 0)
+      todaySolvedQaCount.value = Number(res.data.todaySolvedQaCount || 0)
+      followedTagUpdateCount.value = Number(res.data.followedTagUpdateCount || 0)
+    }
   } catch {
     // ignore bootstrap failure on hero
   }
@@ -81,109 +94,53 @@ onMounted(async () => {
 <template>
   <MainLayout>
     <div class="page-content">
-      <section class="hero-panel">
-        <div class="hero-copy-area">
-          <div class="hero-copy">
-            <span class="hero-kicker">企业级开发者社区与内容运营平台</span>
-            <h1 class="hero-title">沉淀技术知识，驱动社区增长</h1>
-            <p class="hero-desc">
-              在 Zens 中管理内容流、交流工程实践、沉淀团队经验，让开发者协作与社区运营形成正循环。
-            </p>
-          </div>
+      <section class="pulse-hero" aria-label="社区脉搏">
+        <div class="pulse-copy">
+          <span class="pulse-kicker">社区脉搏</span>
+          <h1 class="pulse-title">先看今天值得参与的讨论</h1>
+          <p class="pulse-desc">
+            Zens 会把新帖、热门主题、待解决问题和精华内容放到同一个入口里，让你少翻几页，多参与一次有价值的交流。
+          </p>
 
-          <div class="hero-actions" aria-label="首页快捷操作">
-            <button class="hero-action primary" type="button" @click="composerStore.open()">
+          <div class="pulse-actions" aria-label="首页快捷操作">
+            <button class="pulse-action primary" type="button" @click="composerStore.open()">
               <PencilLine class="action-icon" aria-hidden="true" />
               <span>发布帖子</span>
             </button>
-            <button class="hero-action secondary" type="button" @click="router.push('/hot')">
+            <button class="pulse-action secondary" type="button" @click="router.push('/hot')">
               <Flame class="action-icon" aria-hidden="true" />
-              <span>浏览热门</span>
+              <span>看热榜</span>
             </button>
           </div>
         </div>
 
-        <div class="hero-visual" aria-hidden="true">
-          <div class="visual-stage">
-            <div class="visual-orb orb-warm"></div>
-            <div class="visual-orb orb-blue"></div>
-
-            <div class="visual-card code-card">
-              <div class="visual-card-head">
-                <Code2 class="visual-card-icon" />
-                <span>topic.ts</span>
-              </div>
-              <div class="code-lines">
-                <span></span>
-                <span></span>
-                <span></span>
-              </div>
-            </div>
-
-            <div class="visual-card chat-card">
-              <MessageCircle class="chat-icon" />
-              <div class="bubble-lines">
-                <span></span>
-                <span></span>
-              </div>
-            </div>
-
-            <div class="visual-card doc-card">
-              <FileText class="doc-icon" />
-              <div class="doc-lines">
-                <span></span>
-                <span></span>
-                <span></span>
-              </div>
-            </div>
-
-            <div class="smile-chip">
-              <Smile />
-            </div>
-            <div class="spark-chip spark-one">
-              <Sparkles />
-            </div>
-            <div class="spark-chip spark-two">
-              <Sparkles />
-            </div>
-            <span class="float-dot dot-one"></span>
-            <span class="float-dot dot-two"></span>
-            <span class="float-dot dot-three"></span>
-          </div>
-        </div>
-
-        <div class="hero-stats" aria-label="社区数据概览">
-          <div
-            v-for="item in heroStats"
+        <div class="pulse-board">
+          <button
+            v-for="item in pulseCards"
             :key="item.label"
-            class="stat-card"
+            class="pulse-card"
             :class="`tone-${item.tone}`"
+            type="button"
+            @click="router.push(item.path)"
           >
-            <div class="stat-icon-wrap">
-              <component :is="item.icon" class="stat-icon" aria-hidden="true" />
-            </div>
-            <div class="stat-copy">
-              <span class="stat-label">{{ item.label }}</span>
-              <strong class="stat-value">{{ item.value }}</strong>
-            </div>
+            <span class="pulse-card-icon">
+              <component :is="item.icon" aria-hidden="true" />
+            </span>
+            <span class="pulse-card-copy">
+              <small>{{ item.label }}</small>
+              <strong>{{ item.value }}</strong>
+              <em>{{ item.desc }}</em>
+            </span>
+          </button>
+        </div>
+
+        <div class="signal-row" aria-label="社区数据概览">
+          <div v-for="item in communitySignals" :key="item.label" class="signal-item">
+            <component :is="item.icon" class="signal-icon" aria-hidden="true" />
+            <span>{{ item.label }}</span>
+            <strong>{{ item.value }}</strong>
           </div>
         </div>
-      </section>
-
-      <section class="discovery-strip" aria-label="社区发现入口">
-        <button
-          v-for="item in discoveryLinks"
-          :key="item.label"
-          class="discovery-item"
-          type="button"
-          @click="router.push(item.path)"
-        >
-          <component :is="item.icon" class="discovery-icon" aria-hidden="true" />
-          <span>
-            <strong>{{ item.label }}</strong>
-            <small>{{ item.desc }}</small>
-          </span>
-        </button>
       </section>
 
       <TopicList />
@@ -201,128 +158,95 @@ onMounted(async () => {
   margin: 0 auto;
 }
 
-.hero-panel {
-  position: relative;
-  isolation: isolate;
-  overflow: hidden;
+.pulse-hero {
   display: grid;
-  grid-template-columns: minmax(0, 1.22fr) minmax(230px, 0.58fr);
+  grid-template-columns: minmax(0, 0.95fr) minmax(360px, 1.05fr);
   grid-template-areas:
-    "copy visual"
-    "stats visual";
-  gap: 12px 28px;
-  min-height: 0;
-  padding: 16px 24px;
+    "copy board"
+    "signals board";
+  gap: 14px 18px;
+  padding: 18px;
+  border: 1px solid rgba(234, 179, 74, 0.28);
   border-radius: 18px;
-  border: 1px solid rgba(245, 190, 92, 0.34);
   background:
-    radial-gradient(circle at 86% 22%, rgba(255, 204, 111, 0.28), transparent 34%),
-    linear-gradient(135deg, #fff2bf 0%, #fff8e6 42%, #ffffff 100%);
-  box-shadow: 0 14px 34px rgba(156, 105, 26, 0.08), 0 1px 0 rgba(255, 255, 255, 0.8) inset;
+    linear-gradient(135deg, rgba(255, 248, 229, 0.98) 0%, rgba(255, 255, 255, 0.98) 56%),
+    var(--el-bg-color-overlay);
+  box-shadow: 0 14px 34px rgba(156, 105, 26, 0.08);
 }
 
-.hero-panel::before {
-  position: absolute;
-  inset: 1px;
-  z-index: -1;
-  content: '';
-  border-radius: 17px;
-  background:
-    radial-gradient(circle at 18% 12%, rgba(255, 255, 255, 0.78), transparent 26%),
-    radial-gradient(circle at 60% 100%, rgba(255, 214, 135, 0.2), transparent 34%);
-  pointer-events: none;
-}
-
-.hero-copy-area {
+.pulse-copy {
   grid-area: copy;
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  justify-content: flex-start;
-}
-
-.hero-copy {
   min-width: 0;
 }
 
-.hero-kicker {
+.pulse-kicker {
   display: inline-flex;
   width: fit-content;
-  padding: 5px 11px;
+  padding: 5px 10px;
   border-radius: 999px;
-  border: 1px solid rgba(242, 165, 41, 0.22);
-  background: rgba(255, 255, 255, 0.56);
+  border: 1px solid rgba(242, 165, 41, 0.24);
+  background: rgba(255, 255, 255, 0.68);
   color: #9a6211;
   font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0;
-  box-shadow: 0 8px 20px rgba(242, 165, 41, 0.08);
+  font-weight: 800;
 }
 
-.hero-title {
-  max-width: 620px;
+.pulse-title {
+  max-width: 520px;
   margin: 10px 0 8px;
-  font-size: clamp(24px, 2.6vw, 32px);
-  line-height: 1.13;
-  letter-spacing: 0;
   color: #1f2937;
+  font-size: 30px;
+  line-height: 1.16;
+  letter-spacing: 0;
 }
 
-.hero-desc {
-  margin: 0;
+.pulse-desc {
   max-width: 560px;
-  font-size: 14px;
-  line-height: 1.55;
+  margin: 0;
   color: #6b5a3f;
+  font-size: 14px;
+  line-height: 1.58;
 }
 
-.hero-actions {
+.pulse-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
-  margin-top: 14px;
+  margin-top: 15px;
 }
 
-.hero-action {
+.pulse-action {
   display: inline-flex;
   min-height: 38px;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  border-radius: 999px;
-  padding: 0 18px;
   border: 1px solid transparent;
+  border-radius: 999px;
+  padding: 0 16px;
   font-size: 14px;
   font-weight: 800;
   cursor: pointer;
   transition: transform 0.18s ease, box-shadow 0.22s ease, border-color 0.2s ease, background-color 0.2s ease;
 }
 
-.hero-action:active {
+.pulse-action:active {
   transform: scale(0.98);
 }
 
-.hero-action.primary {
+.pulse-action.primary {
   color: #fff;
   background: linear-gradient(135deg, #f6b800 0%, #f29b24 100%);
-  box-shadow: 0 12px 24px rgba(242, 155, 36, 0.26);
+  box-shadow: 0 12px 24px rgba(242, 155, 36, 0.24);
 }
 
-.hero-action.primary:hover {
-  box-shadow: 0 16px 28px rgba(242, 155, 36, 0.32);
-  transform: translateY(-1px);
-}
-
-.hero-action.secondary {
+.pulse-action.secondary {
   color: #8a5a00;
-  background: rgba(255, 255, 255, 0.74);
-  border-color: rgba(231, 174, 79, 0.4);
-  box-shadow: 0 10px 22px rgba(82, 58, 22, 0.06);
+  background: rgba(255, 255, 255, 0.78);
+  border-color: rgba(231, 174, 79, 0.42);
 }
 
-.hero-action.secondary:hover {
-  border-color: rgba(231, 174, 79, 0.72);
-  background: #fff;
+.pulse-action:hover {
   transform: translateY(-1px);
 }
 
@@ -332,428 +256,142 @@ onMounted(async () => {
   stroke-width: 2.4;
 }
 
-.hero-visual {
-  grid-area: visual;
-  position: relative;
-  display: flex;
-  min-height: 0;
-  align-items: center;
-}
-
-.visual-stage {
-  position: relative;
-  width: min(100%, 300px);
-  height: 140px;
-  margin: 0 0 0 auto;
-  transform: translate3d(0, 2px, 0);
-}
-
-.visual-orb {
-  position: absolute;
-  border-radius: 999px;
-  filter: blur(10px);
-  opacity: 0.7;
-}
-
-.orb-warm {
-  right: 28px;
-  bottom: 10px;
-  width: 150px;
-  height: 54px;
-  background: rgba(247, 180, 58, 0.24);
-}
-
-.orb-blue {
-  top: 28px;
-  right: 16px;
-  width: 78px;
-  height: 78px;
-  background: rgba(106, 155, 204, 0.18);
-}
-
-.visual-card,
-.smile-chip,
-.spark-chip {
-  position: absolute;
-  border: 1px solid rgba(231, 174, 79, 0.24);
-  background: rgba(255, 255, 255, 0.82);
-  box-shadow: 0 18px 34px rgba(124, 84, 24, 0.13);
-  backdrop-filter: blur(14px);
-}
-
-.visual-card {
-  border-radius: 20px;
-}
-
-.code-card {
-  top: 8px;
-  right: 38px;
-  width: 168px;
-  min-height: 78px;
-  padding: 12px;
-  transform: rotate(-4deg);
-}
-
-.visual-card-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: #72511d;
-  font-size: 11px;
-  font-weight: 800;
-}
-
-.visual-card-icon {
-  width: 18px;
-  height: 18px;
-  color: #f29b24;
-}
-
-.code-lines,
-.doc-lines,
-.bubble-lines {
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-  margin-top: 9px;
-}
-
-.code-lines span,
-.doc-lines span,
-.bubble-lines span {
-  display: block;
-  height: 7px;
-  border-radius: 999px;
-  background: #f2d592;
-}
-
-.code-lines span:nth-child(1) {
-  width: 84%;
-}
-
-.code-lines span:nth-child(2) {
-  width: 58%;
-  background: #b8d5f0;
-}
-
-.code-lines span:nth-child(3) {
-  width: 72%;
-  background: #f7c86a;
-}
-
-.chat-card {
-  top: 70px;
-  left: 18px;
+.pulse-board {
+  grid-area: board;
   display: grid;
-  grid-template-columns: 32px minmax(0, 1fr);
-  gap: 9px;
-  width: 144px;
-  min-height: 62px;
-  padding: 10px;
-  transform: rotate(5deg);
-}
-
-.chat-icon {
-  width: 32px;
-  height: 32px;
-  padding: 7px;
-  border-radius: 12px;
-  color: #35a66f;
-  background: #e9f8ef;
-}
-
-.bubble-lines {
-  margin-top: 2px;
-}
-
-.bubble-lines span:nth-child(1) {
-  width: 86px;
-  background: #cdeed9;
-}
-
-.bubble-lines span:nth-child(2) {
-  width: 62px;
-  background: #f3d080;
-}
-
-.doc-card {
-  right: 18px;
-  bottom: 0;
-  display: grid;
-  grid-template-columns: 32px minmax(0, 1fr);
-  gap: 9px;
-  width: 148px;
-  min-height: 66px;
-  padding: 10px;
-  transform: rotate(3deg);
-}
-
-.doc-icon {
-  width: 32px;
-  height: 32px;
-  padding: 7px;
-  border-radius: 12px;
-  color: #4b8edb;
-  background: #eaf3ff;
-}
-
-.doc-lines {
-  gap: 7px;
-  margin-top: 1px;
-}
-
-.doc-lines span:nth-child(1) {
-  width: 74px;
-  background: #b9d7f2;
-}
-
-.doc-lines span:nth-child(2) {
-  width: 54px;
-  background: #f5cf79;
-}
-
-.doc-lines span:nth-child(3) {
-  width: 66px;
-  background: #e4e8ef;
-}
-
-.smile-chip {
-  top: 0;
-  left: 64px;
-  display: grid;
-  place-items: center;
-  width: 40px;
-  height: 40px;
-  border-radius: 15px;
-  color: #f29b24;
-  transform: rotate(8deg);
-}
-
-.smile-chip svg {
-  width: 22px;
-  height: 22px;
-}
-
-.spark-chip {
-  display: grid;
-  place-items: center;
-  width: 30px;
-  height: 30px;
-  border-radius: 11px;
-  color: #a56de2;
-  background: rgba(255, 255, 255, 0.9);
-}
-
-.spark-one {
-  top: 18px;
-  right: 4px;
-  animation: soft-float 4s ease-in-out infinite;
-}
-
-.spark-two {
-  bottom: 20px;
-  left: 0;
-  color: #f2a51f;
-  animation: soft-float 4.8s ease-in-out infinite reverse;
-}
-
-.spark-chip svg {
-  width: 16px;
-  height: 16px;
-}
-
-.float-dot {
-  position: absolute;
-  width: 10px;
-  height: 10px;
-  border-radius: 999px;
-  background: #f6c453;
-  box-shadow: 0 8px 18px rgba(246, 196, 83, 0.3);
-}
-
-.dot-one {
-  top: 66px;
-  left: 40px;
-}
-
-.dot-two {
-  right: 2px;
-  bottom: 66px;
-  width: 12px;
-  height: 12px;
-  background: #9fd0ff;
-}
-
-.dot-three {
-  left: 164px;
-  bottom: 12px;
-  width: 8px;
-  height: 8px;
-  background: #82d8ad;
-}
-
-.hero-stats {
-  grid-area: stats;
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
 }
 
-.stat-card {
-  display: flex;
-  min-width: 0;
-  min-height: 48px;
-  align-items: center;
+.pulse-card {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  align-items: start;
   gap: 10px;
-  padding: 8px 10px;
+  min-height: 118px;
+  padding: 14px;
   border: 1px solid rgba(228, 189, 122, 0.22);
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.72);
-  box-shadow: 0 10px 22px rgba(106, 74, 28, 0.06);
-  backdrop-filter: blur(12px);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.76);
+  color: var(--el-text-color-primary);
+  text-align: left;
+  cursor: pointer;
+  box-shadow: 0 10px 22px rgba(106, 74, 28, 0.055);
+  transition: transform 0.18s ease, border-color 0.18s ease, background-color 0.18s ease;
 }
 
-.stat-icon-wrap {
+.pulse-card:hover {
+  border-color: rgba(244, 180, 0, 0.42);
+  background: #fff;
+  transform: translateY(-1px);
+}
+
+.pulse-card-icon {
   display: grid;
-  flex: 0 0 auto;
   place-items: center;
-  width: 32px;
-  height: 32px;
+  width: 38px;
+  height: 38px;
   border-radius: 12px;
 }
 
-.stat-icon {
-  width: 17px;
-  height: 17px;
+.pulse-card-icon svg {
+  width: 19px;
+  height: 19px;
   stroke-width: 2.4;
 }
 
-.stat-copy {
+.pulse-card-copy {
+  display: grid;
   min-width: 0;
+  gap: 4px;
 }
 
-.stat-label {
-  display: block;
-  font-size: 12px;
-  font-weight: 700;
+.pulse-card-copy small {
   color: #6b5a3f;
+  font-size: 12px;
+  font-weight: 800;
 }
 
-.stat-value {
-  display: block;
-  margin-top: 2px;
-  font-size: 20px;
-  line-height: 1;
+.pulse-card-copy strong {
   color: #1f2937;
+  font-size: 25px;
+  line-height: 1;
 }
 
-.tone-green .stat-icon-wrap {
+.pulse-card-copy em {
+  overflow: hidden;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+  font-style: normal;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.tone-green .pulse-card-icon {
   color: #26a269;
   background: #e8f8ef;
 }
 
-.tone-orange .stat-icon-wrap {
+.tone-orange .pulse-card-icon {
   color: #e68a1f;
   background: #fff1d7;
 }
 
-.tone-blue .stat-icon-wrap {
+.tone-blue .pulse-card-icon {
   color: #3f8ed8;
   background: #eaf4ff;
 }
 
-.tone-purple .stat-icon-wrap {
+.tone-purple .pulse-card-icon {
   color: #8e63d9;
   background: #f2ecff;
 }
 
-.discovery-strip {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
+.signal-row {
+  grid-area: signals;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-self: end;
 }
 
-.discovery-item {
-  display: grid;
-  grid-template-columns: 34px minmax(0, 1fr);
+.signal-item {
+  display: inline-flex;
+  min-height: 34px;
   align-items: center;
-  gap: 10px;
-  min-height: 58px;
-  border: 1px solid var(--el-border-color-lighter);
-  border-radius: 10px;
-  background: var(--el-bg-color-overlay);
-  cursor: pointer;
-  padding: 10px 12px;
-  text-align: left;
-  transition: background-color 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+  gap: 7px;
+  border: 1px solid rgba(228, 189, 122, 0.22);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.68);
+  padding: 0 11px;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+  font-weight: 800;
 }
 
-.discovery-item:hover {
-  border-color: rgba(244, 180, 0, 0.42);
-  background: var(--el-fill-color-extra-light);
-  transform: translateY(-1px);
-}
-
-.discovery-icon {
-  width: 20px;
-  height: 20px;
+.signal-icon {
+  width: 14px;
+  height: 14px;
   color: #d18a00;
 }
 
-.discovery-item span {
-  display: grid;
-  gap: 2px;
-  min-width: 0;
-}
-
-.discovery-item strong {
+.signal-item strong {
   color: var(--el-text-color-primary);
-  font-size: 13px;
-}
-
-.discovery-item small {
-  overflow: hidden;
-  color: var(--el-text-color-secondary);
-  font-size: 12px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-@keyframes soft-float {
-  0%,
-  100% {
-    transform: translate3d(0, 0, 0);
-  }
-
-  50% {
-    transform: translate3d(0, -8px, 0);
-  }
 }
 
 @media (max-width: 900px) {
-  .hero-panel {
+  .pulse-hero {
     grid-template-columns: 1fr;
     grid-template-areas:
       "copy"
-      "visual"
-      "stats";
-    padding: 24px;
+      "board"
+      "signals";
   }
 
-  .hero-title {
-    font-size: 30px;
-  }
-
-  .visual-stage {
-    margin: 0 auto;
-  }
-
-  .hero-stats {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .discovery-strip {
-    grid-template-columns: 1fr;
+  .pulse-title {
+    font-size: 28px;
   }
 }
 
@@ -762,116 +400,82 @@ onMounted(async () => {
     gap: 10px;
   }
 
-  .discovery-strip {
-    gap: 8px;
+  .pulse-hero {
+    padding: 14px;
+    border-radius: 16px;
+    gap: 12px;
   }
 
-  .discovery-item {
-    min-height: 50px;
-    border-radius: 12px;
-  }
-
-  .hero-panel {
-    min-height: 0;
-    padding: 14px 16px 12px;
-    border-radius: 18px;
-    gap: 10px;
-  }
-
-  .hero-panel::before {
-    border-radius: 17px;
-  }
-
-  .hero-kicker {
-    padding: 4px 9px;
-    font-size: 11px;
-  }
-
-  .hero-title {
+  .pulse-title {
     margin: 8px 0 6px;
     font-size: 23px;
     line-height: 1.18;
   }
 
-  .hero-desc {
+  .pulse-desc {
     font-size: 13px;
     line-height: 1.45;
     display: -webkit-box;
     -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-    line-clamp: 2;
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
     overflow: hidden;
   }
 
-  .hero-actions {
+  .pulse-actions {
     margin-top: 10px;
   }
 
-  .hero-action.primary {
-    display: none;
-  }
-
-  .hero-action {
-    flex: 1 1 100%;
+  .pulse-action {
+    flex: 1 1 0;
+    min-width: 0;
     min-height: 34px;
-    padding: 0 14px;
+    padding: 0 12px;
     font-size: 13px;
   }
 
-  .hero-visual {
-    display: none;
+  .pulse-board {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
   }
 
-  .hero-stats {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 6px;
-    overflow-x: auto;
-    padding-bottom: 2px;
-    scrollbar-width: none;
-  }
-
-  .hero-stats::-webkit-scrollbar {
-    display: none;
-  }
-
-  .stat-card {
-    min-width: 76px;
-    min-height: 48px;
-    flex-direction: column;
-    align-items: flex-start;
-    justify-content: center;
-    gap: 5px;
-    padding: 8px;
+  .pulse-card {
+    grid-template-columns: 1fr;
+    min-height: 112px;
+    gap: 8px;
+    padding: 10px;
     border-radius: 12px;
   }
 
-  .stat-icon-wrap {
-    width: 24px;
-    height: 24px;
-    border-radius: 9px;
+  .pulse-card-icon {
+    width: 30px;
+    height: 30px;
+    border-radius: 10px;
   }
 
-  .stat-icon {
-    width: 14px;
-    height: 14px;
+  .pulse-card-icon svg {
+    width: 16px;
+    height: 16px;
   }
 
-  .stat-label {
-    font-size: 10px;
-    line-height: 1;
-    white-space: nowrap;
+  .pulse-card-copy strong {
+    font-size: 21px;
   }
 
-  .stat-value {
-    margin-top: 0;
-    font-size: 17px;
+  .pulse-card-copy em {
+    -webkit-line-clamp: 1;
   }
-}
 
-@media (prefers-reduced-motion: reduce) {
-  .spark-one,
-  .spark-two {
-    animation: none;
+  .signal-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .signal-item {
+    justify-content: center;
+    min-width: 0;
+    padding: 0 8px;
+  }
+
 }
 </style>

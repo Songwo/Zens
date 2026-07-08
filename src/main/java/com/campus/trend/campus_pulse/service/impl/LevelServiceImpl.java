@@ -44,13 +44,14 @@ public class LevelServiceImpl implements LevelService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void addExperience(String userId, int exp, String reason) {
-        if (userId == null || exp <= 0) return;
+        // Song：支持负增量（取消点赞/收藏对称扣回），经验保底不为负
+        if (userId == null || exp == 0) return;
 
         User user = userService.getById(userId);
         if (user == null) return;
 
         int currentExp = user.getExperience() != null ? user.getExperience() : 0;
-        user.setExperience(currentExp + exp);
+        user.setExperience(Math.max(0, currentExp + exp));
         user.setUpdateTime(LocalDateTime.now());
         userService.updateById(user);
 
@@ -67,7 +68,7 @@ public class LevelServiceImpl implements LevelService {
                     userId, exp, reason, e.getMessage());
         }
 
-        log.debug("用户[{}] 获得 {} 经验 ({}), 当前经验: {}", userId, exp, reason, currentExp + exp);
+        log.debug("用户[{}] 获得 {} 经验 ({}), 当前经验: {}", userId, exp, reason, Math.max(0, currentExp + exp));
     }
 
     @Override

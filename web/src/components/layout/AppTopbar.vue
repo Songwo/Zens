@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch, h } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Bell, ChatDotRound, Check, Connection, Delete, EditPen, Present, Search } from '@element-plus/icons-vue'
+import { Bell, ChatDotRound, Check, Delete, EditPen, Search } from '@element-plus/icons-vue'
 import { ElNotification } from 'element-plus'
 import AppLogo from '@/components/common/AppLogo.vue'
 import UserMenu from '@/components/common/UserMenu.vue'
@@ -10,17 +10,27 @@ import { usePostComposerStore } from '@/store/postComposer'
 import { useUserStore } from '@/store/user'
 import { notificationApi, type Notification } from '@/api/notification'
 import { dmApi } from '@/api/dm'
+import { tagApi } from '@/api/tag'
+import { postApi } from '@/api/post'
+import { userApi } from '@/api/user'
 import { cachedRequest, clearRequestCache } from '@/utils/requestCache'
 import { timeAgo } from '@/utils/timeAgo'
 import { wsClient, type NotificationEvent } from '@/utils/websocket'
 import { emitNotificationUnreadSync, onNotificationUnreadSync } from '@/utils/notificationSync'
 import { resolveNotificationRoute } from '@/utils/notificationRoute'
+import { DEFAULT_DISCOVERY_SEARCH_TERMS } from '@/utils/communityDiscovery'
+import { encodePostId, encodeUserId } from '@/utils/shortId'
 
 const router = useRouter()
 const route = useRoute()
 
 const searchQuery = ref('')
 const showMobileSearch = ref(false)
+const searchFocused = ref(false)
+const commandTagSuggestions = ref<string[]>([])
+const commandPostResults = ref<Array<{ id: string; title: string; sectionName?: string; commentCount?: number }>>([])
+const commandUserResults = ref<Array<{ id: string; nickname?: string; username?: string; avatar?: string; postCount?: number }>>([])
+const commandSuggestLoading = ref(false)
 
 const composerStore = usePostComposerStore()
 const userStore = useUserStore()
@@ -31,31 +41,73 @@ const notifications = ref<Notification[]>([])
 const notifLoading = ref(false)
 const notifPopoverVisible = ref(false)
 let pollTimer: ReturnType<typeof setInterval> | null = null
+let commandSuggestTimer: ReturnType<typeof setTimeout> | null = null
+let commandCloseTimer: ReturnType<typeof setTimeout> | null = null
+let commandAbortController: AbortController | null = null
+let commandRequestId = 0
 let unsubscribeWs: (() => void) | null = null
 let unsubscribeUnreadSync: (() => void) | null = null
 
 const currentUserId = computed(() => String(userStore.userInfo?.id || userStore.userId || ''))
+const normalizedCommandQuery = computed(() => searchQuery.value.trim())
 
 const currentPageLabel = computed(() => {
   const path = route.path
-  if (path === '/hot') return '热门排行'
-  if (path === '/featured') return '精华汇总'
-  if (path === '/benefits') return '福利中心'
-  if (path === '/metaverse') return 'Zens 星港'
-  if (path.startsWith('/s/')) return '板块详情'
-  if (path.startsWith('/t/')) return '帖子详情'
-  if (path === '/me') return '个人中心'
-  return '社区中枢'
+  if (path === '/hot') return '热榜'
+  if (path === '/featured') return '精华'
+  if (path === '/agent') return 'Agent'
+  if (path === '/benefits') return '福利'
+  if (path === '/metaverse') return '星港'
+  if (path.startsWith('/s/')) return '板块'
+  if (path.startsWith('/t/')) return '帖子'
+  if (path === '/me') return '我的'
+  return '首页'
 })
 
 const mobileSearchShortcuts = [
   { label: '热门排行', path: '/hot' },
   { label: '精华文档', path: '/featured' },
   { label: '福利中心', path: '/benefits' },
-  { label: 'Zens 星港', path: '/metaverse' },
+  { label: '星港', path: '/metaverse' },
 ]
 
-const mobileSearchTags = ['架构设计', 'Spring Boot', 'Vue', '性能优化', '项目复盘']
+const mobileSearchTags = DEFAULT_DISCOVERY_SEARCH_TERMS.slice(0, 5)
+
+const commandQuickActions = computed(() => {
+  const q = normalizedCommandQuery.value
+  const actions = [
+    { label: '看热榜', desc: '进入社区热门讨论', path: '/hot' },
+    { label: '精华汇总', desc: '浏览已沉淀的高价值内容', path: '/featured' },
+    { label: '福利中心', desc: '查看可领取的社区福利', path: '/benefits' },
+    { label: '星港', desc: '打开活动、积分与治理入口', path: '/metaverse' },
+  ]
+
+  if (!q) return actions
+  return [
+    { label: `搜索「${q}」`, desc: '帖子、标签、用户与 Agent 推荐', path: `/search?q=${encodeURIComponent(q)}` },
+    { label: '让 Agent 补充推荐', desc: '从帖子和评论里继续找相关线索', path: `/search?q=${encodeURIComponent(q)}&agent=1` },
+    ...actions.slice(0, 3),
+  ]
+})
+
+const commandSearchTerms = computed(() => {
+  const source = commandTagSuggestions.value.length
+    ? commandTagSuggestions.value
+    : DEFAULT_DISCOVERY_SEARCH_TERMS
+  return source.slice(0, 6)
+})
+
+const commandHasDirectResults = computed(() => (
+  commandPostResults.value.length > 0 ||
+  commandUserResults.value.length > 0 ||
+  commandTagSuggestions.value.length > 0
+))
+
+const commandShowNoResults = computed(() => (
+  normalizedCommandQuery.value.length >= 2 &&
+  !commandSuggestLoading.value &&
+  !commandHasDirectResults.value
+))
 
 const goCompose = () => {
   composerStore.open()
@@ -66,6 +118,7 @@ const handleSearch = () => {
   if (q) {
     router.push({ path: '/search', query: { q } })
     showMobileSearch.value = false
+    searchFocused.value = false
   }
 }
 
@@ -77,14 +130,144 @@ const closeMobileSearch = () => {
   showMobileSearch.value = false
 }
 
+const openCommandPanel = () => {
+  if (commandCloseTimer) {
+    clearTimeout(commandCloseTimer)
+    commandCloseTimer = null
+  }
+  searchFocused.value = true
+}
+
+const closeCommandPanelSoon = () => {
+  if (commandCloseTimer) {
+    clearTimeout(commandCloseTimer)
+  }
+  commandCloseTimer = setTimeout(() => {
+    searchFocused.value = false
+  }, 140)
+}
+
 const goMobileSearchShortcut = (path: string) => {
   showMobileSearch.value = false
   router.push(path)
 }
 
+const goCommandAction = (path: string) => {
+  searchFocused.value = false
+  showMobileSearch.value = false
+  router.push(path)
+}
+
+const goCommandPost = (postId: string) => {
+  searchFocused.value = false
+  showMobileSearch.value = false
+  router.push(`/t/${encodePostId(postId)}`)
+}
+
+const goCommandUser = (userId: string) => {
+  searchFocused.value = false
+  showMobileSearch.value = false
+  router.push(`/user/${encodeUserId(userId)}`)
+}
+
 const searchByTag = (tag: string) => {
   searchQuery.value = tag
   handleSearch()
+}
+
+const fetchCommandTagSuggestions = async (keyword: string) => {
+  const q = keyword.trim()
+  const requestId = ++commandRequestId
+  commandAbortController?.abort()
+  if (q.length < 2) {
+    commandTagSuggestions.value = []
+    commandPostResults.value = []
+    commandUserResults.value = []
+    commandSuggestLoading.value = false
+    return
+  }
+
+  const controller = new AbortController()
+  commandAbortController = controller
+  commandSuggestLoading.value = true
+  try {
+    const [tagRes, postRes, userRes] = await Promise.allSettled([
+      tagApi.search(q, { signal: controller.signal }),
+      postApi.searchList({
+        keyword: q,
+        page: 1,
+        pageSize: 3,
+        needTotal: false,
+        status: 1,
+        orderBy: 'relevance',
+      }, { signal: controller.signal }),
+      userApi.searchUsers(q),
+    ])
+    if (commandAbortController !== controller || requestId !== commandRequestId) return
+    const tagList = tagRes.status === 'fulfilled' && Array.isArray(tagRes.value.data) ? tagRes.value.data : []
+    commandTagSuggestions.value = Array.from(
+      new Set(
+        tagList
+          .map((item: any) => String(item?.name || '').trim())
+          .filter(Boolean)
+      )
+    ).slice(0, 6)
+    const postList = postRes.status === 'fulfilled' && Array.isArray(postRes.value.data?.records)
+      ? postRes.value.data.records
+      : []
+    commandPostResults.value = postList
+      .map((item: any) => ({
+        id: String(item?.id || ''),
+        title: String(item?.title || '').trim(),
+        sectionName: item?.sectionName,
+        commentCount: Number(item?.commentCount || 0),
+      }))
+      .filter((item) => item.id && item.title)
+      .slice(0, 3)
+    const userList = userRes.status === 'fulfilled' && Array.isArray(userRes.value.data)
+      ? userRes.value.data
+      : []
+    commandUserResults.value = userList
+      .map((item: any) => ({
+        id: String(item?.id || ''),
+        nickname: item?.nickname,
+        username: item?.username,
+        avatar: item?.avatar,
+        postCount: Number(item?.postCount || 0),
+      }))
+      .filter((item) => item.id)
+      .slice(0, 3)
+  } catch (error: any) {
+    if (error?.code !== 'ERR_CANCELED') {
+      commandTagSuggestions.value = []
+      commandPostResults.value = []
+      commandUserResults.value = []
+    }
+  } finally {
+    if (commandAbortController === controller) {
+      commandAbortController = null
+      commandSuggestLoading.value = false
+    }
+  }
+}
+
+const scheduleCommandSuggestions = () => {
+  if (commandSuggestTimer) {
+    clearTimeout(commandSuggestTimer)
+    commandSuggestTimer = null
+  }
+  const q = normalizedCommandQuery.value
+  if (q.length < 2) {
+    commandAbortController?.abort()
+    commandTagSuggestions.value = []
+    commandPostResults.value = []
+    commandUserResults.value = []
+    commandSuggestLoading.value = false
+    return
+  }
+  commandSuggestTimer = setTimeout(() => {
+    fetchCommandTagSuggestions(q)
+  }, 180)
 }
 
 const updateUnreadCount = (value: number) => {
@@ -357,8 +540,13 @@ watch(
   () => route.fullPath,
   () => {
     showMobileSearch.value = false
+    searchFocused.value = false
   }
 )
+
+watch(normalizedCommandQuery, () => {
+  scheduleCommandSuggestions()
+})
 
 onMounted(() => {
   document.addEventListener('visibilitychange', handleVisibilityChange)
@@ -388,6 +576,15 @@ onMounted(() => {
 onUnmounted(() => {
   document.removeEventListener('visibilitychange', handleVisibilityChange)
   stopPolling()
+  commandAbortController?.abort()
+  if (commandSuggestTimer) {
+    clearTimeout(commandSuggestTimer)
+    commandSuggestTimer = null
+  }
+  if (commandCloseTimer) {
+    clearTimeout(commandCloseTimer)
+    commandCloseTimer = null
+  }
   if (unsubscribeWs) {
     unsubscribeWs()
   }
@@ -405,40 +602,102 @@ onUnmounted(() => {
       </div>
 
       <div class="topbar-center">
-        <el-input
-          v-model="searchQuery"
-          placeholder="搜索帖子、标签、用户"
-          :prefix-icon="Search"
-          class="nav-search-input desktop-search"
-          @keyup.enter="handleSearch"
-          clearable
-        />
+        <div
+          class="desktop-search-shell"
+          @focusin="openCommandPanel"
+          @focusout="closeCommandPanelSoon"
+        >
+          <el-input
+            v-model="searchQuery"
+            placeholder="搜索帖子、标签、用户"
+            :prefix-icon="Search"
+            class="nav-search-input desktop-search"
+            @keyup.enter="handleSearch"
+            clearable
+          />
+
+          <section
+            class="command-search-panel"
+            aria-label="命令式搜索建议"
+            @mousedown.prevent
+          >
+            <div v-if="normalizedCommandQuery && commandPostResults.length" class="command-section">
+              <span class="command-heading">帖子结果</span>
+              <button
+                v-for="post in commandPostResults"
+                :key="post.id"
+                class="command-item command-result"
+                type="button"
+                @click="goCommandPost(post.id)"
+              >
+                <span class="command-item-title">{{ post.title }}</span>
+                <span class="command-item-desc">
+                  {{ post.sectionName || '社区帖子' }} · {{ post.commentCount || 0 }} 回复
+                </span>
+              </button>
+            </div>
+
+            <div v-if="normalizedCommandQuery && commandUserResults.length" class="command-section">
+              <span class="command-heading">用户</span>
+              <button
+                v-for="user in commandUserResults"
+                :key="user.id"
+                class="command-user-item"
+                type="button"
+                @click="goCommandUser(user.id)"
+              >
+                <el-avatar :size="26" :src="user.avatar">
+                  {{ (user.nickname || user.username || 'U').charAt(0) }}
+                </el-avatar>
+                <span class="command-user-copy">
+                  <strong>{{ user.nickname || user.username }}</strong>
+                  <small>@{{ user.username || 'user' }} · {{ user.postCount || 0 }} 帖</small>
+                </span>
+              </button>
+            </div>
+
+            <div class="command-section">
+              <span class="command-heading">快捷入口</span>
+              <button
+                v-for="item in commandQuickActions"
+                :key="item.path"
+                class="command-item"
+                type="button"
+                @click="goCommandAction(item.path)"
+              >
+                <span class="command-item-title">{{ item.label }}</span>
+                <span class="command-item-desc">{{ item.desc }}</span>
+              </button>
+            </div>
+
+            <div class="command-section">
+              <span class="command-heading">
+                {{ normalizedCommandQuery ? '相关标签' : '热门搜索' }}
+              </span>
+              <div v-if="commandSuggestLoading" class="command-loading">正在匹配...</div>
+              <div v-else-if="commandShowNoResults" class="command-empty">
+                没有直接命中，试试完整搜索或让 Agent 补充线索。
+              </div>
+              <div v-else class="command-tags">
+                <button
+                  v-for="tag in commandSearchTerms"
+                  :key="tag"
+                  class="command-tag"
+                  type="button"
+                  @click="searchByTag(tag)"
+                >
+                  # {{ tag }}
+                </button>
+              </div>
+            </div>
+          </section>
+        </div>
         <span class="mobile-title">{{ currentPageLabel }}</span>
       </div>
 
       <div class="topbar-right">
         <el-button circle text class="icon-btn mobile-only" @click="toggleMobileSearch">
           <el-icon><Search /></el-icon>
-        </el-button>
-
-        <el-button
-          text
-          class="metaverse-shortcut mobile-hidden-action"
-          :class="{ active: route.path.startsWith('/benefits') }"
-          @click="router.push('/benefits')"
-        >
-          <el-icon><Present /></el-icon>
-          <span class="metaverse-label">福利</span>
-        </el-button>
-
-        <el-button
-          text
-          class="metaverse-shortcut mobile-hidden-action"
-          :class="{ active: route.path.startsWith('/metaverse') }"
-          @click="router.push('/metaverse')"
-        >
-          <el-icon><Connection /></el-icon>
-          <span class="metaverse-label">星港</span>
         </el-button>
 
         <span class="ecosystem-launcher mobile-hidden-action">
@@ -541,10 +800,12 @@ onUnmounted(() => {
           </div>
 
           <div class="mobile-search-section">
-            <span class="mobile-search-heading">热门搜索</span>
+            <span class="mobile-search-heading">{{ normalizedCommandQuery ? '相关标签' : '推荐搜索' }}</span>
+            <div v-if="commandSuggestLoading" class="mobile-search-hint">正在匹配...</div>
+            <div v-else-if="commandShowNoResults" class="mobile-search-hint">没有直接命中，可以按回车进入完整搜索。</div>
             <div class="mobile-search-tags">
               <button
-                v-for="tag in mobileSearchTags"
+                v-for="tag in (normalizedCommandQuery ? commandSearchTerms : mobileSearchTags)"
                 :key="tag"
                 class="mobile-search-tag"
                 type="button"
@@ -601,8 +862,208 @@ onUnmounted(() => {
   width: 100%;
 }
 
+.desktop-search-shell {
+  position: relative;
+  width: min(100%, 520px);
+}
+
+.desktop-search-shell .desktop-search {
+  max-width: none;
+}
+
+.command-search-panel {
+  position: absolute;
+  z-index: 140;
+  top: calc(100% + 10px);
+  left: 0;
+  right: 0;
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, var(--el-border-color-light) 78%, transparent);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--el-bg-color-overlay) 96%, transparent);
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.14);
+  backdrop-filter: blur(16px) saturate(128%);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-4px);
+  transition: opacity 0.16s ease, transform 0.16s ease;
+}
+
+.desktop-search-shell:focus-within .command-search-panel {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.command-section + .command-section {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--el-border-color-lighter);
+}
+
+.command-heading {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.command-item {
+  width: 100%;
+  min-height: 42px;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--el-text-color-primary);
+  cursor: pointer;
+  display: grid;
+  gap: 2px;
+  text-align: left;
+  transition: background-color 0.18s ease, transform 0.18s ease;
+}
+
+.command-item:hover {
+  background: var(--el-fill-color-light);
+  transform: translateY(-1px);
+}
+
+.command-result {
+  border-left: 3px solid transparent;
+}
+
+.command-result:hover {
+  border-left-color: var(--cp-primary);
+}
+
+.command-user-item {
+  width: 100%;
+  min-height: 42px;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--el-text-color-primary);
+  cursor: pointer;
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr);
+  align-items: center;
+  gap: 9px;
+  text-align: left;
+  transition: background-color 0.18s ease, transform 0.18s ease;
+}
+
+.command-user-item:hover {
+  background: var(--el-fill-color-light);
+  transform: translateY(-1px);
+}
+
+.command-user-copy {
+  min-width: 0;
+  display: grid;
+  gap: 1px;
+}
+
+.command-user-copy strong,
+.command-user-copy small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.command-user-copy strong {
+  font-size: 13px;
+}
+
+.command-user-copy small {
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+}
+
+.command-item-title,
+.command-item-desc {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.command-item-title {
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.command-item-desc {
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+}
+
+.command-loading {
+  min-height: 32px;
+  padding: 7px 10px;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.command-empty {
+  min-height: 34px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--el-fill-color-extra-light);
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.command-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.command-tag {
+  max-width: 100%;
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 999px;
+  background: var(--el-fill-color-lighter);
+  color: var(--el-text-color-regular);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: background-color 0.18s ease, color 0.18s ease, transform 0.18s ease;
+}
+
+.command-tag:hover {
+  background: var(--el-color-primary-light-9);
+  color: var(--el-color-primary);
+  transform: translateY(-1px);
+}
+
+.command-pop-enter-active,
+.command-pop-leave-active {
+  transition: opacity 0.16s ease, transform 0.16s ease;
+}
+
+.command-pop-enter-from,
+.command-pop-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+
 .mobile-title {
   display: none;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: 14px;
   font-weight: 700;
   color: var(--el-text-color-primary);
@@ -629,32 +1090,9 @@ onUnmounted(() => {
   flex-shrink: 0;
 }
 
-.metaverse-shortcut {
-  height: 36px;
-  border-radius: 999px;
-  border: 1px solid var(--el-border-color-light);
-  color: var(--el-text-color-regular);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(255, 255, 255, 0.62)),
-    var(--el-bg-color);
-  font-weight: 800;
-  padding: 0 12px;
-}
-
-.metaverse-shortcut :deep(.el-icon) {
-  margin-right: 5px;
-  color: var(--cp-primary-dark);
-}
-
-.metaverse-shortcut:hover,
-.metaverse-shortcut.active {
-  color: #7a5700;
-  border-color: color-mix(in srgb, var(--cp-primary) 54%, var(--el-border-color-light));
-  background: var(--accept-bg-soft);
-  transform: translateY(-1px);
-}
-
 .icon-btn {
+  width: 36px;
+  height: 36px;
   color: var(--el-text-color-regular);
   font-size: 18px;
   border: 1px solid var(--el-border-color-light);
@@ -811,17 +1249,13 @@ onUnmounted(() => {
     min-width: 48px;
   }
 
-  .desktop-search {
+  .desktop-search-shell {
     display: none;
   }
 
   .mobile-title {
-    display: inline-flex;
-    min-width: 0;
-    max-width: 34vw;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    display: block;
+    max-width: clamp(96px, 42vw, 180px);
   }
 
   .mobile-only {
@@ -886,6 +1320,13 @@ onUnmounted(() => {
     color: var(--el-text-color-secondary);
     font-size: 12px;
     font-weight: 800;
+  }
+
+  .mobile-search-hint {
+    margin-bottom: 8px;
+    color: var(--el-text-color-secondary);
+    font-size: 12px;
+    line-height: 1.45;
   }
 
   .mobile-search-grid {
@@ -958,7 +1399,7 @@ onUnmounted(() => {
   }
 
   .mobile-title {
-    max-width: 28vw;
+    max-width: clamp(84px, 38vw, 150px);
     font-size: 13px;
   }
 

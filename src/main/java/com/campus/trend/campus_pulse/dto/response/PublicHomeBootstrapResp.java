@@ -15,4 +15,7 @@ public class PublicHomeBootstrapResp {
     private List<Tag> hotTags;
     private List<Map<String, Object>> hotRank;
     private SiteStatsResp siteStats;
+    private long unsolvedQaCount;
+    private long todaySolvedQaCount;
+    private long followedTagUpdateCount;
 }

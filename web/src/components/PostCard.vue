@@ -190,6 +190,10 @@ const goToPost = () => {
 
 const handleLike = async (e: Event) => {
   e.stopPropagation()
+  if (!userStore.accessToken) {
+    ElMessage.warning('请先登录后再点赞')
+    return
+  }
   if (isLiking.value) return // 防抖:请求未回前忽略重复点击
   isLiking.value = true
   likeAnimating.value = true
@@ -220,6 +224,10 @@ const handleLike = async (e: Event) => {
 
 const handleCollect = async (e: Event) => {
   e.stopPropagation()
+  if (!userStore.accessToken) {
+    ElMessage.warning('请先登录后再收藏')
+    return
+  }
   if (isCollecting.value) return
   isCollecting.value = true
   collectAnimating.value = true
@@ -346,6 +354,13 @@ const highlightedSummary = computed(() => highlightText(postSummary.value))
         <span v-if="post.rejectReason" class="reject-reason">打回原因：{{ post.rejectReason }}</span>
       </div>
       <el-button size="small" type="warning" :loading="isOpeningEditor" @click.stop="handleCommand('edit')">去编辑</el-button>
+    </div>
+    <div v-else-if="post.auditStatus === 'PENDING'" class="pending-banner">
+      <div class="rejected-banner-text">
+        <span>该帖子正在审核，当前仅作者和版务可见</span>
+        <span class="reject-reason">审核通过后才会进入搜索、推荐和公开列表</span>
+      </div>
+      <el-button v-if="canManagePost" size="small" type="warning" plain :loading="isOpeningEditor" @click.stop="handleCommand('edit')">继续修改</el-button>
     </div>
     <div v-else-if="post.status === 0 || post.auditStatus === 'DRAFT'" class="draft-banner">
       <span>该内容当前为草稿，尚未提交发布</span>
@@ -837,6 +852,18 @@ const highlightedSummary = computed(() => highlightText(postSummary.value))
   background: var(--el-color-danger-light-9);
   border-bottom: 1px solid var(--el-color-danger-light-5);
   color: var(--el-color-danger);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.pending-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 20px;
+  background: var(--el-color-warning-light-9);
+  border-bottom: 1px solid var(--el-color-warning-light-5);
+  color: var(--el-color-warning-dark-2);
   font-size: 13px;
   font-weight: 600;
 }

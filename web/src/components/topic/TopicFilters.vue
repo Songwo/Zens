@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { publicDataApi, type PublicSectionItem } from '@/api/publicData'
+import { formatSectionName } from '@/utils/communitySections'
 
 const props = defineProps<{
   hideCategories?: boolean
@@ -13,6 +14,7 @@ const activeNav = ref<NavType>('latest')
 const activeCategory = ref('all')
 const categories = ref<PublicSectionItem[]>([])
 const categoryLoading = ref(false)
+const isAnswerNav = computed(() => activeNav.value === 'unsolved' || activeNav.value === 'solved')
 const navItems = computed(() => [
   { key: 'latest' as NavType, label: '最新' },
   { key: 'recommend' as NavType, label: '为你' },
@@ -28,13 +30,16 @@ const emit = defineEmits<{
 const emitFilterChange = () => {
   emit('filter-change', {
     navType: activeNav.value,
-    category: props.hideCategories ? 'all' : activeCategory.value,
+    category: props.hideCategories || isAnswerNav.value ? 'all' : activeCategory.value,
   })
 }
 
 const setNav = (navType: NavType) => {
   if (activeNav.value === navType) return
   activeNav.value = navType
+  if (isAnswerNav.value) {
+    activeCategory.value = 'all'
+  }
   emitFilterChange()
 }
 
@@ -67,6 +72,9 @@ watch(() => props.hideCategories, (hideCategories) => {
 watch(() => props.modelValue, (value) => {
   if (value && activeNav.value !== value) {
     activeNav.value = value
+    if (isAnswerNav.value) {
+      activeCategory.value = 'all'
+    }
   }
 }, { immediate: true })
 
@@ -91,8 +99,10 @@ onMounted(() => {
     </div>
 
     <div v-if="!hideCategories" class="filters-side">
-      <span class="sort-label">分类</span>
+      <span class="sort-label">{{ isAnswerNav ? '范围' : '分类' }}</span>
+      <span v-if="isAnswerNav" class="qa-scope-pill">答疑解惑</span>
       <el-select
+        v-else
         v-model="activeCategory"
         class="filter-select"
         :loading="categoryLoading"
@@ -102,7 +112,7 @@ onMounted(() => {
         <el-option
           v-for="category in categories"
           :key="category.id"
-          :label="category.name"
+          :label="formatSectionName(category.name || '')"
           :value="String(category.id)"
         />
       </el-select>
@@ -172,6 +182,20 @@ onMounted(() => {
   width: 160px;
 }
 
+.qa-scope-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 0 11px;
+  border: 1px solid rgba(244, 180, 0, 0.32);
+  border-radius: 999px;
+  background: #fff8e6;
+  color: #7a5700;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
 @media (max-width: 768px) {
   .topic-filters {
     position: sticky;
@@ -188,14 +212,23 @@ onMounted(() => {
   }
 
   .filters-main {
-    display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    display: flex;
+    flex-wrap: nowrap;
     gap: 6px;
+    margin: 0 -2px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .filters-main::-webkit-scrollbar {
+    display: none;
   }
 
   .tab-btn {
+    flex: 0 0 auto;
     min-width: 0;
-    padding: 7px 4px;
+    padding: 8px 11px;
     font-size: 11.5px;
     line-height: 1;
     white-space: nowrap;

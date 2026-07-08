@@ -95,7 +95,7 @@ export interface PostSearchRequest {
     sectionIds?: number[]
     status?: number
     orderBy?: 'new' | 'hot' | string
-    navType?: 'latest' | 'hot' | 'essence' | string
+    navType?: 'latest' | 'recommend' | 'hot' | 'essence' | 'unsolved' | 'solved' | 'pinned' | string
     category?: string | number
     timeRange?: 'TODAY' | 'WEEK' | 'MONTH' | string
     isFeatured?: boolean

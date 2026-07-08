@@ -61,6 +61,9 @@ export const performanceApi = {
   },
 
   reportWebVital(data: WebVitalMetric) {
-    return api.post<any, Result<void>>('/performance/web-vitals', data)
+    return api.post<any, Result<void>>('/performance/web-vitals', data, {
+      skipGlobalProgress: true,
+      silentError: true,
+    })
   },
 }

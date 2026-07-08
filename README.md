@@ -28,6 +28,7 @@ Campus Pulse 不是一个普通的论坛系统。它以**行为驱动洞察**为
 |------|------|
 | 🔥 **热度引擎** | 基于浏览/点赞/评论/收藏的多维热度衰减算法，定时批量更新 + Redis 缓存双轨驱动 |
 | 🤖 **AI 摘要** | 集成 DeepSeek API 对帖子自动生成摘要，支持作者一键重新生成 |
+| 🧠 **社区 Agent** | 独立 Python 问答服务，支持引用式回答、流式输出、MySQL 主库直连与 PostgreSQL 搜索库切换 |
 | 📊 **趋势决策** | 实时板块分布饼图、发帖趋势折线图、热词云、智能话题预测表 |
 | 🔐 **多层安全** | JWT + Redis 令牌绑定 + 设备 ID 校验 + 请求签名（SHA-256）+ 二步验证（TOTP） |
 | 🗂️ **内容治理** | 多级审核流程（PENDING/APPROVED/REJECTED）、举报异步工作流、版主申请机制 |
@@ -59,7 +60,7 @@ Campus Pulse 不是一个普通的论坛系统。它以**行为驱动洞察**为
 
 ## 🏗️ 系统架构
 
-Campus Pulse 采用 **Java 主应用 + Go 媒体服务** 双后端拆分，Java 专注业务编排，Go 专注高并发媒体上传与治理；两端通过 Upload JWT / Service Token 解耦通信。
+Campus Pulse 采用 **Java 主应用 + Go 媒体服务 + Python Agent 服务** 的组合架构：Java 专注主业务编排，Go 负责高并发媒体上传与治理，Python Agent 负责社区检索问答与流式回答；三者通过 HTTP / Service Token / 只读数据链路解耦协作。
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
@@ -94,6 +95,18 @@ Campus Pulse 采用 **Java 主应用 + Go 媒体服务** 双后端拆分，Java 
 ```
 
 > 📎 媒体子系统的详细文档见 [`go-media-service/README.md`](go-media-service/README.md)。
+
+### 🤖 社区 Agent 服务
+
+项目已经内置一个独立的社区问答服务 [`agent-service/`](agent-service/README.md)，适合企业化接入“社区知识问答 / 帖子搜索 Copilot / 引用式回答”场景。
+
+- **服务形态**：FastAPI + Python，单独监听端口，避免拖慢主站写链路
+- **接入方式**：前端直连或通过 Spring Boot 网关 `/api/agent/*` 转发
+- **检索后端**：当前阶段可直接连 MySQL；后续可平滑切到 PostgreSQL 搜索库
+- **流式输出**：支持 `ask-stream` SSE，前端可做正式问答面板
+- **副本策略**：本仓库已附带 [`deploy/mysql-replication/`](deploy/mysql-replication) 与 [`docs/MYSQL_READ_REPLICA_GUIDE.md`](docs/MYSQL_READ_REPLICA_GUIDE.md) 用于先搭 MySQL 只读从库
+
+如果你要单独启动 Agent，请直接看 [`agent-service/README.md`](agent-service/README.md)。
 
 ---
 
@@ -264,6 +277,11 @@ campus-pulse/
 │   │   ├── types/           # TypeScript 类型定义
 │   │   └── utils/           # 工具函数（richLink、notificationRoute、cardTheme...）
 │   └── vite.config.ts
+├── agent-service/                    # Python 社区 Agent（检索问答 / 流式回答 / 搜索副本）
+│   ├── app/                          # FastAPI 入口、配置、仓储、问答服务
+│   ├── scripts/                      # 本地启动 / smoke test 脚本
+│   ├── sql/postgres/                 # PostgreSQL 搜索索引建议
+│   └── README.md
 ├── go-media-service/                 # 独立 Go 媒体服务（见子目录 README）
 │   ├── cmd/media-service/            # 进程入口
 │   ├── internal/
@@ -279,7 +297,10 @@ campus-pulse/
 ├── campus-lottery-station/           # 抽奖站子站（React + Go）
 ├── cdk-airdrop-station/              # CDK 空投站（React + Go + PostgreSQL）
 ├── docs/
+│   ├── MYSQL_READ_REPLICA_GUIDE.md   # MySQL 主从 / 只读副本小白手册
 │   └── PROJECTS_AND_DOCKER_DEPLOY.md # 项目清单与 Docker 部署总览
+├── deploy/
+│   └── mysql-replication/            # 本地 MySQL 主从 Docker 演示与引导脚本
 ├── deploy-subsites.sh                # 子站 Docker 一键部署脚本（不重启主站）
 └── scripts/
     ├── deploy.sh            # 主站 Jar 部署脚本
@@ -383,7 +404,26 @@ npm run dev
 
 前端开发服务运行在：**http://localhost:5173**（已配置 `/api` 代理至后端 7800 端口）
 
-### 6. 启动媒体服务（Go）
+### 6. 启动社区 Agent 服务（Python，可选但推荐）
+
+```bash
+cd agent-service
+python -m venv .venv
+
+# Windows PowerShell
+.\.venv\Scripts\Activate.ps1
+
+# macOS / Linux
+# source .venv/bin/activate
+
+pip install -r requirements.txt
+uvicorn app.main:app --host 0.0.0.0 --port 7810 --reload
+```
+
+Agent 默认运行在：**http://localhost:7810**  
+服务说明、OpenAI 兼容接口配置、搜索后端切换见 [`agent-service/README.md`](agent-service/README.md)。
+
+### 7. 启动媒体服务（Go）
 
 ```bash
 cd go-media-service

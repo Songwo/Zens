@@ -14,7 +14,7 @@ SET t.`post_count` = (
     SELECT COUNT(*)
     FROM `sys_post` p
     WHERE p.`status` = 1
-      AND (p.`audit_status` IS NULL OR p.`audit_status` = '' OR p.`audit_status` = 'PENDING' OR p.`audit_status` = 'APPROVED')
+      AND (p.`audit_status` IS NULL OR p.`audit_status` = '' OR p.`audit_status` = 'APPROVED')
       AND (FIND_IN_SET(t.`name`, p.`tags`) > 0
            OR FIND_IN_SET(CONCAT(' ', t.`name`), p.`tags`) > 0
            OR p.`tags` = t.`name`)

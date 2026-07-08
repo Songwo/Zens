@@ -85,6 +85,16 @@ public class Post implements Serializable {
      */
     private String auditStatus;
 
+    /**
+     * 软删前 status 快照，恢复时还原；非删除态为 null。
+     */
+    private Integer preDeleteStatus;
+
+    /**
+     * 软删前 audit_status 快照，恢复时还原；非删除态为 null。
+     */
+    private String preDeleteAuditStatus;
+
     @Deprecated
     private Integer isPinned;
 

@@ -38,7 +38,7 @@ const goTopic = () => {
   router.push(`/t/${encodePostId(String(props.topic.id))}`)
 }
 
-const maxVisibleTags = 3
+const maxVisibleTags = 2
 
 const visibleTags = computed(() => (props.topic.tags || []).slice(0, maxVisibleTags))
 const hiddenTagCount = computed(() => Math.max((props.topic.tags || []).length - maxVisibleTags, 0))
@@ -87,6 +87,19 @@ const aiBadgeClass = computed(() => {
 
 const aiBadge = computed(() => !!aiBadgeText.value)
 const recommendReason = computed(() => (props.topic.recommendReason || '').trim())
+const visibleStateTags = computed(() => {
+  const tags: Array<{ key: string; label: string; className: string }> = []
+  if (props.topic.isPinned) tags.push({ key: 'pin', label: '置顶', className: 'pin' })
+  if (props.topic.isFeatured) tags.push({ key: 'feature', label: '精华', className: 'feature' })
+  if (props.topic.isSolved) tags.push({ key: 'solved', label: '已解决', className: 'solved' })
+  if (isNew.value) tags.push({ key: 'fresh', label: 'NEW', className: 'fresh' })
+
+  const visible = tags.slice(0, 2)
+  if (tags.length > 2) {
+    visible.push({ key: 'more', label: `+${tags.length - 2}`, className: 'more' })
+  }
+  return visible
+})
 
 const formatMetric = (value: number) => {
   if (!Number.isFinite(value)) return '0'
@@ -205,10 +218,14 @@ const formatMetric = (value: number) => {
           <span class="rp-time">{{ timeAgo(topic.lastActive || topic.createdAt) }}</span>
         </div>
         <div class="state-tags">
-          <span v-if="topic.isPinned" class="state-tag pin">置顶</span>
-          <span v-if="topic.isFeatured" class="state-tag feature">精华</span>
-          <span v-if="topic.isSolved" class="state-tag solved">已解决</span>
-          <span v-if="isNew" class="state-tag fresh">NEW</span>
+          <span
+            v-for="tag in visibleStateTags"
+            :key="tag.key"
+            class="state-tag"
+            :class="tag.className"
+          >
+            {{ tag.label }}
+          </span>
         </div>
       </div>
 
@@ -338,6 +355,11 @@ const formatMetric = (value: number) => {
 .state-tag.fresh {
   color: #0b57d0;
   background: #e7f0ff;
+}
+
+.state-tag.more {
+  color: var(--el-text-color-secondary);
+  background: var(--el-fill-color-light);
 }
 
 .topic-title {

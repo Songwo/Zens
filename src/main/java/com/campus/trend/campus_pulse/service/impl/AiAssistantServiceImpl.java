@@ -44,7 +44,11 @@ public class AiAssistantServiceImpl implements AiAssistantService {
             // 1. 查询相似帖子（有采纳答案的优先）
             LambdaQueryWrapper<Post> wrapper = new LambdaQueryWrapper<>();
             wrapper.eq(Post::getStatus, 1)
-                    .eq(Post::getAuditStatus, "APPROVED")
+                    .and(w -> w.isNull(Post::getAuditStatus)
+                            .or()
+                            .eq(Post::getAuditStatus, "")
+                            .or()
+                            .eq(Post::getAuditStatus, "APPROVED"))
                     .orderByDesc(Post::getHeatScore)
                     .last("LIMIT 10");
 

@@ -8,6 +8,7 @@ import com.campus.trend.campus_pulse.dto.response.CommentResp;
 import com.campus.trend.campus_pulse.entity.AnswerAdoption;
 import com.campus.trend.campus_pulse.entity.Comment;
 import com.campus.trend.campus_pulse.entity.CommentCollect;
+import com.campus.trend.campus_pulse.entity.CommentLike;
 import com.campus.trend.campus_pulse.entity.Post;
 import com.campus.trend.campus_pulse.entity.User;
 import com.campus.trend.campus_pulse.mapper.AnswerAdoptionMapper;
@@ -36,7 +37,6 @@ import java.util.stream.Collectors;
 public class CommentServiceImpl extends ServiceImpl<CommentMapper, Comment> implements CommentService {
 
     private static final int POST_STATUS_PUBLISHED = 1;
-    private static final String AUDIT_STATUS_PENDING = "PENDING";
     private static final String AUDIT_STATUS_APPROVED = "APPROVED";
     private static final String AUDIT_STATUS_DELETED = "DELETED";
     private static final String AUDIT_STATUS_REJECTED = "REJECTED";
@@ -47,7 +47,7 @@ public class CommentServiceImpl extends ServiceImpl<CommentMapper, Comment> impl
     private final PostMapper sysPostMapper;
     private final ContentSecurityService contentSecurityService;
     private final com.campus.trend.campus_pulse.service.post.PostCacheManager postCacheManager;
-    private final org.springframework.data.redis.core.StringRedisTemplate stringRedisTemplate;
+    private final com.campus.trend.campus_pulse.mapper.CommentLikeMapper commentLikeMapper;
     private final UserService userService;
     private final NotificationService notificationService;
     private final com.campus.trend.campus_pulse.service.PostEventService postEventService;
@@ -93,16 +93,14 @@ public class CommentServiceImpl extends ServiceImpl<CommentMapper, Comment> impl
         this.save(comment);
 
         Set<String> alreadyMentionedUserIds = new HashSet<>();
-        post.setCommentCount((post.getCommentCount() == null ? 0 : post.getCommentCount()) + 1);
-        // Song：更新最后回复时间和最后活跃时间
+        // Song：评论数与最后回复/活跃时间走原子 UPDATE，避免整行回写覆盖并发的其它计数字段
         LocalDateTime now = LocalDateTime.now();
-        post.setLastReplyAt(now);
-        post.setLastActivityAt(now);
-        sysPostMapper.updateById(post);
+        sysPostMapper.incrementCommentCount(post.getId(), now);
+        int newCommentCount = (post.getCommentCount() == null ? 0 : post.getCommentCount()) + 1;
         invalidatePostFeedCache(post.getSectionId(), post.getId());
 
         // 异步：推送新回复事件
-        asyncTaskService.pushPostRepliedAsync(post.getId(), post.getSectionId(), post.getCommentCount());
+        asyncTaskService.pushPostRepliedAsync(post.getId(), post.getSectionId(), newCommentCount);
 
         // 异步：评论通知 + 经验奖励
         if (!post.getUserId().equals(actorUserId)) {
@@ -187,10 +185,9 @@ public class CommentServiceImpl extends ServiceImpl<CommentMapper, Comment> impl
                 .eq(Comment::getId, commentId)
                 .update();
 
-        // 评论数 -1 + 刷新 Redis 版本
+        // 评论数 -1（原子）+ 刷新 Redis 版本
         if (post != null) {
-            post.setCommentCount(Math.max(0, post.getCommentCount() - 1));
-            sysPostMapper.updateById(post);
+            sysPostMapper.decrementCommentCount(post.getId());
             invalidatePostFeedCache(post.getSectionId(), post.getId());
         }
     }
@@ -226,11 +223,11 @@ public class CommentServiceImpl extends ServiceImpl<CommentMapper, Comment> impl
                 .update();
 
         if (post != null) {
-            post.setCommentCount(post.getCommentCount() == null ? 1 : post.getCommentCount() + 1);
-            post.setLastActivityAt(now);
-            sysPostMapper.updateById(post);
+            // Song：评论数 +1 并刷新活跃时间（原子）
+            sysPostMapper.incrementCommentCount(post.getId(), now);
+            int newCommentCount = (post.getCommentCount() == null ? 0 : post.getCommentCount()) + 1;
             invalidatePostFeedCache(post.getSectionId(), post.getId());
-            asyncTaskService.pushPostRepliedAsync(post.getId(), post.getSectionId(), post.getCommentCount());
+            asyncTaskService.pushPostRepliedAsync(post.getId(), post.getSectionId(), newCommentCount);
         }
     }
 
@@ -455,19 +452,34 @@ public class CommentServiceImpl extends ServiceImpl<CommentMapper, Comment> impl
             throw new BusinessException(ResultCode.NO_PERMISSION, "该帖子当前不可点赞评论");
         }
 
-        String key = "comment:like:" + commentId + ":" + userId;
-        Boolean hasLiked = stringRedisTemplate.hasKey(key);
+        // Song：点赞状态持久化到 comment_likes 表（原 Redis 永不过期键会因 Redis 数据丢失导致状态漂移）。
+        //      唯一约束 uk_comment_like_user_comment 兜底并发重复点赞；计数走原子 UPDATE。
+        Long likedCount = commentLikeMapper.selectCount(Wrappers.<CommentLike>lambdaQuery()
+                .eq(CommentLike::getCommentId, commentId)
+                .eq(CommentLike::getUserId, userId));
+        boolean hasLiked = likedCount != null && likedCount > 0;
 
-        if (Boolean.TRUE.equals(hasLiked)) {
-            stringRedisTemplate.delete(key);
-            comment.setLikeCount(Math.max(0, comment.getLikeCount() - 1));
-            userService.decrementLikesReceived(comment.getUserId());
+        if (hasLiked) {
+            int removed = commentLikeMapper.delete(Wrappers.<CommentLike>lambdaQuery()
+                    .eq(CommentLike::getCommentId, commentId)
+                    .eq(CommentLike::getUserId, userId));
+            if (removed > 0) {
+                baseMapper.decrementLikeCount(commentId);
+                userService.decrementLikesReceived(comment.getUserId());
+            }
         } else {
-            stringRedisTemplate.opsForValue().set(key, "1");
-            comment.setLikeCount(comment.getLikeCount() + 1);
+            try {
+                commentLikeMapper.insert(new CommentLike()
+                        .setCommentId(commentId)
+                        .setUserId(userId)
+                        .setCreatedAt(LocalDateTime.now()));
+            } catch (org.springframework.dao.DuplicateKeyException e) {
+                // Song：并发重复点赞，幂等返回
+                return;
+            }
+            baseMapper.incrementLikeCount(commentId);
             userService.incrementLikesReceived(comment.getUserId());
         }
-        updateById(comment);
         postCacheManager.bumpPostDetailCacheVersion(comment.getPostId());
     }
 
@@ -545,7 +557,6 @@ public class CommentServiceImpl extends ServiceImpl<CommentMapper, Comment> impl
                 && !AUDIT_STATUS_DELETED.equalsIgnoreCase(post.getAuditStatus())
                 && Integer.valueOf(POST_STATUS_PUBLISHED).equals(post.getStatus())
                 && (!StringUtils.hasText(post.getAuditStatus())
-                || AUDIT_STATUS_PENDING.equalsIgnoreCase(post.getAuditStatus())
                 || AUDIT_STATUS_APPROVED.equalsIgnoreCase(post.getAuditStatus()));
     }
 
@@ -684,23 +695,19 @@ public class CommentServiceImpl extends ServiceImpl<CommentMapper, Comment> impl
             return;
         }
 
-        List<String> ids = new ArrayList<>(commentIds);
-        List<String> keys = ids.stream()
-                .map(id -> buildCommentLikeKey(id, currentUserId))
-                .toList();
-
+        // Song：点赞状态改从 comment_likes 表批查（原 Redis 键会因数据丢失导致状态漂移）
         Set<String> likedIds = new HashSet<>();
         try {
-            List<String> values = stringRedisTemplate.opsForValue().multiGet(keys);
-            if (values != null) {
-                for (int i = 0; i < values.size(); i++) {
-                    if (values.get(i) != null) {
-                        likedIds.add(ids.get(i));
-                    }
-                }
-            }
+            likedIds = commentLikeMapper.selectList(Wrappers.<CommentLike>lambdaQuery()
+                            .select(CommentLike::getCommentId)
+                            .eq(CommentLike::getUserId, currentUserId)
+                            .in(CommentLike::getCommentId, commentIds))
+                    .stream()
+                    .map(CommentLike::getCommentId)
+                    .filter(StringUtils::hasText)
+                    .collect(Collectors.toSet());
         } catch (Exception e) {
-            // Redis 异常不影响评论列表主流程，降级为未点赞状态。
+            // DB 异常不影响评论列表主流程，降级为未点赞状态。
         }
 
         applyLikeStatus(responses, likedIds);
@@ -732,10 +739,6 @@ public class CommentServiceImpl extends ServiceImpl<CommentMapper, Comment> impl
                 collectCommentIds(c.getChildren(), commentIds);
             }
         }
-    }
-
-    private String buildCommentLikeKey(String commentId, String userId) {
-        return "comment:like:" + commentId + ":" + userId;
     }
 
     private void applyLikeStatus(List<CommentResp> responses, Set<String> likedIds) {

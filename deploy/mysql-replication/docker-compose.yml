@@ -1,0 +1,56 @@
+services:
+  mysql-source:
+    image: mysql:8.4
+    container_name: campus-mysql-source
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root123456
+      MYSQL_DATABASE: campus_pulse
+    ports:
+      - "3307:3306"
+    command:
+      - --server-id=1
+      - --log-bin=mysql-bin
+      - --binlog-format=ROW
+      - --gtid-mode=ON
+      - --enforce-gtid-consistency=ON
+      - --log-replica-updates=ON
+      - --innodb-flush-log-at-trx-commit=1
+      - --sync-binlog=1
+      - --skip-name-resolve=1
+    volumes:
+      - source-data:/var/lib/mysql
+      - ./source/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -uroot -proot123456"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  mysql-replica:
+    image: mysql:8.4
+    container_name: campus-mysql-replica
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root123456
+    ports:
+      - "3308:3306"
+    command:
+      - --server-id=2
+      - --log-bin=mysql-bin
+      - --relay-log=mysql-relay-bin
+      - --gtid-mode=ON
+      - --enforce-gtid-consistency=ON
+      - --log-replica-updates=ON
+      - --skip-name-resolve=1
+    volumes:
+      - replica-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -uroot -proot123456"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  source-data:
+  replica-data:

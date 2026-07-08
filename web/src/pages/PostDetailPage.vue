@@ -532,8 +532,17 @@ const fetchPost = async () => {
   }
 }
 
+const isLiking = ref(false)
+const isCollecting = ref(false)
+
 const handleLike = async () => {
   if (!post.value) return
+  if (!userStore.accessToken) {
+    ElMessage.warning('请先登录后再点赞')
+    return
+  }
+  if (isLiking.value) return // 防抖:请求未回前忽略重复点击
+  isLiking.value = true
   // 乐观更新:先翻转 UI,失败回滚
   const prevLiked = post.value.isLiked
   const prevCount = post.value.likeCount
@@ -553,11 +562,19 @@ const handleLike = async () => {
       post.value.likeCount = prevCount
     }
     pulseNotification.error('点赞操作失败，请重试')
+  } finally {
+    isLiking.value = false
   }
 }
 
 const handleCollect = async () => {
   if (!post.value) return
+  if (!userStore.accessToken) {
+    ElMessage.warning('请先登录后再收藏')
+    return
+  }
+  if (isCollecting.value) return
+  isCollecting.value = true
   const prevCollected = post.value.isCollected
   const prevCount = post.value.collectCount
   const nextCollected = !prevCollected
@@ -576,10 +593,16 @@ const handleCollect = async () => {
       post.value.collectCount = prevCount
     }
     pulseNotification.error('收藏操作失败，请重试')
+  } finally {
+    isCollecting.value = false
   }
 }
 
 const handleCommentLike = async (comment: any) => {
+  if (!userStore.accessToken) {
+    ElMessage.warning('请先登录后再点赞评论')
+    return
+  }
   const prevLiked = comment.isLiked
   const prevCount = comment.likeCount || 0
   const nextLiked = !prevLiked

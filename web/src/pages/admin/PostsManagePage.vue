@@ -53,7 +53,7 @@ const emptyTitle = computed(() => isTrashMode.value ? '回收站暂无内容' : 
 const emptyDescription = computed(() => isTrashMode.value ? '已删除的帖子会在这里集中显示' : '尝试调整搜索关键词')
 const manageablePosts = computed(() => posts.value.filter(canManageRow))
 const pendingCount = computed(() => posts.value.filter(post => post.auditStatus === 'PENDING').length)
-const publishedCount = computed(() => posts.value.filter(post => post.auditStatus === 'APPROVED' || post.status === 1).length)
+const publishedCount = computed(() => posts.value.filter(post => post.status === 1 && (!post.auditStatus || post.auditStatus === 'APPROVED')).length)
 const deletedCount = computed(() => posts.value.filter(post => post.auditStatus === 'DELETED').length)
 const featuredCount = computed(() => posts.value.filter(post => post.isFeatured === 1).length)
 const selectedManageablePosts = computed(() => selectedPosts.value.filter(canManageRow))

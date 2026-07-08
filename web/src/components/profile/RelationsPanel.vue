@@ -8,6 +8,7 @@ import { tagApi, type Tag } from '@/api/tag'
 import { encodeUserId } from '@/utils/shortId'
 import { ElMessage } from 'element-plus'
 import { User, Connection, PriceTag } from '@element-plus/icons-vue'
+import { invalidateCommunityContentCaches } from '@/utils/communityCache'
 
 const props = withDefaults(defineProps<{ initialSub?: 'following' | 'followers' | 'tags' }>(), {
   initialSub: 'following',
@@ -40,7 +41,7 @@ onMounted(loadCurrent)
 
 const goUser = (id: string) => router.push(`/user/${encodeUserId(id)}`)
 const unfollowUser = async (id: string) => { await followApi.unfollow(id); following.value = following.value.filter(u => u.id !== id) }
-const unfollowTag = async (t: Tag) => { try { await tagApi.unfollow(t.id); tags.value = tags.value.filter(x => x.id !== t.id); ElMessage.success(`已取消关注 #${t.name}`) } catch { ElMessage.error('取消关注失败') } }
+const unfollowTag = async (t: Tag) => { try { await tagApi.unfollow(t.id); tags.value = tags.value.filter(x => x.id !== t.id); invalidateCommunityContentCaches(); ElMessage.success(`已取消关注 #${t.name}`) } catch { ElMessage.error('取消关注失败') } }
 </script>
 
 <template>

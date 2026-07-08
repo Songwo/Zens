@@ -80,7 +80,6 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         this.followMapper = followMapper;
     }
 
-    private static final String AUDIT_STATUS_PENDING = "PENDING";
     private static final String AUDIT_STATUS_APPROVED = "APPROVED";
 
     /**
@@ -176,8 +175,6 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
                                 .or()
                                 .eq(Post::getAuditStatus, "")
                                 .or()
-                                .eq(Post::getAuditStatus, AUDIT_STATUS_PENDING)
-                                .or()
                                 .eq(Post::getAuditStatus, AUDIT_STATUS_APPROVED)))
                 .forEach(p -> postCountMap.merge(p.getUserId(), 1L, Long::sum));
 
@@ -201,8 +198,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
 
     @Override
     public UserStatsResp getProfileStats(String userId) {
-        long postCount = safeCount(postMapper.selectCount(
-                new LambdaQueryWrapper<Post>().eq(Post::getUserId, userId).eq(Post::getStatus, 1)));
+        long postCount = safeCount(postMapper.selectCount(buildPublicVisibleUserPostWrapper(userId)));
         long followingCount = safeCount(followMapper.selectCount(
                 new LambdaQueryWrapper<Follow>().eq(Follow::getFollowerId, userId)));
         long followerCount = safeCount(followMapper.selectCount(
@@ -217,8 +213,6 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
                 .and(w -> w.isNull(Post::getAuditStatus)
                         .or()
                         .eq(Post::getAuditStatus, "")
-                        .or()
-                        .eq(Post::getAuditStatus, AUDIT_STATUS_PENDING)
                         .or()
                         .eq(Post::getAuditStatus, AUDIT_STATUS_APPROVED));
     }
@@ -559,11 +553,10 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
 
     @Override
     public void addContribution(String userId, int amount) {
-        User user = getById(userId);
-        if (user == null)
+        if (userId == null || amount == 0)
             return;
-        user.setContributionVal((user.getContributionVal() != null ? user.getContributionVal() : 0) + amount);
-        updateById(user);
+        // Song：原子更新，避免"先查再整行回写"并发丢失更新
+        baseMapper.addContribution(userId, amount);
     }
 
     @Override
@@ -577,30 +570,23 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
 
     @Override
     public void incrementLikesReceived(String userId) {
-        User user = getById(userId);
-        if (user == null)
+        if (userId == null)
             return;
-        user.setTotalLikesReceived((user.getTotalLikesReceived() != null ? user.getTotalLikesReceived() : 0) + 1);
-        updateById(user);
+        baseMapper.incrementLikesReceived(userId);
     }
 
     @Override
     public void decrementLikesReceived(String userId) {
-        User user = getById(userId);
-        if (user == null)
+        if (userId == null)
             return;
-        user.setTotalLikesReceived(
-                Math.max(0, (user.getTotalLikesReceived() != null ? user.getTotalLikesReceived() : 0) - 1));
-        updateById(user);
+        baseMapper.decrementLikesReceived(userId);
     }
 
     @Override
     public void incrementTotalPosts(String userId) {
-        User user = getById(userId);
-        if (user == null)
+        if (userId == null)
             return;
-        user.setTotalPosts((user.getTotalPosts() != null ? user.getTotalPosts() : 0) + 1);
-        updateById(user);
+        baseMapper.incrementTotalPosts(userId);
     }
 
     @Override

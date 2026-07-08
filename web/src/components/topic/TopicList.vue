@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, defineAsyncComponent, onMounted, onUnmounted, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { DataLine, Finished, Loading, Refresh, Warning } from '@element-plus/icons-vue'
 import TopicFilters from './TopicFilters.vue'
@@ -11,6 +11,7 @@ import type { PostSearchRequest } from '@/types'
 import { wsClient, type PostEvent } from '@/utils/websocket'
 import { isTruthyFlag } from '@/utils/flags'
 import { isOffline, shouldReduceBackgroundWork } from '@/utils/network'
+import { COMMUNITY_FEED_REFRESH_EVENT } from '@/utils/communityCache'
 
 const PulseDashboardDialog = defineAsyncComponent(() => import('./PulseDashboardDialog.vue'))
 
@@ -29,6 +30,7 @@ const props = defineProps<{
 }>()
 
 const route = useRoute()
+const router = useRouter()
 
 const topics = ref<any[]>([])
 const page = ref(1)
@@ -51,6 +53,7 @@ let newContentTimer: any = null
 let wsUnsubscribe: (() => void) | null = null
 let realtimeInitialized = false
 let fetchDocumentsToken = 0
+let syncingFilterRoute = false
 const POST_METRICS_UPDATED_EVENT = 'cp:post-metrics-updated'
 
 const loadTrigger = ref<HTMLElement | null>(null)
@@ -134,6 +137,16 @@ const toFiniteMetric = (value: unknown): number | null => {
   return null
 }
 
+const normalizeTags = (value: unknown): string[] => {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item || '').trim()).filter(Boolean)
+  }
+  if (typeof value === 'string') {
+    return value.split(/[,，\s#]+/).map((item) => item.trim()).filter(Boolean)
+  }
+  return []
+}
+
 const applyTopicMetrics = (postId: string, data?: Partial<PostMetricsUpdate> & Record<string, any>, options: { incrementReply?: boolean } = {}) => {
   const index = topics.value.findIndex((item) => String(item.id) === String(postId))
   if (index === -1) return
@@ -156,7 +169,8 @@ const applyTopicMetrics = (postId: string, data?: Partial<PostMetricsUpdate> & R
 
 const buildSearchReq = (): PostSearchRequest => {
   const navType = resolveNavType()
-  const category = resolveCategory()
+  const isAnswerNav = navType === 'unsolved' || navType === 'solved'
+  const category = isAnswerNav ? 'all' : resolveCategory()
   const orderBy = resolveOrderBy(navType)
   const req: PostSearchRequest = {
     ...props.defaultQuery,
@@ -172,15 +186,18 @@ const buildSearchReq = (): PostSearchRequest => {
   if (navType === 'unsolved') {
     req.answerState = 'unsolved'
     req.orderBy = 'new'
-    req.navType = 'latest'
+    delete req.sectionId
+    delete req.sectionIds
   } else if (navType === 'solved') {
     req.answerState = 'solved'
     req.orderBy = 'new'
-    req.navType = 'latest'
+    delete req.sectionId
+    delete req.sectionIds
   } else if (navType === 'pinned') {
     req.pinnedOnly = true
     req.orderBy = 'new'
-    req.navType = 'latest'
+  } else if (navType === 'essence') {
+    req.isFeatured = true
   }
 
   if (orderBy === 'new' && cursor.value) {
@@ -199,7 +216,7 @@ const mapPost = (p: any) => ({
     name: p.sectionName || '未分类',
     color: '#409EFF',
   },
-  tags: p.tags ? p.tags.split(',').filter(Boolean) : [],
+  tags: normalizeTags(p.tags),
   author: {
     id: p.userId,
     username: p.authorUsername || '',
@@ -247,7 +264,7 @@ const feedNotice = computed(() => {
     return '为你推荐会结合兴趣标签、近期互动和社区热度生成，可随时切回最新时间线。'
   }
   if (navType === 'unsolved') {
-    return '待解决列表只展示还没有采纳答案的帖子，适合快速找到可以帮忙的问题。'
+    return '待解决列表只展示「答疑解惑」里还没有采纳答案的帖子，适合快速找到可以帮忙的问题。'
   }
   if (navType === 'solved') {
     return '已解决列表展示已经采纳答案的讨论，适合复盘经验和沉淀知识。'
@@ -256,6 +273,38 @@ const feedNotice = computed(() => {
     return '置顶列表由管理员或版主维护，通常包含公告、规则和重要专题。'
   }
   return ''
+})
+
+const emptyStateCopy = computed(() => {
+  const navType = resolveNavType()
+  if (navType === 'unsolved') {
+    return {
+      title: '暂时没有待解决问题',
+      description: '答疑解惑里的问题都处理完了，可以去最新内容看看别的讨论。',
+    }
+  }
+  if (navType === 'solved') {
+    return {
+      title: '还没有已解决讨论',
+      description: '有回答被采纳后，这里会沉淀成可复盘的经验。',
+    }
+  }
+  if (navType === 'essence') {
+    return {
+      title: '还没有精华内容',
+      description: '高质量帖子加精后会出现在这里。',
+    }
+  }
+  if (navType === 'hot') {
+    return {
+      title: '热度还在积累',
+      description: '有浏览、回复和互动后，热门主题会自然浮上来。',
+    }
+  }
+  return {
+    title: '这里还没有内容',
+    description: '发布第一篇帖子，让这个社区动起来。',
+  }
 })
 
 // Interactive AI Pulse Dashboard State & Computed Charts
@@ -335,6 +384,16 @@ const refreshLatest = () => {
 const handleFilterChange = (filter: { navType: NavType; category: string }) => {
   activeNav.value = filter.navType
   activeCategory.value = filter.category || 'all'
+  const query = { ...route.query }
+  if (filter.navType === 'latest') {
+    delete query.sort
+  } else {
+    query.sort = filter.navType
+  }
+  syncingFilterRoute = true
+  router.replace({ path: route.path, query }).finally(() => {
+    syncingFilterRoute = false
+  })
   fetchDocuments(true)
 }
 
@@ -369,6 +428,12 @@ const handleLocalMetricsUpdate = (event: Event) => {
   const detail = (event as CustomEvent<PostMetricsUpdate>).detail
   if (!detail?.postId) return
   applyTopicMetrics(detail.postId, detail)
+}
+
+const handleCommunityFeedRefresh = () => {
+  if (route.path === '/' || route.path === '/hot' || route.path === '/featured' || props.defaultQuery?.sectionId) {
+    fetchDocuments(true)
+  }
 }
 
 const stopNewContentPolling = () => {
@@ -442,6 +507,7 @@ const scheduleRealtimeInit = () => {
 }
 
 watch(() => route.query.sort, () => {
+  if (syncingFilterRoute) return
   activeNav.value = resolveRouteNavType()
   refreshLatest()
 })
@@ -456,6 +522,7 @@ onMounted(() => {
 
   startNewContentPolling()
   window.addEventListener(POST_METRICS_UPDATED_EVENT, handleLocalMetricsUpdate)
+  window.addEventListener(COMMUNITY_FEED_REFRESH_EVENT, handleCommunityFeedRefresh)
 
   observer = new IntersectionObserver(
     (entries) => {
@@ -474,6 +541,7 @@ onMounted(() => {
 onUnmounted(() => {
   if (observer) observer.disconnect()
   window.removeEventListener(POST_METRICS_UPDATED_EVENT, handleLocalMetricsUpdate)
+  window.removeEventListener(COMMUNITY_FEED_REFRESH_EVENT, handleCommunityFeedRefresh)
   stopNewContentPolling()
   if (wsUnsubscribe) wsUnsubscribe()
 })
@@ -535,9 +603,12 @@ defineExpose({
       </div>
 
       <div v-else-if="topics.length === 0 && !loading" class="empty-state">
-        <el-empty description="这里还没有内容，发一篇试试吧" :image-size="120">
+        <el-empty :description="emptyStateCopy.description" :image-size="120">
           <template #image>
             <el-icon :size="48" color="#dcdfe6"><Finished /></el-icon>
+          </template>
+          <template #default>
+            <strong class="empty-title">{{ emptyStateCopy.title }}</strong>
           </template>
         </el-empty>
       </div>
@@ -571,6 +642,13 @@ defineExpose({
 
 .empty-state {
   padding: 40px 0;
+}
+
+.empty-title {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--el-text-color-primary);
+  font-size: 15px;
 }
 
 .error-state {

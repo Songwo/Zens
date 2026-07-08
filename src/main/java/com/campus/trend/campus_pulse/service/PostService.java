@@ -30,7 +30,10 @@ public interface PostService extends IService<Post> {
 
     IPage<PostResp> searchModerationPosts(PostSearchReq postSearchRequest, String userId);
 
-    void createPost(PostCreateReq createPostRequest, String userID);
+    /**
+     * 创建帖子，返回落库后的审核状态（APPROVED 直接公开 / PENDING 待人工审核），供前端准确提示。
+     */
+    String createPost(PostCreateReq createPostRequest, String userID);
 
     PostResp saveDraft(PostDraftReq draftRequest, String userId);
 
@@ -48,7 +51,10 @@ public interface PostService extends IService<Post> {
 
     IPage<Post> searchAllList(PostSearchReq postSearchRequest);
 
-    void updatePost(PostUpdateReq request, String userId);
+    /**
+     * 更新帖子，返回落库后的审核状态，供前端准确提示（发布动作可能进 PENDING 人工审核）。
+     */
+    String updatePost(PostUpdateReq request, String userId);
 
     List<PostVersionHistoryResp> listVersionHistory(String postId, String userId);
 

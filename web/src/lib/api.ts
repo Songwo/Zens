@@ -22,11 +22,25 @@ type WarmupResult =
 // ─────────────────────────────────────────────────────────
 // 常量
 // ─────────────────────────────────────────────────────────
-const AUTH_PUBLIC_PATHS = [
+const PUBLIC_PATH_PREFIXES = [
   '/auth/login', '/auth/register', '/auth/send-code', '/auth/verify-code',
   '/auth/check-email', '/auth/check-username', '/auth/refresh',
   '/auth/reset-password', '/auth/github/authorize-url', '/auth/github/login',
   '/auth/2fa/verify-login',
+  '/post/search-lists', '/documents/list',
+  '/agent/health', '/agent/community-qa/ask', '/agent/community-qa/ask-stream', '/agent/community-qa/search',
+  '/category/', '/categories',
+  '/tag/hot', '/tag/search',
+  '/recommend/', '/trend-stat/', '/heat-rank/', '/public/',
+  '/comment/post/', '/comment/create',
+  '/stats/', '/section/', '/user/public/', '/user/search',
+  '/invite/validate', '/invite/required',
+  '/follow/stats/', '/level/thresholds', '/trust-level/thresholds',
+  '/changelog/list', '/short-link/', '/sso/clients/public/', '/onebox/preview',
+  '/performance/web-vitals', '/performance/web-vitals/summary', '/performance/web-vitals/events',
+]
+const PUBLIC_GET_PATH_PATTERNS = [
+  /^\/post\/[^/]+$/,
 ]
 const REFRESH_AHEAD_MS    = 3 * 60 * 1000  // 过期前3分钟预刷新
 const TOKEN_EXPIRE_SKEW_MS = 10 * 1000    // 10秒边界容差
@@ -229,21 +243,41 @@ function normalizePath(config: InternalAxiosRequestConfig): string {
   return raw.startsWith('/api/') ? raw.slice(4) : raw
 }
 
-function isPublicAuthPath(path: string) {
-  return AUTH_PUBLIC_PATHS.some(p => path.startsWith(p))
+function matchesPathPrefix(path: string, prefix: string) {
+  if (prefix.endsWith('/')) {
+    return path.startsWith(prefix)
+  }
+  return path === prefix || path.startsWith(`${prefix}/`)
+}
+
+function isPublicPath(path: string, method = 'GET') {
+  const normalizedMethod = method.toUpperCase()
+  if (PUBLIC_PATH_PREFIXES.some(p => matchesPathPrefix(path, p))) return true
+  if (normalizedMethod === 'GET' || normalizedMethod === 'HEAD') {
+    return PUBLIC_GET_PATH_PATTERNS.some(pattern => pattern.test(path))
+  }
+  return false
+}
+
+function isPublicRequest(config: InternalAxiosRequestConfig) {
+  return isPublicPath(normalizePath(config), String(config.method || 'get'))
+}
+
+function shouldAttachAuthHeader(path: string, token: string | null) {
+  return Boolean(token) && !path.startsWith('/auth/')
 }
 
 function needSign(config: InternalAxiosRequestConfig, token: string | null): boolean {
   if (!token) return false
   const method = String(config.method || 'get').toUpperCase()
   if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) return false
-  return !isPublicAuthPath(normalizePath(config))
+  return !isPublicRequest(config)
 }
 
 function applyAuthHeaders(config: RetryConfig) {
   const token = getAccessToken()
   const path = normalizePath(config)
-  if (token && !isPublicAuthPath(path)) {
+  if (shouldAttachAuthHeader(path, token)) {
     config.headers['Authorization'] = `Bearer ${token}`
   } else {
     delete config.headers['Authorization']
@@ -324,53 +358,70 @@ function syncRenewedAccessToken(headers?: Record<string, unknown>) {
 // 请求拦截器
 // ─────────────────────────────────────────────────────────
 api.interceptors.request.use(async (config) => {
-  startGlobalProgress('正在同步数据')
-  const path = normalizePath(config)
-  const isPublic = isPublicAuthPath(path)
-  let token = getAccessToken()
+  if (!config.skipGlobalProgress) {
+    startGlobalProgress('正在同步数据')
+  }
 
-  if (!isPublic) {
-    if (_refreshPromise) {
-      // 有正在进行的刷新，等它完成再用新 token
-      await _refreshPromise
-      token = getAccessToken()
-    } else if (!token && getRefreshToken()) {
-      // access token 过期，立即刷新（阻塞此请求）
-      const result = await refreshTokens()
-      if (result.ok) token = getAccessToken()
-    } else if (token && shouldRefreshSoon(token)) {
-      // 快过期，后台静默预刷新（不阻塞当前请求）
-      refreshTokens().catch(() => {})
+  try {
+    const path = normalizePath(config)
+    const isPublic = isPublicRequest(config)
+    let token = getAccessToken()
+
+    if (!isPublic) {
+      if (_refreshPromise) {
+        // 有正在进行的刷新，等它完成再用新 token
+        await _refreshPromise
+        token = getAccessToken()
+      } else if (!token && getRefreshToken()) {
+        // access token 过期，立即刷新（阻塞此请求）
+        const result = await refreshTokens()
+        if (result.ok) token = getAccessToken()
+      } else if (token && shouldRefreshSoon(token)) {
+        // 快过期，后台静默预刷新（不阻塞当前请求）
+        refreshTokens().catch(() => {})
+      }
     }
-  }
 
-  config.headers['X-Device-Id'] = getOrCreateDeviceId()
-  if (token && !isPublic) {
-    config.headers['Authorization'] = `Bearer ${token}`
-  } else {
-    delete config.headers['Authorization']
-  }
+    config.headers['X-Device-Id'] = getOrCreateDeviceId()
+    if (shouldAttachAuthHeader(path, token)) {
+      config.headers['Authorization'] = `Bearer ${token}`
+    } else {
+      delete config.headers['Authorization']
+    }
 
-  // 请求签名（重试请求也要重新生成，避免 refresh 后继续带旧 token 的签名）
-  if (needSign(config, token)) {
-    const method = String(config.method || 'get').toUpperCase()
-    const timestamp = String(Date.now())
-    const nonce = randomNonce()
-    const deviceId = getOrCreateDeviceId()
-    const sig = await sha256Hex(`${method}\n${path}\n${timestamp}\n${nonce}\n${deviceId}\n${token}`)
-    config.headers['X-Request-Timestamp'] = timestamp
-    config.headers['X-Request-Nonce'] = nonce
-    config.headers['X-Request-Signature'] = sig
+    // 请求签名（重试请求也要重新生成，避免 refresh 后继续带旧 token 的签名）
+    if (needSign(config, token)) {
+      const method = String(config.method || 'get').toUpperCase()
+      const timestamp = String(Date.now())
+      const nonce = randomNonce()
+      const deviceId = getOrCreateDeviceId()
+      const sig = await sha256Hex(`${method}\n${path}\n${timestamp}\n${nonce}\n${deviceId}\n${token}`)
+      config.headers['X-Request-Timestamp'] = timestamp
+      config.headers['X-Request-Nonce'] = nonce
+      config.headers['X-Request-Signature'] = sig
+    }
+    return config
+  } catch (error) {
+    if (!config.skipGlobalProgress) {
+      finishGlobalProgress()
+    }
+    return Promise.reject(error)
   }
-  return config
-}, (error) => Promise.reject(error))
+}, (error) => {
+  if (!error?.config?.skipGlobalProgress) {
+    finishGlobalProgress()
+  }
+  return Promise.reject(error)
+})
 
 // ─────────────────────────────────────────────────────────
 // 响应拦截器
 // ─────────────────────────────────────────────────────────
 api.interceptors.response.use(
   (response) => {
-    finishGlobalProgress()
+    if (!response.config.skipGlobalProgress) {
+      finishGlobalProgress()
+    }
     syncRenewedAccessToken(response.headers as Record<string, unknown> | undefined)
     const res = response.data
     if (response.config.responseType === 'blob' || res instanceof Blob) return res
@@ -383,7 +434,9 @@ api.interceptors.response.use(
     return res
   },
   async (error) => {
-    finishGlobalProgress()
+    if (!error?.config?.skipGlobalProgress) {
+      finishGlobalProgress()
+    }
     if (error?.code === 'ERR_CANCELED') return Promise.reject(error)
 
     const originalRequest = error?.config as RetryConfig | undefined
@@ -391,7 +444,7 @@ api.interceptors.response.use(
 
     // ── 401 无感刷新 ──────────────────────────────────────
     if (status === 401 && originalRequest && !originalRequest._retry) {
-      const isPublic = isPublicAuthPath(normalizePath(originalRequest))
+      const isPublic = isPublicRequest(originalRequest)
       if (!isPublic) {
         // 标记已重试，防止无限循环
         originalRequest._retry = true
@@ -454,7 +507,9 @@ api.interceptors.response.use(
 
     // ── 错误提示 ──────────────────────────────────────────
     const errMsg = getErrorMessage(error, '')
-    if (errMsg) showErrorMessage(errMsg, error?.code || error?.response?.status || errMsg)
+    if (errMsg && !originalRequest?.silentError) {
+      showErrorMessage(errMsg, error?.code || error?.response?.status || errMsg)
+    }
 
     // 增强错误日志（仅在开发环境或启用调试时）
     if (import.meta.env.DEV || localStorage.getItem('debug_auth') === 'true') {

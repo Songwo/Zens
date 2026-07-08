@@ -10,12 +10,21 @@ import { postApi } from '@/api/post'
 import { publicDataApi } from '@/api/publicData'
 import { tagApi } from '@/api/tag'
 import { userApi } from '@/api/user'
+import { agentApi, type AgentCitation, type AgentRelatedPost, type CommunityQaAskResponse } from '@/api/agent'
 import type { Post } from '@/types'
 import { ElMessage } from 'element-plus'
-import { Search, Filter, Close, Loading } from '@element-plus/icons-vue'
+import { Search, Filter, Close, Loading, MagicStick } from '@element-plus/icons-vue'
 import { cachedRequest } from '@/utils/requestCache'
-import { encodeUserId } from '@/utils/shortId'
+import { encodePostId, encodeUserId } from '@/utils/shortId'
 import { useInfiniteScroll } from '@/composables/useInfiniteScroll'
+import {
+  DEFAULT_DISCOVERY_SEARCH_TERMS,
+  dedupeTextList,
+  formatDiscoveryTagName,
+  isMeaningfulDiscoveryTagName,
+  normalizeDiscoveryTagNames,
+} from '@/utils/communityDiscovery'
+import { formatSectionName } from '@/utils/communitySections'
 
 const route = useRoute()
 const router = useRouter()
@@ -24,6 +33,11 @@ const SEARCH_HISTORY_KEY = 'cp:search:history'
 const SEARCH_HISTORY_MAX = 12
 const SEARCH_RESULT_CACHE_TTL = 60 * 1000
 const SEARCH_SUGGEST_CACHE_TTL = 5 * 60 * 1000
+const SEARCH_STOP_WORDS = [
+  '怎么', '如何', '一下', '一个', '这个', '那个', '是否', '有没有',
+  '还是', '以及', '然后', '什么', '为啥', '为什么', '需要', '想问', '想知道',
+  '帖子', '板块', '评论', '社区', '相关', '内容', '问题', '经验', '案例',
+]
 
 type SearchTab = 'post' | 'user' | 'tag'
 
@@ -63,6 +77,11 @@ let searchAbortController: AbortController | null = null
 let suggestAbortController: AbortController | null = null
 let userAbortController: AbortController | null = null
 let tagAbortController: AbortController | null = null
+let agentAbortController: AbortController | null = null
+let agentTimer: ReturnType<typeof setTimeout> | null = null
+let agentRequestId = 0
+let lastAgentSignature = ''
+let syncingRouteState = false
 
 const filters = ref({
   category: '' as string | number,
@@ -75,8 +94,21 @@ const showFilters = ref(false)
 const searchHistory = ref<string[]>([])
 const hotSuggestions = ref<string[]>([])
 const dynamicSuggestions = ref<string[]>([])
+const agentLoading = ref(false)
+const agentError = ref('')
+const agentResult = ref<CommunityQaAskResponse | null>(null)
 
 const normalizedQuery = computed(() => searchQuery.value.trim())
+const canOpenAgent = computed(() => searchTab.value === 'post' && normalizedQuery.value.length >= 2)
+const agentSignature = computed(() => [
+  normalizedQuery.value.toLowerCase(),
+  filters.value.category || '_',
+  searchTab.value,
+].join('|'))
+const selectedCategoryLabel = computed(() => {
+  const matched = categories.value.find((item) => Number(item.id) === Number(filters.value.category))
+  return matched ? formatSectionName(matched.name || '') : ''
+})
 
 const filteredHistory = computed(() => {
   const q = normalizedQuery.value.toLowerCase()
@@ -114,6 +146,170 @@ const shouldShowSuggestionPanel = computed(() => {
 
 const shouldShowDiscoveryPanel = computed(() => {
   return !normalizedQuery.value && (searchHistory.value.length > 0 || hotSuggestions.value.length > 0)
+})
+
+const showPostEmptyRecovery = computed(() => {
+  return searchTab.value === 'post' && !loading.value && posts.value.length === 0 && Boolean(normalizedQuery.value)
+})
+
+const buildPostAgentSummary = (post: Post) => {
+  const source = post.summary || post.content || post.title || '社区相关讨论'
+  return String(source)
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/[#*_>`[\](){}|]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 140)
+}
+
+const parsePostTags = (tags: string | undefined) => {
+  if (!tags) return []
+  return tags
+    .split(/[,，#\s]+/)
+    .map(tag => tag.replace(/[\[\]"]/g, '').trim())
+    .filter(Boolean)
+    .slice(0, 6)
+}
+
+const rawAgentCitations = computed<AgentCitation[]>(() => agentResult.value?.citations?.slice(0, 4) || [])
+const rawAgentRelatedPosts = computed<AgentRelatedPost[]>(() => agentResult.value?.related_posts?.slice(0, 4) || [])
+const agentAnswer = computed(() => (agentResult.value?.answer || '').trim())
+const agentAnswerParagraphs = computed(() =>
+  agentAnswer.value
+    .split(/\n+/)
+    .map(item => item.trim())
+    .filter(Boolean)
+)
+const agentTrace = computed(() => agentResult.value?.trace || null)
+const agentBackend = computed(() => agentTrace.value?.backend || agentResult.value?.backend || '')
+const agentFallbackReason = computed(() => agentResult.value?.fallback_reason || agentTrace.value?.fallback_reason || '')
+const searchResultAgentFallbackPosts = computed<AgentRelatedPost[]>(() =>
+  posts.value.slice(0, 4).map((post, index) => ({
+    post_id: post.id,
+    title: post.title || '未命名帖子',
+    section_name: post.sectionName,
+    summary: buildPostAgentSummary(post),
+    tags: parsePostTags(post.tags),
+    score: 1 - index * 0.05,
+    url: `/t/${encodePostId(post.id)}`,
+  }))
+)
+const agentUsingSearchFallback = computed(() =>
+  canOpenAgent.value &&
+  posts.value.length > 0 &&
+  rawAgentCitations.value.length === 0 &&
+  rawAgentRelatedPosts.value.length === 0 &&
+  !agentAnswer.value
+)
+const agentCitations = computed<AgentCitation[]>(() => rawAgentCitations.value)
+const agentRelatedPosts = computed<AgentRelatedPost[]>(() =>
+  rawAgentRelatedPosts.value.length > 0
+    ? rawAgentRelatedPosts.value
+    : agentUsingSearchFallback.value
+      ? searchResultAgentFallbackPosts.value
+      : []
+)
+const agentHasHits = computed(() => agentCitations.value.length > 0 || agentRelatedPosts.value.length > 0)
+const agentHitCount = computed(() => agentTrace.value?.hit_count || agentCitations.value.length + agentRelatedPosts.value.length)
+const agentHasAnswer = computed(() => agentAnswer.value.length > 0)
+const agentLatencyText = computed(() => {
+  const trace = agentTrace.value
+  if (!trace) return ''
+  const total = Number(trace.total_ms)
+  if (Number.isFinite(total) && total > 0) return `${total} ms`
+  const retrieval = Number(trace.retrieval_ms)
+  return Number.isFinite(retrieval) && retrieval > 0 ? `${retrieval} ms` : ''
+})
+const agentConfidenceLabel = computed(() => {
+  const confidence = agentResult.value?.confidence
+  if (confidence === 'high') return '高置信'
+  if (confidence === 'medium') return '中置信'
+  if (confidence === 'low') return '低置信'
+  return ''
+})
+const agentFallbackLabel = computed(() => {
+  const reason = agentFallbackReason.value
+  if (reason === 'agent_disabled') return 'Agent 未启用，已用社区搜索兜底'
+  if (reason === 'agent_unavailable') return 'Agent 不可达，已用社区搜索兜底'
+  if (reason === 'agent_empty') return 'Agent 无强命中，已补充普通搜索结果'
+  return ''
+})
+const agentPanelTitle = computed(() => {
+  if (agentUsingSearchFallback.value) return 'Agent 已沿用当前搜索结果补充推荐'
+  if (agentLoading.value && !agentHasAnswer.value) return 'Agent 正在生成社区回答'
+  if (agentError.value) return 'Agent 问答暂时没有跑通'
+  if (agentHasAnswer.value) return 'Agent 已回答当前搜索'
+  if (agentHasHits.value) return 'Agent 已为当前搜索补充证据'
+  return 'Agent 会自动帮你整理社区线索'
+})
+const agentPanelDescription = computed(() => {
+  if (agentUsingSearchFallback.value) return '专用 Agent 暂未返回引用时，会先复用已经命中的帖子，保证推荐和搜索结果保持一致。'
+  if (agentLoading.value && !agentHasAnswer.value) return '正在沿用当前关键词和板块范围检索帖子、评论，并生成一段可核查的社区回答。'
+  if (agentError.value) return agentError.value
+  if (agentHasAnswer.value) return agentFallbackLabel.value || '回答基于社区帖子与评论生成，下面保留可跳转的引用和相近帖子。'
+  if (agentHasHits.value) return '这些内容来自社区帖子与评论，可以作为普通搜索结果之外的补充入口。'
+  return '输入至少 2 个字符后，搜索会自动触发 Agent 回答，不需要再进入单独页面。'
+})
+
+const emptyRecoveryDescription = computed(() => {
+  if (selectedCategoryLabel.value) {
+    return `${selectedCategoryLabel.value} 里暂时没有直接命中，先放宽范围或换一个更聚焦的搜词试试。`
+  }
+  return '没有找到直接命中的帖子，可以换一个更聚焦的搜词，或者交给 Agent 去帖子和评论里继续归纳。'
+})
+
+const parseRouteSectionId = () => {
+  const raw = route.query.sectionId
+  const value = Array.isArray(raw) ? raw[0] : raw
+  const parsed = Number(value)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : ''
+}
+
+const extractSearchKeywords = (text: string) => {
+  const normalized = String(text || '')
+    .toLowerCase()
+    .replace(/[\r\n]+/g, ' ')
+    .replace(/[，。！？、,.!?:：;；()[\]{}【】<>《》"“”'‘’`~@#$%^&*=+|\\/]+/g, ' ')
+
+  let working = normalized
+  SEARCH_STOP_WORDS.forEach((item) => {
+    working = working.split(item).join(' ')
+  })
+
+  const matches = working.match(/[a-z0-9+#._-]+|[\u4e00-\u9fff]{2,}/g) ?? []
+  const deduped: string[] = []
+  const seen = new Set<string>()
+  matches.forEach((item) => {
+    const keyword = formatDiscoveryTagName(item.trim())
+    const key = keyword.toLowerCase()
+    if (!keyword || keyword.length < 2 || seen.has(key)) {
+      return
+    }
+    seen.add(key)
+    deduped.push(keyword)
+  })
+  return deduped
+}
+
+const emptyRecoveryTerms = computed(() => {
+  const keywords = extractSearchKeywords(normalizedQuery.value)
+  const seedTerms = [
+    keywords.slice(0, 2).join(' '),
+    keywords[0] || '',
+    ...dynamicSuggestions.value,
+    ...hotSuggestions.value.slice(0, 4),
+  ]
+
+  return dedupeTextList(
+    normalizeDiscoveryTagNames(seedTerms.filter(Boolean), {
+      limit: 8,
+      minScore: 1,
+      includeDefaults: true,
+    }),
+    8
+  )
+    .filter((item) => item.trim().toLowerCase() !== normalizedQuery.value.trim().toLowerCase())
+    .slice(0, 4)
 })
 
 const loadSearchHistory = () => {
@@ -166,7 +362,12 @@ const fetchCategories = async () => {
   try {
     const res = await publicDataApi.getActiveSectionsCached()
     if (res.code === 2000 || res.code === 200) {
-      categories.value = res.data || []
+      categories.value = Array.isArray(res.data)
+        ? res.data.map((item: any) => ({
+            ...item,
+            id: Number(item.id),
+          }))
+        : []
     }
   } catch (error) {
     console.error('Failed to fetch sections:', error)
@@ -175,14 +376,15 @@ const fetchCategories = async () => {
 
 const fetchHotSuggestions = async () => {
   try {
-    const res = await publicDataApi.getHotTagsCached(12)
+    const res = await publicDataApi.getHotTagsCached(30)
     const list = Array.isArray(res.data) ? res.data : []
-    hotSuggestions.value = list
-      .map((item) => item?.name?.trim())
-      .filter((name): name is string => Boolean(name))
-      .slice(0, 12)
+    const curated = normalizeDiscoveryTagNames(
+      list.map((item) => item?.name?.trim()).filter((name): name is string => Boolean(name)),
+      { limit: 12, minScore: 2 }
+    )
+    hotSuggestions.value = curated.length ? curated : DEFAULT_DISCOVERY_SEARCH_TERMS.slice(0, 6)
   } catch {
-    hotSuggestions.value = ['架构设计', '性能优化', '项目复盘', '开源项目', '系统监控', '最佳实践']
+    hotSuggestions.value = DEFAULT_DISCOVERY_SEARCH_TERMS.slice(0, 6)
   }
 }
 
@@ -210,10 +412,12 @@ const fetchDynamicSuggestions = async (keyword: string) => {
     }
 
     const list = Array.isArray(res.data) ? res.data : []
-    dynamicSuggestions.value = list
+    dynamicSuggestions.value = normalizeDiscoveryTagNames(
+      list
       .map((item) => item?.name?.trim())
-      .filter((name): name is string => Boolean(name))
-      .slice(0, 8)
+      .filter((name): name is string => Boolean(name) && isMeaningfulDiscoveryTagName(name)),
+      { limit: 8, minScore: 1, includeDefaults: false }
+    )
   } catch (error: any) {
     if (error?.code === 'ERR_CANCELED') {
       return
@@ -393,6 +597,89 @@ const scheduleFetch = (reset = true) => {
   }, 250)
 }
 
+const openAgentTarget = (url: string) => {
+  if (!url) return
+  router.push(url)
+}
+
+const formatCitationSource = (item: AgentCitation) => {
+  const section = item.section_name ? formatSectionName(item.section_name) : '社区'
+  return `${section} · ${item.source_type === 'comment' ? '评论引用' : '原帖引用'}`
+}
+
+const resetAgentState = () => {
+  agentAbortController?.abort()
+  agentAbortController = null
+  agentLoading.value = false
+  agentError.value = ''
+  agentResult.value = null
+  lastAgentSignature = ''
+}
+
+const fetchAgentRecommendations = async (force = false) => {
+  if (!canOpenAgent.value) {
+    resetAgentState()
+    return
+  }
+
+  const signature = agentSignature.value
+  if (!force && signature === lastAgentSignature && (agentLoading.value || agentResult.value || agentError.value)) {
+    return
+  }
+
+  lastAgentSignature = signature
+  const requestId = ++agentRequestId
+  agentAbortController?.abort()
+  const controller = new AbortController()
+  agentAbortController = controller
+  agentLoading.value = true
+  agentError.value = ''
+  if (force) {
+    agentResult.value = null
+  }
+
+  try {
+    const res = await agentApi.ask({
+      question: normalizedQuery.value,
+      retrievalQuery: normalizedQuery.value,
+      sectionId: filters.value.category ? Number(filters.value.category) : undefined,
+      limit: 6,
+      includeComments: true,
+      commentsPerPost: 2,
+    }, { signal: controller.signal })
+    if (requestId !== agentRequestId) return
+    agentResult.value = res.data || null
+  } catch (error: any) {
+    if (error?.code === 'ERR_CANCELED') return
+    if (requestId === agentRequestId) {
+      const status = error?.response?.status
+      agentError.value = status === 401 || status === 403
+        ? 'Agent 问答当前需要登录或服务授权，登录后会自动整理社区回答。'
+        : 'Agent 问答服务暂时不可用，可以稍后重试。'
+      agentResult.value = null
+    }
+  } finally {
+    if (agentAbortController === controller) {
+      agentAbortController = null
+      agentLoading.value = false
+    }
+  }
+}
+
+const scheduleAgentRecommendations = (delay = 320) => {
+  if (agentTimer) {
+    clearTimeout(agentTimer)
+    agentTimer = null
+  }
+  if (!canOpenAgent.value) {
+    resetAgentState()
+    return
+  }
+  agentTimer = setTimeout(() => {
+    fetchAgentRecommendations(false)
+  }, delay)
+}
+
 const triggerSearch = (keyword?: string) => {
   const q = (keyword ?? normalizedQuery.value).trim()
   if (!q) {
@@ -402,7 +689,11 @@ const triggerSearch = (keyword?: string) => {
 
   searchQuery.value = q
   pushSearchHistory(q)
-  router.push({ path: '/search', query: { q } })
+  const query: Record<string, string> = { q }
+  if (filters.value.category) {
+    query.sectionId = String(filters.value.category)
+  }
+  router.push({ path: '/search', query })
   scheduleFetch(true)
 }
 
@@ -412,6 +703,36 @@ const handleSearch = () => {
 
 const handleSuggestionSelect = (term: string) => {
   triggerSearch(term)
+}
+
+const openAgentPanel = () => {
+  if (!canOpenAgent.value) {
+    ElMessage.warning('先输入至少 2 个字符，再交给 Agent 帮你整理')
+    return
+  }
+  fetchAgentRecommendations(true)
+}
+
+const broadenSearchScope = () => {
+  if (!normalizedQuery.value) {
+    return
+  }
+  filters.value.category = ''
+  router.push({ path: '/search', query: { q: normalizedQuery.value } })
+  scheduleFetch(true)
+}
+
+const resetSearchFiltersAndRetry = () => {
+  filters.value = {
+    category: '',
+    sortBy: 'relevance',
+    timeRange: 'all',
+  }
+  if (!normalizedQuery.value) {
+    return
+  }
+  router.push({ path: '/search', query: { q: normalizedQuery.value } })
+  scheduleFetch(true)
 }
 
 const clearFilters = () => {
@@ -427,21 +748,32 @@ const clearFilters = () => {
 
 watch(normalizedQuery, () => {
   scheduleDynamicSuggestions()
+  scheduleAgentRecommendations()
 })
 
-watch(() => route.query.q, (newQuery) => {
+watch(() => [route.query.q, route.query.sectionId], ([newQuery]) => {
   const q = typeof newQuery === 'string' ? newQuery.trim() : ''
+  syncingRouteState = true
   searchQuery.value = q
+  filters.value.category = parseRouteSectionId()
+  syncingRouteState = false
+
   if (q) {
     scheduleFetch(true)
+    scheduleAgentRecommendations()
   } else {
     resetSearchResultState()
+    resetAgentState()
   }
 })
 
 watch(() => [filters.value.category, filters.value.sortBy, filters.value.timeRange], () => {
+  if (syncingRouteState) {
+    return
+  }
   if (normalizedQuery.value && searchTab.value === 'post') {
     scheduleFetch(true)
+    scheduleAgentRecommendations()
   }
 })
 
@@ -449,6 +781,7 @@ watch(searchTab, () => {
   if (normalizedQuery.value) {
     scheduleFetch(true)
   }
+  scheduleAgentRecommendations()
 })
 
 onMounted(() => {
@@ -457,9 +790,14 @@ onMounted(() => {
   fetchHotSuggestions()
 
   const q = typeof route.query.q === 'string' ? route.query.q.trim() : ''
+  const routeSectionId = parseRouteSectionId()
+  if (routeSectionId) {
+    filters.value.category = routeSectionId
+  }
   if (q) {
     searchQuery.value = q
     scheduleFetch(true)
+    scheduleAgentRecommendations(0)
   }
 })
 
@@ -468,6 +806,7 @@ onUnmounted(() => {
   suggestAbortController?.abort()
   userAbortController?.abort()
   tagAbortController?.abort()
+  agentAbortController?.abort()
 
   if (fetchTimer) {
     clearTimeout(fetchTimer)
@@ -476,6 +815,10 @@ onUnmounted(() => {
   if (suggestTimer) {
     clearTimeout(suggestTimer)
     suggestTimer = null
+  }
+  if (agentTimer) {
+    clearTimeout(agentTimer)
+    agentTimer = null
   }
 })
 </script>
@@ -521,7 +864,7 @@ onUnmounted(() => {
                   <span class="label">板块分类</span>
                   <el-select v-model="filters.category" placeholder="全部板块" clearable>
                     <el-option label="全部板块" value="" />
-                    <el-option v-for="cat in categories" :key="cat.id" :label="cat.name" :value="cat.id" />
+                    <el-option v-for="cat in categories" :key="cat.id" :label="formatSectionName(cat.name || '')" :value="cat.id" />
                   </el-select>
                 </div>
               </el-col>
@@ -591,7 +934,7 @@ onUnmounted(() => {
             </div>
 
             <div v-if="hotSuggestions.length" class="suggest-block">
-              <div class="suggest-title">热门搜索</div>
+              <div class="suggest-title">推荐搜索</div>
               <div class="suggest-chips">
                 <el-tag
                   v-for="item in hotSuggestions.slice(0, 8)"
@@ -630,6 +973,120 @@ onUnmounted(() => {
         </p>
       </div>
 
+      <section v-if="normalizedQuery && searchTab === 'post'" class="agent-panel">
+        <div class="agent-panel-header">
+          <div class="agent-panel-copy">
+            <p class="agent-panel-kicker">Agent 回答</p>
+            <h2 class="agent-panel-title">{{ agentPanelTitle }}</h2>
+            <p class="agent-panel-desc">{{ agentPanelDescription }}</p>
+            <div class="agent-panel-pill-row">
+              <span class="agent-panel-pill">
+                当前搜索词
+                <strong>{{ normalizedQuery }}</strong>
+              </span>
+              <span v-if="selectedCategoryLabel" class="agent-panel-pill">
+                已限定板块
+                <strong>{{ selectedCategoryLabel }}</strong>
+              </span>
+              <span v-if="agentBackend" class="agent-panel-pill">
+                链路
+                <strong>{{ agentBackend }}</strong>
+              </span>
+              <span v-if="agentConfidenceLabel" class="agent-panel-pill">
+                {{ agentConfidenceLabel }}
+              </span>
+            </div>
+          </div>
+          <el-button
+            type="primary"
+            :icon="MagicStick"
+            class="agent-panel-cta"
+            :disabled="!canOpenAgent"
+            :loading="agentLoading"
+            @click="openAgentPanel"
+          >
+            {{ agentError ? '重试回答' : '重新回答' }}
+          </el-button>
+        </div>
+
+        <div v-if="agentLoading && !agentResult && !agentUsingSearchFallback" class="agent-inline-state">
+          <div class="agent-skeleton-line wide"></div>
+          <div class="agent-skeleton-line"></div>
+        </div>
+
+        <div v-else-if="agentError && !agentUsingSearchFallback" class="agent-inline-state error">
+          <span>{{ agentError }}</span>
+          <el-button link type="primary" @click="fetchAgentRecommendations(true)">再试一次</el-button>
+        </div>
+
+        <div v-else-if="agentHasAnswer || agentHasHits" class="agent-answer-stack">
+          <div v-if="agentHasAnswer" class="agent-answer-card">
+            <div class="agent-answer-heading">
+              <span>Agent 结论</span>
+              <div class="agent-answer-meta">
+                <small v-if="agentLatencyText">{{ agentLatencyText }}</small>
+                <small v-if="agentHitCount">{{ agentHitCount }} 条命中</small>
+              </div>
+            </div>
+            <div class="agent-answer-body">
+              <p v-for="item in agentAnswerParagraphs" :key="item">{{ item }}</p>
+            </div>
+            <div v-if="agentFallbackLabel" class="agent-answer-note">
+              {{ agentFallbackLabel }}
+            </div>
+          </div>
+
+          <div v-if="agentHasHits" class="agent-results">
+          <div v-if="agentCitations.length" class="agent-result-group">
+            <div class="agent-result-heading">
+              <span>引用线索</span>
+              <small>{{ agentHitCount }} 条相关命中</small>
+            </div>
+            <button
+              v-for="item in agentCitations"
+              :key="`${item.source_type}-${item.post_id}-${item.comment_id || item.index}`"
+              class="agent-citation-card"
+              type="button"
+              @click="openAgentTarget(item.url)"
+            >
+              <span class="agent-citation-meta">{{ formatCitationSource(item) }}</span>
+              <strong>{{ item.title }}</strong>
+              <em>{{ item.excerpt }}</em>
+            </button>
+          </div>
+
+          <div v-if="agentRelatedPosts.length" class="agent-result-group">
+            <div class="agent-result-heading">
+              <span>相近帖子</span>
+              <small>可直接跳转</small>
+            </div>
+            <button
+              v-for="item in agentRelatedPosts"
+              :key="item.post_id"
+              class="agent-related-row"
+              type="button"
+              @click="openAgentTarget(item.url)"
+            >
+              <span>
+                <strong>{{ item.title }}</strong>
+                <em>{{ item.summary || item.tags?.slice(0, 3).join(' / ') || '社区相关讨论' }}</em>
+              </span>
+              <small>{{ item.section_name ? formatSectionName(item.section_name) : '帖子' }}</small>
+            </button>
+          </div>
+          </div>
+        </div>
+
+        <div v-else class="agent-panel-footer">
+          <div class="agent-panel-hint">
+            <span class="agent-panel-hint-label">本轮会沿用</span>
+            <span class="agent-panel-highlight">{{ normalizedQuery }}</span>
+            <span v-if="selectedCategoryLabel">· {{ selectedCategoryLabel }}</span>
+          </div>
+          <span class="agent-panel-feature">自动加载</span>
+        </div>
+      </section>
+
       <!-- 帖子结果 -->
       <div v-if="searchTab === 'post'" class="posts-list">
         <PostCard
@@ -646,10 +1103,56 @@ onUnmounted(() => {
         </div>
 
         <EmptyState
-          v-if="!loading && posts.length === 0 && normalizedQuery"
-          title="换个姿势再搜一次？"
-          description="没有找到相关内容，试着精简关键词或调整筛选条件"
-        />
+          v-if="showPostEmptyRecovery"
+          title="先放宽范围，还是交给 Agent 继续？"
+          :description="emptyRecoveryDescription"
+        >
+          <div class="search-empty-recovery">
+            <div class="search-empty-summary">
+              <span class="search-empty-pill">
+                当前搜索词
+                <strong>{{ normalizedQuery }}</strong>
+              </span>
+              <span v-if="selectedCategoryLabel" class="search-empty-pill">
+                已限定板块
+                <strong>{{ selectedCategoryLabel }}</strong>
+              </span>
+            </div>
+
+            <p v-if="emptyRecoveryTerms.length" class="search-empty-note">
+              可以先换成这些更容易命中的搜词：
+            </p>
+            <div v-if="emptyRecoveryTerms.length" class="search-examples">
+              <el-tag
+                v-for="term in emptyRecoveryTerms"
+                :key="term"
+                class="clickable-tag"
+                @click="handleSuggestionSelect(term)"
+              >
+                {{ term }}
+              </el-tag>
+            </div>
+
+            <div class="search-empty-actions">
+              <el-button v-if="selectedCategoryLabel" plain @click="broadenSearchScope">
+                扩大到全站范围
+              </el-button>
+              <el-button v-else-if="hasActiveFilters" plain @click="resetSearchFiltersAndRetry">
+                恢复默认筛选
+              </el-button>
+              <el-button
+                type="primary"
+                plain
+                :icon="MagicStick"
+                :disabled="!canOpenAgent"
+                :loading="agentLoading"
+                @click="openAgentPanel"
+              >
+                让 Agent 再找一遍
+              </el-button>
+            </div>
+          </div>
+        </EmptyState>
 
         <EmptyState
           v-if="!loading && !normalizedQuery"
@@ -755,13 +1258,13 @@ onUnmounted(() => {
 }
 
 .search-hero {
-  padding: 24px;
-  margin-bottom: 26px;
-  border: 1px solid var(--el-border-color-lighter);
-  border-radius: 18px;
+  padding: 22px;
+  margin-bottom: 22px;
+  border: 1px solid var(--cp-border, var(--el-border-color-lighter));
+  border-radius: 12px;
   background:
-    radial-gradient(circle at top right, var(--el-color-primary-light-9), transparent 34%),
-    linear-gradient(180deg, var(--el-bg-color-overlay), var(--el-fill-color-extra-light));
+    linear-gradient(180deg, color-mix(in srgb, var(--cp-primary, var(--el-color-primary)) 5%, var(--cp-bg-card, var(--el-bg-color-overlay))), var(--cp-bg-card, var(--el-bg-color-overlay)));
+  box-shadow: var(--shadow-soft, 0 1px 3px rgba(15, 23, 42, 0.05));
 }
 
 .search-back-button {
@@ -769,10 +1272,10 @@ onUnmounted(() => {
 }
 
 .search-title {
-  font-size: 32px;
+  font-size: 28px;
   font-weight: 900;
   color: var(--el-text-color-primary);
-  margin-bottom: 24px;
+  margin-bottom: 22px;
 }
 
 .search-bar-wrapper {
@@ -786,14 +1289,14 @@ onUnmounted(() => {
 }
 
 .main-search-input :deep(.el-input__wrapper) {
-  border-radius: 12px 0 0 12px;
+  border-radius: 8px 0 0 8px;
 }
 
 .main-search-input :deep(.el-input-group__append) {
-  border-radius: 0 12px 12px 0;
-  background-color: var(--el-color-primary);
+  border-radius: 0 8px 8px 0;
+  background-color: var(--cp-primary, var(--el-color-primary));
   color: #fff;
-  border-color: var(--el-color-primary);
+  border-color: var(--cp-primary, var(--el-color-primary));
 }
 
 .filter-toggle {
@@ -802,11 +1305,11 @@ onUnmounted(() => {
 }
 
 .filter-panel {
-  background-color: var(--el-fill-color-light);
-  border-radius: 16px;
-  padding: 24px;
+  background-color: var(--cp-bg-surface, var(--el-fill-color-light));
+  border-radius: 8px;
+  padding: 18px;
   margin-top: 12px;
-  border: 1px solid var(--el-border-color-lighter);
+  border: 1px solid var(--cp-border, var(--el-border-color-lighter));
 }
 
 .filter-item {
@@ -818,9 +1321,9 @@ onUnmounted(() => {
 .filter-item .label {
   font-size: 12px;
   font-weight: 800;
-  color: var(--el-text-color-secondary);
+  color: var(--cp-text-muted, var(--el-text-color-secondary));
   text-transform: uppercase;
-  letter-spacing: 0.1em;
+  letter-spacing: 0;
 }
 
 .filter-footer {
@@ -830,9 +1333,9 @@ onUnmounted(() => {
 }
 
 .suggest-panel {
-  background-color: var(--el-bg-color-overlay);
-  border: 1px solid var(--el-border-color-lighter);
-  border-radius: 14px;
+  background-color: var(--cp-bg-card, var(--el-bg-color-overlay));
+  border: 1px solid var(--cp-border, var(--el-border-color-lighter));
+  border-radius: 8px;
   padding: 12px 14px;
   margin-top: 10px;
 }
@@ -871,10 +1374,10 @@ onUnmounted(() => {
 }
 
 .suggest-action {
-  border: 1px solid var(--el-border-color-lighter);
-  background: var(--el-fill-color-lighter);
+  border: 1px solid var(--cp-border, var(--el-border-color-lighter));
+  background: var(--cp-bg-surface, var(--el-fill-color-lighter));
   color: var(--el-text-color-regular);
-  border-radius: 10px;
+  border-radius: 8px;
   padding: 8px 10px;
   display: inline-flex;
   align-items: center;
@@ -884,15 +1387,337 @@ onUnmounted(() => {
 }
 
 .suggest-action:hover {
-  border-color: var(--el-color-primary-light-5);
-  color: var(--el-color-primary);
-  background: var(--el-color-primary-light-9);
+  border-color: color-mix(in srgb, var(--cp-primary, var(--el-color-primary)) 34%, var(--cp-border, var(--el-border-color-light)));
+  color: var(--cp-primary-dark, var(--el-color-primary));
+  background: var(--cp-hover-strong, var(--el-color-primary-light-9));
 }
 
 .results-info {
   margin-bottom: 20px;
   color: var(--el-text-color-secondary);
   font-size: 14px;
+}
+
+.agent-panel {
+  margin-bottom: 22px;
+  padding: 18px 20px;
+  border: 1px solid color-mix(in srgb, var(--cp-primary, var(--el-color-primary)) 24%, var(--cp-border, var(--el-border-color-lighter)));
+  border-radius: 12px;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--cp-primary, var(--el-color-primary)) 6%, var(--cp-bg-card, var(--el-bg-color-overlay))), var(--cp-bg-card, var(--el-bg-color-overlay)));
+  box-shadow: var(--shadow-soft, 0 1px 3px rgba(15, 23, 42, 0.05));
+}
+
+.agent-panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.agent-panel-copy {
+  min-width: 0;
+}
+
+.agent-panel-kicker {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--cp-primary-dark, var(--el-color-primary));
+  text-transform: uppercase;
+  letter-spacing: 0;
+}
+
+.agent-panel-title {
+  margin: 0;
+  font-size: 18px;
+  line-height: 1.4;
+  color: var(--el-text-color-primary);
+}
+
+.agent-panel-desc {
+  margin: 8px 0 0;
+  color: var(--el-text-color-secondary);
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.agent-panel-pill-row {
+  margin-top: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.agent-panel-pill,
+.agent-panel-feature {
+  min-height: 30px;
+  padding: 0 10px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.agent-panel-pill {
+  border: 1px solid color-mix(in srgb, var(--cp-primary, var(--el-color-primary)) 20%, var(--cp-border, var(--el-border-color-light)));
+  background: var(--cp-bg-surface, var(--el-bg-color));
+  color: var(--el-text-color-secondary);
+}
+
+.agent-panel-pill strong {
+  color: var(--el-text-color-primary);
+}
+
+.agent-panel-cta {
+  flex-shrink: 0;
+  min-height: 40px;
+}
+
+.agent-inline-state {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--cp-border, var(--el-border-color-lighter));
+  border-radius: 10px;
+  background: var(--cp-bg-surface, var(--el-bg-color));
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.agent-inline-state.error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--el-color-danger);
+}
+
+.agent-skeleton-line {
+  height: 12px;
+  width: 62%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--el-fill-color-light), var(--el-fill-color), var(--el-fill-color-light));
+  background-size: 220% 100%;
+  animation: agent-shimmer 1.2s ease-in-out infinite;
+}
+
+.agent-skeleton-line + .agent-skeleton-line {
+  margin-top: 10px;
+}
+
+.agent-skeleton-line.wide {
+  width: 88%;
+}
+
+.agent-answer-stack {
+  margin-top: 14px;
+  display: grid;
+  gap: 12px;
+}
+
+.agent-answer-card {
+  border: 1px solid color-mix(in srgb, var(--cp-primary, var(--el-color-primary)) 22%, var(--cp-border, var(--el-border-color-lighter)));
+  border-radius: 10px;
+  background: var(--cp-bg-surface, var(--el-bg-color));
+  padding: 14px 16px;
+}
+
+.agent-answer-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--el-text-color-primary);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.agent-answer-meta {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.agent-answer-meta small {
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.agent-answer-body {
+  margin-top: 10px;
+  color: var(--el-text-color-primary);
+  font-size: 14px;
+  line-height: 1.8;
+}
+
+.agent-answer-body p {
+  margin: 0;
+}
+
+.agent-answer-body p + p {
+  margin-top: 8px;
+}
+
+.agent-answer-note {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--cp-border, var(--el-border-color-lighter));
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.agent-results {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(260px, 0.9fr);
+  gap: 12px;
+}
+
+.agent-result-group {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.agent-result-heading {
+  min-height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--el-text-color-primary);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.agent-result-heading small {
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.agent-citation-card,
+.agent-related-row {
+  width: 100%;
+  border: 1px solid var(--cp-border, var(--el-border-color-lighter));
+  border-radius: 10px;
+  background: var(--cp-bg-surface, var(--el-bg-color));
+  color: var(--el-text-color-primary);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.18s ease, background-color 0.18s ease, transform 0.18s ease;
+}
+
+.agent-citation-card:hover,
+.agent-related-row:hover {
+  border-color: color-mix(in srgb, var(--cp-primary, var(--el-color-primary)) 38%, var(--cp-border, var(--el-border-color-light)));
+  background: color-mix(in srgb, var(--cp-primary, var(--el-color-primary)) 5%, var(--cp-bg-surface, var(--el-bg-color)));
+  transform: translateY(-1px);
+}
+
+.agent-citation-card {
+  display: grid;
+  gap: 5px;
+  padding: 10px 12px;
+}
+
+.agent-citation-meta {
+  color: var(--cp-primary-dark, var(--el-color-primary));
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.agent-citation-card strong,
+.agent-related-row strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--el-text-color-primary);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-citation-card em,
+.agent-related-row em {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+  font-style: normal;
+  line-height: 1.55;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.agent-related-row {
+  min-height: 58px;
+  padding: 9px 11px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.agent-related-row span {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.agent-related-row small {
+  color: var(--el-text-color-secondary);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.agent-panel-footer {
+  margin-top: 16px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: var(--cp-bg-surface, var(--el-bg-color));
+  border: 1px solid var(--cp-border, var(--el-border-color-lighter));
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.agent-panel-hint {
+  color: var(--el-text-color-secondary);
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.agent-panel-hint-label {
+  color: var(--cp-primary-dark, var(--el-color-primary));
+  font-weight: 700;
+}
+
+.agent-panel-features {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.agent-panel-feature {
+  background: color-mix(in srgb, var(--cp-primary, var(--el-color-primary)) 10%, var(--cp-bg-card, var(--el-bg-color-overlay)));
+  color: var(--cp-primary-dark, var(--el-color-primary));
+}
+
+.agent-panel-highlight {
+  color: var(--el-text-color-primary);
+  font-weight: 700;
 }
 
 .highlight {
@@ -926,6 +1751,53 @@ onUnmounted(() => {
   flex-wrap: wrap;
 }
 
+.search-empty-recovery {
+  width: min(100%, 640px);
+  margin-top: 12px;
+  display: grid;
+  gap: 14px;
+}
+
+.search-empty-summary {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+.search-empty-pill {
+  min-height: 30px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--cp-primary, var(--el-color-primary)) 20%, var(--cp-border, var(--el-border-color-light)));
+  background: var(--cp-bg-card, var(--el-bg-color-overlay));
+  color: var(--el-text-color-secondary);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.search-empty-pill strong {
+  color: var(--el-text-color-primary);
+}
+
+.search-empty-note {
+  margin: 0;
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
+  line-height: 1.7;
+  text-align: center;
+}
+
+.search-empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+}
+
 .clickable-tag {
   cursor: pointer;
 }
@@ -948,6 +1820,15 @@ onUnmounted(() => {
   letter-spacing: 0.1em;
 }
 
+@keyframes agent-shimmer {
+  0% {
+    background-position: 120% 0;
+  }
+  100% {
+    background-position: -120% 0;
+  }
+}
+
 :deep(.el-select) {
   width: 100%;
 }
@@ -957,9 +1838,9 @@ onUnmounted(() => {
   gap: 4px;
   margin-bottom: 20px;
   padding: 4px;
-  background: var(--el-fill-color-light);
-  border-radius: 12px;
-  border: 1px solid var(--el-border-color-lighter);
+  background: var(--cp-bg-surface, var(--el-fill-color-light));
+  border-radius: 10px;
+  border: 1px solid var(--cp-border, var(--el-border-color-lighter));
 }
 
 .search-tab {
@@ -971,7 +1852,7 @@ onUnmounted(() => {
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
-  border-radius: 10px;
+  border-radius: 8px;
   transition: all 0.2s ease;
 }
 
@@ -980,8 +1861,8 @@ onUnmounted(() => {
 }
 
 .search-tab.active {
-  background: var(--el-bg-color-overlay);
-  color: var(--el-color-primary);
+  background: var(--cp-bg-card, var(--el-bg-color-overlay));
+  color: var(--cp-primary-dark, var(--el-color-primary));
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
@@ -995,15 +1876,15 @@ onUnmounted(() => {
   display: flex;
   gap: 16px;
   padding: 18px;
-  border: 1px solid var(--el-border-color-lighter);
-  border-radius: 14px;
-  background: var(--el-bg-color-overlay);
+  border: 1px solid var(--cp-border, var(--el-border-color-lighter));
+  border-radius: 10px;
+  background: var(--cp-bg-card, var(--el-bg-color-overlay));
   cursor: pointer;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .user-card:hover {
-  border-color: var(--el-color-primary-light-5);
+  border-color: color-mix(in srgb, var(--cp-primary, var(--el-color-primary)) 34%, var(--cp-border, var(--el-border-color-light)));
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
 }
 
@@ -1063,15 +1944,15 @@ onUnmounted(() => {
 
 .tag-card {
   padding: 16px 18px;
-  border: 1px solid var(--el-border-color-lighter);
-  border-radius: 14px;
-  background: var(--el-bg-color-overlay);
+  border: 1px solid var(--cp-border, var(--el-border-color-lighter));
+  border-radius: 10px;
+  background: var(--cp-bg-card, var(--el-bg-color-overlay));
   cursor: pointer;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .tag-card:hover {
-  border-color: var(--el-color-primary-light-5);
+  border-color: color-mix(in srgb, var(--cp-primary, var(--el-color-primary)) 34%, var(--cp-border, var(--el-border-color-light)));
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
 }
 
@@ -1097,6 +1978,47 @@ onUnmounted(() => {
 @media (max-width: 768px) {
   .search-hero {
     padding: 18px;
+  }
+
+  .agent-panel {
+    padding: 18px;
+  }
+
+  .agent-panel-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .agent-results {
+    grid-template-columns: 1fr;
+  }
+
+  .agent-answer-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .agent-answer-meta {
+    justify-content: flex-start;
+  }
+
+  .agent-inline-state.error {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .agent-panel-footer {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .agent-panel-features {
+    justify-content: flex-start;
+  }
+
+  .search-empty-actions {
+    flex-direction: column;
+    align-items: stretch;
   }
 
   .suggest-actions {

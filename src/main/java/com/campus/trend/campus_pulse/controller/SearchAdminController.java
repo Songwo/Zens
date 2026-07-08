@@ -71,7 +71,11 @@ public class SearchAdminController {
             Page<Post> result = postMapper.selectPage(pageReq,
                     new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<Post>()
                             .eq(Post::getStatus, 1)
-                            .eq(Post::getAuditStatus, "APPROVED"));
+                            .and(w -> w.isNull(Post::getAuditStatus)
+                                    .or()
+                                    .eq(Post::getAuditStatus, "")
+                                    .or()
+                                    .eq(Post::getAuditStatus, "APPROVED")));
             if (result.getRecords().isEmpty()) {
                 break;
             }

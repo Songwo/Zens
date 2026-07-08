@@ -37,7 +37,6 @@ import java.util.stream.Collectors;
 @Slf4j
 public class PostRecommendServiceImpl implements PostRecommendService {
 
-    private static final String AUDIT_STATUS_PENDING = "PENDING";
     private static final String AUDIT_STATUS_APPROVED = "APPROVED";
     private final UserTagRelationService userTagRelationService;
     private final TagService tagService;
@@ -512,8 +511,6 @@ public class PostRecommendServiceImpl implements PostRecommendService {
                 .and(w -> w.isNull(Post::getAuditStatus)
                         .or()
                         .eq(Post::getAuditStatus, "")
-                        .or()
-                        .eq(Post::getAuditStatus, AUDIT_STATUS_PENDING)
                         .or()
                         .eq(Post::getAuditStatus, AUDIT_STATUS_APPROVED));
     }
