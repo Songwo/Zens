@@ -5,7 +5,7 @@ set -Eeuo pipefail
 # It deploys only sub-sites and never restarts the main community service.
 #
 # Default domains:
-#   main:    https://allinsong.top
+#   main:    https://www.allinsong.top
 #   shop:    https://shop.allinsong.top
 #   lottery: https://lottery.allinsong.top
 #   cdk:     https://cdk.allinsong.top
@@ -15,7 +15,7 @@ set -Eeuo pipefail
 #
 # Useful overrides:
 #   MAIN_ENV_FILE=.env.production bash deploy-subsites.sh
-#   MAIN_SITE_BACKEND_URL=https://allinsong.top RUN_SHOP_SEED=true bash deploy-subsites.sh
+#   MAIN_SITE_BACKEND_URL=https://www.allinsong.top RUN_SHOP_SEED=true bash deploy-subsites.sh
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 STAMP="$(date +%Y%m%d%H%M%S)"
@@ -228,8 +228,10 @@ write_env() {
   local tmp="${file}.tmp.${STAMP}"
   mkdir -p "$(dirname "$file")"
   cat > "$tmp"
+  chmod 600 "$tmp"
   if [[ -f "$file" ]]; then
     cp "$file" "${file}.bak.${STAMP}"
+    chmod 600 "${file}.bak.${STAMP}"
     log "backup ${file#${ROOT_DIR}/} -> ${file#${ROOT_DIR}/}.bak.${STAMP}"
   fi
   mv "$tmp" "$file"
@@ -561,10 +563,11 @@ main() {
 
   load_main_env
 
-  local main_domain main_site_url main_backend_url shop_domain lottery_domain cdk_domain
+  local main_domain main_site_url main_backend_url lottery_backend_url shop_domain lottery_domain cdk_domain
   main_domain="${MAIN_DOMAIN:-allinsong.top}"
-  main_site_url="${MAIN_SITE_URL:-https://${main_domain}}"
+  main_site_url="${MAIN_SITE_URL:-https://www.${main_domain}}"
   main_backend_url="${MAIN_SITE_BACKEND_URL:-${main_site_url}}"
+  lottery_backend_url="${LOTTERY_MAIN_SITE_API_URL:-http://www.${main_domain}/api}"
   shop_domain="${SHOP_DOMAIN:-shop.${main_domain}}"
   lottery_domain="${LOTTERY_DOMAIN:-lottery.${main_domain}}"
   cdk_domain="${CDK_DOMAIN:-cdk.${main_domain}}"
@@ -575,20 +578,23 @@ main() {
   cdk_url="${CDK_PUBLIC_URL:-https://${cdk_domain}}"
   logo_url="${MAIN_SITE_LOGO_URL:-${main_site_url}/logo.png}"
 
-  local db_url jwt_secret shop_service_secret lottery_service_secret
+  local db_url jwt_secret shop_service_secret lottery_service_secret cdk_service_secret
   db_url="$(cfg DB_URL 'jdbc:mysql://127.0.0.1:3306/campus_pulse?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true')"
   MYSQL_USER="$(cfg DB_USERNAME root)"
   MYSQL_PASSWORD="$(cfg DB_PASSWORD '')"
   jwt_secret="$(cfg JWT_SECRET '')"
   shop_service_secret="$(cfg SHOP_SERVICE_SECRET 'dev-shop-service-secret-CHANGE_ME_at_least_16_chars')"
   lottery_service_secret="$(cfg LOTTERY_SERVICE_SECRET 'dev-lottery-service-secret-CHANGE_ME_at_least_16_chars')"
+  cdk_service_secret="$(cfg CDK_SERVICE_SECRET 'dev-cdk-service-secret-CHANGE_ME_at_least_16_chars')"
 
   [[ -n "$jwt_secret" ]] || die "JWT_SECRET is required for SSO"
   [[ ${#jwt_secret} -ge 32 ]] || warn "JWT_SECRET is short; production should use at least 32 chars"
   shop_service_secret="$(ensure_main_service_secret SHOP_SERVICE_SECRET "$shop_service_secret")"
   lottery_service_secret="$(ensure_main_service_secret LOTTERY_SERVICE_SECRET "$lottery_service_secret")"
+  cdk_service_secret="$(ensure_main_service_secret CDK_SERVICE_SECRET "$cdk_service_secret")"
   [[ "$shop_service_secret" != *CHANGE_ME* && "$shop_service_secret" != dev-* ]] || warn "SHOP_SERVICE_SECRET looks like a dev value"
   [[ "$lottery_service_secret" != *CHANGE_ME* && "$lottery_service_secret" != dev-* ]] || warn "LOTTERY_SERVICE_SECRET looks like a dev value"
+  [[ "$cdk_service_secret" != *CHANGE_ME* && "$cdk_service_secret" != dev-* ]] || warn "CDK_SERVICE_SECRET looks like a dev value"
 
   parse_jdbc_mysql "$db_url"
   ensure_mysql
@@ -642,7 +648,7 @@ main() {
   r2_key="$(cfg R2_ACCESS_KEY_ID '')"
   r2_secret="$(cfg R2_SECRET_ACCESS_KEY '')"
   r2_bucket="${SHOP_R2_BUCKET:-$(cfg R2_BUCKET 'zdc-shop-assets')}"
-  r2_public="${SHOP_R2_PUBLIC_BASE_URL:-$(cfg R2_PUBLIC_BASE_URL "$main_site_url")}"
+  r2_public="${SHOP_R2_PUBLIC_BASE_URL:-$(cfg R2_PUBLIC_BASE_URL "https://media.${main_domain}")}"
   [[ -n "$r2_account" && -n "$r2_key" && -n "$r2_secret" ]] || warn "R2 config is incomplete; shop image upload may be unavailable"
 
   local bot_token bot_username bot_password
@@ -688,7 +694,8 @@ $(env_line LOTTERY_COMMENT_MAX_PAGES "${LOTTERY_COMMENT_MAX_PAGES:-50}")
 $(env_line LOTTERY_SERVICE_ID campus-lottery-station)
 $(env_line LOTTERY_SERVICE_SECRET "$lottery_service_secret")
 $(env_line COMMUNITY_BASE_URL "$main_site_url")
-$(env_line COMMUNITY_API_BASE_URL "$main_backend_url")
+$(env_line MAIN_SITE_API_URL "$lottery_backend_url")
+$(env_line COMMUNITY_API_BASE_URL "$lottery_backend_url")
 $(env_line COMMUNITY_SSO_AUTHORIZE_URL "${main_site_url}/sso/authorize")
 $(env_line COMMUNITY_SSO_TOKEN_URL '')
 $(env_line COMMUNITY_JWT_SECRET "$jwt_secret")
@@ -723,6 +730,8 @@ $(env_line CDK_AIRDROP_RABBITMQ_URL "${CDK_AIRDROP_RABBITMQ_URL:-}")
 $(env_line CDK_COMMUNITY_URL "$main_site_url")
 $(env_line CDK_COMMUNITY_CLIENT_ID cdk-airdrop)
 $(env_line CDK_COMMUNITY_JWT_SECRET "$jwt_secret")
+$(env_line CDK_SERVICE_SECRET "$cdk_service_secret")
+$(env_line MAIN_SITE_API_URL "$main_backend_url")
 $(env_line CDK_AIRDROP_ALLOWED_ORIGINS "${cdk_url},${main_site_url}")
 $(env_line CDK_AIRDROP_CSP_ENABLED true)
 $(env_line CDK_AIRDROP_HSTS_ENABLED true)

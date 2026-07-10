@@ -1,5 +1,9 @@
 $ErrorActionPreference = "Stop"
 
+Invoke-RestMethod `
+  -Method Get `
+  -Uri "http://127.0.0.1:7810/ready" | Out-Null
+
 $body = @{
   question = "Spring Boot 登录态频繁失效怎么排查？"
   limit = 5

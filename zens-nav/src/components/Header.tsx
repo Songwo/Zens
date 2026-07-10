@@ -31,13 +31,13 @@ export function Header() {
 
         <div className="flex items-center gap-2">
           <a
-            href="https://allinsong.top/auth/login"
+            href="https://www.allinsong.top/auth/login"
             className="inline-flex h-9 items-center justify-center rounded-nav border border-line px-3 text-sm text-mutedStrong hover:border-amber hover:bg-amber-softer hover:text-ink"
           >
             登录 / 注册
           </a>
           <a
-            href="https://allinsong.top"
+            href="https://www.allinsong.top"
             className="inline-flex h-9 items-center justify-center gap-1.5 rounded-nav border border-amber bg-amber px-3 text-sm font-medium text-amber-ink hover:bg-[#E9AA00]"
             target="_blank"
             rel="noreferrer"

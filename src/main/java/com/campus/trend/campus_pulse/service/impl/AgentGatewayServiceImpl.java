@@ -91,6 +91,9 @@ public class AgentGatewayServiceImpl implements AgentGatewayService {
             data.put("backend", health.get("backend"));
             data.put("postgres", health.get("postgres"));
             data.put("mysql", health.get("mysql"));
+            data.put("mysqlReplica", health.getOrDefault("mysql_replica", health.get("mysql")));
+            data.put("replicaReadOnly", health.get("replica_read_only"));
+            data.put("replicaReadOnlyRequired", health.get("replica_read_only_required"));
             data.put("llmEnabled", health.get("llm_enabled"));
             data.put("llmConfigured", health.get("llm_configured"));
             data.put("llmStatus", health.get("llm_status"));
@@ -448,8 +451,13 @@ public class AgentGatewayServiceImpl implements AgentGatewayService {
         if (!"ok".equalsIgnoreCase(status)) {
             advice.add("Agent 服务已响应但处于非 ok 状态，请检查检索库连接");
         }
-        if ("down".equalsIgnoreCase(safeObjectText(health.get("mysql"), ""))) {
-            advice.add("MySQL 检索库不可用，检查 AGENT_MYSQL_* 配置和 3306/3308 连接");
+        Object mysqlReplicaStatus = health.getOrDefault("mysql_replica", health.get("mysql"));
+        if ("down".equalsIgnoreCase(safeObjectText(mysqlReplicaStatus, ""))) {
+            advice.add("MySQL 只读副本不可用，检查 AGENT_MYSQL_REPLICA_* 配置和副本网络连接");
+        }
+        if ("mysql".equalsIgnoreCase(safeObjectText(health.get("backend"), ""))
+                && Boolean.FALSE.equals(health.get("replica_read_only"))) {
+            advice.add("Agent 当前连接到可写 MySQL；生产环境应指向只读副本并启用 AGENT_MYSQL_REQUIRE_READ_ONLY");
         }
         if ("down".equalsIgnoreCase(safeObjectText(health.get("postgres"), ""))) {
             advice.add("PostgreSQL 检索库不可用，检查 AGENT_POSTGRES_DSN");
@@ -494,6 +502,9 @@ public class AgentGatewayServiceImpl implements AgentGatewayService {
         data.put("backend", "none");
         data.put("postgres", "not_configured");
         data.put("mysql", "not_configured");
+        data.put("mysql_replica", "not_configured");
+        data.put("replica_read_only", null);
+        data.put("replica_read_only_required", false);
         return data;
     }
 

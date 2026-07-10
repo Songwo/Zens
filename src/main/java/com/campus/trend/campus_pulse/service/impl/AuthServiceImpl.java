@@ -18,6 +18,7 @@ import com.campus.trend.campus_pulse.service.UserService;
 import com.campus.trend.campus_pulse.service.VerificationCodeService;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import com.campus.trend.campus_pulse.utils.JwtUtil;
+import com.campus.trend.campus_pulse.utils.Ip2RegionUtils;
 import com.campus.trend.campus_pulse.utils.SecurityUtils;
 import com.campus.trend.campus_pulse.utils.TotpUtil;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -375,7 +376,7 @@ public class AuthServiceImpl implements AuthService {
         // 异步：登录成功通知（不阻塞登录响应）
         try {
             String deviceType = resolveDeviceType(safeDid).equals("mobile") ? "移动端" : "PC端";
-            String region = StringUtils.hasText(activeRegion) ? activeRegion : (StringUtils.hasText(clientIp) ? clientIp : "未知位置");
+            String region = StringUtils.hasText(activeRegion) ? activeRegion : "未知位置";
             String loginTime = java.time.format.DateTimeFormatter.ofPattern("MM月dd日 HH:mm")
                     .format(java.time.LocalDateTime.now());
             String notifyKey = "auth:login:notify:" + user.getId() + ":" + LocalDate.now() + ":" + safeDid.hashCode();
@@ -692,12 +693,14 @@ public class AuthServiceImpl implements AuthService {
         return normalized.length() > 80 ? normalized.substring(0, 80) : normalized;
     }
 
-    private String resolveActiveRegion(String clientIp) {
+    static String resolveActiveRegion(String clientIp) {
         if (!StringUtils.hasText(clientIp)) return null;
         String normalized = clientIp.trim();
         if (!StringUtils.hasText(normalized) || "unknown".equalsIgnoreCase(normalized)) return null;
-        if ("127.0.0.1".equals(normalized) || "::1".equals(normalized) || "0:0:0:0:0:0:0:1".equals(normalized)) return "本地开发环境";
-        return normalized;
+        String region = Ip2RegionUtils.getShortRegion(normalized);
+        if ("本地 IP".equals(region)) return "本地开发环境";
+        if (!StringUtils.hasText(region) || "未知".equals(region)) return null;
+        return region;
     }
 
     private String buildAccessKey(String userId, String sessionId) {

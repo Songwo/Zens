@@ -1,30 +1,113 @@
 $ErrorActionPreference = "Stop"
 
 $composeFile = Join-Path $PSScriptRoot "docker-compose.yml"
-$dumpFile = Join-Path $env:TEMP "campus-pulse-replication-seed.sql"
+$envFile = Join-Path $PSScriptRoot ".env"
+$containerSeedFile = "/replication-seed/campus-pulse-replication-seed.sql"
+$composePrefix = @(
+    "compose",
+    "--project-directory", $PSScriptRoot,
+    "--env-file", $envFile,
+    "--file", $composeFile
+)
 
-Write-Host "1/5 启动 source / replica 容器..." -ForegroundColor Cyan
-docker compose -f $composeFile up -d
+function Invoke-Compose {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string[]] $CommandArgs
+    )
 
-Write-Host "2/5 等待 source 就绪..." -ForegroundColor Cyan
-docker compose -f $composeFile exec -T mysql-source sh -c "until mysqladmin ping -uroot -proot123456 --silent; do sleep 2; done"
+    & docker @composePrefix @CommandArgs
+    if ($LASTEXITCODE -ne 0) {
+        throw "docker compose failed with exit code $LASTEXITCODE."
+    }
+}
 
-Write-Host "3/5 等待 replica 就绪..." -ForegroundColor Cyan
-docker compose -f $composeFile exec -T mysql-replica sh -c "until mysqladmin ping -uroot -proot123456 --silent; do sleep 2; done"
+function Invoke-ComposeCleanup {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string[]] $CommandArgs
+    )
 
-Write-Host "4/5 从 source 导出 campus_pulse 并导入 replica..." -ForegroundColor Cyan
-docker compose -f $composeFile exec -T mysql-source sh -c "mysqldump -uroot -proot123456 --single-transaction --set-gtid-purged=ON --databases campus_pulse" | Out-File -FilePath $dumpFile -Encoding utf8
-Get-Content -Raw $dumpFile | docker compose -f $composeFile exec -T mysql-replica mysql -uroot -proot123456
+    try {
+        & docker @composePrefix @CommandArgs *> $null
+    }
+    catch {
+        # Cleanup is best-effort and must not hide the original bootstrap error.
+    }
+}
 
-Write-Host "5/5 配置并启动复制..." -ForegroundColor Cyan
-docker compose -f $composeFile exec -T mysql-replica mysql -uroot -proot123456 -e "STOP REPLICA; RESET REPLICA ALL; CHANGE REPLICATION SOURCE TO SOURCE_HOST='mysql-source', SOURCE_PORT=3306, SOURCE_USER='repl', SOURCE_PASSWORD='repl123456!', SOURCE_AUTO_POSITION=1, GET_SOURCE_PUBLIC_KEY=1; START REPLICA;"
-docker compose -f $composeFile exec -T mysql-replica mysql -uroot -proot123456 -e "SHOW REPLICA STATUS\G"
+if (-not (Test-Path -LiteralPath $envFile -PathType Leaf)) {
+    throw "Missing $envFile. Copy .env.example to .env and replace every placeholder."
+}
 
-Write-Host ""
-Write-Host "完成。现在你可以用下面两个地址连接：" -ForegroundColor Green
-Write-Host "  主库: 127.0.0.1:3307"
-Write-Host "  从库: 127.0.0.1:3308"
-Write-Host ""
-Write-Host "验证建议：" -ForegroundColor Yellow
-Write-Host "  1. 往 3307 的 campus_pulse 写一条测试数据"
-Write-Host "  2. 到 3308 查询同一张表，确认数据同步过来了"
+try {
+    Write-Host "1/7 Validate the local demonstration configuration..." -ForegroundColor Cyan
+    Invoke-Compose -CommandArgs @("config", "--quiet")
+    Invoke-Compose -CommandArgs @(
+        "run", "--rm", "--no-deps", "--entrypoint", "bash", "mysql-source",
+        "/opt/campus-replication/source/configure-replication-user.sh", "--validate-only"
+    )
+    Invoke-Compose -CommandArgs @(
+        "run", "--rm", "--no-deps", "--entrypoint", "bash", "mysql-replica",
+        "/opt/campus-replication/replica/manage-replica.sh", "--validate-only"
+    )
+
+    Write-Host "2/7 Start the source and replica containers..." -ForegroundColor Cyan
+    Invoke-Compose -CommandArgs @("up", "--detach", "--wait", "--wait-timeout", "180")
+
+    Write-Host "3/7 Create or rotate the dedicated replication user..." -ForegroundColor Cyan
+    Invoke-Compose -CommandArgs @(
+        "exec", "-T", "mysql-source", "bash",
+        "/opt/campus-replication/source/configure-replication-user.sh"
+    )
+
+    Write-Host "4/7 Create a consistent GTID seed from campus_pulse..." -ForegroundColor Cyan
+    Invoke-Compose -CommandArgs @(
+        "exec", "-T", "mysql-source", "bash",
+        "/opt/campus-replication/source/create-seed.sh"
+    )
+
+    Write-Host "5/7 Re-seed the local replica..." -ForegroundColor Cyan
+    Invoke-Compose -CommandArgs @(
+        "exec", "-T", "mysql-replica", "bash",
+        "/opt/campus-replication/replica/manage-replica.sh", "prepare"
+    )
+    Invoke-Compose -CommandArgs @(
+        "exec", "-T", "mysql-replica", "bash",
+        "/opt/campus-replication/replica/manage-replica.sh", "import"
+    )
+
+    Write-Host "6/7 Configure GTID replication and restore strict read-only mode..." -ForegroundColor Cyan
+    Invoke-Compose -CommandArgs @(
+        "exec", "-T", "mysql-replica", "bash",
+        "/opt/campus-replication/replica/manage-replica.sh", "configure"
+    )
+
+    Write-Host "7/7 Verify replication, read-only flags, and the database filter..." -ForegroundColor Cyan
+    Invoke-Compose -CommandArgs @(
+        "exec", "-T", "mysql-replica", "bash",
+        "/opt/campus-replication/replica/manage-replica.sh", "verify"
+    )
+    Invoke-Compose -CommandArgs @(
+        "exec", "-T", "mysql-replica", "bash",
+        "/opt/campus-replication/replica/manage-replica.sh", "status"
+    )
+
+    Write-Host ""
+    Write-Host "Local demonstration is ready. Connection ports are defined in $envFile." -ForegroundColor Green
+    Write-Host "The replica accepts campus_pulse reads only; keep all writes on the source." -ForegroundColor Yellow
+}
+finally {
+    if (Test-Path -LiteralPath $envFile -PathType Leaf) {
+        Invoke-ComposeCleanup -CommandArgs @(
+            "exec", "-T", "mysql-replica", "bash",
+            "/opt/campus-replication/replica/manage-replica.sh", "read-only"
+        )
+        Invoke-ComposeCleanup -CommandArgs @(
+            "exec", "-T", "mysql-source", "rm", "-f", "--", $containerSeedFile
+        )
+        Invoke-ComposeCleanup -CommandArgs @(
+            "exec", "-T", "mysql-replica", "rm", "-f", "--", $containerSeedFile
+        )
+    }
+}

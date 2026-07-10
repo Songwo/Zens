@@ -41,6 +41,7 @@ const fullPagination = ref({
   pages: 0
 })
 const supportContact = ref<SupportContact | null>(null)
+const mailEntryUrl = (import.meta.env.VITE_ZENSMAIL_URL || '').trim()
 const LV6_REQUIRED_EXP = 1500
 
 const isLoggedIn = computed(() => !!userStore.accessToken)
@@ -454,12 +455,13 @@ watch(isLv6Unlocked, async (unlocked) => {
             <span v-if="supportContact">联系管理员：{{ supportContact.nickname || supportContact.username }}</span>
             <span v-else>联系管理员：社区管理员</span>
             <el-tag
+              v-if="mailEntryUrl"
               class="mail-entry-tag"
               type="primary"
               effect="plain"
               round
               tag="a"
-              href="https://zensmail.allinsong.top"
+              :href="mailEntryUrl"
               target="_blank"
               rel="noopener noreferrer"
             >

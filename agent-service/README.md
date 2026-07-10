@@ -10,8 +10,8 @@
 这套服务默认假设：
 
 1. 主站仍由 Spring Boot 提供写入与主业务接口
-2. 当前阶段可直接连接 **MySQL 主库**，先把能力跑起来
-3. 后续接好同步后，再把搜索切到 **PostgreSQL 只读副本 / 搜索库**
+2. Agent 只使用 **MySQL 只读副本** 或独立的 PostgreSQL 搜索库
+3. Agent 不持有主库写账号，也不执行写入、会话落库或数据库迁移
 4. 搜索库中建议同步 `sys_post`、`sys_comment`、`sections`、`sys_user` 等基础表
 
 如果暂时没有接入大模型，服务也能返回基于社区检索结果的可读回答；配置 OpenAI 兼容接口后，会自动升级为更自然的总结式答案。
@@ -61,7 +61,7 @@ agent-service/
 
 ### 3. `GET /health`
 
-返回服务和当前搜索后端连通状态。
+返回服务、当前搜索后端和 MySQL 副本只读状态。该接口始终返回健康快照；供容器编排使用的 `GET /ready` 在数据库不可用时会返回 `503`。
 
 ## 快速启动
 
@@ -94,12 +94,24 @@ cp .env.example .env.local
 最关键的配置：
 
 ```env
-AGENT_SEARCH_BACKEND=auto
-AGENT_MYSQL_DSN=jdbc:mysql://127.0.0.1:3308/campus_pulse?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
-AGENT_MYSQL_USERNAME=root
-AGENT_MYSQL_PASSWORD=root123456
+AGENT_SEARCH_BACKEND=mysql
+AGENT_MYSQL_REPLICA_DSN=jdbc:mysql://127.0.0.1:3308/campus_pulse?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+AGENT_MYSQL_REPLICA_USERNAME=agent_reader
+AGENT_MYSQL_REPLICA_PASSWORD=change-me
+AGENT_MYSQL_REQUIRE_READ_ONLY=true
 AGENT_LLM_ENABLED=false
 ```
+
+建议在 MySQL 副本创建独立只读账号，不要把主站的 `root` 或业务写账号交给 Agent：
+
+```sql
+CREATE USER 'agent_reader'@'应用容器网段' IDENTIFIED BY '请替换为强密码';
+GRANT SELECT, SHOW VIEW ON campus_pulse.* TO 'agent_reader'@'应用容器网段';
+```
+
+`AGENT_MYSQL_REQUIRE_READ_ONLY=true` 会在启动阶段确认 `read_only` 与 `super_read_only` 均已开启。如果配置误指向可写主库或保护不完整的副本，服务会直接拒绝启动；此外，每个 MySQL 会话都会执行 `SET SESSION TRANSACTION READ ONLY`。本地临时直连开发库时可以显式设为 `false`，生产环境应保持 `true`。
+
+旧的 `AGENT_MYSQL_DSN`、`AGENT_MYSQL_USERNAME`、`AGENT_MYSQL_PASSWORD` 仍可兼容读取，但新部署应只使用 `AGENT_MYSQL_REPLICA_*`，并避免向 Agent 容器注入主库写凭证。
 
 当前项目里，`agent-service/.env.local` 就是 Agent 的本地配置入口。你要改：
 
@@ -137,6 +149,15 @@ uvicorn app.main:app --host 0.0.0.0 --port 7810 --reload
 ```powershell
 .\scripts\dev.ps1
 ```
+
+### 4. 验证
+
+```bash
+python -m unittest discover -s tests -v
+curl -fsS http://127.0.0.1:7810/ready
+```
+
+`/ready` 返回 `200` 才表示搜索库可用；启用严格只读校验后，响应中的 `mysql_replica` 应为 `ok`，`replica_read_only` 应为 `true`。
 
 ## 示例请求
 
@@ -182,7 +203,7 @@ curl -X POST "http://127.0.0.1:7810/v1/community-qa/ask" \
 - `AGENT_SEARCH_BACKEND=mysql`: 强制走 MySQL
 - `AGENT_SEARCH_BACKEND=postgres`: 强制走 PostgreSQL
 
-所以当前你只有 MySQL 主库时，不需要再等同步链路，Agent 就能先上线验证。
+生产环境使用 MySQL 时，`AGENT_MYSQL_REPLICA_*` 必须指向同步正常的只读副本。主库继续只服务 Spring Boot 的写入、事务、会话和迁移链路。
 
 ## PostgreSQL 搜索副本建议
 
@@ -202,6 +223,6 @@ curl -X POST "http://127.0.0.1:7810/v1/community-qa/ask" \
 
 1. 前端搜索页直接调用 Agent
 2. 或 Spring Boot 提供一个轻量代理接口 `/api/agent/ask`
-3. 现阶段 Agent 可先连 MySQL；等只读副本稳定后再切过去
+3. Agent 的搜索请求只连 MySQL 副本或 PostgreSQL 搜索库
 
 这样即使 Agent 压力上来，也不会直接拖慢主站事务链路。

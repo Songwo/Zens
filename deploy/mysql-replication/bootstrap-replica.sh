@@ -1,26 +1,67 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-COMPOSE_FILE="${SCRIPT_DIR}/docker-compose.yml"
-DUMP_FILE="${TMPDIR:-/tmp}/campus-pulse-replication-seed.sql"
+readonly SCRIPT_DIR
+readonly COMPOSE_FILE="${SCRIPT_DIR}/docker-compose.yml"
+readonly ENV_FILE="${SCRIPT_DIR}/.env"
+readonly CONTAINER_SEED_FILE='/replication-seed/campus-pulse-replication-seed.sql'
 
-echo "1/5 启动 source / replica 容器..."
-docker compose -f "${COMPOSE_FILE}" up -d
+if [[ ! -f "${ENV_FILE}" ]]; then
+  echo "Missing ${ENV_FILE}. Copy .env.example to .env and replace every placeholder." >&2
+  exit 1
+fi
 
-echo "2/5 等待 source 就绪..."
-docker compose -f "${COMPOSE_FILE}" exec -T mysql-source sh -c "until mysqladmin ping -uroot -proot123456 --silent; do sleep 2; done"
+compose() {
+  docker compose \
+    --project-directory "${SCRIPT_DIR}" \
+    --env-file "${ENV_FILE}" \
+    --file "${COMPOSE_FILE}" \
+    "$@"
+}
 
-echo "3/5 等待 replica 就绪..."
-docker compose -f "${COMPOSE_FILE}" exec -T mysql-replica sh -c "until mysqladmin ping -uroot -proot123456 --silent; do sleep 2; done"
+cleanup() {
+  compose exec -T mysql-replica bash \
+    /opt/campus-replication/replica/manage-replica.sh read-only >/dev/null 2>&1 || true
+  compose exec -T mysql-source rm -f -- "${CONTAINER_SEED_FILE}" >/dev/null 2>&1 || true
+  compose exec -T mysql-replica rm -f -- "${CONTAINER_SEED_FILE}" >/dev/null 2>&1 || true
+}
+trap cleanup EXIT
 
-echo "4/5 从 source 导出 campus_pulse 并导入 replica..."
-docker compose -f "${COMPOSE_FILE}" exec -T mysql-source sh -c "mysqldump -uroot -proot123456 --single-transaction --set-gtid-purged=ON --databases campus_pulse" > "${DUMP_FILE}"
-docker compose -f "${COMPOSE_FILE}" exec -T mysql-replica mysql -uroot -proot123456 < "${DUMP_FILE}"
+echo "1/7 Validate the local demonstration configuration..."
+compose config --quiet
+compose run --rm --no-deps --entrypoint bash mysql-source \
+  /opt/campus-replication/source/configure-replication-user.sh --validate-only
+compose run --rm --no-deps --entrypoint bash mysql-replica \
+  /opt/campus-replication/replica/manage-replica.sh --validate-only
 
-echo "5/5 配置并启动复制..."
-docker compose -f "${COMPOSE_FILE}" exec -T mysql-replica mysql -uroot -proot123456 -e "STOP REPLICA; RESET REPLICA ALL; CHANGE REPLICATION SOURCE TO SOURCE_HOST='mysql-source', SOURCE_PORT=3306, SOURCE_USER='repl', SOURCE_PASSWORD='repl123456!', SOURCE_AUTO_POSITION=1, GET_SOURCE_PUBLIC_KEY=1; START REPLICA;"
-docker compose -f "${COMPOSE_FILE}" exec -T mysql-replica mysql -uroot -proot123456 -e "SHOW REPLICA STATUS\G"
+echo "2/7 Start the source and replica containers..."
+compose up --detach --wait --wait-timeout 180
+
+echo "3/7 Create or rotate the dedicated replication user..."
+compose exec -T mysql-source bash \
+  /opt/campus-replication/source/configure-replication-user.sh
+
+echo "4/7 Create a consistent GTID seed from campus_pulse..."
+compose exec -T mysql-source bash \
+  /opt/campus-replication/source/create-seed.sh
+
+echo "5/7 Re-seed the local replica..."
+compose exec -T mysql-replica bash \
+  /opt/campus-replication/replica/manage-replica.sh prepare
+compose exec -T mysql-replica bash \
+  /opt/campus-replication/replica/manage-replica.sh import
+
+echo "6/7 Configure GTID replication and restore strict read-only mode..."
+compose exec -T mysql-replica bash \
+  /opt/campus-replication/replica/manage-replica.sh configure
+
+echo "7/7 Verify replication, read-only flags, and the database filter..."
+compose exec -T mysql-replica bash \
+  /opt/campus-replication/replica/manage-replica.sh verify
+compose exec -T mysql-replica bash \
+  /opt/campus-replication/replica/manage-replica.sh status
 
 echo
-echo "完成。主库: 127.0.0.1:3307  从库: 127.0.0.1:3308"
+echo "Local demonstration is ready. Connection ports are defined in ${ENV_FILE}."
+echo "The replica accepts campus_pulse reads only; keep all writes on the source."

@@ -28,21 +28,52 @@ class Settings(BaseSettings):
 
     mysql_url: str = Field(
         default="",
-        validation_alias=AliasChoices("AGENT_MYSQL_DSN", "AGENT_MYSQL_JDBC_URL", "DB_URL"),
+        validation_alias=AliasChoices(
+            "AGENT_MYSQL_REPLICA_DSN",
+            "AGENT_MYSQL_REPLICA_JDBC_URL",
+            "AGENT_MYSQL_DSN",
+            "AGENT_MYSQL_JDBC_URL",
+            "DB_URL",
+        ),
     )
-    mysql_host: str = Field(default="", validation_alias=AliasChoices("AGENT_MYSQL_HOST"))
-    mysql_port: int = Field(default=3306, validation_alias=AliasChoices("AGENT_MYSQL_PORT"))
-    mysql_database: str = Field(default="", validation_alias=AliasChoices("AGENT_MYSQL_DATABASE"))
+    mysql_host: str = Field(
+        default="",
+        validation_alias=AliasChoices("AGENT_MYSQL_REPLICA_HOST", "AGENT_MYSQL_HOST"),
+    )
+    mysql_port: int = Field(
+        default=3306,
+        ge=1,
+        le=65535,
+        validation_alias=AliasChoices("AGENT_MYSQL_REPLICA_PORT", "AGENT_MYSQL_PORT"),
+    )
+    mysql_database: str = Field(
+        default="",
+        validation_alias=AliasChoices("AGENT_MYSQL_REPLICA_DATABASE", "AGENT_MYSQL_DATABASE"),
+    )
     mysql_username: str = Field(
         default="",
-        validation_alias=AliasChoices("AGENT_MYSQL_USERNAME", "DB_USERNAME"),
+        validation_alias=AliasChoices(
+            "AGENT_MYSQL_REPLICA_USERNAME",
+            "AGENT_MYSQL_USERNAME",
+            "DB_USERNAME",
+        ),
     )
     mysql_password: str = Field(
         default="",
-        validation_alias=AliasChoices("AGENT_MYSQL_PASSWORD", "DB_PASSWORD"),
+        validation_alias=AliasChoices(
+            "AGENT_MYSQL_REPLICA_PASSWORD",
+            "AGENT_MYSQL_PASSWORD",
+            "DB_PASSWORD",
+        ),
     )
     mysql_charset: str = Field(default="utf8mb4", alias="AGENT_MYSQL_CHARSET")
-    mysql_connect_timeout_seconds: int = Field(default=5, alias="AGENT_MYSQL_CONNECT_TIMEOUT_SECONDS")
+    mysql_connect_timeout_seconds: int = Field(
+        default=5,
+        ge=1,
+        le=60,
+        alias="AGENT_MYSQL_CONNECT_TIMEOUT_SECONDS",
+    )
+    mysql_require_read_only: bool = Field(default=False, alias="AGENT_MYSQL_REQUIRE_READ_ONLY")
 
     default_search_limit: int = Field(default=6, alias="AGENT_DEFAULT_SEARCH_LIMIT")
     max_search_limit: int = Field(default=12, alias="AGENT_MAX_SEARCH_LIMIT")
@@ -77,7 +108,7 @@ class Settings(BaseSettings):
     @property
     def has_mysql_configured(self) -> bool:
         try:
-            options = self.mysql_connection_options
+            options = self.mysql_replica_connection_options
         except ValueError:
             return False
         return bool(options.get("host") and options.get("database") and options.get("user"))
@@ -91,7 +122,7 @@ class Settings(BaseSettings):
             return "postgres"
         if backend == "mysql":
             if not self.has_mysql_configured:
-                raise ValueError("已指定 MySQL 后端，但未配置可用的 MySQL 连接信息")
+                raise ValueError("已指定 MySQL 后端，但未配置可用的 AGENT_MYSQL_REPLICA_* 连接信息")
             return "mysql"
         if self.has_postgres_configured:
             return "postgres"
@@ -100,7 +131,7 @@ class Settings(BaseSettings):
         raise ValueError("未配置任何搜索后端，请至少提供 PostgreSQL DSN 或 MySQL 连接信息")
 
     @property
-    def mysql_connection_options(self) -> dict[str, Any]:
+    def mysql_replica_connection_options(self) -> dict[str, Any]:
         base: dict[str, Any] = {
             "host": self.mysql_host.strip(),
             "port": self.mysql_port,
@@ -133,6 +164,11 @@ class Settings(BaseSettings):
             "database": parsed.path.lstrip("/") or base["database"],
             "charset": charset,
         }
+
+    @property
+    def mysql_connection_options(self) -> dict[str, Any]:
+        """Backward-compatible alias for callers using the old property name."""
+        return self.mysql_replica_connection_options
 
 
 @lru_cache(maxsize=1)

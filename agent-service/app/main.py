@@ -4,14 +4,14 @@ import time
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
 from app.config import get_settings
 from app.models import AskRequest, AskResponse, HealthResponse, SearchResponse
 from app.repositories.base import SearchRepository
-from app.repositories.mysql_search import MysqlSearchRepository
+from app.repositories.mysql_search import MysqlSearchRepository, ReplicaSafetyError
 from app.repositories.postgres_search import PostgresSearchRepository
 from app.services.community_qa import CommunityQaService
 from app.services.llm_client import LlmClient
@@ -64,8 +64,7 @@ if settings.allowed_origins:
     )
 
 
-@app.get("/health", response_model=HealthResponse)
-def health() -> HealthResponse:
+def build_health_response() -> HealthResponse:
     settings = get_settings()
     repository: SearchRepository = app.state.repository
     repository_error: str | None = None
@@ -73,8 +72,15 @@ def health() -> HealthResponse:
         repository_ok = repository.ping()
     except Exception as exc:
         repository_ok = False
-        repository_error = str(exc)
+        repository_error = str(exc) if isinstance(exc, ReplicaSafetyError) else "database health check failed"
     active_backend = repository.backend_name
+    replica_read_only = getattr(repository, "replica_read_only", None)
+    replica_read_only_required = bool(getattr(repository, "replica_read_only_required", False))
+    mysql_status = (
+        "ok"
+        if active_backend == "mysql" and repository_ok
+        else ("down" if active_backend == "mysql" else "not_configured")
+    )
     llm_configured = bool(settings.llm_api_key.strip())
     if not settings.llm_enabled:
         llm_status = "disabled"
@@ -87,7 +93,10 @@ def health() -> HealthResponse:
         uptime_seconds=max(0, int(time.time() - STARTED_AT)),
         backend=active_backend,
         postgres="ok" if active_backend == "postgres" and repository_ok else ("down" if active_backend == "postgres" else "not_configured"),
-        mysql="ok" if active_backend == "mysql" and repository_ok else ("down" if active_backend == "mysql" else "not_configured"),
+        mysql=mysql_status,
+        mysql_replica=mysql_status,
+        replica_read_only=replica_read_only,
+        replica_read_only_required=replica_read_only_required,
         error=repository_error,
         search_backend=settings.normalized_search_backend,
         llm_enabled=settings.llm_enabled,
@@ -98,6 +107,19 @@ def health() -> HealthResponse:
         min_question_length=settings.min_question_length,
         default_comments_per_post=settings.default_comments_per_post,
     )
+
+
+@app.get("/health", response_model=HealthResponse)
+def health() -> HealthResponse:
+    return build_health_response()
+
+
+@app.get("/ready", response_model=HealthResponse)
+def ready(response: Response) -> HealthResponse:
+    health_response = build_health_response()
+    if health_response.status != "ok":
+        response.status_code = 503
+    return health_response
 
 
 @app.post("/v1/community-qa/search", response_model=SearchResponse)

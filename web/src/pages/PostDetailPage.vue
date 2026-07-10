@@ -1410,7 +1410,13 @@ onMounted(() => {
           <template v-if="!isDeletedPost">
             <!-- Cover Image -->
             <div v-if="postCoverImageUrl" class="post-cover">
-              <el-image :src="postCoverImageUrl" fit="contain" lazy />
+              <img
+                :src="postCoverImageUrl"
+                :alt="post?.title ? `${post.title} 封面` : '帖子封面'"
+                class="post-cover-image"
+                loading="lazy"
+                decoding="async"
+              />
             </div>
 
             <!-- AI Summary -->
@@ -2163,14 +2169,23 @@ onMounted(() => {
 }
 
 .post-cover {
-  margin: 0 -20px 24px -20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  margin: 0 0 24px;
+  padding: 12px;
   background: var(--el-fill-color-lighter);
 }
 
-.post-cover :deep(.el-image) {
-  width: 100%;
-  max-height: min(70vh, 640px);
+.post-cover-image {
   display: block;
+  width: auto;
+  height: auto;
+  max-width: min(100%, 720px);
+  max-height: min(72vh, 760px);
+  object-fit: contain;
+  object-position: center;
 }
 
 .post-body {
@@ -2562,8 +2577,15 @@ onMounted(() => {
 :deep(.markdown-body p) {
   margin-bottom: 16px;
 }
-:deep(.markdown-body img) {
-  max-width: 100%;
+:deep(.content-body.markdown-body img) {
+  display: block;
+  width: auto !important;
+  height: auto !important;
+  max-width: min(100%, 720px) !important;
+  max-height: min(72vh, 760px) !important;
+  object-fit: contain !important;
+  object-position: center;
+  margin: 18px auto;
   border-radius: var(--el-border-radius-base);
 }
 

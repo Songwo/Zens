@@ -32,10 +32,23 @@ class MysqlSearchRepository:
     backend_name = "mysql"
 
     def __init__(self, settings: Settings) -> None:
-        self._connection_options = settings.mysql_connection_options
+        self._connection_options = settings.mysql_replica_connection_options
+        self._require_read_only = settings.mysql_require_read_only
+        self._replica_read_only: bool | None = None
 
     def open(self) -> None:
-        return None
+        try:
+            healthy = self.ping()
+        except ReplicaSafetyError:
+            raise
+        except pymysql.MySQLError as exc:
+            error_code = exc.args[0] if exc.args else "unknown"
+            raise ConnectionError(
+                f"Cannot connect to the configured MySQL read replica (error {error_code}); "
+                "check AGENT_MYSQL_REPLICA_* and network access"
+            ) from None
+        if not healthy:
+            raise ConnectionError("MySQL read replica did not answer the startup health check")
 
     def close(self) -> None:
         return None
@@ -43,9 +56,30 @@ class MysqlSearchRepository:
     def ping(self) -> bool:
         with self._connect() as conn:
             with conn.cursor() as cur:
-                cur.execute("SELECT 1")
+                cur.execute(
+                    "SELECT 1 AS healthy, "
+                    "@@GLOBAL.read_only AS read_only, "
+                    "@@GLOBAL.super_read_only AS super_read_only"
+                )
                 row = cur.fetchone()
-                return bool(row)
+                if not row:
+                    return False
+                self._replica_read_only = bool(row["read_only"] and row["super_read_only"])
+                if self._require_read_only and not self._replica_read_only:
+                    raise ReplicaSafetyError(
+                        "MySQL search target is writable while "
+                        "AGENT_MYSQL_REQUIRE_READ_ONLY=true; point AGENT_MYSQL_REPLICA_* "
+                        "to a read-only replica"
+                    )
+                return bool(row["healthy"])
+
+    @property
+    def replica_read_only(self) -> bool | None:
+        return self._replica_read_only
+
+    @property
+    def replica_read_only_required(self) -> bool:
+        return self._require_read_only
 
     def search_posts(self, question: str, section_id: int | None, limit: int) -> List[PostHit]:
         try:
@@ -279,4 +313,15 @@ class MysqlSearchRepository:
         return hits
 
     def _connect(self) -> pymysql.Connection:
-        return pymysql.connect(cursorclass=DictCursor, **self._connection_options)
+        connection = pymysql.connect(cursorclass=DictCursor, **self._connection_options)
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute("SET SESSION TRANSACTION READ ONLY")
+        except Exception:
+            connection.close()
+            raise
+        return connection
+
+
+class ReplicaSafetyError(RuntimeError):
+    """Raised when strict replica mode resolves to a writable MySQL server."""

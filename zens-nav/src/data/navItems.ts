@@ -1,6 +1,6 @@
 import type { IntegrationFlow, NavCategoryMeta, NavItem } from "../types/nav";
 
-const mainSite = "https://allinsong.top";
+const mainSite = "https://www.allinsong.top";
 const mainLocal = "http://localhost:5173";
 const cdkLocal = "http://localhost:8088";
 const lotteryLocal = "http://localhost:8093";

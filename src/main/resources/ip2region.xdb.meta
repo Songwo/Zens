@@ -1,0 +1,5 @@
+source=https://raw.githubusercontent.com/lionsoul2014/ip2region/ee19ac95cab906a27ff204f3a7504595a7e6720f/data/ip2region_v4.xdb
+upstream_commit=ee19ac95cab906a27ff204f3a7504595a7e6720f
+sha256=6307a9696f5711f84bcb8b25f07894de68a64a0ed4a1cc7e990562dd3084f210
+license=Apache-2.0 OR MIT
+license_file=ip2region.LICENSE.md

@@ -13,6 +13,7 @@ services:
       - "${LOTTERY_BIND:-127.0.0.1}:${LOTTERY_PORT:-8093}:8093"
     extra_hosts:
       - "host.docker.internal:host-gateway"
+      - "www.allinsong.top:host-gateway"
     volumes:
       - zens-lottery-data:/app/data
     healthcheck:

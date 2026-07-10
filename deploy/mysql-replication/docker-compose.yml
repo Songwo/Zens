@@ -4,25 +4,24 @@ services:
     container_name: campus-mysql-source
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: root123456
+      MYSQL_ROOT_PASSWORD: ${MYSQL_SOURCE_ROOT_PASSWORD:?Set MYSQL_SOURCE_ROOT_PASSWORD in deploy/mysql-replication/.env}
       MYSQL_DATABASE: campus_pulse
+      MYSQL_REPLICATION_USER: ${MYSQL_REPLICATION_USER:?Set MYSQL_REPLICATION_USER in deploy/mysql-replication/.env}
+      MYSQL_REPLICATION_PASSWORD: ${MYSQL_REPLICATION_PASSWORD:?Set MYSQL_REPLICATION_PASSWORD in deploy/mysql-replication/.env}
     ports:
-      - "3307:3306"
-    command:
-      - --server-id=1
-      - --log-bin=mysql-bin
-      - --binlog-format=ROW
-      - --gtid-mode=ON
-      - --enforce-gtid-consistency=ON
-      - --log-replica-updates=ON
-      - --innodb-flush-log-at-trx-commit=1
-      - --sync-binlog=1
-      - --skip-name-resolve=1
+      - "127.0.0.1:${MYSQL_SOURCE_PORT:-3307}:3306"
     volumes:
       - source-data:/var/lib/mysql
-      - ./source/init:/docker-entrypoint-initdb.d:ro
+      - ./source/conf.d/my.cnf:/etc/mysql/conf.d/zz-replication.cnf:ro
+      - ./source/scripts:/opt/campus-replication/source:ro
+      - ./scripts:/opt/campus-replication/common:ro
+      - replication-seed:/replication-seed
     healthcheck:
-      test: ["CMD-SHELL", "mysqladmin ping -uroot -proot123456"]
+      test:
+        [
+          "CMD-SHELL",
+          "MYSQL_PWD=\"$${MYSQL_ROOT_PASSWORD}\" mysqladmin ping --user=root --silent",
+        ]
       interval: 10s
       timeout: 5s
       retries: 20
@@ -32,21 +31,23 @@ services:
     container_name: campus-mysql-replica
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: root123456
+      MYSQL_ROOT_PASSWORD: ${MYSQL_REPLICA_ROOT_PASSWORD:?Set MYSQL_REPLICA_ROOT_PASSWORD in deploy/mysql-replication/.env}
+      MYSQL_REPLICATION_USER: ${MYSQL_REPLICATION_USER:?Set MYSQL_REPLICATION_USER in deploy/mysql-replication/.env}
+      MYSQL_REPLICATION_PASSWORD: ${MYSQL_REPLICATION_PASSWORD:?Set MYSQL_REPLICATION_PASSWORD in deploy/mysql-replication/.env}
     ports:
-      - "3308:3306"
-    command:
-      - --server-id=2
-      - --log-bin=mysql-bin
-      - --relay-log=mysql-relay-bin
-      - --gtid-mode=ON
-      - --enforce-gtid-consistency=ON
-      - --log-replica-updates=ON
-      - --skip-name-resolve=1
+      - "127.0.0.1:${MYSQL_REPLICA_PORT:-3308}:3306"
     volumes:
       - replica-data:/var/lib/mysql
+      - ./replica/conf.d/my.cnf:/etc/mysql/conf.d/zz-replication.cnf:ro
+      - ./replica/scripts:/opt/campus-replication/replica:ro
+      - ./scripts:/opt/campus-replication/common:ro
+      - replication-seed:/replication-seed
     healthcheck:
-      test: ["CMD-SHELL", "mysqladmin ping -uroot -proot123456"]
+      test:
+        [
+          "CMD-SHELL",
+          "MYSQL_PWD=\"$${MYSQL_ROOT_PASSWORD}\" mysqladmin ping --user=root --silent",
+        ]
       interval: 10s
       timeout: 5s
       retries: 20
@@ -54,3 +55,4 @@ services:
 volumes:
   source-data:
   replica-data:
+  replication-seed:

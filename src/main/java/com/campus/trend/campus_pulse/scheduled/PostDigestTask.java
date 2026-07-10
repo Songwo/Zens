@@ -39,7 +39,7 @@ public class PostDigestTask {
     private final UserMapper userMapper;
     private final MailService mailService;
 
-    @Value("${campus.site.url:https://allinsong.top}")
+    @Value("${campus.site.url:https://www.allinsong.top}")
     private String siteUrl;
 
     /**

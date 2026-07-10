@@ -109,59 +109,75 @@ MySQL 主从复制本质上是：
 
 ```text
 deploy/mysql-replication/
+├── .env.example
+├── README.md
 ├── docker-compose.yml
 ├── bootstrap-replica.ps1
 ├── bootstrap-replica.sh
+├── scripts/validate-env.sh
 ├── source/
 │   ├── conf.d/my.cnf
-│   └── init/01-create-repl-user.sql
+│   └── scripts/
 └── replica/
-    └── conf.d/my.cnf
+    ├── conf.d/my.cnf
+    └── scripts/
 ```
+
+这套 Compose **只用于本地演示**。引导脚本会删除并重新灌入演示从库的
+`campus_pulse`，还会重置演示从库的 GTID；不要把它指向线上数据库，也不要把
+这两个 Docker volume 当生产存储。
 
 ### 3.1 你需要准备什么
 
-只需要先装好 Docker Desktop。
+先装好支持 `--wait` 的 Docker Compose v2，然后从示例创建本地密钥文件：
 
 验证命令：
 
 ```powershell
 docker --version
 docker compose version
+Set-Location deploy/mysql-replication
+Copy-Item .env.example .env
+notepad .env
 ```
 
-如果这两个命令能正常输出版本号，就可以继续。
+把 `.env` 中每一个占位值换掉。两套 root 密码、复制账号和复制密码这四个字段
+都是必填项，密码至少 16 位，复制账号必须是独立的非 root 账号。`.env` 已被
+Git 忽略，禁止提交。
 
 ### 3.2 一键启动
 
 在项目根目录打开 PowerShell，执行：
 
 ```powershell
-cd "D:\2026毕业设计\DaiMa\campus-pulse(back)\campus-pulse"
-.\deploy\mysql-replication\bootstrap-replica.ps1
+cd "D:\2026毕业设计\DaiMa\campus-pulse(back)\campus-pulse\deploy\mysql-replication"
+.\bootstrap-replica.ps1
 ```
 
 如果你在 Linux 或 macOS：
 
 ```bash
-cd /path/to/campus-pulse
-bash ./deploy/mysql-replication/bootstrap-replica.sh
+cd /path/to/campus-pulse/deploy/mysql-replication
+cp .env.example .env
+${EDITOR:-vi} .env
+bash ./bootstrap-replica.sh
 ```
 
 ### 3.3 启动成功后你会得到什么
 
 - 主库地址：`127.0.0.1:3307`
 - 从库地址：`127.0.0.1:3308`
-- root 密码：`root123456`
-- 复制账号：`repl`
-- 复制密码：`repl123456!`
+- root 密码、复制账号和复制密码：只存在你本机未提交的 `.env` 中
+
+脚本不会把密码值放进 `docker`、`mysql` 或 `mysqladmin` 的命令行参数；连接
+数据库时使用容器环境，临时快照无论成功或失败都会清理。
 
 ### 3.4 怎么验证它真的同步了
 
 先连主库：
 
 ```powershell
-docker exec -it campus-mysql-source mysql -uroot -proot123456
+docker compose exec mysql-source mysql --user=root -p
 ```
 
 执行：
@@ -180,7 +196,7 @@ SELECT * FROM replica_demo;
 再连从库：
 
 ```powershell
-docker exec -it campus-mysql-replica mysql -uroot -proot123456
+docker compose exec mysql-replica mysql --user=root -p
 ```
 
 执行：
@@ -211,6 +227,11 @@ SHOW REPLICA STATUS\G
 ---
 
 ## 4. 正式版：服务器上怎么搭
+
+本节描述的是**生产拓扑**：已有主库与独立从库位于不同主机或故障域，通过
+私网复制；它不是把上一节的双容器 Compose 直接搬到服务器。上线前必须先做
+可恢复性验证过的备份，并准备回滚和维护窗口。生产复制账号只允许固定从库 IP，
+Agent 另用仅有 `SELECT` / `SHOW VIEW` 的读取账号。
 
 下面这部分假设你是：
 
@@ -356,20 +377,25 @@ sudo vim /etc/mysql/mysql.conf.d/mysqld.cnf
 
 ```ini
 server-id = 2
+log_bin = mysql-bin
 relay_log = mysql-relay-bin
+relay_log_recovery = ON
 read_only = ON
 super_read_only = ON
 gtid_mode = ON
 enforce_gtid_consistency = ON
 log_replica_updates = ON
+replicate_wild_do_table = campus_pulse.%
 ```
 
 解释一下：
 
 - `server-id = 2`：从库唯一编号，不能和主库重复
 - `relay_log`：从库保存主库 binlog 的地方
+- `relay_log_recovery`：异常重启后按复制元数据恢复 relay log
 - `read_only = ON`：普通写入禁止
 - `super_read_only = ON`：更严格，避免手滑往从库写
+- `replicate_wild_do_table`：只接收 `campus_pulse` 库的表变更
 
 ### 8.3 重启从库
 
@@ -497,12 +523,13 @@ SELECT * FROM replica_check;
 
 ```env
 AGENT_SEARCH_BACKEND=mysql
-AGENT_MYSQL_DSN=jdbc:mysql://从库IP:3306/campus_pulse?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
-AGENT_MYSQL_USERNAME=xxx
-AGENT_MYSQL_PASSWORD=xxx
+AGENT_MYSQL_REPLICA_DSN=jdbc:mysql://从库IP:3306/campus_pulse?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+AGENT_MYSQL_REPLICA_USERNAME=agent_reader
+AGENT_MYSQL_REPLICA_PASSWORD=请替换为只读账号密码
+AGENT_MYSQL_REQUIRE_READ_ONLY=true
 ```
 
-这样 Agent 的搜索和问答就不会压主库了。
+请给 `agent_reader` 仅授予 `campus_pulse` 库的 `SELECT`、`SHOW VIEW` 权限。这样 Agent 的搜索和问答不会压主库，误连到可写库时也会在启动阶段失败。
 
 ### 13.2 给 Spring Boot 主服务用
 

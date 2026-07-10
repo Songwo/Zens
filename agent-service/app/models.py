@@ -75,6 +75,9 @@ class HealthResponse(BaseModel):
     backend: str
     postgres: str = "not_configured"
     mysql: str = "not_configured"
+    mysql_replica: str = "not_configured"
+    replica_read_only: Optional[bool] = None
+    replica_read_only_required: bool = False
     error: Optional[str] = None
     search_backend: str = "auto"
     llm_enabled: bool = False

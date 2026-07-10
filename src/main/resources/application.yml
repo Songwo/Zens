@@ -206,7 +206,7 @@ internal:
 
 # 6.Web Url 配置
 Web:
-  AvatarUrl: "https://allinsong.top/static/avatar/"
+  AvatarUrl: "https://www.allinsong.top/static/avatar/"
 
 # 7. AI 深度思考模型配置
 ai:
@@ -283,7 +283,7 @@ campus:
     required: ${INVITE_REQUIRED:false}
     user-min-level: ${INVITE_USER_MIN_LEVEL:5}
   site:
-    url: ${SITE_URL:https://allinsong.top}
+    url: ${SITE_URL:https://www.allinsong.top}
   support:
     admin-username: ${SUPPORT_ADMIN_USERNAME:admin}
     admin-display-name: ${SUPPORT_ADMIN_DISPLAY_NAME:社区管理员}
@@ -370,7 +370,7 @@ oauth:
   github:
     client-id: ${GITHUB_CLIENT_ID:}
     client-secret: ${GITHUB_CLIENT_SECRET:}
-    redirect-uri: ${GITHUB_REDIRECT_URI:https://allinsong.top/auth?type=login&provider=github}
+    redirect-uri: ${GITHUB_REDIRECT_URI:https://www.allinsong.top/auth?type=login&provider=github}
 
 cloudflare:
   turnstile:

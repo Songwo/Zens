@@ -1,9 +1,9 @@
 export function Footer() {
   const links = [
-    { label: "关于我们", href: "https://allinsong.top/about" },
-    { label: "用户协议", href: "https://allinsong.top/terms" },
-    { label: "隐私政策", href: "https://allinsong.top/privacy" },
-    { label: "联系管理", href: "https://allinsong.top/contact" },
+    { label: "关于我们", href: "https://www.allinsong.top/about" },
+    { label: "用户协议", href: "https://www.allinsong.top/terms" },
+    { label: "隐私政策", href: "https://www.allinsong.top/privacy" },
+    { label: "联系管理", href: "https://www.allinsong.top/contact" },
   ];
 
   return (

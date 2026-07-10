@@ -1,9 +1,12 @@
 package main
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -12,6 +15,78 @@ import (
 	"testing"
 	"time"
 )
+
+func TestBotAccessTokenUsesSignedInternalLogin(t *testing.T) {
+	const serviceSecret = "test-service-secret-with-enough-entropy"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != internalBotLoginPath {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var payload map[string]string
+		if err := json.Unmarshal(body, &payload); err != nil {
+			t.Fatal(err)
+		}
+		if payload["account"] != "zens-lottery-bot" || payload["password"] != "bot-password" {
+			t.Fatalf("unexpected payload: %#v", payload)
+		}
+		ts := r.Header.Get("X-Service-Timestamp")
+		nonce := r.Header.Get("X-Service-Nonce")
+		bodyHash := sha256.Sum256(body)
+		signed := strings.Join([]string{
+			http.MethodPost,
+			internalBotLoginPath,
+			ts,
+			nonce,
+			hex.EncodeToString(bodyHash[:]),
+		}, "\n")
+		mac := hmac.New(sha256.New, []byte(serviceSecret))
+		_, _ = mac.Write([]byte(signed))
+		expected := hex.EncodeToString(mac.Sum(nil))
+		if r.Header.Get("X-Service-Id") != "campus-lottery-station" ||
+			!hmac.Equal([]byte(expected), []byte(r.Header.Get("X-Service-Signature"))) {
+			t.Fatal("missing or invalid service signature")
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"code":2000,"message":"操作成功","data":{"accessToken":"issued-token"}}`)
+	}))
+	defer server.Close()
+
+	app := &App{cfg: Config{
+		CommunityAPI:  server.URL,
+		BotUsername:   "zens-lottery-bot",
+		BotPassword:   "bot-password",
+		ServiceID:     "campus-lottery-station",
+		ServiceSecret: serviceSecret,
+	}}
+	token, err := app.botAccessToken()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if token != "issued-token" {
+		t.Fatalf("unexpected token: %q", token)
+	}
+}
+
+func TestBotAccessTokenRequiresServiceSecret(t *testing.T) {
+	app := &App{cfg: Config{BotUsername: "zens-lottery-bot", BotPassword: "bot-password"}}
+	if _, err := app.botAccessToken(); err == nil || !strings.Contains(err.Error(), "LOTTERY_SERVICE_SECRET") {
+		t.Fatalf("expected service secret error, got %v", err)
+	}
+}
+
+func TestCommunityURLAvoidsDuplicateAPIPrefix(t *testing.T) {
+	app := &App{cfg: Config{CommunityAPI: "http://www.allinsong.top/api/"}}
+	if got := app.communityURL("/auth/login"); got != "http://www.allinsong.top/api/auth/login" {
+		t.Fatalf("unexpected normal API URL: %s", got)
+	}
+	if got := app.communityURL("/api/internal/auth/bot-login"); got != "http://www.allinsong.top/api/internal/auth/bot-login" {
+		t.Fatalf("unexpected internal API URL: %s", got)
+	}
+}
 
 func TestDeterministicRandomStreamIsReproducible(t *testing.T) {
 	seed, _ := hex.DecodeString("00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff")

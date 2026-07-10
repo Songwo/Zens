@@ -22,6 +22,9 @@ public class MetricsInterceptor implements HandlerInterceptor {
 
     private final MeterRegistry meterRegistry;
     private static final String START_TIME_ATTR = "requestStartTime";
+    private static final String DURATION_METRIC = "campus.http.server.duration";
+    private static final String REQUEST_METRIC = "campus.http.server.requests";
+    private static final String ERROR_METRIC = "campus.http.server.errors";
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
@@ -43,7 +46,7 @@ public class MetricsInterceptor implements HandlerInterceptor {
         int status = response.getStatus();
 
         // 记录响应时间
-        Timer.builder("http.server.requests")
+        Timer.builder(DURATION_METRIC)
             .tag("uri", simplifyUri(uri))
             .tag("method", method)
             .tag("status", String.valueOf(status))
@@ -51,7 +54,7 @@ public class MetricsInterceptor implements HandlerInterceptor {
             .record(duration, java.util.concurrent.TimeUnit.MILLISECONDS);
 
         // 记录请求计数
-        Counter.builder("http.server.requests.count")
+        Counter.builder(REQUEST_METRIC)
             .tag("uri", simplifyUri(uri))
             .tag("method", method)
             .tag("status", String.valueOf(status))
@@ -65,7 +68,7 @@ public class MetricsInterceptor implements HandlerInterceptor {
 
         // 错误请求计数
         if (status >= 400) {
-            Counter.builder("http.server.requests.error")
+            Counter.builder(ERROR_METRIC)
                 .tag("uri", simplifyUri(uri))
                 .tag("method", method)
                 .tag("status", String.valueOf(status))

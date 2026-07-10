@@ -99,7 +99,7 @@ type User struct {
 }
 
 type Session struct {
-	Token string `json:"token"`
+	Token  string `json:"token"`
 	UserID string `json:"userId"`
 	// CommunityAccessToken 存的是主站颁发的 5 分钟 SSO token,仅在登录回调时用于
 	// 本地验签确认身份(见 userFromSSOToken)。它【不会、也无法】通过主站用户态鉴权:
@@ -2344,6 +2344,7 @@ func (app *App) communityGetFromURLs(candidates []string, token string, dst any)
 			continue
 		}
 		req.Header.Set("Accept", "application/json")
+		req.Header.Set("User-Agent", "Zens-Lottery-Service/1.0")
 		req.Header.Set("X-Device-Id", "zens-lottery-station")
 		if strings.TrimSpace(token) != "" {
 			req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(token))
@@ -2447,6 +2448,7 @@ func (app *App) communityGetWithToken(path, token string, dst any) error {
 		return err
 	}
 	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", "Zens-Lottery-Service/1.0")
 	req.Header.Set("X-Device-Id", "zens-lottery-station")
 	if token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
@@ -2511,6 +2513,7 @@ func (app *App) communityPost(path string, payload any, token string, dst any) e
 	}
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", "Zens-Lottery-Service/1.0")
 	req.Header.Set("X-Device-Id", "zens-lottery-station")
 	if token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
@@ -2545,6 +2548,7 @@ func (app *App) communityPost(path string, payload any, token string, dst any) e
 // 主站需在 internal.service.lottery-secret 配置同一密钥,并把 campus-lottery-station 加入白名单。
 
 const internalSubsiteEventsPath = "/api/internal/subsite/events"
+const internalBotLoginPath = "/api/internal/auth/bot-login"
 
 var eventIDInvalidChars = regexp.MustCompile(`[^a-z0-9._:-]+`)
 
@@ -2675,6 +2679,7 @@ func (app *App) callSignedInternal(method, path, bodyStr string) (status int, re
 		return 0, nil, err
 	}
 	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", "Zens-Lottery-Service/1.0")
 	if bodyStr != "" {
 		req.Header.Set("Content-Type", "application/json")
 	}
@@ -2713,9 +2718,9 @@ var pointsErrCodePattern = regexp.MustCompile(`^([A-Z][A-Z0-9_]+):\s*(.*)$`)
 
 func parseMainSiteResult(respBody []byte) (code string, message string, data map[string]any) {
 	var parsed struct {
-		Code    int             `json:"code"`
-		Message string          `json:"message"`
-		Data    map[string]any  `json:"data"`
+		Code    int            `json:"code"`
+		Message string         `json:"message"`
+		Data    map[string]any `json:"data"`
 	}
 	if json.Unmarshal(respBody, &parsed) != nil {
 		return "", "", nil
@@ -2807,7 +2812,11 @@ func (app *App) fetchMainSitePoints(userID string) (int, error) {
 
 func (app *App) communityURL(path string) string {
 	base := strings.TrimRight(app.cfg.CommunityAPI, "/")
-	return base + normalizeAPIPath(path)
+	path = normalizeAPIPath(path)
+	if strings.HasSuffix(base, "/api") && strings.HasPrefix(path, "/api/") {
+		path = strings.TrimPrefix(path, "/api")
+	}
+	return base + path
 }
 
 func commentsToParticipants(comments []communityComment, post communityPost, req lotteryCriteria) []LotteryParticipant {
@@ -2983,17 +2992,26 @@ func (app *App) botAccessToken() (string, error) {
 	if app.cfg.BotUsername == "" || app.cfg.BotPassword == "" {
 		return "", errors.New("未配置机器人凭据：请设置 LOTTERY_BOT_ACCESS_TOKEN，或设置 LOTTERY_BOT_USERNAME 与 LOTTERY_BOT_PASSWORD")
 	}
+	if strings.TrimSpace(app.cfg.ServiceSecret) == "" {
+		return "", errors.New("未配置 LOTTERY_SERVICE_SECRET，无法安全申请机器人会话")
+	}
 	var resp communityResult[struct {
 		AccessToken string `json:"accessToken"`
 	}]
 	payload := map[string]any{
-		"loginType":  "password",
-		"account":    app.cfg.BotUsername,
-		"password":   app.cfg.BotPassword,
-		"rememberMe": true,
+		"account":  app.cfg.BotUsername,
+		"password": app.cfg.BotPassword,
 	}
-	if err := app.communityPost("/auth/login", payload, "", &resp); err != nil {
-		return "", err
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		return "", fmt.Errorf("机器人登录请求编码失败：%w", err)
+	}
+	status, body, err := app.callSignedInternal(http.MethodPost, internalBotLoginPath, string(raw))
+	if err != nil {
+		return "", fmt.Errorf("机器人登录失败：HTTP %d: %w", status, err)
+	}
+	if err := json.Unmarshal(body, &resp); err != nil {
+		return "", fmt.Errorf("机器人登录响应解析失败：%w", err)
 	}
 	if resp.Code != 2000 || resp.Data.AccessToken == "" {
 		return "", fmt.Errorf("机器人登录失败：%s", fallback(resp.Message, "未返回 accessToken"))
