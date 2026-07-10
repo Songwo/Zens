@@ -698,7 +698,7 @@ onUnmounted(() => {
       </div>
 
       <div class="topbar-right">
-        <el-button circle text class="icon-btn mobile-only" @click="toggleMobileSearch">
+        <el-button circle text class="icon-btn mobile-only" aria-label="打开搜索" title="搜索" @click="toggleMobileSearch">
           <el-icon><Search /></el-icon>
         </el-button>
 
@@ -717,7 +717,7 @@ onUnmounted(() => {
           :max="99"
           class="notification-badge"
         >
-          <el-button circle text class="icon-btn" @click="router.push('/messages')">
+          <el-button circle text class="icon-btn" aria-label="打开私信" title="私信" @click="router.push('/messages')">
             <el-icon><ChatDotRound /></el-icon>
           </el-button>
         </el-badge>
@@ -725,7 +725,7 @@ onUnmounted(() => {
         <el-popover v-model:visible="notifPopoverVisible" placement="bottom-end" :width="360" trigger="click" popper-class="notif-popover" @show="handlePopoverShow">
           <template #reference>
             <el-badge :value="unreadCount > 0 ? unreadCount : ''" :max="99" class="notification-badge">
-              <el-button circle text class="icon-btn">
+              <el-button circle text class="icon-btn" aria-label="打开消息通知" title="消息通知">
                 <el-icon><Bell /></el-icon>
               </el-button>
             </el-badge>
@@ -754,7 +754,16 @@ onUnmounted(() => {
                   <div class="notif-content">{{ notif.content }}</div>
                   <div class="notif-time">{{ getNotifTime(notif) }}</div>
                 </div>
-                <el-button class="notif-delete" text type="danger" size="small" :icon="Delete" @click="handleNotifDelete($event, notif)" />
+                <el-button
+                  class="notif-delete"
+                  text
+                  type="danger"
+                  size="small"
+                  :icon="Delete"
+                  :aria-label="`删除通知：${notif.title}`"
+                  title="删除通知"
+                  @click="handleNotifDelete($event, notif)"
+                />
               </div>
 
               <div v-if="!notifLoading && notifications.length === 0" class="notif-empty">

@@ -19,21 +19,23 @@ import {
 const router = useRouter()
 const composerStore = usePostComposerStore()
 const userStore = useUserStore()
+const statsStatus = ref<'loading' | 'ready' | 'error'>('loading')
 const siteStats = ref<PublicSiteStats>({
   totalPosts: 0,
   totalUsers: 0,
   totalComments: 0,
   todayPosts: 0,
 })
-const hotTopicCount = ref(8)
+const hotTopicCount = ref(0)
 const unsolvedQaCount = ref(0)
 const todaySolvedQaCount = ref(0)
 const followedTagUpdateCount = ref(0)
+const displayMetric = (value: number) => statsStatus.value === 'ready' ? value : '—'
 
 const pulseCards = computed(() => [
   {
     label: '今日新帖',
-    value: siteStats.value.todayPosts,
+    value: displayMetric(siteStats.value.todayPosts),
     desc: '快速扫过今天的新讨论',
     icon: MessageCircle,
     tone: 'green',
@@ -41,7 +43,7 @@ const pulseCards = computed(() => [
   },
   {
     label: '待解决',
-    value: unsolvedQaCount.value,
+    value: displayMetric(unsolvedQaCount.value),
     desc: '答疑解惑里等待回答',
     icon: CheckCircle2,
     tone: 'blue',
@@ -49,7 +51,7 @@ const pulseCards = computed(() => [
   },
   {
     label: '热门主题',
-    value: hotTopicCount.value,
+    value: displayMetric(hotTopicCount.value),
     desc: '本周被反复讨论的话题',
     icon: Hash,
     tone: 'purple',
@@ -57,7 +59,7 @@ const pulseCards = computed(() => [
   },
   {
     label: '关注更新',
-    value: userStore.isLoggedIn ? followedTagUpdateCount.value : '登录',
+    value: userStore.isLoggedIn ? displayMetric(followedTagUpdateCount.value) : '登录',
     desc: userStore.isLoggedIn ? '关注标签今日新帖' : '登录后同步兴趣',
     icon: Heart,
     tone: 'orange',
@@ -66,9 +68,9 @@ const pulseCards = computed(() => [
 ])
 
 const communitySignals = computed(() => [
-  { label: '活跃用户', value: siteStats.value.totalUsers, icon: Users },
-  { label: '累计帖子', value: siteStats.value.totalPosts, icon: Flame },
-  { label: '今日解决', value: todaySolvedQaCount.value, icon: CheckCircle2 },
+  { label: '活跃用户', value: displayMetric(siteStats.value.totalUsers), icon: Users },
+  { label: '累计帖子', value: displayMetric(siteStats.value.totalPosts), icon: Flame },
+  { label: '今日解决', value: displayMetric(todaySolvedQaCount.value), icon: CheckCircle2 },
 ])
 
 onMounted(async () => {
@@ -84,9 +86,12 @@ onMounted(async () => {
       unsolvedQaCount.value = Number(res.data.unsolvedQaCount || 0)
       todaySolvedQaCount.value = Number(res.data.todaySolvedQaCount || 0)
       followedTagUpdateCount.value = Number(res.data.followedTagUpdateCount || 0)
+      statsStatus.value = 'ready'
+    } else {
+      statsStatus.value = 'error'
     }
   } catch {
-    // ignore bootstrap failure on hero
+    statsStatus.value = 'error'
   }
 })
 </script>
@@ -114,7 +119,7 @@ onMounted(async () => {
           </div>
         </div>
 
-        <div class="pulse-board">
+        <div class="pulse-board" aria-live="polite" :aria-busy="statsStatus === 'loading'">
           <button
             v-for="item in pulseCards"
             :key="item.label"
@@ -134,7 +139,7 @@ onMounted(async () => {
           </button>
         </div>
 
-        <div class="signal-row" aria-label="社区数据概览">
+        <div class="signal-row" aria-label="社区数据概览" aria-live="polite" :aria-busy="statsStatus === 'loading'">
           <div v-for="item in communitySignals" :key="item.label" class="signal-item">
             <component :is="item.icon" class="signal-icon" aria-hidden="true" />
             <span>{{ item.label }}</span>

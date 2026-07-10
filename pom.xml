@@ -168,11 +168,11 @@
         </dependency>
 
         <!-- IP 归属地查询 -->
-        <dependency>
-            <groupId>org.lionsoul</groupId>
-            <artifactId>ip2region</artifactId>
-            <version>2.7.0</version>
-        </dependency>
+          <dependency>
+              <groupId>org.lionsoul</groupId>
+              <artifactId>ip2region</artifactId>
+              <version>3.3.7</version>
+          </dependency>
 
         <!-- Caffeine 本地缓存（L1缓存） -->
         <dependency>

@@ -887,6 +887,7 @@ html.dark .composer-overlay {
 .composer-scroll-shell {
   width: min(100%, 1220px);
   max-height: calc(100vh - 40px);
+  max-height: calc(100dvh - 40px);
   overflow-y: auto;
   overflow-x: hidden;
   border-radius: var(--el-border-radius-base);
@@ -932,9 +933,12 @@ html.dark .composer-modal {
 .composer-modal.is-maximized {
   max-width: 100vw;
   max-height: 100vh;
+  max-height: 100dvh;
   width: 100vw;
   height: 100vh;
+  height: 100dvh;
   min-height: 100vh;
+  min-height: 100dvh;
   border-radius: 0;
   border: none;
 }
@@ -942,6 +946,7 @@ html.dark .composer-modal {
 .composer-scroll-shell.is-maximized {
   width: 100vw;
   max-height: 100vh;
+  max-height: 100dvh;
   border-radius: 0;
 }
 
@@ -1250,11 +1255,13 @@ html.dark .composer-footer {
   .composer-scroll-shell {
     width: 100%;
     max-height: 90vh;
+    max-height: 90dvh;
     border-radius: 12px 12px 0 0;
   }
 
   .composer-modal {
     min-height: 90vh;
+    min-height: 90dvh;
     border-radius: 12px 12px 0 0;
     border-bottom: none;
     border-left: none;
@@ -1264,6 +1271,10 @@ html.dark .composer-footer {
 
   .composer-header {
     border-radius: 12px 12px 0 0;
+  }
+
+  .composer-footer {
+    padding-bottom: max(16px, env(safe-area-inset-bottom));
   }
 
   .meta-row {

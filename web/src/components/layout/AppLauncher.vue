@@ -77,6 +77,7 @@ watch(visible, (open) => {
         text
         class="icon-btn"
         :class="{ active: route.path.startsWith('/metaverse') }"
+        aria-label="打开 Zens 生态应用"
         title="Zens 生态应用"
       >
         <el-icon><Grid /></el-icon>

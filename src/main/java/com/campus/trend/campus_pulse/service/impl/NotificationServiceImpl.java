@@ -460,9 +460,9 @@ public class NotificationServiceImpl implements NotificationService {
         if (!StringUtils.hasText(userId)) return;
         String title = "新设备登录提醒";
         String content = String.format(
-                "你的账号刚在新的%s设备上登录，IP：%s，时间：%s。如非本人操作，请立即修改密码并开启二步验证。",
+                "你的账号刚在新的%s设备上登录，登录位置：%s，时间：%s。如非本人操作，请立即修改密码并开启二步验证。",
                 describeDeviceType(deviceType),
-                formatIpWithLocation(clientIp),
+                formatLocationWithIp(clientIp),
                 LocalDateTime.now().format(SECURITY_TIME_FMT));
         if (StringUtils.hasText(userAgent)) {
             content += "\n浏览器：" + userAgent;
@@ -474,9 +474,9 @@ public class NotificationServiceImpl implements NotificationService {
     public void sendSessionTerminatedNotification(String userId, String deviceType, String clientIp) {
         if (!StringUtils.hasText(userId)) return;
         String content = String.format(
-                "你的账号已在另一%s设备登录，此设备已被自动登出。IP：%s，时间：%s。",
+                "你的账号已在另一%s设备登录，此设备已被自动登出。登录位置：%s，时间：%s。",
                 describeDeviceType(deviceType),
-                formatIpWithLocation(clientIp),
+                formatLocationWithIp(clientIp),
                 LocalDateTime.now().format(SECURITY_TIME_FMT));
         createNotification(userId, NotificationType.SESSION_TERMINATED, "会话已被强制下线", content, null, null);
     }
@@ -485,8 +485,8 @@ public class NotificationServiceImpl implements NotificationService {
     public void sendPasswordChangedNotification(String userId, String clientIp) {
         if (!StringUtils.hasText(userId)) return;
         String content = String.format(
-                "你的登录密码已修改成功。IP：%s，时间：%s。如非本人操作，请立即联系管理员并使用找回密码功能重置。",
-                formatIpWithLocation(clientIp),
+                "你的登录密码已修改成功。操作位置：%s，时间：%s。如非本人操作，请立即联系管理员并使用找回密码功能重置。",
+                formatLocationWithIp(clientIp),
                 LocalDateTime.now().format(SECURITY_TIME_FMT));
         createNotification(userId, NotificationType.PASSWORD_CHANGED, "密码修改成功", content, null, null);
     }
@@ -495,8 +495,8 @@ public class NotificationServiceImpl implements NotificationService {
     public void sendPasswordResetNotification(String userId, String clientIp) {
         if (!StringUtils.hasText(userId)) return;
         String content = String.format(
-                "你的账号已通过邮箱验证码重置密码。IP：%s，时间：%s。如非本人操作，请立即联系管理员。",
-                formatIpWithLocation(clientIp),
+                "你的账号已通过邮箱验证码重置密码。操作位置：%s，时间：%s。如非本人操作，请立即联系管理员。",
+                formatLocationWithIp(clientIp),
                 LocalDateTime.now().format(SECURITY_TIME_FMT));
         createNotification(userId, NotificationType.PASSWORD_RESET, "密码已重置", content, null, null);
     }
@@ -517,9 +517,9 @@ public class NotificationServiceImpl implements NotificationService {
     public void sendLoginFailedBurstNotification(String userId, int failedAttempts, String clientIp) {
         if (!StringUtils.hasText(userId)) return;
         String content = String.format(
-                "过去 10 分钟内检测到 %d 次登录失败尝试，IP：%s，时间：%s。如非本人操作，建议立即修改密码并开启二步验证。",
+                "过去 10 分钟内检测到 %d 次登录失败尝试，尝试位置：%s，时间：%s。如非本人操作，建议立即修改密码并开启二步验证。",
                 failedAttempts,
-                formatIpWithLocation(clientIp),
+                formatLocationWithIp(clientIp),
                 LocalDateTime.now().format(SECURITY_TIME_FMT));
         createNotification(userId, NotificationType.LOGIN_FAILED_BURST, "登录失败次数异常", content, null, null);
     }
@@ -540,13 +540,13 @@ public class NotificationServiceImpl implements NotificationService {
         return StringUtils.hasText(value) ? value : fallback;
     }
 
-    private static String formatIpWithLocation(String ip) {
+    private static String formatLocationWithIp(String ip) {
         String safeIp = defaultString(ip, "未知");
         if ("未知".equals(safeIp)) return safeIp;
         String region = com.campus.trend.campus_pulse.utils.Ip2RegionUtils.getShortRegion(safeIp);
-        if ("未知".equals(region) || "本地 IP".equals(region)) {
-            return safeIp;
+        if (!StringUtils.hasText(region) || "未知".equals(region)) {
+            return "未知（IP：" + safeIp + "）";
         }
-        return String.format("%s (%s)", safeIp, region);
+        return String.format("%s（IP：%s）", region, safeIp);
     }
 }

@@ -1,11 +1,17 @@
 package com.campus.trend.campus_pulse.utils;
 
 import lombok.extern.slf4j.Slf4j;
+import org.lionsoul.ip2region.xdb.LongByteArray;
 import org.lionsoul.ip2region.xdb.Searcher;
+import org.lionsoul.ip2region.xdb.Version;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.util.FileCopyUtils;
 
 import java.io.InputStream;
+import java.net.Inet6Address;
+import java.net.InetAddress;
+import java.util.ArrayList;
+import java.util.List;
 
 @Slf4j
 public class Ip2RegionUtils {
@@ -13,23 +19,32 @@ public class Ip2RegionUtils {
     private static final String UNKNOWN_REGION = "未知";
     private static final String LOCAL_REGION = "本地 IP";
     private static final String PRIVATE_REGION = "内网";
-    private static Searcher searcher;
+    private static Searcher ipv4Searcher;
+    private static Searcher ipv6Searcher;
 
     static {
+        ipv4Searcher = loadSearcher("ip2region.xdb", Version.IPv4);
+        ipv6Searcher = loadSearcher("ip2region_v6.xdb", Version.IPv6);
+    }
+
+    private static Searcher loadSearcher(String resourceName, Version version) {
         try {
-            // 从 classpath 加载 xdb 文件并缓存到内存中（xdb 只有 11MB，完全可以直接丢进内存）
-            ClassPathResource resource = new ClassPathResource("ip2region.xdb");
+            ClassPathResource resource = new ClassPathResource(resourceName);
             if (!resource.exists()) {
-                log.warn("未配置 ip2region.xdb，IP 归属地功能将返回未知");
-            } else {
-                try (InputStream inputStream = resource.getInputStream()) {
-                    byte[] cBuff = FileCopyUtils.copyToByteArray(inputStream);
-                    searcher = Searcher.newWithBuffer(cBuff);
-                }
-                log.info("ip2region 离线词典加载成功");
+                log.warn("未配置 {}，{} 归属地将返回未知", resourceName, version.name);
+                return null;
+            }
+            try (InputStream inputStream = resource.getInputStream()) {
+                byte[] bytes = FileCopyUtils.copyToByteArray(inputStream);
+                LongByteArray buffer = new LongByteArray();
+                buffer.append(bytes);
+                Searcher loaded = Searcher.newWithBuffer(version, buffer);
+                log.info("ip2region {} 离线词典加载成功，大小={} bytes", version.name, bytes.length);
+                return loaded;
             }
         } catch (Exception e) {
-            log.warn("ip2region 离线词典加载失败，IP 归属地功能将返回未知: {}", e.getMessage());
+            log.warn("ip2region {} 离线词典加载失败: {}", version.name, e.getMessage());
+            return null;
         }
     }
 
@@ -46,12 +61,23 @@ public class Ip2RegionUtils {
         String normalized = normalizeIp(ip.trim());
         String specialRegion = resolveSpecialRegion(normalized);
         if (specialRegion != null) return specialRegion;
-        if (!isIpv4Address(normalized)) return UNKNOWN_REGION;
+        Searcher searcher;
+        if (isIpv4Address(normalized)) {
+            searcher = ipv4Searcher;
+        } else if (isIpv6Address(normalized)) {
+            searcher = ipv6Searcher;
+        } else {
+            return UNKNOWN_REGION;
+        }
         if (searcher == null) return UNKNOWN_REGION;
         try {
-            return searcher.search(normalized);
+            // Searcher 不是线程安全实现，登录等低频场景串行查询可避免共享计数器竞争。
+            synchronized (searcher) {
+                String region = searcher.search(normalized);
+                return region == null || region.isBlank() ? UNKNOWN_REGION : region;
+            }
         } catch (Exception e) {
-            log.warn("IP 解析物理地址失败: {}", normalized, e);
+            log.warn("IP 解析物理地址失败: {}", e.getMessage());
             return UNKNOWN_REGION;
         }
     }
@@ -67,30 +93,52 @@ public class Ip2RegionUtils {
         if (UNKNOWN_REGION.equals(region) || LOCAL_REGION.equals(region) || PRIVATE_REGION.equals(region)) {
             return region;
         }
-        // ip2region 的格式：国家|区域|省份|城市|ISP
-        String[] parts = region.split("\\|");
+        return formatRegion(region);
+    }
+
+    /**
+     * 兼容 ip2region 新旧数据格式：
+     * - v3: 国家|省份|城市|ISP|国家代码
+     * - v2: 国家|区域|省份|城市|ISP
+     */
+    public static String formatRegion(String region) {
+        if (region == null || region.isBlank() || UNKNOWN_REGION.equals(region)) return UNKNOWN_REGION;
+        String[] parts = region.split("\\|", -1);
         if (parts.length != 5) {
             return region;
         }
 
-        String country = parts[0];
-        String province = parts[2];
-        String city = parts[3];
+        String country = cleanPart(parts[0]);
+        if ("reserved".equalsIgnoreCase(country)) return UNKNOWN_REGION;
+        // v3 的最后一段是两位国家代码；v2 的最后一段是 ISP。
+        // 不再根据“区域/省份是否同时非空”猜测格式，避免把 v2 的区域名（如“华东”）误当成省份。
+        boolean modernFormat = isCountryCode(parts[4]);
+        String province = cleanPart(modernFormat ? parts[1] : parts[2]);
+        String city = cleanPart(modernFormat ? parts[2] : parts[3]);
 
-        if ("0".equals(province)) {
-            province = "";
-        }
-        if ("0".equals(city)) {
-            city = "";
-        }
+        List<String> location = new ArrayList<>();
+        if (!"中国".equals(country)) addDistinct(location, country);
+        addDistinct(location, province);
+        addDistinct(location, city);
+        if (location.isEmpty()) addDistinct(location, country);
+        return location.isEmpty() ? UNKNOWN_REGION : String.join(" ", location);
+    }
 
-        if ("中国".equals(country)) {
-            if (province.isEmpty() && city.isEmpty()) {
-                return "中国";
-            }
-            return (province + " " + city).trim();
-        } else {
-            return (country + " " + province + " " + city).trim();
+    private static String cleanPart(String value) {
+        if (value == null) return "";
+        String cleaned = value.trim();
+        return cleaned.isEmpty() || "0".equals(cleaned) ? "" : cleaned;
+    }
+
+    private static boolean isCountryCode(String value) {
+        String cleaned = cleanPart(value);
+        return cleaned.length() == 2 && cleaned.chars().allMatch(ch ->
+                (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z'));
+    }
+
+    private static void addDistinct(List<String> values, String value) {
+        if (!value.isEmpty() && (values.isEmpty() || !values.get(values.size() - 1).equals(value))) {
+            values.add(value);
         }
     }
 
@@ -118,6 +166,16 @@ public class Ip2RegionUtils {
 
     private static boolean isIpv4Address(String ip) {
         return parseIpv4(ip) != null;
+    }
+
+    private static boolean isIpv6Address(String ip) {
+        if (ip == null || !ip.contains(":")) return false;
+        try {
+            InetAddress parsed = InetAddress.getByName(ip);
+            return parsed instanceof Inet6Address;
+        } catch (Exception ignored) {
+            return false;
+        }
     }
 
     private static int[] parseIpv4(String ip) {

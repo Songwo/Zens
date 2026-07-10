@@ -66,11 +66,11 @@ const goToLogin = () => {
   <div class="user-menu">
     <template v-if="isLoggedIn">
       <el-dropdown trigger="click" @command="handleCommand">
-        <div class="avatar-trigger">
+        <button class="avatar-trigger" type="button" aria-label="打开账户菜单" title="账户菜单">
           <el-avatar :size="36" :src="avatarUrl" class="user-avatar">
             {{ userInfo?.username?.charAt(0)?.toUpperCase() || 'U' }}
           </el-avatar>
-        </div>
+        </button>
         <template #dropdown>
           <el-dropdown-menu class="user-dropdown">
             <div class="user-info-dropdown">
@@ -103,6 +103,10 @@ const goToLogin = () => {
 }
 
 .avatar-trigger {
+  appearance: none;
+  padding: 0;
+  border: 0;
+  background: transparent;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -111,6 +115,12 @@ const goToLogin = () => {
 
 .avatar-trigger:hover {
   opacity: 0.8;
+}
+
+.avatar-trigger:focus-visible {
+  outline: 2px solid var(--el-color-primary);
+  outline-offset: 3px;
+  border-radius: 50%;
 }
 
 .user-avatar {

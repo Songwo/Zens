@@ -21,6 +21,7 @@ class AuthRegionResolutionTest {
         assertNotEquals(ip, region);
         assertNotEquals("未知", region);
         assertFalse(region.contains("|"));
+        assertEquals("江苏省 南京市", region);
     }
 
     @Test
@@ -48,5 +49,21 @@ class AuthRegionResolutionTest {
         assertEquals("本地 IP", Ip2RegionUtils.getShortRegion("0:0:0:0:0:0:0:1"));
         assertEquals("内网", Ip2RegionUtils.getShortRegion("169.254.10.20"));
         assertEquals("内网", Ip2RegionUtils.getShortRegion("100.64.10.20"));
+    }
+
+    @Test
+    void getShortRegion_shouldSupportModernAndLegacyDataLayouts() {
+        assertEquals("浙江省 杭州市", Ip2RegionUtils.formatRegion("中国|浙江省|杭州市|电信|CN"));
+        assertEquals("United States California", Ip2RegionUtils.formatRegion("United States|California|0|Google LLC|US"));
+        assertEquals("江苏省 南京市", Ip2RegionUtils.formatRegion("中国|0|江苏省|南京市|电信"));
+        assertEquals("江苏省 南京市", Ip2RegionUtils.formatRegion("中国|华东|江苏省|南京市|电信"));
+    }
+
+    @Test
+    void resolveActiveRegion_shouldSupportPublicIpv6() {
+        String region = AuthServiceImpl.resolveActiveRegion("2001:4860:4860::8888");
+        assertNotNull(region);
+        assertNotEquals("未知", region);
+        assertFalse(region.contains("|"));
     }
 }
