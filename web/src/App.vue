@@ -6,7 +6,6 @@ import { usePostComposerStore } from '@/store/postComposer'
 import GlobalProgressBar from '@/components/common/GlobalProgressBar.vue'
 import { initSessionResilience } from '@/utils/sessionResilience'
 import { ensureCurrentUserProfile } from '@/utils/sessionProfile'
-import { publicDataApi } from '@/api/publicData'
 import { wsClient } from '@/utils/websocket'
 import { shouldReduceBackgroundWork } from '@/utils/network'
 import { setRouteMeta } from '@/utils/seo'
@@ -34,13 +33,6 @@ const routePrefetchTimers: number[] = []
 const routePrefetchLoaders = [
   () => import('@/pages/HotPage.vue'),
   () => import('@/pages/FeaturedPage.vue'),
-  () => import('@/pages/MetaversePage.vue'),
-  () => import('@/pages/MePage.vue'),
-]
-const routeDataWarmers = [
-  () => publicDataApi.getHomeBootstrapCached(12, 5, 'WEEK'),
-  () => publicDataApi.getActiveSectionsCached(),
-  () => publicDataApi.getHotTagsCached(12),
 ]
 
 const clearRoutePrefetch = () => {
@@ -71,16 +63,7 @@ const runRoutePrefetch = () => {
       void load().catch(() => {
         // ignore non-critical prefetch failures
       })
-    }, index * 180)
-    routePrefetchTimers.push(timer)
-  })
-
-  routeDataWarmers.forEach((warm, index) => {
-    const timer = window.setTimeout(() => {
-      void warm().catch(() => {
-        // 这些数据本来就是弱依赖，预热失败直接忽略即可。
-      })
-    }, 240 + index * 220)
+    }, 1200 + index * 600)
     routePrefetchTimers.push(timer)
   })
 }

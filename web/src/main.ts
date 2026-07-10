@@ -61,10 +61,24 @@ const scheduleNonCriticalStartup = (callback: () => void) => {
   window.setTimeout(callback, 800)
 }
 
+const registerProductionServiceWorker = () => {
+  if (!import.meta.env.PROD || !('serviceWorker' in navigator)) return
+  if (window.location.hostname !== 'www.allinsong.top') return
+
+  navigator.serviceWorker.register('/sw.js')
+    .then((registration) => {
+      window.setInterval(() => registration.update().catch(() => {}), 60 * 60 * 1000)
+    })
+    .catch((error) => {
+      console.warn('Service worker registration failed:', error)
+    })
+}
+
 if (typeof window !== 'undefined') {
   scheduleNonCriticalStartup(() => {
     installCodeBlockCopy()
     cleanupDevServiceWorker()
     installWebVitals()
+    registerProductionServiceWorker()
   })
 }

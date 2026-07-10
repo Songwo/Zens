@@ -13,6 +13,7 @@ import { mdComment } from '@/utils/markdownRenderer'
 import { pulseNotification } from '@/utils/pulseNotification'
 import { commentApi } from '@/api/comment'
 import { isTruthyFlag } from '@/utils/flags'
+import { resolvePublicAssetUrl } from '@/utils/assetUrl'
 
 const props = defineProps<{
   comments: any[]
@@ -59,7 +60,7 @@ watch(
   }
 )
 
-const getAvatar = (c: any) => c.userAvatar || c.avatar || c.author?.avatar || ''
+const getAvatar = (c: any) => resolvePublicAssetUrl(c.userAvatar || c.avatar || c.author?.avatar)
 const getName = (c: any) => c.nickname || c.author?.name || '匿名用户'
 const getTime = (c: any) => timeAgo(c.createTime || c.createdAt || '')
 const getLikes = (c: any) => c.likeCount ?? c.likes ?? 0

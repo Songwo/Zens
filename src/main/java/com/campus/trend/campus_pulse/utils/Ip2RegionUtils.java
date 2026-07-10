@@ -16,12 +16,17 @@ public class Ip2RegionUtils {
         try {
             // 从 classpath 加载 xdb 文件并缓存到内存中（xdb 只有 11MB，完全可以直接丢进内存）
             ClassPathResource resource = new ClassPathResource("ip2region.xdb");
-            InputStream inputStream = resource.getInputStream();
-            byte[] cBuff = FileCopyUtils.copyToByteArray(inputStream);
-            searcher = Searcher.newWithBuffer(cBuff);
-            log.info("ip2region 离线词典加载成功");
+            if (!resource.exists()) {
+                log.warn("未配置 ip2region.xdb，IP 归属地功能将返回未知");
+            } else {
+                try (InputStream inputStream = resource.getInputStream()) {
+                    byte[] cBuff = FileCopyUtils.copyToByteArray(inputStream);
+                    searcher = Searcher.newWithBuffer(cBuff);
+                }
+                log.info("ip2region 离线词典加载成功");
+            }
         } catch (Exception e) {
-            log.error("ip2region 离线词典加载失败", e);
+            log.warn("ip2region 离线词典加载失败，IP 归属地功能将返回未知: {}", e.getMessage());
         }
     }
 

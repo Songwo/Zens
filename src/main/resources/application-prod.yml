@@ -230,7 +230,7 @@ campus:
     max-video-size-mb: ${R2_MAX_VIDEO_MB:1024}
     allowed-image-extensions: ${R2_ALLOWED_IMAGE_EXTENSIONS:.jpg,.jpeg,.png,.gif,.webp}
     allowed-video-extensions: ${R2_ALLOWED_VIDEO_EXTENSIONS:.mp4,.webm,.ogg,.mov}
-    cache-control: ${R2_CACHE_CONTROL:}
+    cache-control: ${R2_CACHE_CONTROL:public, max-age=31536000, immutable}
   observability:
     request-log-enabled: ${REQUEST_LOG_ENABLED:true}
     slow-request-ms: ${SLOW_REQUEST_MS:1000}

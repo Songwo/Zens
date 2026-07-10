@@ -114,15 +114,13 @@ const closeAddTag = () => {
 
 onMounted(async () => {
   try {
-    const [sectionRes, hotTagRes] = await Promise.all([
-      publicDataApi.getActiveSectionsCached(),
-      publicDataApi.getHotTagsCached(30),
-    ])
-    if ((sectionRes.code === 2000 || sectionRes.code === 200) && Array.isArray(sectionRes.data)) {
-      categories.value = sectionRes.data || []
+    const bootstrapRes = await publicDataApi.getHomeBootstrapCached(12, 5, 'WEEK')
+    const bootstrap = bootstrapRes.data
+    if ((bootstrapRes.code === 2000 || bootstrapRes.code === 200) && Array.isArray(bootstrap?.activeSections)) {
+      categories.value = bootstrap.activeSections || []
     }
-    if (hotTagRes.code === 2000 && Array.isArray(hotTagRes.data)) {
-      const extractedTags = pickCuratedDiscoveryTags(hotTagRes.data, { limit: 10 })
+    if (bootstrapRes.code === 2000 && Array.isArray(bootstrap?.hotTags)) {
+      const extractedTags = pickCuratedDiscoveryTags(bootstrap.hotTags, { limit: 10 })
         .map((item: any) => item.name)
         .filter(Boolean)
       topTags.value = Array.from(new Set(extractedTags)).slice(0, 10)

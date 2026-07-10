@@ -5,6 +5,7 @@ import { useUserStore } from '@/store/user'
 import { ChatDotRound, Connection, Document, EditPen, Setting, Star, SwitchButton, User } from '@element-plus/icons-vue'
 import { hasAdminRole, hasBackofficeAccess } from '@/utils/sessionProfile'
 import { triggerSingleLogout } from '@/utils/singleLogout'
+import { resolvePublicAssetUrl } from '@/utils/assetUrl'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -15,6 +16,7 @@ const userInfo = computed(() => userStore.userInfo)
 const isAdmin = computed(() => hasAdminRole(userInfo.value))
 const canEnterBackoffice = computed(() => hasBackofficeAccess(userInfo.value))
 const backofficeLabel = computed(() => (isAdmin.value ? '管理后台' : '版务后台'))
+const avatarUrl = computed(() => resolvePublicAssetUrl(userInfo.value?.avatar))
 
 interface UserMenuItem {
   key: string
@@ -65,7 +67,7 @@ const goToLogin = () => {
     <template v-if="isLoggedIn">
       <el-dropdown trigger="click" @command="handleCommand">
         <div class="avatar-trigger">
-          <el-avatar :size="36" :src="userInfo?.avatar" class="user-avatar">
+          <el-avatar :size="36" :src="avatarUrl" class="user-avatar">
             {{ userInfo?.username?.charAt(0)?.toUpperCase() || 'U' }}
           </el-avatar>
         </div>

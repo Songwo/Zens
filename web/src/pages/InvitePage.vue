@@ -7,8 +7,10 @@ import { ElMessage } from 'element-plus'
 import { Link, User, Trophy, CopyDocument, Lock, Star } from '@element-plus/icons-vue'
 import api from '@/lib/api'
 import type { Result } from '@/types'
+import { resolvePublicAssetUrl } from '@/utils/assetUrl'
 
 const userStore = useUserStore()
+const publicAssetUrl = (value?: string | null) => resolvePublicAssetUrl(value)
 
 interface InviteRecord {
   id: string
@@ -204,7 +206,7 @@ onMounted(loadData)
               </div>
               <!-- 被邀请人 -->
               <div v-if="r.invitee" class="invitee-row">
-                <el-avatar :size="28" :src="r.invitee.avatar">{{ r.invitee.nickname?.charAt(0) }}</el-avatar>
+                <el-avatar :size="28" :src="publicAssetUrl(r.invitee.avatar)">{{ r.invitee.nickname?.charAt(0) }}</el-avatar>
                 <span class="invitee-name">{{ r.invitee.nickname }}</span>
                 <el-tag type="success" size="small">Lv{{ r.invitee.level }}</el-tag>
                 <el-tag type="warning" size="small">+30 经验</el-tag>

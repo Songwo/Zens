@@ -24,14 +24,14 @@ export default defineConfig({
       dts: 'src/components.d.ts',
     }),
     // Song：PWA —— Workbox generateSW 自动生成 Service Worker 与 manifest。
-    // registerType:'autoUpdate' 后台静默更新；injectRegister:'auto' 自动注入注册脚本（无需改 main.ts）。
+    // Service Worker 由 main.ts 仅在规范域名上手动注册，避免 apex 域名请求 registerSW.js 被 Cloudflare 403。
     // 安全要点：生产前端与后端 API 同源(allinsong.top)，SW 作用域覆盖全站，因此：
     //   1) navigateFallbackDenylist 排除 /api、/ws、/uploads、/static，避免 SPA 回退劫持后端路由；
     //   2) /api 绝不进 runtime 缓存（请求带 token，CacheFirst 会串号/返回过期数据）；
     //   3) 仅对 /uploads、/static 静态资源做 StaleWhileRevalidate，让看过的图片离线可见。
     VitePWA({
       registerType: 'autoUpdate',
-      injectRegister: 'auto',
+      injectRegister: null,
       manifestFilename: 'manifest.json',
       includeAssets: ['logo.png', 'logo-horizontal.png', 'robots.txt'],
       manifest: {
@@ -90,9 +90,11 @@ export default defineConfig({
             },
           },
           {
-            // 用户上传 / 后端静态图片：看过的离线可见，后台静默更新
+            // 用户上传 / 后端静态图片 / R2 媒体：看过的离线可见，后台静默更新
             urlPattern: ({ url }) =>
-              url.pathname.startsWith('/uploads/') || url.pathname.startsWith('/static/'),
+              url.pathname.startsWith('/uploads/')
+              || url.pathname.startsWith('/static/')
+              || url.hostname === 'media.allinsong.top',
             handler: 'StaleWhileRevalidate',
             options: {
               cacheName: 'cp-media',

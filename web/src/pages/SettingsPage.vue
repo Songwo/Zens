@@ -26,6 +26,7 @@ import { UPLOAD_IMAGE_MAX_SIZE_BYTES, UPLOAD_IMAGE_MAX_SIZE_MB } from '@/constan
 import { CARD_THEME_OPTIONS, getCardThemePalette } from '@/utils/cardTheme'
 import { ensureCurrentUserProfile, patchCurrentUserProfile } from '@/utils/sessionProfile'
 import { getErrorMessage } from '@/utils/errorMessage'
+import { resolvePublicAssetUrl } from '@/utils/assetUrl'
 
 const userStore = useUserStore()
 const uiStore = useUiStore()
@@ -77,15 +78,16 @@ const applyProfileForm = (data: any) => {
 
 const getThemePreviewStyle = (themeKey: string, customBgUrl?: string) => {
   const palette = getCardThemePalette(themeKey, 'sunset')
-  const normalizedUrl = String(customBgUrl || '').trim()
-  const hasCustomBg = /^https?:\/\/[^"'\s]+$/.test(normalizedUrl) || /^\/uploads\/[^"'\s]+$/.test(normalizedUrl)
+  const normalizedUrl = resolvePublicAssetUrl(customBgUrl)
   return {
-    background: hasCustomBg
+    background: normalizedUrl
       ? `linear-gradient(135deg, rgba(255,255,255,0.78), rgba(255,255,255,0.78)), url("${normalizedUrl}") center/cover no-repeat`
       : palette.background,
     borderColor: palette.borderColor
   }
 }
+
+const previewAvatarUrl = computed(() => resolvePublicAssetUrl(userStore.userInfo?.avatar || profileForm.avatar))
 
 const loadProfile = async () => {
   try {
@@ -390,7 +392,7 @@ onMounted(() => {
 
           <div class="profile-edit-section">
             <div class="avatar-edit">
-              <el-avatar :size="80" :src="userStore.userInfo?.avatar">
+              <el-avatar :size="80" :src="previewAvatarUrl">
                 {{ (userStore.userInfo?.nickname || userStore.userInfo?.username || '?').charAt(0) }}
               </el-avatar>
               <el-upload

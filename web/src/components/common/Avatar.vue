@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { User } from '@element-plus/icons-vue'
 import { computed } from 'vue'
+import { resolvePublicAssetUrl } from '@/utils/assetUrl'
 
 interface Props {
   src?: string
@@ -24,11 +25,13 @@ const avatarSize = computed(() => {
   }
   return sizeMap[props.size] || 40
 })
+
+const resolvedSrc = computed(() => resolvePublicAssetUrl(props.src))
 </script>
 
 <template>
   <el-avatar
-    :src="src"
+    :src="resolvedSrc"
     :size="avatarSize"
     class="custom-avatar"
   >

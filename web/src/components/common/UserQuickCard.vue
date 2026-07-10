@@ -11,6 +11,7 @@ import { userApi, type UserPublicProfile } from '@/api/user'
 import { useUserStore } from '@/store/user'
 import { getCardThemePalette } from '@/utils/cardTheme'
 import { encodeUserId } from '@/utils/shortId'
+import { resolvePublicAssetUrl } from '@/utils/assetUrl'
 
 const props = withDefaults(
   defineProps<{
@@ -51,7 +52,7 @@ const displayName = computed(() => {
 })
 
 const displayAvatar = computed(() => {
-  return profile.value?.avatar || props.avatar || ''
+  return resolvePublicAssetUrl(profile.value?.avatar || props.avatar)
 })
 
 const displayBio = computed(() => {
@@ -83,11 +84,11 @@ const quickCardPalette = computed(() =>
 )
 
 const quickCardBgUrl = computed(() =>
-  String(profile.value?.quickCardBgUrl || props.quickCardBgUrl || '').trim()
+  resolvePublicAssetUrl(profile.value?.quickCardBgUrl || props.quickCardBgUrl)
 )
 
 const quickCardStyle = computed(() => ({
-  background: /^https?:\/\/[^"'\s]+$/.test(quickCardBgUrl.value) || /^\/uploads\/[^"'\s]+$/.test(quickCardBgUrl.value)
+  background: quickCardBgUrl.value
     ? `linear-gradient(135deg, rgba(255,255,255,0.80), rgba(255,255,255,0.80)), url("${quickCardBgUrl.value}") center/cover no-repeat`
     : quickCardPalette.value.background,
   border: `1px solid ${quickCardPalette.value.borderColor}`,

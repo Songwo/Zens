@@ -20,6 +20,7 @@ import { emitNotificationUnreadSync, onNotificationUnreadSync } from '@/utils/no
 import { resolveNotificationRoute } from '@/utils/notificationRoute'
 import { DEFAULT_DISCOVERY_SEARCH_TERMS } from '@/utils/communityDiscovery'
 import { encodePostId, encodeUserId } from '@/utils/shortId'
+import { resolvePublicAssetUrl } from '@/utils/assetUrl'
 
 const router = useRouter()
 const route = useRoute()
@@ -50,6 +51,7 @@ let unsubscribeUnreadSync: (() => void) | null = null
 
 const currentUserId = computed(() => String(userStore.userInfo?.id || userStore.userId || ''))
 const normalizedCommandQuery = computed(() => searchQuery.value.trim())
+const publicAssetUrl = (value?: string | null) => resolvePublicAssetUrl(value)
 
 const currentPageLabel = computed(() => {
   const path = route.path
@@ -646,7 +648,7 @@ onUnmounted(() => {
                 type="button"
                 @click="goCommandUser(user.id)"
               >
-                <el-avatar :size="26" :src="user.avatar">
+                <el-avatar :size="26" :src="publicAssetUrl(user.avatar)">
                   {{ (user.nickname || user.username || 'U').charAt(0) }}
                 </el-avatar>
                 <span class="command-user-copy">

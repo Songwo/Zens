@@ -55,6 +55,7 @@ import { usePostComposerStore } from '@/store/postComposer'
 import { useDwellTime } from '@/composables/useDwellTime'
 import OneboxCard from '@/components/common/OneboxCard.vue'
 import { followApi } from '@/api/follow'
+import { resolvePublicAssetUrl } from '@/utils/assetUrl'
 
 const route = useRoute()
 const router = useRouter()
@@ -68,6 +69,8 @@ const comments = ref<Comment[]>([])
 const relatedPosts = ref<RecommendPost[]>([])
 const poll = ref<Poll | null>(null)
 const loading = ref(true)
+const postAuthorAvatarUrl = computed(() => resolvePublicAssetUrl(post.value?.authorAvatar))
+const postCoverImageUrl = computed(() => resolvePublicAssetUrl(post.value?.coverImage))
 // 区分"加载失败"和"帖子真的不存在/已删除":网络错误时给重试入口,别误导成已删除
 const postLoadError = ref(false)
 const commentLoading = ref(false)
@@ -263,7 +266,7 @@ const renderedContent = computed(() => {
   const rawHtml = tocRenderResult.value.html
   const lazyImageHtml = rawHtml.replace(/<img\b(?![^>]*\bloading=)/gi, '<img loading="lazy" decoding="async" ')
   const mergedHtml = mergeConsecutiveBlockquotes(lazyImageHtml)
-  const richHtml = renderGithubRichCards(mergedHtml)
+  const richHtml = renderGithubRichCards(normalizeContentAssetUrls(mergedHtml))
   return DOMPurify.sanitize(richHtml, {
     ALLOWED_TAGS: [
       'h1','h2','h3','h4','h5','h6','p','br','hr',
@@ -289,6 +292,19 @@ const renderedContent = computed(() => {
     ALLOW_DATA_ATTR: false,
   })
 })
+
+function normalizeContentAssetUrls(html: string) {
+  if (typeof document === 'undefined' || !html) return html
+  const template = document.createElement('template')
+  template.innerHTML = html
+  template.content.querySelectorAll('img, video, source').forEach((el) => {
+    for (const attr of ['src', 'poster']) {
+      const nextUrl = resolvePublicAssetUrl(el.getAttribute(attr))
+      if (nextUrl) el.setAttribute(attr, nextUrl)
+    }
+  })
+  return template.innerHTML
+}
 
 const tocRenderResult = ref<MarkdownTocRenderResult>({ html: '', headings: [], hasTocTag: false })
 let _renderToken = 0
@@ -787,7 +803,7 @@ const applyPostSeo = () => {
   ensureMetaByProperty('og:url', `${window.location.origin}${canonicalPath}`)
   // Song：分享卡片配图（有封面时）
   if (post.value.coverImage) {
-    ensureMetaByProperty('og:image', String(post.value.coverImage))
+    ensureMetaByProperty('og:image', postCoverImageUrl.value || String(post.value.coverImage))
   }
   ensureCanonical(canonicalPath)
 }
@@ -1098,6 +1114,7 @@ const acceptedAnswer = computed<Comment | null>(() => {
   }
   return find(comments.value)
 })
+const acceptedAnswerAvatarUrl = computed(() => resolvePublicAssetUrl(acceptedAnswer.value?.userAvatar))
 
 const acceptedAnswerId = computed(() => String(acceptedAnswer.value?.id || ''))
 
@@ -1283,11 +1300,11 @@ onMounted(() => {
               <UserQuickCard
                 :user-id="post.userId"
                 :nickname="post.authorName"
-                :avatar="post.authorAvatar"
+                :avatar="postAuthorAvatarUrl"
                 :roles="post.authorRoles"
               >
                 <div class="avatar-wrapper">
-                  <el-avatar :size="40" :src="post.authorAvatar">
+                  <el-avatar :size="40" :src="postAuthorAvatarUrl">
                     {{ post.authorName?.charAt(0) || 'U' }}
                   </el-avatar>
                 </div>
@@ -1297,7 +1314,7 @@ onMounted(() => {
                   <UserQuickCard
                     :user-id="post.userId"
                     :nickname="post.authorName"
-                    :avatar="post.authorAvatar"
+                    :avatar="postAuthorAvatarUrl"
                     :roles="post.authorRoles"
                   >
                     <span class="author-name">{{ post.authorName }}</span>
@@ -1392,8 +1409,8 @@ onMounted(() => {
           <!-- Cover Image & Article Body (Hidden if deleted) -->
           <template v-if="!isDeletedPost">
             <!-- Cover Image -->
-            <div v-if="post.coverImage" class="post-cover">
-              <el-image :src="post.coverImage" fit="contain" lazy />
+            <div v-if="postCoverImageUrl" class="post-cover">
+              <el-image :src="postCoverImageUrl" fit="contain" lazy />
             </div>
 
             <!-- AI Summary -->
@@ -1468,7 +1485,7 @@ onMounted(() => {
 
               <template v-if="acceptedAnswer">
                 <div class="accepted-answer-author">
-                  <el-avatar :size="22" :src="acceptedAnswer.userAvatar">
+                  <el-avatar :size="22" :src="acceptedAnswerAvatarUrl">
                     {{ (acceptedAnswer.nickname || 'U').charAt(0) }}
                   </el-avatar>
                   <span class="accepted-answer-name">{{ acceptedAnswer.nickname || '匿名用户' }}</span>

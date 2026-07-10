@@ -13,6 +13,7 @@ import UserBadge from '@/components/common/UserBadge.vue'
 import { stripMarkdown } from '@/utils/markdown'
 import { encodePostId, encodeUserId } from '@/utils/shortId'
 import { isTruthyFlag } from '@/utils/flags'
+import { resolvePublicAssetUrl } from '@/utils/assetUrl'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -183,6 +184,8 @@ const submitReport = async () => {
 }
 
 const imageError = ref(false)
+const authorAvatarUrl = computed(() => resolvePublicAssetUrl(props.post?.authorAvatar))
+const coverImageUrl = computed(() => resolvePublicAssetUrl(props.post?.coverImage))
 
 const goToPost = () => {
   router.push('/t/' + encodePostId(props.post.id))
@@ -376,7 +379,7 @@ const highlightedSummary = computed(() => highlightText(postSummary.value))
       <div class="card-header-info">
         <div class="author-block" @click.stop="post.userId ? router.push(`/user/${encodeUserId(post.userId)}`) : null" :style="post.userId ? 'cursor:pointer' : ''">
           <div class="avatar-wrapper">
-            <el-avatar :size="32" :src="post.authorAvatar" class="author-avatar">
+            <el-avatar :size="32" :src="authorAvatarUrl" class="author-avatar">
               {{ post.authorName?.charAt(0) || 'U' }}
             </el-avatar>
           </div>
@@ -452,11 +455,11 @@ const highlightedSummary = computed(() => highlightText(postSummary.value))
 
         <!-- Optional Thumbnail -->
         <div 
-          v-if="post.coverImage && post.coverImage !== 'null' && post.coverImage !== 'undefined' && post.coverImage !== '' && !imageError"
+          v-if="coverImageUrl && !imageError"
           class="post-thumbnail"
         >
           <img 
-            :src="post.coverImage" 
+            :src="coverImageUrl" 
             @error="imageError = true"
             class="thumbnail-image"
             alt="thumbnail"

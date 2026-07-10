@@ -344,6 +344,19 @@ const router = createRouter({
   ],
 })
 
+const CANONICAL_HOST = 'www.allinsong.top'
+const LEGACY_APEX_HOST = 'allinsong.top'
+
+function redirectApexToCanonical(targetPath: string) {
+  if (typeof window === 'undefined' || window.location.hostname !== LEGACY_APEX_HOST) {
+    return false
+  }
+
+  const safeTarget = targetPath.startsWith('/') ? targetPath : '/'
+  window.location.replace(`https://${CANONICAL_HOST}${safeTarget}`)
+  return true
+}
+
 const TOKEN_EXPIRE_SKEW_MS = 5000
 
 function decodeJwtExpireAtMs(token: string) {
@@ -393,6 +406,12 @@ function hasOauthCallbackParams(to: RouteLocationNormalized) {
 
 // Song：说明
 router.beforeEach(async (to, _from, next) => {
+  // Cloudflare currently challenges the apex host's lazy JS/CSS assets. Redirect before
+  // Vue Router resolves async route components so navigation cannot be cancelled by 403s.
+  if (redirectApexToCanonical(to.fullPath || '/')) {
+    return
+  }
+
   startRouteProgress('正在打开页面')
   const composerStore = usePostComposerStore()
   const accessToken = readToken('access_token')
@@ -465,22 +484,43 @@ router.afterEach((to) => {
   document.title = `${title} - Zens`
   ensureMetaTag('description', description)
   ensureCanonical(to.fullPath || '/')
-  if (import.meta.env.DEV && typeof window !== 'undefined') {
+  if (typeof window !== 'undefined') {
     sessionStorage.removeItem(`zens:vite-route-reload:${to.fullPath}`)
   }
   finishRouteProgress()
 })
 
+const clearAppRuntimeCaches = async () => {
+  if (typeof window === 'undefined') return
+
+  const tasks: Promise<unknown>[] = []
+  if ('serviceWorker' in navigator) {
+    tasks.push(
+      navigator.serviceWorker.getRegistrations()
+        .then((registrations) => Promise.all(registrations.map(registration => registration.unregister())))
+    )
+  }
+  if ('caches' in window) {
+    tasks.push(caches.keys().then(keys => Promise.all(keys.map(key => caches.delete(key)))))
+  }
+
+  await Promise.allSettled(tasks)
+}
+
 router.onError((error, to) => {
   failGlobalProgress()
   console.error('Route navigation failed:', error)
 
-  if (!import.meta.env.DEV || typeof window === 'undefined') return
+  if (typeof window === 'undefined') return
 
   const message = String(error?.message || error || '')
   const isViteStaleModule = message.includes('Failed to fetch dynamically imported module')
     || message.includes('Outdated Optimize Dep')
     || message.includes('Importing a module script failed')
+    || message.includes('Loading chunk')
+    || message.includes('ChunkLoadError')
+    || message.includes('Unable to preload CSS')
+    || message.includes('Failed to preload CSS')
 
   if (!isViteStaleModule) return
 
@@ -488,7 +528,13 @@ router.onError((error, to) => {
   if (sessionStorage.getItem(reloadKey) === '1') return
 
   sessionStorage.setItem(reloadKey, '1')
-  window.location.assign(to.fullPath)
+  const targetPath = to.fullPath || `${window.location.pathname}${window.location.search}${window.location.hash}` || '/'
+  if (redirectApexToCanonical(targetPath)) {
+    return
+  }
+
+  clearAppRuntimeCaches()
+    .finally(() => window.location.assign(targetPath))
 })
 
 export default router

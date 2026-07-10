@@ -7,6 +7,7 @@ import TrustLevelBadge from '@/components/common/TrustLevelBadge.vue'
 import UserBadge from '@/components/common/UserBadge.vue'
 import ProfileCover from '@/components/profile/ProfileCover.vue'
 import { parseCoverConfig, type CoverConfig } from '@/utils/coverConfig'
+import { resolvePublicAssetUrl } from '@/utils/assetUrl'
 import { EditPen, Connection, ChatDotRound } from '@element-plus/icons-vue'
 
 export interface ProfileHeaderData {
@@ -59,9 +60,7 @@ const emit = defineEmits<{
 }>()
 
 const coverImageUrl = computed(() => {
-  const url = String(props.profile.profileCardBgUrl || '').trim()
-  const ok = /^https?:\/\/[^"'\s]+$/.test(url) || /^\/uploads\/[^"'\s]+$/.test(url)
-  return ok ? url : ''
+  return resolvePublicAssetUrl(props.profile.profileCardBgUrl)
 })
 const parsedCover = computed(() => parseCoverConfig(props.profile.coverConfig))
 const onCoverNotice = (msg: string) => ElMessage.info(msg)

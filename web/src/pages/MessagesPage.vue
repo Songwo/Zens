@@ -11,6 +11,7 @@ import { decodePostId, encodePostId } from '@/utils/shortId'
 import { useUserStore } from '@/store/user'
 import { wsClient } from '@/utils/websocket'
 import UserBadge from '@/components/common/UserBadge.vue'
+import { resolvePublicAssetUrl } from '@/utils/assetUrl'
 
 // 1. 帖子分享嵌入卡片子组件 (TS Render Function, 高兼容)
 const PostEmbedCard = defineComponent({
@@ -58,7 +59,7 @@ const PostEmbedCard = defineComponent({
       }, [
         h('div', { class: 'dm-post-card-header' }, [
           h('img', {
-            src: postData.value.authorAvatar || 'https://api.dicebear.com/7.x/identicon/svg?seed=' + postData.value.authorName,
+            src: resolvePublicAssetUrl(postData.value.authorAvatar) || 'https://api.dicebear.com/7.x/identicon/svg?seed=' + postData.value.authorName,
             style: 'width: 18px; height: 18px; border-radius: 50%; object-fit: cover;'
           }),
           h('span', { class: 'dm-post-card-author', style: 'margin-left: 6px; font-weight: 600; font-size: 11px; color: var(--el-text-color-regular);' }, postData.value.authorNickname || postData.value.authorName || '社区用户'),
@@ -183,6 +184,10 @@ const filteredConversations = computed(() => {
 const activeConversation = computed(() => {
   return conversations.value.find(item => item.peerId === activePeerId.value) || null
 })
+const getPeerAvatar = (value?: string | null) => resolvePublicAssetUrl(value)
+const activePeerAvatarUrl = computed(() =>
+  getPeerAvatar(activeConversation.value?.peerAvatar || activePeerAvatar.value)
+)
 
 const orderedMessages = computed(() => {
   return [...messages.value].reverse()
@@ -649,7 +654,7 @@ onUnmounted(() => {
               @click="selectConversation(item)"
             >
               <div class="avatar-container-relative">
-                <el-avatar :size="40" :src="item.peerAvatar">
+                <el-avatar :size="40" :src="getPeerAvatar(item.peerAvatar)">
                   {{ item.peerName?.charAt(0) || 'U' }}
                 </el-avatar>
                 <!-- 在线状态呼吸灯 -->
@@ -689,7 +694,7 @@ onUnmounted(() => {
                   style="margin-right: 4px; font-size: 18px;"
                 />
                 <div class="avatar-container-relative">
-                  <el-avatar :size="38" :src="activeConversation?.peerAvatar || activePeerAvatar">
+                  <el-avatar :size="38" :src="activePeerAvatarUrl">
                     {{ renderPeerName(activeConversation).charAt(0) }}
                   </el-avatar>
                   <span class="status-breath-dot" :class="activePeerTyping ? 'typing' : 'online'"></span>
@@ -727,7 +732,7 @@ onUnmounted(() => {
                   </div>
 
                   <div class="message-row" :class="{ self: msg.self }">
-                    <el-avatar v-if="!msg.self" :size="36" :src="activeConversation?.peerAvatar || activePeerAvatar" class="chat-peer-avatar">
+                    <el-avatar v-if="!msg.self" :size="36" :src="activePeerAvatarUrl" class="chat-peer-avatar">
                       {{ renderPeerName(activeConversation).charAt(0) }}
                     </el-avatar>
                     
@@ -755,7 +760,7 @@ onUnmounted(() => {
 
                 <!-- 正在输入状态动画 -->
                 <div v-if="activePeerTyping" class="message-row">
-                  <el-avatar :size="36" :src="activeConversation?.peerAvatar || activePeerAvatar" class="chat-peer-avatar">
+                  <el-avatar :size="36" :src="activePeerAvatarUrl" class="chat-peer-avatar">
                     {{ renderPeerName(activeConversation).charAt(0) }}
                   </el-avatar>
                   <div class="bubble" style="padding: 12px 18px; display: flex; align-items: center; gap: 4px; background: rgba(255,255,255,0.5); backdrop-filter: blur(10px); border-radius: 20px 20px 20px 4px;">

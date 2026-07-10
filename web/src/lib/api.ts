@@ -36,6 +36,7 @@ const PUBLIC_PATH_PREFIXES = [
   '/stats/', '/section/', '/user/public/', '/user/search',
   '/invite/validate', '/invite/required',
   '/follow/stats/', '/level/thresholds', '/trust-level/thresholds',
+  '/search/hot-keywords', '/search/suggestions', '/poll/by-post/',
   '/changelog/list', '/short-link/', '/sso/clients/public/', '/onebox/preview',
   '/performance/web-vitals', '/performance/web-vitals/summary', '/performance/web-vitals/events',
 ]
@@ -271,7 +272,8 @@ function needSign(config: InternalAxiosRequestConfig, token: string | null): boo
   if (!token) return false
   const method = String(config.method || 'get').toUpperCase()
   if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) return false
-  return !isPublicRequest(config)
+  const path = normalizePath(config)
+  return !path.startsWith('/auth/')
 }
 
 function applyAuthHeaders(config: RetryConfig) {

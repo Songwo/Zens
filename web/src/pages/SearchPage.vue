@@ -25,9 +25,11 @@ import {
   normalizeDiscoveryTagNames,
 } from '@/utils/communityDiscovery'
 import { formatSectionName } from '@/utils/communitySections'
+import { resolvePublicAssetUrl } from '@/utils/assetUrl'
 
 const route = useRoute()
 const router = useRouter()
+const publicAssetUrl = (value?: string | null) => resolvePublicAssetUrl(value)
 
 const SEARCH_HISTORY_KEY = 'cp:search:history'
 const SEARCH_HISTORY_MAX = 12
@@ -1196,7 +1198,7 @@ onUnmounted(() => {
             class="user-card"
             @click="router.push(`/user/${encodeUserId(user.id)}`)"
           >
-            <el-avatar :size="48" :src="user.avatar" class="user-card-avatar">
+            <el-avatar :size="48" :src="publicAssetUrl(user.avatar)" class="user-card-avatar">
               {{ user.nickname?.charAt(0) || '?' }}
             </el-avatar>
             <div class="user-card-info">

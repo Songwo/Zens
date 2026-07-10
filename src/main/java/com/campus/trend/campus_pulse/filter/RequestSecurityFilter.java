@@ -2,6 +2,7 @@ package com.campus.trend.campus_pulse.filter;
 
 import com.campus.trend.campus_pulse.common.api.Result;
 import com.campus.trend.campus_pulse.common.api.ResultCode;
+import com.campus.trend.campus_pulse.config.SecurityWhitelist;
 import com.campus.trend.campus_pulse.utils.JwtUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.FilterChain;
@@ -17,6 +18,8 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
@@ -51,6 +54,8 @@ public class RequestSecurityFilter extends OncePerRequestFilter {
             "/api/auth/2fa/verify-login",
             "/performance/web-vitals",
             "/api/performance/web-vitals");
+    private static final Set<String> PUBLIC_MUTATING_PATHS =
+            new HashSet<>(Arrays.asList(SecurityWhitelist.PUBLIC_POST_URLS));
 
     private final StringRedisTemplate redisTemplate;
     private final JwtUtil jwtUtil;
@@ -74,7 +79,7 @@ public class RequestSecurityFilter extends OncePerRequestFilter {
         }
 
         String requestUri = request.getRequestURI();
-        if (SKIP_PATHS.contains(requestUri)) {
+        if (SKIP_PATHS.contains(requestUri) || PUBLIC_MUTATING_PATHS.contains(requestUri)) {
             filterChain.doFilter(request, response);
             return;
         }
@@ -141,8 +146,7 @@ public class RequestSecurityFilter extends OncePerRequestFilter {
             return;
         }
 
-        String expected = buildSignature(request.getMethod(), requestUri, timestampHeader, nonce, deviceId, token);
-        if (!constantTimeEquals(expected, signature)) {
+        if (!matchesSignature(request.getMethod(), requestUri, timestampHeader, nonce, deviceId, token, signature)) {
             log.warn("请求签名校验失败: method={}, uri={}, userId={}",
                     request.getMethod(), requestUri, userId);
             writeError(response, HttpStatus.UNAUTHORIZED.value(), "请求签名校验失败");
@@ -178,6 +182,23 @@ public class RequestSecurityFilter extends OncePerRequestFilter {
         } catch (Exception e) {
             return "";
         }
+    }
+
+    private boolean matchesSignature(String method, String requestUri, String timestamp, String nonce, String deviceId,
+            String token, String signature) {
+        if (constantTimeEquals(buildSignature(method, requestUri, timestamp, nonce, deviceId, token), signature)) {
+            return true;
+        }
+        String apiStrippedUri = stripApiPrefix(requestUri);
+        return !requestUri.equals(apiStrippedUri)
+                && constantTimeEquals(buildSignature(method, apiStrippedUri, timestamp, nonce, deviceId, token), signature);
+    }
+
+    private String stripApiPrefix(String requestUri) {
+        if (requestUri != null && requestUri.startsWith("/api/")) {
+            return requestUri.substring(4);
+        }
+        return requestUri;
     }
 
     private boolean constantTimeEquals(String a, String b) {

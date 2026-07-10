@@ -73,7 +73,7 @@ const communitySignals = computed(() => [
 
 onMounted(async () => {
   try {
-    const res = await publicDataApi.getHomeBootstrapCached(8, 5, 'WEEK')
+    const res = await publicDataApi.getHomeBootstrapCached(12, 5, 'WEEK')
     if (res.code === 2000 && res.data?.siteStats) {
       siteStats.value = res.data.siteStats
     }
