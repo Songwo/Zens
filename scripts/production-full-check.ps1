@@ -225,7 +225,13 @@ $jsonOk = {
 $actuatorHealthOk = {
     param($resp)
     try {
-        $data = $resp.Content | ConvertFrom-Json
+        # Actuator 的 vendor JSON content-type 在 Windows PowerShell 中可能返回 byte[]。
+        $raw = if ($resp.Content -is [byte[]]) {
+            [Text.Encoding]::UTF8.GetString($resp.Content)
+        } else {
+            [string]$resp.Content
+        }
+        $data = $raw | ConvertFrom-Json
         [pscustomobject]@{
             ok = ([string]$data.status -eq "UP")
             detail = "status=$($data.status)"
