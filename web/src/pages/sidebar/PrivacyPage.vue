@@ -25,7 +25,7 @@ const router = useRouter()
       </div>
 
       <el-card shadow="never" class="content-card">
-        <div class="meta">最后更新：2026 年 3 月 28 日 &nbsp;·&nbsp; 版本 1.0</div>
+        <div class="meta">最后更新：2026 年 7 月 11 日 &nbsp;·&nbsp; 版本 1.1</div>
 
         <section>
           <h2 class="h2-green">1. 我们收集哪些信息</h2>
@@ -62,7 +62,7 @@ const router = useRouter()
 
         <section>
           <h2 class="h2-green">4. Cookie 与本地存储</h2>
-          <p>本站使用 localStorage / sessionStorage 存储登录凭证（JWT Token），不依赖 Cookie 进行身份验证。我们不使用跨站追踪 Cookie。</p>
+          <p>本站使用 localStorage / sessionStorage 存储登录凭证（JWT Token），并保存随机生成的站内分析标识，用于计算访问、激活和留存。分析事件不包含帖子正文、密码、精确 IP 或跨站广告标识；开启浏览器“请勿跟踪”（DNT）后不采集该类事件。我们不使用跨站追踪 Cookie。</p>
         </section>
 
         <section>

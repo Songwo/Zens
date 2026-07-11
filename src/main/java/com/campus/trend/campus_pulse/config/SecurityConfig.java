@@ -93,6 +93,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers(SecurityWhitelist.AUTH_WHITELIST).permitAll()
                         .requestMatchers("/api/auth/**").permitAll()
+                        .requestMatchers("/payment/callback/**", "/api/payment/callback/**").permitAll()
                         .requestMatchers("/api/static/**", "/api/uploads/**", "/api/ws/**").permitAll()
                         // 内部 s2s 接口由 InternalServiceFilter 单独 HMAC 鉴权,绕过 SecurityFilterChain 的认证
                         .requestMatchers("/api/internal/**").permitAll()

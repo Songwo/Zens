@@ -37,6 +37,7 @@ interface InviteStats {
   userLevel: number
   minLevel: number
   canGenerate: boolean
+  maxPendingCodes: number
 }
 
 const levelInfo = ref<LevelInfo | null>(null)
@@ -46,7 +47,7 @@ const generating = ref(false)
 
 const isLoggedIn = computed(() => !!userStore.accessToken)
 const canGenerate = computed(() => inviteStats.value?.canGenerate ?? false)
-const minLevel = computed(() => inviteStats.value?.minLevel ?? 5)
+const minLevel = computed(() => inviteStats.value?.minLevel ?? 1)
 const userLevel = computed(() => inviteStats.value?.userLevel ?? 0)
 const expNeeded = computed(() => {
   if (!levelInfo.value || canGenerate.value) return 0
@@ -124,7 +125,7 @@ onMounted(loadData)
       <div class="invite-hero">
         <div class="hero-icon"><el-icon :size="36"><Link /></el-icon></div>
         <h1 class="hero-title">邀请好友</h1>
-        <p class="hero-sub">邀请新用户加入，双方共同获得经验奖励</p>
+        <p class="hero-sub">邀请愿意认真交流的朋友加入；好友完成注册后，邀请人获得 30 点经验</p>
       </div>
 
       <!-- 未登录 -->
@@ -183,7 +184,7 @@ onMounted(loadData)
           >
             生成邀请链接
           </el-button>
-          <span class="generate-hint">每次生成1个，有效期30天，最多同时保留5个未使用</span>
+          <span class="generate-hint">每次生成 1 个，有效期 30 天，最多同时保留 {{ inviteStats.maxPendingCodes }} 个未使用</span>
         </div>
 
         <!-- 邀请记录 -->

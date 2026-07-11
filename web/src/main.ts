@@ -24,6 +24,7 @@ import App from './App.vue'
 import { installCodeBlockCopy } from './utils/codeBlockCopy'
 import { cleanupDevServiceWorker } from './utils/devServiceWorkerCleanup'
 import { installWebVitals } from './utils/webVitals'
+import { installGrowthAnalytics } from './utils/growthAnalytics'
 
 const app = createApp(App)
 const pinia = createPinia()
@@ -45,6 +46,7 @@ app.directive('click-away', {
 
 app.use(pinia)
 app.use(router)
+installGrowthAnalytics(router)
 // Song：注册 v-loading 指令 + ElLoading 服务（按需模式下需手动注册）
 app.use(ElLoading)
 

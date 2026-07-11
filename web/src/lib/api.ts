@@ -5,6 +5,7 @@ import { getOrCreateDeviceId } from '@/utils/device'
 import { useUserStore } from '@/store/user'
 import { finishGlobalProgress, startGlobalProgress } from '@/utils/globalProgress'
 import { getErrorMessage } from '@/utils/errorMessage'
+import { trackGrowthEvent } from '@/utils/growthAnalytics'
 
 // ─────────────────────────────────────────────────────────
 // 类型定义
@@ -39,6 +40,7 @@ const PUBLIC_PATH_PREFIXES = [
   '/search/hot-keywords', '/search/suggestions', '/poll/by-post/',
   '/changelog/list', '/short-link/', '/sso/clients/public/', '/onebox/preview',
   '/performance/web-vitals', '/performance/web-vitals/summary', '/performance/web-vitals/events',
+  '/growth/events',
 ]
 const PUBLIC_GET_PATH_PATTERNS = [
   /^\/post\/[^/]+$/,
@@ -432,6 +434,16 @@ api.interceptors.response.use(
       err._bizCode = res.code
       err._bizData = res.data
       return Promise.reject(err)
+    }
+    const method = response.config.method?.toLowerCase()
+    const path = String(response.config.url || '').split('?')[0] || ''
+    if (method === 'post') {
+      if (path === '/auth/register') trackGrowthEvent('signup_completed')
+      else if (path === '/comment/create') trackGrowthEvent('comment_created')
+      else if (path === '/post/create-post') trackGrowthEvent('post_created')
+      else if (path.startsWith('/post-collect/') && res?.data?.isCollected === true) trackGrowthEvent('post_collected')
+      else if (path.includes('/follow')) trackGrowthEvent('user_followed')
+      else if (path.includes('/subscribe')) trackGrowthEvent('subscription_created')
     }
     return res
   },

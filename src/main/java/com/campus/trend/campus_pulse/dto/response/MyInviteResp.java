@@ -8,6 +8,7 @@ public record MyInviteResp(
         int total,
         int userLevel,
         int minLevel,
-        boolean canGenerate
+        boolean canGenerate,
+        int maxPendingCodes
 ) {
 }

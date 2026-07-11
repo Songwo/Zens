@@ -382,7 +382,10 @@ onUnmounted(() => {
 
           <el-form-item prop="agreement">
             <el-checkbox v-model="form.agreement">
-              我已阅读并同意 <el-link type="primary" :underline="false">《服务协议》</el-link> 与 <el-link type="primary" :underline="false">《隐私政策》</el-link>
+              我已阅读并同意
+              <el-link type="primary" :underline="false" href="/terms" target="_blank">《服务协议》</el-link>
+              与
+              <el-link type="primary" :underline="false" href="/privacy" target="_blank">《隐私政策》</el-link>
             </el-checkbox>
           </el-form-item>
         </div>
@@ -393,7 +396,7 @@ onUnmounted(() => {
             <el-icon class="i-icon"><Ticket /></el-icon>
             <div class="i-text">
               <h4>输入专属邀请码</h4>
-              <p>携带邀请码注册可立刻解锁高级圈子并获得新手徽章。没有邀请码可直接跳过。</p>
+              <p>邀请码用于记录真实好友邀请；注册成功后邀请人获得 30 点经验。没有邀请码也可以直接加入。</p>
             </div>
           </div>
 

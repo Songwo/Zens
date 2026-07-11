@@ -13,6 +13,7 @@ import { LineChart, BarChart } from 'echarts/charts'
 import { GridComponent, TooltipComponent } from 'echarts/components'
 import VChart from 'vue-echarts'
 import { statsApi } from '@/api/stats'
+import { growthApi, type GrowthDashboard } from '@/api/growth'
 
 use([CanvasRenderer, LineChart, BarChart, GridComponent, TooltipComponent])
 
@@ -26,6 +27,9 @@ const stats = ref({
 const loading = ref(true)
 const userChartOptions = ref<any>(null)
 const postChartOptions = ref<any>(null)
+const growth = ref<GrowthDashboard | null>(null)
+
+const conversion = (value: number, base: number) => base ? `${(value * 100 / base).toFixed(1)}%` : '—'
 
 const fetchStats = async () => {
   loading.value = true
@@ -40,10 +44,12 @@ const fetchStats = async () => {
     }
 
     // Song：说明
-    const [postTrendRes, userTrendRes] = await Promise.all([
+    const [postTrendRes, userTrendRes, growthRes] = await Promise.all([
       statsApi.getPostTrend().catch(() => ({ data: [] })),
-      statsApi.getUserTrend().catch(() => ({ data: [] }))
+      statsApi.getUserTrend().catch(() => ({ data: [] })),
+      growthApi.dashboard(30).catch(() => ({ data: null }))
     ])
+    growth.value = growthRes.data || null
 
     const postData = postTrendRes.data || []
     const userData = userTrendRes.data || []
@@ -167,6 +173,47 @@ onMounted(() => {
       </el-col>
     </el-row>
 
+    <el-card v-if="growth" shadow="never" class="growth-card">
+      <template #header>
+        <div class="chart-header"><el-icon><TrendCharts /></el-icon><span>近 30 天增长漏斗</span></div>
+      </template>
+      <div class="funnel-grid">
+        <div class="funnel-step"><strong>{{ growth.overview.visitors }}</strong><span>访问用户</span></div>
+        <div class="funnel-arrow">→ <small>{{ conversion(growth.overview.registrations, growth.overview.visitors) }}</small></div>
+        <div class="funnel-step"><strong>{{ growth.overview.registrations }}</strong><span>完成注册</span></div>
+        <div class="funnel-arrow">→ <small>{{ conversion(growth.overview.activated, growth.overview.registrations) }}</small></div>
+        <div class="funnel-step"><strong>{{ growth.overview.activated }}</strong><span>完成激活</span></div>
+        <div class="funnel-arrow">→ <small>{{ conversion(growth.overview.contributors, growth.overview.activated) }}</small></div>
+        <div class="funnel-step"><strong>{{ growth.overview.contributors }}</strong><span>内容贡献者</span></div>
+        <div class="funnel-arrow">→ <small>{{ conversion(growth.overview.supporters, growth.overview.contributors) }}</small></div>
+        <div class="funnel-step supporter"><strong>{{ growth.overview.supporters }}</strong><span>付费支持者</span></div>
+      </div>
+    </el-card>
+
+    <el-row v-if="growth" :gutter="20" class="growth-detail-row">
+      <el-col :span="14" :xs="24">
+        <el-card shadow="never" class="growth-card">
+          <template #header><div class="chart-header">留存 Cohort</div></template>
+          <el-table :data="growth.retention" size="small" empty-text="数据积累后显示">
+            <el-table-column prop="cohortDate" label="首次访问" min-width="110" />
+            <el-table-column prop="cohortSize" label="用户" width="75" />
+            <el-table-column label="D1" width="80"><template #default="{ row }">{{ row.d1 }}%</template></el-table-column>
+            <el-table-column label="D7" width="80"><template #default="{ row }">{{ row.d7 }}%</template></el-table-column>
+            <el-table-column label="D30" width="80"><template #default="{ row }">{{ row.d30 }}%</template></el-table-column>
+          </el-table>
+        </el-card>
+      </el-col>
+      <el-col :span="10" :xs="24">
+        <el-card shadow="never" class="growth-card">
+          <template #header><div class="chart-header">真实获客来源</div></template>
+          <div v-if="growth.sources.length" class="source-list">
+            <div v-for="item in growth.sources" :key="item.source"><span>{{ item.source }}</span><strong>{{ item.visitors }}</strong></div>
+          </div>
+          <el-empty v-else description="数据积累后显示" :image-size="70" />
+        </el-card>
+      </el-col>
+    </el-row>
+
     <!-- Visual Analytics -->
     <el-row :gutter="20" class="charts-row">
       <el-col :span="12" :xs="24">
@@ -282,6 +329,18 @@ onMounted(() => {
 .chart-card {
   border-radius: 12px;
 }
+
+.growth-card { border-radius: 12px; margin-bottom: 20px; }
+.funnel-grid { display: flex; align-items: center; gap: 12px; overflow-x: auto; padding: 8px 2px 12px; }
+.funnel-step { min-width: 112px; padding: 16px; border-radius: 12px; background: var(--el-fill-color-light); text-align: center; }
+.funnel-step strong { display: block; font-size: 25px; color: var(--el-text-color-primary); }
+.funnel-step span { font-size: 12px; color: var(--el-text-color-secondary); }
+.funnel-step.supporter { background: var(--el-color-warning-light-9); }
+.funnel-arrow { color: var(--el-text-color-placeholder); text-align: center; }
+.funnel-arrow small { display: block; color: var(--el-color-primary); font-weight: 700; }
+.growth-detail-row { margin-bottom: 0; }
+.source-list > div { display: flex; justify-content: space-between; padding: 11px 0; border-bottom: 1px solid var(--el-border-color-lighter); }
+.source-list > div:last-child { border-bottom: 0; }
 
 .chart-header {
   display: flex;

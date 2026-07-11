@@ -4,17 +4,29 @@ import { useRouter } from 'vue-router'
 import { trustLevelApi, type TrustInfo } from '@/api/trustLevel'
 import { TRUST_LEVELS, trustLevelColor, trustLevelLabel } from '@/utils/trustLevel'
 import { useUserStore } from '@/store/user'
-import { Check, Close, Lightning, ArrowRight } from '@element-plus/icons-vue'
+import { tagApi, type Tag } from '@/api/tag'
+import { ElMessage } from 'element-plus'
+import { Check, Close, Lightning, ArrowRight, Reading, CollectionTag, ChatDotRound } from '@element-plus/icons-vue'
 
 const router = useRouter()
 const userStore = useUserStore()
 const loading = ref(false)
 const info = ref<TrustInfo | null>(null)
+const followedTags = ref<Tag[]>([])
+const hotTags = ref<Tag[]>([])
+const followingTagId = ref<number | null>(null)
 
 const currentLevel = computed(() => info.value?.trustLevel ?? userStore.userInfo?.trustLevel ?? 0)
 const metrics = computed(() => info.value?.metrics)
 const isRestricted = computed(() => currentLevel.value < 1)
 const readMinutes = computed(() => Math.round((metrics.value?.readTimeSec ?? 0) / 60))
+const activationSteps = computed(() => [
+    { label: '关注 3 个感兴趣的主题', done: followedTags.value.length >= 3, current: followedTags.value.length, target: 3, icon: CollectionTag },
+    { label: '认真阅读至少 3 篇内容', done: (metrics.value?.postsEnteredRecent ?? 0) >= 3, current: metrics.value?.postsEnteredRecent ?? 0, target: 3, icon: Reading },
+    { label: '完成第一次点赞、评论、收藏或发帖', done: (metrics.value?.likesGiven ?? 0) + (metrics.value?.postsCreated ?? 0) > 0, current: ((metrics.value?.likesGiven ?? 0) + (metrics.value?.postsCreated ?? 0)) > 0 ? 1 : 0, target: 1, icon: ChatDotRound },
+])
+const activationPercent = computed(() => Math.round(activationSteps.value.filter(item => item.done).length / activationSteps.value.length * 100))
+const suggestedTags = computed(() => hotTags.value.filter(tag => !followedTags.value.some(item => item.id === tag.id)).slice(0, 8))
 
 // Song：TL1 晋升条件进度（与后端 campus.trust-level.tl1 默认值对齐）
 const tl1Progress = computed(() => {
@@ -33,12 +45,31 @@ const tl1Progress = computed(() => {
 const fetchInfo = async () => {
     loading.value = true
     try {
-        const res = await trustLevelApi.info()
-        info.value = res.data
+        const [trustRes, followedRes, hotRes] = await Promise.all([
+            trustLevelApi.info(),
+            tagApi.getMyFollowing(),
+            tagApi.getHotTags(12),
+        ])
+        info.value = trustRes.data
+        followedTags.value = followedRes.data ?? []
+        hotTags.value = hotRes.data ?? []
     } catch (e: any) {
         // 未登录或获取失败，用 userStore 兜底
     } finally {
         loading.value = false
+    }
+}
+
+const followSuggestedTag = async (tag: Tag) => {
+    followingTagId.value = tag.id
+    try {
+        await tagApi.follow(tag.id)
+        followedTags.value = [...followedTags.value, tag]
+        ElMessage.success(`已关注 #${tag.name}`)
+    } catch (e: any) {
+        ElMessage.error(e?.message || '关注失败，请稍后重试')
+    } finally {
+        followingTagId.value = null
     }
 }
 
@@ -84,6 +115,40 @@ onMounted(() => {
                 </div>
             </template>
         </el-alert>
+
+        <el-card class="activation-card" shadow="never">
+            <template #header>
+                <div class="card-head">
+                    <div>
+                        <span class="card-title">新人 24 小时行动清单</span>
+                        <div class="card-subtitle">先找到感兴趣的内容，再完成一次真实互动。</div>
+                    </div>
+                    <el-progress type="circle" :percentage="activationPercent" :width="62" :stroke-width="7" />
+                </div>
+            </template>
+            <div class="activation-list">
+                <div v-for="step in activationSteps" :key="step.label" class="activation-item" :class="{ done: step.done }">
+                    <el-icon><component :is="step.done ? Check : step.icon" /></el-icon>
+                    <span>{{ step.label }}</span>
+                    <b>{{ Math.min(step.current, step.target) }} / {{ step.target }}</b>
+                </div>
+            </div>
+            <div v-if="followedTags.length < 3 && suggestedTags.length" class="suggested-tags">
+                <span class="suggested-title">从热门主题开始：</span>
+                <el-button
+                    v-for="tag in suggestedTags"
+                    :key="tag.id"
+                    round
+                    size="small"
+                    :loading="followingTagId === tag.id"
+                    @click="followSuggestedTag(tag)"
+                ># {{ tag.name }}</el-button>
+            </div>
+            <div class="activation-actions">
+                <el-button type="primary" @click="router.push('/featured')">阅读精选内容</el-button>
+                <el-button @click="router.push('/')">参与最新讨论</el-button>
+            </div>
+        </el-card>
 
         <!-- 升级任务清单（TL0 → TL1） -->
         <el-card v-if="currentLevel < 2" class="tasks-card" shadow="never">
@@ -215,9 +280,22 @@ html.dark .hero {
 }
 
 .tasks-card,
+.activation-card,
 .roadmap-card {
     margin-bottom: 20px;
 }
+
+.card-subtitle { margin-top: 4px; font-size: 12px; color: var(--el-text-color-secondary); }
+.activation-list { display: grid; gap: 10px; }
+.activation-item { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border: 1px solid var(--el-border-color-lighter); border-radius: 10px; }
+.activation-item .el-icon { color: var(--el-color-primary); font-size: 18px; }
+.activation-item span { flex: 1; font-size: 14px; }
+.activation-item b { color: var(--el-text-color-secondary); font-size: 13px; }
+.activation-item.done { background: var(--el-color-success-light-9); border-color: var(--el-color-success-light-7); }
+.activation-item.done .el-icon { color: var(--el-color-success); }
+.suggested-tags { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--el-border-color-lighter); }
+.suggested-title { font-size: 13px; color: var(--el-text-color-secondary); }
+.activation-actions { display: flex; gap: 10px; margin-top: 16px; }
 
 .card-head {
     display: flex;

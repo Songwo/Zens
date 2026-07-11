@@ -182,6 +182,20 @@ trend:
     view-log-retention-days: ${VIEW_LOG_RETENTION_DAYS:3650}
 
 campus:
+  payment:
+    enabled: ${PAYMENT_ENABLED:false}
+    provider: ${PAYMENT_PROVIDER:disabled}
+    order-expire-minutes: ${PAYMENT_ORDER_EXPIRE_MINUTES:30}
+    # 生产环境即使误配为 true，启动校验也会拒绝 mock 渠道。
+    allow-mock: false
+    alipay:
+      app-id: ${ALIPAY_APP_ID:}
+      gateway: ${ALIPAY_GATEWAY:https://openapi.alipay.com/gateway.do}
+      merchant-private-key: ${ALIPAY_MERCHANT_PRIVATE_KEY:}
+      alipay-public-key: ${ALIPAY_PUBLIC_KEY:}
+      notify-url: ${ALIPAY_NOTIFY_URL:}
+      return-url: ${ALIPAY_RETURN_URL:}
+      seller-id: ${ALIPAY_SELLER_ID:}
   async:
     core-pool-size: ${ASYNC_CORE_POOL_SIZE:8}
     max-pool-size: ${ASYNC_MAX_POOL_SIZE:16}

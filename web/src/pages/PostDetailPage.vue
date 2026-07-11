@@ -566,6 +566,7 @@ const fetchPost = async () => {
     if (requestToken !== _postFetchToken) return
     post.value = null
     postLoadError.value = true
+    ensureMetaByName('robots', 'noindex,nofollow')
     // 首屏失败由页面内"加载失败+重试"承载,不弹 toast
   } finally {
     if (requestToken === _postFetchToken) loading.value = false
@@ -810,26 +811,71 @@ const ensureCanonical = (path: string) => {
     link.setAttribute('rel', 'canonical')
     document.head.appendChild(link)
   }
-  link.setAttribute('href', `${window.location.origin}${path}`)
+  link.setAttribute('href', `https://www.allinsong.top${path}`)
+}
+
+const applyPostStructuredData = (canonicalUrl: string, description: string) => {
+  if (!post.value) return
+  document.querySelectorAll('[data-zens-post-seo]').forEach(element => element.remove())
+  const script = document.createElement('script')
+  script.type = 'application/ld+json'
+  script.setAttribute('data-zens-post-seo', 'true')
+  script.textContent = JSON.stringify({
+    '@context': 'https://schema.org',
+    '@graph': [
+      {
+        '@type': 'DiscussionForumPosting',
+        '@id': `${canonicalUrl}#post`,
+        headline: post.value.title,
+        description,
+        url: canonicalUrl,
+        mainEntityOfPage: canonicalUrl,
+        datePublished: post.value.createTime,
+        dateModified: post.value.updateTime || post.value.createTime,
+        author: { '@type': 'Person', name: post.value.authorName || 'Zens 社区成员' },
+        image: postCoverImageUrl.value || undefined,
+        interactionStatistic: [
+          { '@type': 'InteractionCounter', interactionType: 'https://schema.org/CommentAction', userInteractionCount: post.value.commentCount || 0 },
+          { '@type': 'InteractionCounter', interactionType: 'https://schema.org/LikeAction', userInteractionCount: post.value.likeCount || 0 },
+        ],
+      },
+      {
+        '@type': 'BreadcrumbList',
+        itemListElement: [
+          { '@type': 'ListItem', position: 1, name: 'Zens 首页', item: 'https://www.allinsong.top/' },
+          { '@type': 'ListItem', position: 2, name: post.value.sectionName || '社区帖子', item: canonicalUrl },
+        ],
+      },
+    ],
+  })
+  document.head.appendChild(script)
 }
 
 const applyPostSeo = () => {
   if (!post.value) return
   const canonicalPath = `/t/${encodePostId(post.value.id)}`
+  const canonicalUrl = `https://www.allinsong.top${canonicalPath}`
   const title = `${post.value.title} - Zens`
   const description = (aiSummaryText.value || generateSummary(post.value.content || '', 160) || '开发者社区帖子详情').slice(0, 160)
 
   document.title = title
   ensureMetaByName('description', description)
+  ensureMetaByName('robots', 'index,follow,max-image-preview:large')
+  ensureMetaByName('twitter:card', 'summary_large_image')
+  ensureMetaByName('twitter:title', title)
+  ensureMetaByName('twitter:description', description)
   ensureMetaByProperty('og:title', title)
   ensureMetaByProperty('og:description', description)
   ensureMetaByProperty('og:type', 'article')
-  ensureMetaByProperty('og:url', `${window.location.origin}${canonicalPath}`)
+  ensureMetaByProperty('og:url', canonicalUrl)
   // Song：分享卡片配图（有封面时）
   if (post.value.coverImage) {
-    ensureMetaByProperty('og:image', postCoverImageUrl.value || String(post.value.coverImage))
+    const imageUrl = postCoverImageUrl.value || String(post.value.coverImage)
+    ensureMetaByProperty('og:image', imageUrl)
+    ensureMetaByName('twitter:image', imageUrl)
   }
   ensureCanonical(canonicalPath)
+  applyPostStructuredData(canonicalUrl, description)
 }
 
 const handleCommand = async (command: string) => {

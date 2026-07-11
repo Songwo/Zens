@@ -245,6 +245,21 @@ trend:
 
 # 10. 上传安全控制配置
 campus:
+  payment:
+    # 取得合规支付服务商商户参数并实现对应 PaymentProvider 前，必须保持关闭。
+    enabled: ${PAYMENT_ENABLED:false}
+    provider: ${PAYMENT_PROVIDER:disabled}
+    order-expire-minutes: ${PAYMENT_ORDER_EXPIRE_MINUTES:30}
+    allow-mock: ${PAYMENT_ALLOW_MOCK:false}
+    mock-webhook-secret: ${PAYMENT_MOCK_WEBHOOK_SECRET:}
+    alipay:
+      app-id: ${ALIPAY_APP_ID:}
+      gateway: ${ALIPAY_GATEWAY:https://openapi.alipay.com/gateway.do}
+      merchant-private-key: ${ALIPAY_MERCHANT_PRIVATE_KEY:}
+      alipay-public-key: ${ALIPAY_PUBLIC_KEY:}
+      notify-url: ${ALIPAY_NOTIFY_URL:}
+      return-url: ${ALIPAY_RETURN_URL:}
+      seller-id: ${ALIPAY_SELLER_ID:}
   ops:
     service-id: ${OPS_SERVICE_ID:zens-ops}
     author-username: ${OPS_AUTHOR_USERNAME:zens_ops}
@@ -293,7 +308,9 @@ campus:
     dedupe-window-seconds: ${NOTIFICATION_DEDUPE_WINDOW_SECONDS:120}
   invite:
     required: ${INVITE_REQUIRED:false}
-    user-min-level: ${INVITE_USER_MIN_LEVEL:5}
+    # 冷启动阶段允许完成邮箱验证的新用户邀请少量真实好友；等级提升后再通过运营策略扩容。
+    user-min-level: ${INVITE_USER_MIN_LEVEL:1}
+    max-pending-self-codes: ${INVITE_MAX_PENDING_SELF_CODES:2}
   site:
     url: ${SITE_URL:https://www.allinsong.top}
   support:

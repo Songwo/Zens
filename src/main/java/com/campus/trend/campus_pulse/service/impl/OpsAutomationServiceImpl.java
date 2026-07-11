@@ -206,6 +206,8 @@ public class OpsAutomationServiceImpl implements OpsAutomationService {
         up.setPostId(saved.getId());
         up.setPublish(true);
         postService.updatePost(up, u.getId());
+        // 草稿已通过运营人工审批，发布后同步为普通内容治理的 APPROVED，避免双重状态不一致。
+        postService.approvePost(saved.getId(), u.getId());
       }
       d.setStatus(PUBLISHED);
       d.setPublishedAt(LocalDateTime.now());

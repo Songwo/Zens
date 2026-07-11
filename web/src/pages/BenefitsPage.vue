@@ -167,6 +167,10 @@ onMounted(fetchAll)
               <el-icon><Connection /></el-icon>
               查看星港
             </el-button>
+            <el-button size="large" round @click="router.push('/supporter')">
+              <el-icon><Coin /></el-icon>
+              支持 Zens
+            </el-button>
           </div>
         </div>
 

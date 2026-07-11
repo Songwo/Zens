@@ -89,6 +89,12 @@ const router = createRouter({
       meta: { requiresAuth: true, title: '福利中心', description: '统一查看积分、兑换、CDK、抽奖和子站权益' }
     },
     {
+      path: '/supporter',
+      name: 'supporter',
+      component: () => import('@/pages/SupporterPage.vue'),
+      meta: { title: '支持 Zens', description: '了解 Zens 支持者计划、收费边界与支付安全说明' }
+    },
+    {
       path: '/settings',
       name: 'settings',
       component: () => import('@/pages/SettingsPage.vue'),
@@ -473,6 +479,8 @@ const ensureMetaTag = (name: string, content: string) => {
   el.setAttribute('content', content)
 }
 
+const SITE_ORIGIN = 'https://www.allinsong.top'
+
 const ensureCanonical = (path: string) => {
   let link = document.querySelector('link[rel="canonical"]') as HTMLLinkElement | null
   if (!link) {
@@ -480,16 +488,27 @@ const ensureCanonical = (path: string) => {
     link.setAttribute('rel', 'canonical')
     document.head.appendChild(link)
   }
-  const origin = window.location.origin
-  link.setAttribute('href', `${origin}${path}`)
+  const normalizedPath = path.startsWith('/') ? path : '/'
+  link.setAttribute('href', `${SITE_ORIGIN}${normalizedPath}`)
 }
 
+const INDEXABLE_ROUTE_NAMES = new Set([
+  'home', 'sections-overview', 'section', 'topic-detail', 'tag', 'hot', 'featured',
+  'about', 'terms', 'privacy', 'contact', 'guide', 'feedback', 'user-profile', 'supporter',
+])
+
 router.afterEach((to) => {
+  if (to.name !== 'topic-detail' && to.name !== 'short-link-detail') {
+    document.querySelectorAll('[data-zens-post-seo]').forEach(element => element.remove())
+  }
   const title = (to.meta.title as string) || '开放社区'
   const description = (to.meta.description as string) || 'Zens 是一个开放的兴趣与知识社区，欢迎分享经验、作品、观点与真实生活，找到值得交流的人和内容。'
   document.title = `${title} - Zens 开放社区`
   ensureMetaTag('description', description)
-  ensureCanonical(to.fullPath || '/')
+  ensureMetaTag('robots', INDEXABLE_ROUTE_NAMES.has(String(to.name))
+    ? 'index,follow,max-image-preview:large'
+    : 'noindex,nofollow')
+  ensureCanonical(to.path || '/')
   if (typeof window !== 'undefined') {
     sessionStorage.removeItem(`zens:vite-route-reload:${to.fullPath}`)
   }

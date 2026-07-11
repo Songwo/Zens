@@ -30,8 +30,11 @@ public class InviteCodeController {
     private final UserService userService;
 
     /** 普通用户生成邀请码所需最低等级 */
-    @Value("${campus.invite.user-min-level:5}")
+    @Value("${campus.invite.user-min-level:1}")
     private int userMinLevel;
+
+    @Value("${campus.invite.max-pending-self-codes:2}")
+    private int maxPendingSelfCodes;
 
     /** 前端站点地址，用于生成邀请链接 */
     @Value("${campus.site.url:http://localhost:5173}")
@@ -61,7 +64,7 @@ public class InviteCodeController {
                 .eq(InviteCode::getCreatorId, userId)
                 .eq(InviteCode::getStatus, 0)
                 .count();
-        if (pendingCount >= 5) {
+        if (pendingCount >= maxPendingSelfCodes) {
             return Result.failed("您还有 " + pendingCount + " 个未使用的邀请码，请先分享后再生成");
         }
         List<String> codes = inviteCodeService.generate(userId, 1, 1, 30, "用户自助生成");
@@ -78,7 +81,8 @@ public class InviteCodeController {
                 .orderByDesc(InviteCode::getCreateTime)
                 .list();
         List<InviteRecordResp> records = codes.stream().map(this::toInviteRecord).toList();
-        return Result.success(new MyInviteResp(records, records.size(), level, userMinLevel, level >= userMinLevel));
+        return Result.success(new MyInviteResp(records, records.size(), level, userMinLevel,
+                level >= userMinLevel, maxPendingSelfCodes));
     }
 
     @PostMapping("/generate")

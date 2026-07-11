@@ -47,6 +47,9 @@ public class SecurityWhitelist {
                         "/sw.js",
                         "/workbox-*.js",
                         "/robots.txt",
+                        "/sitemap.xml",
+                        "/feed.xml",
+                        "/rss.xml",
                         "/logo.png",
                         "/logo-horizontal.png",
                         "/icons/**",
@@ -68,6 +71,7 @@ public class SecurityWhitelist {
                         "/trend-stat/**",
                         "/heat-rank/**",
                         "/public/**",
+                        "/seo/**",
                         "/comment/post/**",
                         "/stats/**",
                         "/section/**",
@@ -88,6 +92,7 @@ public class SecurityWhitelist {
                         "/reaction",
                         "/performance/web-vitals/summary",
                         "/performance/web-vitals/events",
+                        "/supporter/plans",
                         "/actuator/health",
                         "/actuator/info",
                         "/actuator/prometheus");
@@ -102,6 +107,8 @@ public class SecurityWhitelist {
                         "/agent/community-qa/ask-stream",
                         "/agent/community-qa/search",
                         "/performance/web-vitals",
+                        "/payment/callback/**",
+                        "/growth/events",
                         "/comment/create",
                         "/short-link/comment");
 }
