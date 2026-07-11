@@ -2,7 +2,7 @@ from functools import lru_cache
 import ipaddress
 from typing import Annotated
 
-from pydantic import AnyHttpUrl, Field, SecretStr, model_validator
+from pydantic import AnyHttpUrl, Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -31,6 +31,13 @@ class Settings(BaseSettings):
     health_host: str = "127.0.0.1"
     health_port: Annotated[int, Field(ge=1024, le=65535)] = 7820
     log_level: str = "INFO"
+
+    @field_validator("llm_base_url", "llm_api_key", "llm_model", mode="before")
+    @classmethod
+    def empty_optional_llm_values_are_none(cls, value):
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
 
     @model_validator(mode="after")
     def validate_security(self) -> "Settings":

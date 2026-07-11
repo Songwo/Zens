@@ -198,8 +198,8 @@ curl -fsS http://127.0.0.1:7820/ready
 保持主站熔断开启，先验证坏签名返回 401 且不会占用 nonce，再执行一次：
 
 ```bash
-sudo sh -c \
-  'set -a; . /etc/zens/zens-ops.env; exec sudo -u zens-ops /opt/zens-ops-service/.venv/bin/zens-ops plan-daily --once'
+sudo -u zens-ops sh -c \
+  'cd /opt/zens-ops-service && set -a && . /etc/zens/zens-ops.env && exec .venv/bin/zens-ops plan-daily --once'
 ```
 
 数据库和后台必须同时满足：

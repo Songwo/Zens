@@ -30,3 +30,13 @@ def test_production_write_mode_requires_loopback_dependencies():
             service_secret="x" * 32,
             main_site_base_url="https://example.com",
         )
+
+
+def test_blank_optional_llm_environment_is_disabled(monkeypatch):
+    monkeypatch.setenv("OPS_LLM_BASE_URL", "")
+    monkeypatch.setenv("OPS_LLM_API_KEY", "")
+    monkeypatch.setenv("OPS_LLM_MODEL", "")
+
+    settings = Settings(_env_file=None)
+
+    assert settings.llm_enabled is False
