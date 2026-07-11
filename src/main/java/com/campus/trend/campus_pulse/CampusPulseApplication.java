@@ -7,7 +7,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.validation.annotation.Validated;
 
 @SpringBootApplication
-@MapperScan("com.campus.trend.campus_pulse.mapper")
+@MapperScan({"com.campus.trend.campus_pulse.mapper", "com.campus.trend.campus_pulse.seo"})
 @Validated
 @EnableScheduling
 public class CampusPulseApplication {
