@@ -1,5 +1,6 @@
 package com.campus.trend.campus_pulse.controller;
 
+import com.campus.trend.campus_pulse.annotation.RateLimit;
 import com.campus.trend.campus_pulse.common.api.Result;
 import com.campus.trend.campus_pulse.common.api.ResultCode;
 import com.campus.trend.campus_pulse.common.exception.BusinessException;
@@ -31,6 +32,8 @@ public class ViewLogController {
      * 记录浏览（通常由前端在查看帖子详情时调用）
      */
     @PostMapping("/record")
+    @RateLimit(key = "view_log_record", limit = 120, windowSeconds = 60,
+            limitType = RateLimit.LimitType.IP)
     public Result<?> recordView(@RequestParam String postId,
             @RequestParam(required = false) String userId,
             @RequestParam(required = false) String ip,
@@ -48,10 +51,15 @@ public class ViewLogController {
      * 用于信任等级计算（TL2/TL3 需要累计阅读时长）和热度公式加权。
      */
     @PostMapping("/heartbeat")
+    @RateLimit(key = "view_log_heartbeat", limit = 120, windowSeconds = 60,
+            limitType = RateLimit.LimitType.IP)
     public Result<?> heartbeat(@RequestParam String postId,
             @RequestParam(defaultValue = "0") int durationMs) {
         String currentUserId = SecurityUtils.getCurrentUserId();
-        // Song：未登录用户的心跳也接受（仅用于帖子 avg_dwell_sec 统计），但不累加用户阅读时长
+        // 匿名访问只记录一次进入事件，不接受可伪造的停留心跳。
+        if (currentUserId == null) {
+            return Result.success();
+        }
         int safeDuration = Math.min(Math.max(durationMs, 0), 600_000); // 单次最多 10 分钟，防异常值
         viewLogService.recordHeartbeat(postId, currentUserId, safeDuration);
         return Result.success();

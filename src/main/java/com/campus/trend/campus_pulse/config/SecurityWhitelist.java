@@ -85,6 +85,7 @@ public class SecurityWhitelist {
                         "/short-link/**",
                         "/sso/clients/public/**",
                         "/onebox/preview",
+                        "/reaction",
                         "/performance/web-vitals/summary",
                         "/performance/web-vitals/events",
                         "/actuator/health",
@@ -94,6 +95,9 @@ public class SecurityWhitelist {
         public static final String[] PUBLIC_POST_URLS = withApiAliases(
                         "/post/search-lists",
                         "/documents/list",
+                        "/reaction/batch",
+                        "/view-log/record",
+                        "/view-log/heartbeat",
                         "/agent/community-qa/ask",
                         "/agent/community-qa/ask-stream",
                         "/agent/community-qa/search",
