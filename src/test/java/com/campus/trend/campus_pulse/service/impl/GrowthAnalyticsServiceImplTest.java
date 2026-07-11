@@ -21,6 +21,7 @@ class GrowthAnalyticsServiceImplTest {
 
     @Test
     void recordsOnlyAllowlistedPropertiesAndRemovesQueryFromRoute() {
+        when(jdbc.update(anyString(), any(Object[].class))).thenReturn(1);
         GrowthAnalyticsServiceImpl service = new GrowthAnalyticsServiceImpl(jdbc, new ObjectMapper());
         GrowthEventReq request = new GrowthEventReq();
         request.setEventName("POST_READ");

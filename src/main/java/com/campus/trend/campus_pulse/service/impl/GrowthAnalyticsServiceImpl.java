@@ -7,6 +7,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.net.URI;
 import java.util.*;
@@ -23,6 +25,7 @@ public class GrowthAnalyticsServiceImpl implements GrowthAnalyticsService {
     private final ObjectMapper objectMapper;
 
     @Override
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void record(GrowthEventReq request, String userId) {
         String event = request.getEventName() == null ? "" : request.getEventName().trim().toLowerCase(Locale.ROOT);
         if (!ALLOWED_EVENTS.contains(event)) throw new IllegalArgumentException("不支持的统计事件");
@@ -35,9 +38,10 @@ public class GrowthAnalyticsServiceImpl implements GrowthAnalyticsService {
             });
         }
         try {
-            jdbc.update("INSERT INTO growth_event(event_name,user_id,anonymous_id,session_id,route,source,properties_json) VALUES (?,?,?,?,?,?,CAST(? AS JSON))",
+            int updated = jdbc.update("INSERT INTO growth_event(event_name,user_id,anonymous_id,session_id,route,source,properties_json) VALUES (?,?,?,?,?,?,CAST(? AS JSON))",
                     event, userId, token(request.getAnonymousId()), token(request.getSessionId()), safeRoute(request.getRoute()),
                     safeSource(request.getSource()), objectMapper.writeValueAsString(safe));
+            if (updated != 1) throw new IllegalStateException("增长事件写入未生效");
         } catch (JsonProcessingException e) {
             throw new IllegalArgumentException("统计属性格式无效", e);
         }
