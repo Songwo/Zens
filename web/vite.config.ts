@@ -12,13 +12,11 @@ export default defineConfig({
   root: rootDir,
   plugins: [
     vue(),
-    // Song：Element Plus 按需引入组件，样式在 main.ts 全局一次性加载。
-    // 开发环境中大量 element-plus/*/style/css 依赖容易触发 Vite Outdated Optimize Dep，
-    // 进而导致后台路由懒加载失败；关闭 resolver 的样式副作用可避免该类 504。
+    // Element Plus 组件与样式均按需拆分；消息、通知、Loading 等服务型样式在 main.ts 显式引入。
     // 指令(v-loading)在 main.ts 全局注册，故 directives:false；
     // dirs:[] 关闭对 src/components 的扫描，只按需解析 Element Plus，不接管项目自有组件。
     Components({
-      resolvers: [ElementPlusResolver({ importStyle: false })],
+      resolvers: [ElementPlusResolver({ importStyle: 'css' })],
       directives: false,
       dirs: [],
       dts: 'src/components.d.ts',

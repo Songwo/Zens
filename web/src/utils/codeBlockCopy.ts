@@ -37,14 +37,20 @@ async function copyToClipboard(text: string): Promise<void> {
 
 function flashFeedback(btn: HTMLButtonElement, ok: boolean) {
   const originalText = btn.dataset._origText ?? btn.textContent ?? '复制'
+  const originalLabel = btn.dataset._origLabel ?? btn.getAttribute('aria-label') ?? '复制代码'
   if (!btn.dataset._origText) {
     btn.dataset._origText = originalText
   }
+  if (!btn.dataset._origLabel) {
+    btn.dataset._origLabel = originalLabel
+  }
   btn.textContent = ok ? '已复制' : '失败'
+  btn.setAttribute('aria-label', ok ? '代码已复制' : '代码复制失败')
   btn.classList.add(ok ? 'is-copied' : 'is-failed')
   btn.disabled = true
   window.setTimeout(() => {
     btn.textContent = btn.dataset._origText ?? '复制'
+    btn.setAttribute('aria-label', btn.dataset._origLabel ?? '复制代码')
     btn.classList.remove('is-copied', 'is-failed')
     btn.disabled = false
   }, 1400)
@@ -58,10 +64,8 @@ function handleClick(event: Event) {
   const wrapper = btn.closest('.code-block-wrapper') as HTMLElement | null
   if (!wrapper) return
 
-  // 优先用 data-raw（保留原始代码、含转义还原），否则回退到 textContent。
-  const rawAttr = wrapper.getAttribute('data-raw')
   const codeEl = wrapper.querySelector('pre code') as HTMLElement | null
-  const text = rawAttr ?? codeEl?.innerText ?? ''
+  const text = codeEl?.textContent ?? ''
   if (!text) return
 
   event.preventDefault()

@@ -5,6 +5,7 @@ import lombok.experimental.Accessors;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 信任等级信息响应
@@ -31,6 +32,21 @@ public class TrustInfoResp {
     /** 禁言截止时间 */
     private LocalDateTime silencedUntil;
 
+    /** 快照生成时间，前端据此展示“刚刚更新”而不是把旧数据当实时数据。 */
+    private LocalDateTime asOf;
+
+    /** 行为滚动窗口天数。 */
+    private Integer windowDays;
+
+    /** LIVE 表示来自行为明细实时聚合；DEGRADED 表示聚合链路异常。 */
+    private String dataStatus;
+
+    /** 到下一级的逐项进度；最高等级时为空。 */
+    private List<MetricProgress> metricProgress;
+
+    /** 所有必需指标进度的平均值。 */
+    private Integer overallProgress;
+
     @Data
     @Accessors(chain = true)
     public static class LevelSpec {
@@ -38,6 +54,19 @@ public class TrustInfoResp {
         private String label;
         private String description;
         private List<String> privileges;
+        private Map<String, Long> requirements;
+    }
+
+    @Data
+    @Accessors(chain = true)
+    public static class MetricProgress {
+        private String key;
+        private String label;
+        private long current;
+        private long target;
+        private String unit;
+        private int percent;
+        private boolean met;
     }
 
     @Data

@@ -27,6 +27,8 @@ const props = defineProps<{
   hasAdoption?: boolean
   allowAdoption?: boolean
   reactionMap?: Record<string, any>
+  totalComments?: number
+  loadingMore?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -38,6 +40,7 @@ const emit = defineEmits<{
   (e: 'report', comment: any): void
   (e: 'adopted'): void
   (e: 'canceled'): void
+  (e: 'load-more'): void
 }>()
 
 const replySortMode = ref<'time' | 'hot'>('time')
@@ -48,9 +51,13 @@ const COMMENT_COLLAPSE_THRESHOLD = 220
 const COMMENT_PAGE_SIZE = 20
 const visibleCount = ref(COMMENT_PAGE_SIZE)
 const visibleComments = computed(() => props.comments.slice(0, visibleCount.value))
-const remainingComments = computed(() => Math.max(0, props.comments.length - visibleCount.value))
+const totalCommentCount = computed(() => Math.max(props.comments.length, Number(props.totalComments || 0)))
+const remainingComments = computed(() => Math.max(0, totalCommentCount.value - visibleCount.value))
 const showMoreComments = () => {
   visibleCount.value += COMMENT_PAGE_SIZE
+  if (visibleCount.value >= props.comments.length && props.comments.length < totalCommentCount.value) {
+    emit('load-more')
+  }
 }
 // 顶层评论数量明显减少时（如切换帖子）重置可见数量
 watch(
@@ -685,7 +692,9 @@ const handleAction = async (cmd: string, comment: any) => {
 
     <!-- Song：分批加载更多顶层评论，避免长评论区一次性渲染过多 DOM -->
     <div v-if="remainingComments > 0" class="comment-load-more">
-      <el-button text bg @click="showMoreComments">展开更多评论（剩余 {{ remainingComments }} 条）</el-button>
+      <el-button text bg :loading="loadingMore" @click="showMoreComments">
+        展开更多评论（剩余 {{ remainingComments }} 条）
+      </el-button>
     </div>
   </div>
 </template>

@@ -222,6 +222,19 @@ $jsonOk = {
     }
 }
 
+$actuatorHealthOk = {
+    param($resp)
+    try {
+        $data = $resp.Content | ConvertFrom-Json
+        [pscustomobject]@{
+            ok = ([string]$data.status -eq "UP")
+            detail = "status=$($data.status)"
+        }
+    } catch {
+        [pscustomobject]@{ ok = $false; detail = "invalid actuator json: $($_.Exception.Message)" }
+    }
+}
+
 $script:SamplePostId = $null
 $script:SampleUserId = $null
 $script:SampleSectionId = $null
@@ -304,6 +317,7 @@ Invoke-HttpCheck -Name "frontend:index" -Method GET -Path "/" -Validate {
         detail = "htmlBytes=$($resp.Content.Length)"
     }
 }
+Invoke-HttpCheck -Name "api:actuator-health" -Method GET -Path "/api/actuator/health" -Validate $actuatorHealthOk
 Invoke-HttpCheck -Name "api:home-bootstrap" -Method GET -Path "/api/public/home-bootstrap?pageSize=5" -Validate $jsonOk
 Invoke-HttpCheck -Name "api:sections" -Method GET -Path "/api/section/active" -Validate $sectionsOk
 Invoke-HttpCheck -Name "api:hot-tags" -Method GET -Path "/api/tag/hot?limit=5" -Validate $jsonOk

@@ -160,8 +160,6 @@ export async function renderMarkdownWithTocAsync(
   content: string,
   options: RenderMarkdownWithTocOptions = {}
 ): Promise<MarkdownTocRenderResult> {
-  const shiki = await loadShikiApi()
-  await shiki.warmupHighlighter()
   const src = content || ''
   const langs: string[] = []
   let m: RegExpExecArray | null
@@ -169,8 +167,8 @@ export async function renderMarkdownWithTocAsync(
   while ((m = FENCED_LANG_RE.exec(src)) !== null) {
     if (m[3]) langs.push(m[3])
   }
-  if (langs.length > 0) {
-    await shiki.preloadLanguages(langs)
-  }
+  if (langs.length === 0) return renderMarkdownWithTocResult(md, src, options)
+  const shiki = await loadShikiApi()
+  await shiki.preloadLanguages(langs)
   return renderMarkdownWithTocResult(md, src, options)
 }

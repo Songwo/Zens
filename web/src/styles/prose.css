@@ -299,75 +299,94 @@ html.dark .code-block-wrapper .shiki span {
     box-sizing: border-box;
 }
 
-/* 语言水印（top-right），鼠标悬停时淡出让位给复制按钮 */
-.code-block-wrapper > .code-lang-badge {
-    position: absolute;
-    top: 8px;
-    right: 14px;
+/* 固定工具栏：语言、行数和复制操作不再覆盖代码正文。 */
+.code-block-toolbar {
+    min-height: 38px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 6px 8px 6px 14px;
+    background: #f4f1ec;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+.code-block-meta {
+    min-width: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
     font-family: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
+}
+.code-lang-label {
+    overflow: hidden;
+    color: rgba(0, 0, 0, 0.72);
     font-size: 11px;
-    letter-spacing: 0.06em;
+    font-weight: 700;
+    letter-spacing: 0.055em;
+    text-overflow: ellipsis;
     text-transform: uppercase;
-    color: rgba(0, 0, 0, 0.28);
-    pointer-events: none;
-    user-select: none;
-    z-index: 1;
-    transition: opacity 0.18s ease;
+    white-space: nowrap;
 }
-html.dark .code-block-wrapper > .code-lang-badge {
-    color: rgba(255, 255, 255, 0.32);
+.code-line-count {
+    flex: 0 0 auto;
+    color: rgba(0, 0, 0, 0.42);
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
 }
-.code-block-wrapper:hover > .code-lang-badge {
-    opacity: 0;
-}
-
-/* 复制按钮（top-right，悬停显现） */
-.code-block-wrapper > .code-copy-btn {
-    position: absolute;
-    top: 6px;
-    right: 8px;
+.code-block-toolbar > .code-copy-btn {
+    flex: 0 0 auto;
+    min-width: 58px;
+    min-height: 30px;
     padding: 4px 10px;
     font-family: inherit;
     font-size: 12px;
-    font-weight: 500;
+    font-weight: 600;
     line-height: 1.4;
     color: rgba(0, 0, 0, 0.6);
-    background-color: rgba(255, 255, 255, 0.7);
-    backdrop-filter: blur(6px);
+    background-color: rgba(255, 255, 255, 0.72);
     border: 1px solid rgba(0, 0, 0, 0.08);
     border-radius: 6px;
     cursor: pointer;
-    opacity: 0;
-    transition: opacity 0.18s ease, background-color 0.2s, color 0.2s, border-color 0.2s;
-    z-index: 2;
+    transition: background-color 0.2s, color 0.2s, border-color 0.2s, transform 0.15s;
 }
-.code-block-wrapper:hover > .code-copy-btn,
-.code-block-wrapper:focus-within > .code-copy-btn {
-    opacity: 1;
-}
-.code-block-wrapper > .code-copy-btn:hover {
+.code-block-toolbar > .code-copy-btn:hover {
     background-color: var(--el-color-primary-light-9, rgba(0, 0, 0, 0.06));
     color: var(--el-color-primary, #333);
     border-color: var(--el-color-primary-light-7, rgba(0, 0, 0, 0.14));
 }
-.code-block-wrapper > .code-copy-btn.is-copied {
+.code-block-toolbar > .code-copy-btn:active {
+    transform: scale(0.97);
+}
+.code-block-toolbar > .code-copy-btn:focus-visible {
+    outline: 2px solid var(--el-color-primary);
+    outline-offset: 2px;
+}
+.code-block-toolbar > .code-copy-btn.is-copied {
     background-color: rgba(46, 160, 67, 0.14);
     color: #2ea043;
     border-color: rgba(46, 160, 67, 0.3);
-    opacity: 1;
 }
-.code-block-wrapper > .code-copy-btn.is-failed {
+.code-block-toolbar > .code-copy-btn.is-failed {
     background-color: rgba(248, 81, 73, 0.14);
     color: #f85149;
     border-color: rgba(248, 81, 73, 0.3);
-    opacity: 1;
 }
-html.dark .code-block-wrapper > .code-copy-btn {
+html.dark .code-block-toolbar {
+    background: #1b1b1b;
+    border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+html.dark .code-lang-label {
+    color: rgba(255, 255, 255, 0.78);
+}
+html.dark .code-line-count {
+    color: rgba(255, 255, 255, 0.42);
+}
+html.dark .code-block-toolbar > .code-copy-btn {
     color: rgba(255, 255, 255, 0.65);
     background-color: rgba(255, 255, 255, 0.06);
     border-color: rgba(255, 255, 255, 0.1);
 }
-html.dark .code-block-wrapper > .code-copy-btn:hover {
+html.dark .code-block-toolbar > .code-copy-btn:hover {
     background-color: rgba(255, 255, 255, 0.14);
     color: #fff;
     border-color: rgba(255, 255, 255, 0.2);
@@ -503,4 +522,118 @@ html.dark .markdown-body img { box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3); }
 html.dark .prose .cp-toc, html.dark .markdown-body .cp-toc {
     background-color: rgba(255, 255, 255, 0.04);
     border-color: rgba(255, 255, 255, 0.12);
+}
+
+/* 正文阅读节奏在编辑预览、帖子详情和评论中保持一致。 */
+.prose,
+.markdown-body {
+    font-size: 16px;
+    line-height: 1.82;
+}
+.prose p,
+.markdown-body p {
+    margin-bottom: 1.05em;
+    line-height: inherit;
+}
+.prose h1, .prose h2, .prose h3, .prose h4, .prose h5, .prose h6,
+.markdown-body h1, .markdown-body h2, .markdown-body h3,
+.markdown-body h4, .markdown-body h5, .markdown-body h6 {
+    margin-top: 1.75em;
+    margin-bottom: 0.72em;
+    line-height: 1.32;
+    scroll-margin-top: 88px;
+}
+.prose blockquote,
+.markdown-body blockquote {
+    font-style: normal;
+    line-height: 1.72;
+}
+.prose blockquote p,
+.markdown-body blockquote p {
+    margin-bottom: 0.65em;
+}
+.prose blockquote p:last-child,
+.markdown-body blockquote p:last-child {
+    margin-bottom: 0;
+}
+
+/* table 保留表格布局，滚动行为由 wrapper 承担，避免 display:block 破坏列宽。 */
+.prose .table-scroll-wrapper,
+.markdown-body .table-scroll-wrapper {
+    width: 100%;
+    margin: 1.25em 0;
+    overflow-x: auto;
+    border: 1px solid var(--el-border-color-lighter);
+    border-radius: 9px;
+    -webkit-overflow-scrolling: touch;
+}
+.prose .table-scroll-wrapper:focus-visible,
+.markdown-body .table-scroll-wrapper:focus-visible {
+    outline: 2px solid var(--el-color-primary);
+    outline-offset: 2px;
+}
+.prose .table-scroll-wrapper table,
+.markdown-body .table-scroll-wrapper table {
+    display: table;
+    width: max-content;
+    min-width: 100%;
+    margin: 0;
+    overflow: visible;
+    border: 0;
+}
+.prose .table-scroll-wrapper th,
+.prose .table-scroll-wrapper td,
+.markdown-body .table-scroll-wrapper th,
+.markdown-body .table-scroll-wrapper td {
+    white-space: normal;
+    vertical-align: top;
+}
+.prose .table-scroll-wrapper tr > :first-child,
+.markdown-body .table-scroll-wrapper tr > :first-child {
+    border-left: 0;
+}
+.prose .table-scroll-wrapper tr > :last-child,
+.markdown-body .table-scroll-wrapper tr > :last-child {
+    border-right: 0;
+}
+.prose .table-scroll-wrapper thead tr:first-child > *,
+.markdown-body .table-scroll-wrapper thead tr:first-child > * {
+    border-top: 0;
+}
+.prose .table-scroll-wrapper tbody tr:last-child > *,
+.markdown-body .table-scroll-wrapper tbody tr:last-child > * {
+    border-bottom: 0;
+}
+
+@media (max-width: 768px) {
+    .prose,
+    .markdown-body {
+        font-size: 15px;
+        line-height: 1.78;
+    }
+    .code-block-wrapper {
+        margin-right: -4px;
+        margin-left: -4px;
+        border-radius: 7px;
+    }
+    .code-block-toolbar {
+        min-height: 44px;
+        padding: 6px 8px 6px 12px;
+    }
+    .code-block-toolbar > .code-copy-btn {
+        min-width: 64px;
+        min-height: 36px;
+    }
+    .code-block-wrapper .shiki,
+    .code-block-wrapper pre.cp-code-plain {
+        padding: 16px !important;
+        font-size: 12.75px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .code-block-toolbar > .code-copy-btn,
+    .code-block-wrapper .shiki.has-focused .line:not(.focused) {
+        transition: none;
+    }
 }

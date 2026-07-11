@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, onBeforeUnmount, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import MainLayout from '@/layouts/MainLayout.vue'
 import PageBackButton from '@/components/common/PageBackButton.vue'
@@ -9,7 +9,7 @@ import { levelTitle } from '@/utils/levelPrivileges'
 import { TRUST_LEVELS, trustLevelColor } from '@/utils/trustLevel'
 import { useUserStore } from '@/store/user'
 import { ElMessage } from 'element-plus'
-import { ArrowRight, Check, Lock, Trophy, Clock, ArrowUp, ArrowDown } from '@element-plus/icons-vue'
+import { ArrowRight, Check, Lock, Trophy, Clock, ArrowUp, ArrowDown, Refresh } from '@element-plus/icons-vue'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -18,42 +18,34 @@ const info = ref<TrustInfo | null>(null)
 const levelInfo = ref<LevelInfo | null>(null)
 const events = ref<TrustEvent[]>([])
 const eventsLoading = ref(false)
+const lastFetchedAt = ref(0)
 
 const currentLevel = computed(() => info.value?.trustLevel ?? userStore.userInfo?.trustLevel ?? 0)
 const metrics = computed(() => info.value?.metrics)
-const spec = computed(() => TRUST_LEVELS[currentLevel.value])
-const nextSpec = computed(() => (currentLevel.value < 4 ? TRUST_LEVELS[currentLevel.value + 1] : null))
-const readMinutes = computed(() => Math.round((metrics.value?.readTimeSec ?? 0) / 60))
+const levelSpecs = computed(() => info.value?.levels?.length ? info.value.levels : TRUST_LEVELS)
+const spec = computed(() => levelSpecs.value.find(item => item.level === currentLevel.value))
+const nextSpec = computed(() => levelSpecs.value.find(item => item.level === currentLevel.value + 1) || null)
+const readMinutes = computed(() => metrics.value ? Math.round(metrics.value.readTimeSec / 60) : null)
 const expLevel = computed(() => levelInfo.value?.level ?? userStore.userInfo?.level ?? 1)
-
-// Song：综合进度（用 4 项核心指标的平均完成度估算）
-const overallProgress = computed(() => {
-    if (!metrics.value || currentLevel.value >= 4) return 100
-    const m = metrics.value
-    const next = currentLevel.value + 1
-    const targets = next >= 3
-        ? { days: 50, posts: 500, likes: 10, given: 10 }
-        : next >= 2
-        ? { days: 7, posts: 60, likes: 1, given: 0 }
-        : { days: 1, posts: 15, likes: 0, given: 0 }
-    const items = [
-        Math.min(100, (m.daysVisitedRecent / targets.days) * 100),
-        Math.min(100, (m.postsReadRecent / targets.posts) * 100),
-        Math.min(100, (m.likesReceived / Math.max(targets.likes, 1)) * 100),
-        Math.min(100, (m.likesGiven / Math.max(targets.given, 1)) * 100),
-    ]
-    return Math.round(items.reduce((a, b) => a + b, 0) / items.length)
+const overallProgress = computed(() => info.value?.overallProgress ?? 0)
+const metricProgress = computed(() => info.value?.metricProgress ?? [])
+const snapshotLabel = computed(() => {
+    if (!info.value?.asOf) return '等待实时数据'
+    if (info.value.dataStatus !== 'LIVE') return '数据暂不可用'
+    const updatedAt = new Date(info.value.asOf)
+    return `实时更新于 ${updatedAt.toLocaleTimeString('zh-CN', { hour12: false })}`
 })
 
-const fetchInfo = async () => {
+const fetchInfo = async (refresh = true) => {
     loading.value = true
     try {
         const [trustRes, levelRes] = await Promise.all([
-            trustLevelApi.info(),
+            refresh ? trustLevelApi.refresh() : trustLevelApi.info(),
             levelApi.getInfo().catch(() => null),
         ])
         info.value = trustRes.data
         if (levelRes?.data) levelInfo.value = levelRes.data
+        lastFetchedAt.value = Date.now()
     } catch (e: any) {
         ElMessage.error(e?.message || '获取信任等级信息失败')
     } finally {
@@ -80,9 +72,20 @@ const formatTime = (iso: string) => {
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
+const handleVisibilityRefresh = () => {
+    if (document.visibilityState === 'visible' && Date.now() - lastFetchedAt.value > 30_000) {
+        void fetchInfo()
+    }
+}
+
 onMounted(() => {
     fetchInfo()
     fetchEvents()
+    document.addEventListener('visibilitychange', handleVisibilityRefresh)
+})
+
+onBeforeUnmount(() => {
+    document.removeEventListener('visibilitychange', handleVisibilityRefresh)
 })
 </script>
 
@@ -117,12 +120,12 @@ onMounted(() => {
                         </div>
                         <h1 class="meta-title">
                             你是社区{{ spec?.label }}
-                            <span v-if="currentLevel >= 3" class="meta-honor">🏆</span>
+                            <el-icon v-if="currentLevel >= 3" class="meta-honor"><Trophy /></el-icon>
                         </h1>
                         <p class="meta-desc">{{ spec?.description }}</p>
 
                         <!-- 升级进度 -->
-                        <div class="meta-progress" v-if="currentLevel < 4">
+                        <div class="meta-progress" v-if="currentLevel < 3">
                             <div class="progress-head">
                                 <span class="progress-label">距 {{ nextSpec?.label }} 还有</span>
                                 <span class="progress-pct">{{ overallProgress }}%</span>
@@ -134,12 +137,29 @@ onMounted(() => {
                                 ></div>
                             </div>
                             <div class="progress-hint">
-                                多逛帖子、多阅读，系统会自动为你晋升
+                                {{ snapshotLabel }} · 进度按全部必需指标计算
                             </div>
+                            <div v-if="metricProgress.length" class="progress-breakdown">
+                                <div v-for="item in metricProgress" :key="item.key" class="progress-metric">
+                                    <div class="progress-metric-head">
+                                        <span>{{ item.label }}</span>
+                                        <span :class="{ met: item.met }">
+                                            {{ item.current }} / {{ item.target }} {{ item.unit }}
+                                        </span>
+                                    </div>
+                                    <div class="progress-metric-track">
+                                        <span :style="{ width: item.percent + '%' }"></span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="meta-progress meta-max" v-else-if="currentLevel === 3">
+                            <el-icon><Trophy /></el-icon>
+                            <span>TL4 社区领袖由管理员根据长期贡献授予</span>
                         </div>
                         <div class="meta-progress meta-max" v-else>
                             <el-icon><Trophy /></el-icon>
-                            <span>已达到最高信任等级，社区领袖 🎉</span>
+                            <span>已达到最高信任等级，社区领袖</span>
                         </div>
 
                         <!-- 资历副轴 -->
@@ -183,34 +203,39 @@ onMounted(() => {
 
             <!-- ============ 3. 行为雷达（数据可视化） ============ -->
             <section class="section">
-                <div class="section-head">
-                    <h2 class="section-title">行为画像</h2>
-                    <span class="section-sub">你的社区活跃度</span>
+                <div class="section-head behavior-head">
+                    <div>
+                        <h2 class="section-title">行为画像</h2>
+                        <span class="section-sub">近 {{ info?.windowDays ?? 100 }} 天窗口 · {{ snapshotLabel }}</span>
+                    </div>
+                    <el-button class="refresh-btn" :icon="Refresh" :loading="loading" @click="fetchInfo()">
+                        刷新
+                    </el-button>
                 </div>
                 <div class="metrics-grid">
                     <div class="metric-card metric-primary">
-                        <div class="metric-value">{{ metrics?.daysVisited ?? 0 }}</div>
+                        <div class="metric-value">{{ metrics ? metrics.daysVisited : '—' }}</div>
                         <div class="metric-label">累计访问<span>天</span></div>
                     </div>
                     <div class="metric-card">
-                        <div class="metric-value">{{ readMinutes }}</div>
+                        <div class="metric-value">{{ readMinutes ?? '—' }}</div>
                         <div class="metric-label">阅读时长<span>分钟</span></div>
                     </div>
                     <div class="metric-card">
-                        <div class="metric-value">{{ metrics?.postsReadRecent ?? 0 }}</div>
-                        <div class="metric-label">近期阅读<span>帖</span></div>
+                        <div class="metric-value">{{ metrics ? metrics.postsReadRecent : '—' }}</div>
+                        <div class="metric-label">窗口阅读<span>次</span></div>
                     </div>
                     <div class="metric-card">
-                        <div class="metric-value">{{ metrics?.likesReceived ?? 0 }}</div>
+                        <div class="metric-value">{{ metrics ? metrics.likesReceived : '—' }}</div>
                         <div class="metric-label">收到点赞</div>
                     </div>
                     <div class="metric-card">
-                        <div class="metric-value">{{ metrics?.likesGiven ?? 0 }}</div>
+                        <div class="metric-value">{{ metrics ? metrics.likesGiven : '—' }}</div>
                         <div class="metric-label">给出点赞</div>
                     </div>
                     <div class="metric-card">
-                        <div class="metric-value">{{ metrics?.postsCreated ?? 0 }}</div>
-                        <div class="metric-label">发布帖子</div>
+                        <div class="metric-value">{{ metrics ? metrics.postsCreated : '—' }}</div>
+                        <div class="metric-label">公开帖子</div>
                     </div>
                 </div>
             </section>
@@ -224,7 +249,7 @@ onMounted(() => {
                 <div class="timeline">
                     <div class="timeline-line"></div>
                     <div
-                        v-for="s in TRUST_LEVELS"
+                        v-for="s in levelSpecs"
                         :key="s.level"
                         class="timeline-step"
                         :class="{
@@ -232,7 +257,7 @@ onMounted(() => {
                             current: s.level === currentLevel,
                         }"
                     >
-                        <div class="step-dot" :style="{ '--dot-color': s.color }">
+                        <div class="step-dot" :style="{ '--dot-color': trustLevelColor(s.level) }">
                             <span v-if="s.level <= currentLevel">✓</span>
                             <span v-else>{{ s.level }}</span>
                         </div>
@@ -257,7 +282,7 @@ onMounted(() => {
                 </div>
 
                 <div v-else-if="!events.length" class="events-empty">
-                    <div class="empty-icon">📋</div>
+                    <div class="empty-icon"><el-icon><Clock /></el-icon></div>
                     <div class="empty-text">暂无变更记录</div>
                     <div class="empty-hint">活跃参与社区，系统会自动评估你的信任等级</div>
                 </div>
@@ -461,6 +486,39 @@ onMounted(() => {
     color: var(--el-text-color-placeholder);
     margin-top: 8px;
 }
+.progress-breakdown {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 9px 14px;
+    margin-top: 14px;
+}
+.progress-metric-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 4px;
+    color: var(--el-text-color-secondary);
+    font-size: 11px;
+}
+.progress-metric-head span:last-child {
+    color: var(--el-text-color-placeholder);
+    font-variant-numeric: tabular-nums;
+}
+.progress-metric-head span.met {
+    color: var(--el-color-success);
+}
+.progress-metric-track {
+    height: 3px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--identity-color) 12%, var(--el-fill-color));
+}
+.progress-metric-track span {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: var(--identity-color);
+}
 .meta-max {
     display: flex;
     align-items: center;
@@ -511,6 +569,18 @@ onMounted(() => {
 .section-sub {
     font-size: 12px;
     color: var(--el-text-color-placeholder);
+}
+.behavior-head {
+    justify-content: space-between;
+    align-items: center;
+}
+.behavior-head > div {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+}
+.refresh-btn {
+    min-height: 36px;
 }
 
 /* ============ 特权卡片网格 ============ */
@@ -793,6 +863,17 @@ onMounted(() => {
 
 /* ============ 响应式 ============ */
 @media (max-width: 640px) {
+    .progress-breakdown {
+        grid-template-columns: 1fr;
+    }
+    .behavior-head,
+    .behavior-head > div {
+        align-items: flex-start;
+    }
+    .behavior-head > div {
+        flex-direction: column;
+        gap: 3px;
+    }
     .identity-content {
         flex-direction: column;
         text-align: center;

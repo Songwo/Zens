@@ -66,14 +66,22 @@ const dwellTime = useDwellTime()
 
 const post = ref<Post | null>(null)
 const comments = ref<Comment[]>([])
+const commentsTotal = ref(0)
+const commentsPage = ref(1)
+const commentsLoadingMore = ref(false)
 const relatedPosts = ref<RecommendPost[]>([])
 const poll = ref<Poll | null>(null)
+const contentRef = ref<HTMLElement | null>(null)
+let _postFetchToken = 0
 const loading = ref(true)
 const postAuthorAvatarUrl = computed(() => resolvePublicAssetUrl(post.value?.authorAvatar))
 const postCoverImageUrl = computed(() => resolvePublicAssetUrl(post.value?.coverImage))
 // 区分"加载失败"和"帖子真的不存在/已删除":网络错误时给重试入口,别误导成已删除
 const postLoadError = ref(false)
 const commentLoading = ref(false)
+const commentsInitialLoading = ref(false)
+const relatedPostsLoading = ref(false)
+const pollLoading = ref(false)
 const replyingTo = ref<string | null>(null)
 const replyingToName = ref<string | null>(null)
 const regeneratingSummary = ref(false)
@@ -193,12 +201,14 @@ const canManageCurrentPost = computed(() => {
 const isFollowed = ref(false)
 const followLoading = ref(false)
 
-const checkFollowStatus = async () => {
-  if (!userStore.accessToken || !post.value?.userId) return
-  if (post.value.userId === userStore.userId) return
+const checkFollowStatus = async (authorId = post.value?.userId, requestToken = _postFetchToken) => {
+  if (!userStore.accessToken || !authorId) return
+  if (authorId === userStore.userId) return
   try {
-    const res = await followApi.isFollowing(post.value.userId)
-    isFollowed.value = res.data === true
+    const res = await followApi.isFollowing(authorId)
+    if (requestToken === _postFetchToken && post.value?.userId === authorId) {
+      isFollowed.value = res.data === true
+    }
   } catch {}
 }
 
@@ -230,11 +240,13 @@ const handleFollow = async () => {
 const isSubscribed = ref(false)
 const subscribeLoading = ref(false)
 
-const checkSubscriptionStatus = async () => {
-  if (!userStore.accessToken || !postId.value) return
+const checkSubscriptionStatus = async (id = postId.value, requestToken = _postFetchToken) => {
+  if (!userStore.accessToken || !id) return
   try {
-    const res = await subscriptionApi.getStatus(postId.value)
-    isSubscribed.value = res.data?.subscribed === true
+    const res = await subscriptionApi.getStatus(id)
+    if (requestToken === _postFetchToken && postId.value === id) {
+      isSubscribed.value = res.data?.subscribed === true
+    }
   } catch {}
 }
 
@@ -282,9 +294,9 @@ const renderedContent = computed(() => {
       'href','src','alt','title','class','id','target','rel',
       'type','checked','disabled','loading','decoding',
       'controls','preload','poster','playsinline','muted','loop','autoplay',
-      'viewBox','width','height','aria-hidden','aria-label','fill','d',
+      'viewBox','width','height','aria-hidden','aria-label','aria-live','role','tabindex','fill','d',
       'style',
-      'data-lang','data-raw','data-line','data-highlighted-chars','data-highlighted-chars-id',
+      'data-lang','data-line','data-highlighted-chars','data-highlighted-chars-id',
       // Song：Onebox 富链接卡片标记，挂载后由 OneboxCard 异步加载 OG 元数据
       'data-onebox-url'
     ],
@@ -318,7 +330,7 @@ const hydrateOneboxCards = () => {
   }
   oneboxApps.length = 0
 
-  const anchors = document.querySelectorAll('a[data-onebox-url]')
+  const anchors = contentRef.value?.querySelectorAll('a[data-onebox-url]') || []
   anchors.forEach((anchor) => {
     const url = anchor.getAttribute('data-onebox-url')
     if (!url) return
@@ -360,61 +372,16 @@ watch(
   { immediate: true }
 )
 
-const handleMarkdownClick = (e: MouseEvent) => {
-  const target = e.target as HTMLElement
-  if (target.classList.contains('copy-btn')) {
-    const code = target.parentElement?.parentElement?.querySelector('code')?.innerText
-    if (code) {
-      navigator.clipboard.writeText(code)
-      const originalText = target.innerText
-      target.innerText = '已复制!'
-      setTimeout(() => { target.innerText = originalText }, 2000)
-    }
-  }
-}
-
 const aiSummaryText = computed(() => {
   if (!post.value) return ''
   if (post.value.summary && post.value.summary.trim()) return post.value.summary.trim()
   return generateSummary(post.value.content || '', 180)
 })
 
-const displayedSummaryText = ref('')
-let typistTimer: any = null
-
-const startTypingEffect = (fullText: string) => {
-  if (typistTimer) {
-    clearInterval(typistTimer)
-    typistTimer = null
-  }
-  displayedSummaryText.value = ''
-  if (!fullText) return
-
-  let i = 0
-  typistTimer = setInterval(() => {
-    if (i < fullText.length) {
-      displayedSummaryText.value += fullText.charAt(i)
-      i++
-    } else {
-      if (typistTimer) {
-        clearInterval(typistTimer)
-        typistTimer = null
-      }
-    }
-  }, 16) // 16ms delivers an incredibly smooth, lively streaming feel (around 60 characters/sec)
-}
-
-watch(aiSummaryText, (newVal) => {
-  if (newVal) {
-    startTypingEffect(newVal)
-  }
-}, { immediate: true })
+// 摘要一次性呈现，避免长文逐字定时器占用主线程，也避免动态文字影响辅助技术阅读。
+const displayedSummaryText = computed(() => aiSummaryText.value)
 
 onUnmounted(() => {
-  if (typistTimer) {
-    clearInterval(typistTimer)
-    typistTimer = null
-  }
   // Song：卸载所有动态挂载的 Onebox 卡片实例
   for (const app of oneboxApps) {
     try { app.unmount() } catch {}
@@ -460,25 +427,75 @@ watch(
   { immediate: true }
 )
 
-const fetchSecondaryData = async (id: string) => {
+const INITIAL_COMMENT_PAGE_SIZE = 30
+
+const fetchSecondaryData = (id: string, requestToken: number) => {
   const recommendCacheKey = `post:detail:recommend:${userStore.userId || 'anonymous'}:${id}`
-  const [commentRes, relatedRes, pollRes] = await Promise.allSettled([
-    commentApi.getByPostId(id, 1, 120),
-    cachedRequest(
+
+  void commentApi.getByPostId(id, 1, INITIAL_COMMENT_PAGE_SIZE)
+    .then((commentRes) => {
+      if (requestToken !== _postFetchToken) return
+      comments.value = commentRes.data.records || []
+      commentsTotal.value = Number(commentRes.data.total || comments.value.length)
+      commentsPage.value = 1
+      void scrollToRouteComment()
+    })
+    .catch(() => {
+      if (requestToken === _postFetchToken) comments.value = []
+    })
+    .finally(() => {
+      if (requestToken === _postFetchToken) commentsInitialLoading.value = false
+    })
+
+  void cachedRequest(
       recommendCacheKey,
       RELATED_POST_CACHE_TTL,
       () => recommendApi.getSimilar(id)
-    ),
-    // 投票单独拉取，不进帖子详情缓存（票数频繁变动）；无投票时 data=null
-    pollApi.getByPost(id)
-  ])
+    )
+    .then((relatedRes) => {
+      if (requestToken !== _postFetchToken) return
+      relatedPosts.value = (relatedRes.data?.slice(0, 5) || []) as RecommendPost[]
+    })
+    .catch(() => {
+      if (requestToken === _postFetchToken) relatedPosts.value = []
+    })
+    .finally(() => {
+      if (requestToken === _postFetchToken) relatedPostsLoading.value = false
+    })
 
-  return {
-    comments: commentRes.status === 'fulfilled' ? commentRes.value.data.records || [] : [],
-    relatedPosts: relatedRes.status === 'fulfilled'
-      ? ((relatedRes.value.data?.slice(0, 5) || []) as RecommendPost[])
-      : [],
-    poll: pollRes.status === 'fulfilled' ? (pollRes.value.data || null) : null,
+  // 投票单独拉取，不进帖子详情缓存（票数频繁变动）；无投票时 data=null。
+  void pollApi.getByPost(id)
+    .then((pollRes) => {
+      if (requestToken === _postFetchToken) poll.value = pollRes.data || null
+    })
+    .catch(() => {
+      if (requestToken === _postFetchToken) poll.value = null
+    })
+    .finally(() => {
+      if (requestToken === _postFetchToken) pollLoading.value = false
+    })
+}
+
+const loadMoreComments = async () => {
+  if (commentsLoadingMore.value || comments.value.length >= commentsTotal.value) return
+  const id = postId.value
+  const requestToken = _postFetchToken
+  const nextPage = commentsPage.value + 1
+  commentsLoadingMore.value = true
+  try {
+    const res = await commentApi.getByPostId(id, nextPage, INITIAL_COMMENT_PAGE_SIZE)
+    if (requestToken !== _postFetchToken || postId.value !== id) return
+    const records = (res.data.records || []) as Comment[]
+    const knownIds = new Set(comments.value.map(item => String(item.id)))
+    comments.value = comments.value.concat(records.filter(item => !knownIds.has(String(item.id))))
+    commentsTotal.value = Number(res.data.total || comments.value.length)
+    commentsPage.value = nextPage
+  } catch {
+    if (requestToken === _postFetchToken) {
+      ElMessage.error('加载更多评论失败，请稍后重试')
+    }
+  } finally {
+    if (requestToken === _postFetchToken) commentsLoadingMore.value = false
   }
 }
 
@@ -503,6 +520,7 @@ const handlePrivateMessage = () => {
 
 const fetchPost = async () => {
   const id = postId.value
+  const requestToken = ++_postFetchToken
   if (!id) {
     loading.value = false
     return
@@ -511,40 +529,46 @@ const fetchPost = async () => {
   postLoadError.value = false
   post.value = null
   comments.value = []
+  commentsTotal.value = 0
+  commentsPage.value = 1
+  commentsLoadingMore.value = false
   relatedPosts.value = []
   poll.value = null
+  commentsInitialLoading.value = true
+  relatedPostsLoading.value = true
+  pollLoading.value = true
   versionHistory.value = []
   activeVersion.value = null
+  isFollowed.value = false
   isSubscribed.value = false
   acceptedAnswerExpanded.value = false
   cancelReply()
   activeCommentId.value = getRouteCommentId()
+  // 次要接口与详情并行；模板仍以详情接口为首屏门槛，评论/推荐/投票各自渐进呈现。
+  fetchSecondaryData(id, requestToken)
   try {
-    const secondaryTask = fetchSecondaryData(id)
     const postRes = await postApi.getDetail(id)
-    const secondaryData = await secondaryTask
+    if (requestToken !== _postFetchToken) return
 
     post.value = postRes.data || null
-    comments.value = secondaryData.comments
-    relatedPosts.value = secondaryData.relatedPosts
-    poll.value = secondaryData.poll
+    loading.value = false
     syncPostMetricsToLists()
     applyPostSeo()
     if (canManageCurrentPost.value) {
       void loadVersionHistory()
     }
-    scrollToRouteComment()
-    void checkFollowStatus()
-    void checkSubscriptionStatus()
+    void checkFollowStatus(post.value?.userId, requestToken)
+    void checkSubscriptionStatus(id, requestToken)
     void viewLogApi.recordView(id).catch(() => {})
     // Song：开始追踪本帖阅读时长（前端心跳上报）
     dwellTime.start(id)
   } catch (error) {
+    if (requestToken !== _postFetchToken) return
     post.value = null
     postLoadError.value = true
     // 首屏失败由页面内"加载失败+重试"承载,不弹 toast
   } finally {
-    loading.value = false
+    if (requestToken === _postFetchToken) loading.value = false
   }
 }
 
@@ -1040,19 +1064,26 @@ const ensureCommentLoadedForAnchor = async (commentId: string) => {
     return true
   }
 
-  const pageSize = 100
+  const targetPostId = postId.value
+  const requestToken = _postFetchToken
+  const pageSize = INITIAL_COMMENT_PAGE_SIZE
   const collected: Comment[] = []
   let total = 0
   let page = 1
+  let lastLoadedPage = 0
 
-  while (page <= 20) {
-    const res = await commentApi.getByPostId(postId.value, page, pageSize)
+  while (page <= 100) {
+    const res = await commentApi.getByPostId(targetPostId, page, pageSize)
+    if (requestToken !== _postFetchToken || postId.value !== targetPostId) return false
     const records = (res.data.records || []) as Comment[]
+    lastLoadedPage = page
     total = Number(res.data.total || 0)
     collected.push(...records)
 
     if (hasCommentInTree(collected, commentId)) {
       comments.value = collected
+      commentsTotal.value = Math.max(total, collected.length)
+      commentsPage.value = lastLoadedPage
       return true
     }
 
@@ -1064,6 +1095,8 @@ const ensureCommentLoadedForAnchor = async (commentId: string) => {
 
   if (collected.length > comments.value.length) {
     comments.value = collected
+    commentsTotal.value = Math.max(total, collected.length)
+    commentsPage.value = lastLoadedPage
   }
   return hasCommentInTree(comments.value, commentId)
 }
@@ -1155,6 +1188,7 @@ const scrollToAcceptedAnswer = () => {
 
 // 评论表情：批量拉取已加载评论(含楼中楼)的反应，避免每条单独请求
 const commentReactions = ref<Record<string, ReactionResp>>({})
+let _reactionFetchToken = 0
 
 const collectCommentIds = (list: Comment[], acc: string[] = []): string[] => {
   for (const c of list || []) {
@@ -1165,13 +1199,15 @@ const collectCommentIds = (list: Comment[], acc: string[] = []): string[] => {
 }
 
 const loadCommentReactions = async () => {
+  const requestToken = ++_reactionFetchToken
   const ids = collectCommentIds(comments.value)
   if (ids.length === 0) {
     commentReactions.value = {}
     return
   }
   try {
-    commentReactions.value = (await reactionApi.batch('comment', ids)).data || {}
+    const result = (await reactionApi.batch('comment', ids)).data || {}
+    if (requestToken === _reactionFetchToken) commentReactions.value = result
   } catch {
     /* 静默：表情不阻塞评论区 */
   }
@@ -1414,8 +1450,9 @@ onMounted(() => {
                 :src="postCoverImageUrl"
                 :alt="post?.title ? `${post.title} 封面` : '帖子封面'"
                 class="post-cover-image"
-                loading="lazy"
+                loading="eager"
                 decoding="async"
+                fetchpriority="high"
               />
             </div>
 
@@ -1423,7 +1460,7 @@ onMounted(() => {
             <div v-if="aiSummaryText" class="ai-summary-card-premium">
               <div class="summary-header">
                 <div class="summary-title-group">
-                  <span class="summary-icon">✨</span>
+                  <span class="summary-icon" aria-hidden="true">AI</span>
                   <span class="summary-badge-premium">AI 智能摘要</span>
                 </div>
                 <span class="summary-tip">DeepSeek-Chat 自动提炼</span>
@@ -1439,19 +1476,22 @@ onMounted(() => {
                 </el-button>
               </div>
               <p class="summary-text">
-                {{ displayedSummaryText }}<span class="summary-cursor" v-if="displayedSummaryText.length < aiSummaryText.length"></span>
+                {{ displayedSummaryText }}
               </p>
               <div class="summary-footer">
-                <span class="footer-meta">⚡ 深度上下文理解</span>
-                <span class="footer-meta">• 已过滤垃圾信息</span>
-                <span class="footer-meta">• 内容准确率 98%</span>
+                <span class="footer-meta">上下文摘要</span>
+                <span class="footer-meta">已过滤格式噪声</span>
+                <span class="footer-meta">结果仅供快速阅读</span>
               </div>
             </div>
 
             <!-- Article Content -->
-            <div class="content-body markdown-body" v-html="renderedContent" ref="contentRef" @click="handleMarkdownClick"></div>
+            <div ref="contentRef" class="content-body markdown-body" v-html="renderedContent"></div>
 
             <!-- 帖子投票：紧跟正文，独立接口数据，不进详情缓存 -->
+            <div v-if="pollLoading" class="secondary-loading poll-loading" aria-live="polite">
+              正在加载投票…
+            </div>
             <PollCard
               v-if="poll"
               :poll="poll"
@@ -1579,7 +1619,12 @@ onMounted(() => {
         </el-card>
 
         <!-- Comment Section (Hidden if deleted) -->
-        <div v-if="!isDeletedPost" class="comment-section">
+        <div
+          v-if="!isDeletedPost"
+          v-loading="commentsInitialLoading"
+          element-loading-text="正在加载评论"
+          class="comment-section"
+        >
           <div class="section-title">
             <h3>评论区</h3>
             <span class="comment-count">{{ visibleCommentCount }} 条评论</span>
@@ -1605,6 +1650,8 @@ onMounted(() => {
           
           <CommentList
             :comments="(comments as any)"
+            :total-comments="commentsTotal"
+            :loading-more="commentsLoadingMore"
             :active-comment-id="activeCommentId"
             :post-id="postId"
             :post-short-id="encodePostId(postId)"
@@ -1623,6 +1670,7 @@ onMounted(() => {
             @report="handleCommentReport"
             @adopted="fetchPost"
             @canceled="fetchPost"
+            @load-more="loadMoreComments"
           />
         </div>
         </div>
@@ -1766,7 +1814,12 @@ onMounted(() => {
         </el-card>
 
         <!-- Related Posts -->
-        <el-card shadow="never" class="sidebar-card">
+        <el-card
+          v-loading="relatedPostsLoading"
+          element-loading-text="正在加载推荐"
+          shadow="never"
+          class="sidebar-card"
+        >
           <template #header>
             <div class="card-header">
               <span>相关推荐</span>
@@ -1786,6 +1839,9 @@ onMounted(() => {
                 <span>{{ item.likeCount }} 赞</span>
                 <span>{{ item.viewCount }} 浏览</span>
               </div>
+            </div>
+            <div v-if="!relatedPostsLoading && relatedPosts.length === 0" class="secondary-empty">
+              暂无相关推荐
             </div>
           </div>
         </el-card>
@@ -2271,22 +2327,6 @@ onMounted(() => {
   text-align: justify;
 }
 
-.summary-cursor {
-  display: inline-block;
-  vertical-align: middle;
-  width: 2px;
-  height: 15px;
-  background-color: #F59E0B;
-  box-shadow: 0 0 6px #F59E0B;
-  margin-left: 3px;
-  animation: summary-cursor-blink 0.8s infinite;
-}
-
-@keyframes summary-cursor-blink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0; }
-}
-
 .summary-footer {
   display: flex;
   align-items: center;
@@ -2568,14 +2608,22 @@ onMounted(() => {
 :deep(.markdown-body) {
   font-family: inherit;
 }
-:deep(.markdown-body h1, .markdown-body h2, .markdown-body h3) {
-  margin-top: 24px;
-  margin-bottom: 16px;
-  font-weight: 600;
-  line-height: 1.25;
+
+.secondary-loading,
+.secondary-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 72px;
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
 }
-:deep(.markdown-body p) {
-  margin-bottom: 16px;
+
+.poll-loading {
+  margin: 18px 0;
+  border: 1px dashed var(--el-border-color);
+  border-radius: 10px;
+  background: var(--el-fill-color-lighter);
 }
 :deep(.content-body.markdown-body img) {
   display: block;
@@ -2595,28 +2643,6 @@ onMounted(() => {
   border-radius: 12px;
   background: #000;
   margin: 14px 0;
-}
-
-/* ── Blockquote ── */
-:deep(.markdown-body blockquote) {
-  margin: 16px 0;
-  padding: 12px 16px 12px 20px;
-  border-left: 4px solid var(--el-color-primary-light-5);
-  border-radius: 0 8px 8px 0;
-  background: var(--el-fill-color-lighter);
-  color: var(--el-text-color-secondary);
-  font-style: italic;
-}
-:deep(.markdown-body blockquote p) {
-  margin-bottom: 6px;
-}
-:deep(.markdown-body blockquote p:last-child) {
-  margin-bottom: 0;
-}
-:deep(.markdown-body blockquote blockquote) {
-  margin: 8px 0 0;
-  border-left-color: var(--el-border-color);
-  background: var(--el-fill-color-light);
 }
 
 /* ── GitHub Link Card ── */

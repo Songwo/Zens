@@ -8,10 +8,11 @@ import com.campus.trend.campus_pulse.dto.response.LevelInfoResp;
 import com.campus.trend.campus_pulse.entity.LevelExpLog;
 import com.campus.trend.campus_pulse.entity.User;
 import com.campus.trend.campus_pulse.mapper.LevelExpLogMapper;
+import com.campus.trend.campus_pulse.mapper.UserMapper;
 import com.campus.trend.campus_pulse.service.LevelService;
-import com.campus.trend.campus_pulse.service.UserService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,7 +25,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class LevelServiceImpl implements LevelService {
 
-    private final UserService userService;
+    private final UserMapper userMapper;
     private final LevelExpLogMapper levelExpLogMapper;
 
     private static final int[] LEVEL_THRESHOLDS = {
@@ -43,17 +44,17 @@ public class LevelServiceImpl implements LevelService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
+    @CacheEvict(value = "user:info", key = "#userId")
     public void addExperience(String userId, int exp, String reason) {
         // Song：支持负增量（取消点赞/收藏对称扣回），经验保底不为负
         if (userId == null || exp == 0) return;
 
-        User user = userService.getById(userId);
+        if (userMapper.addExperienceAtomic(userId, exp) == 0) return;
+        User user = userMapper.selectById(userId);
         if (user == null) return;
-
         int currentExp = user.getExperience() != null ? user.getExperience() : 0;
-        user.setExperience(Math.max(0, currentExp + exp));
-        user.setUpdateTime(LocalDateTime.now());
-        userService.updateById(user);
+        int calculatedLevel = calculateLevel(currentExp);
+        userMapper.raiseLevelAtLeast(userId, calculatedLevel);
 
         // Song：经验日志记录失败不影响主流程
         try {
@@ -68,12 +69,12 @@ public class LevelServiceImpl implements LevelService {
                     userId, exp, reason, e.getMessage());
         }
 
-        log.debug("用户[{}] 获得 {} 经验 ({}), 当前经验: {}", userId, exp, reason, Math.max(0, currentExp + exp));
+        log.debug("用户[{}] 获得 {} 经验 ({}), 当前经验: {}", userId, exp, reason, currentExp);
     }
 
     @Override
     public LevelInfoResp getUserLevelInfo(String userId) {
-        User user = userService.getById(userId);
+        User user = userMapper.selectById(userId);
         if (user == null) return null;
 
         int experience = user.getExperience() != null ? user.getExperience() : 0;
@@ -132,7 +133,7 @@ public class LevelServiceImpl implements LevelService {
 
         // 历史兼容：旧版本累计的经验可能没有日志，给前端返回一条兜底记录
         if (resultPage.getTotal() == 0) {
-            User user = userService.getById(userId);
+            User user = userMapper.selectById(userId);
             int experience = user != null && user.getExperience() != null ? user.getExperience() : 0;
             if (experience > 0) {
                 if (safePage == 1) {
@@ -157,8 +158,9 @@ public class LevelServiceImpl implements LevelService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
+    @CacheEvict(value = "user:info", key = "#userId")
     public void processLevelUpgrade(String userId) {
-        User user = userService.getById(userId);
+        User user = userMapper.selectById(userId);
         if (user == null) return;
 
         int experience = user.getExperience() != null ? user.getExperience() : 0;
@@ -166,9 +168,7 @@ public class LevelServiceImpl implements LevelService {
         int newLevel = calculateLevel(experience);
 
         if (newLevel > currentLevel) {
-            user.setLevel(newLevel);
-            user.setUpdateTime(LocalDateTime.now());
-            userService.updateById(user);
+            userMapper.raiseLevelAtLeast(userId, newLevel);
             log.info("用户[{}] 升级: Lv{} -> Lv{}, 经验: {}", userId, currentLevel, newLevel, experience);
         }
     }
@@ -177,7 +177,7 @@ public class LevelServiceImpl implements LevelService {
     @Transactional(rollbackFor = Exception.class)
     public void batchUpgradeAllUsers() {
         log.info("开始批量升级所有用户等级...");
-        List<User> users = userService.list();
+        List<User> users = userMapper.selectList(null);
         int upgraded = 0;
 
         for (User user : users) {
@@ -188,9 +188,7 @@ public class LevelServiceImpl implements LevelService {
             int newLevel = calculateLevel(experience);
 
             if (newLevel > currentLevel) {
-                user.setLevel(newLevel);
-                user.setUpdateTime(LocalDateTime.now());
-                userService.updateById(user);
+                userMapper.raiseLevelAtLeast(user.getId(), newLevel);
                 upgraded++;
                 log.info("用户[{}] 升级: Lv{} -> Lv{}", user.getId(), currentLevel, newLevel);
             }

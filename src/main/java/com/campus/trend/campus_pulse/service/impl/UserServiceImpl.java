@@ -560,15 +560,14 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     }
 
     @Override
+    @CacheEvict(value = "user:info", key = "#userId")
     public void updateLastActiveTime(String userId) {
-        User user = getById(userId);
-        if (user == null)
-            return;
-        user.setLastActiveTime(LocalDateTime.now());
-        updateById(user);
+        if (userId == null) return;
+        baseMapper.updateLastActiveTimeAtomic(userId, LocalDateTime.now());
     }
 
     @Override
+    @CacheEvict(value = "user:info", key = "#userId")
     public void incrementLikesReceived(String userId) {
         if (userId == null)
             return;
@@ -576,6 +575,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     }
 
     @Override
+    @CacheEvict(value = "user:info", key = "#userId")
     public void decrementLikesReceived(String userId) {
         if (userId == null)
             return;
@@ -583,6 +583,21 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     }
 
     @Override
+    @CacheEvict(value = "user:info", key = "#userId")
+    public void incrementLikesGiven(String userId) {
+        if (userId == null) return;
+        baseMapper.incrementLikesGiven(userId);
+    }
+
+    @Override
+    @CacheEvict(value = "user:info", key = "#userId")
+    public void decrementLikesGiven(String userId) {
+        if (userId == null) return;
+        baseMapper.decrementLikesGiven(userId);
+    }
+
+    @Override
+    @CacheEvict(value = "user:info", key = "#userId")
     public void incrementTotalPosts(String userId) {
         if (userId == null)
             return;
@@ -612,12 +627,10 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     }
 
     @Override
+    @CacheEvict(value = "user:info", key = "#userId")
     public void updateActiveRegion(String userId, String region) {
-        User user = getById(userId);
-        if (user == null)
-            return;
-        user.setActiveRegion(region);
-        updateById(user);
+        if (userId == null) return;
+        baseMapper.updateActiveRegionAtomic(userId, region);
     }
 
     private String resolveCardTheme(String raw, String fallback) {

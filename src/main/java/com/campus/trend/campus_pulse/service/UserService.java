@@ -47,6 +47,8 @@ public interface UserService extends IService<User> {
     void updateLastActiveTime(String userId);
     void incrementLikesReceived(String userId);
     void decrementLikesReceived(String userId);
+    void incrementLikesGiven(String userId);
+    void decrementLikesGiven(String userId);
     void incrementTotalPosts(String userId);
     void updatePreferredSections(String userId, String sectionId);
     void updateActiveRegion(String userId, String region);

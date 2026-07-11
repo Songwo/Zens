@@ -77,14 +77,25 @@ const scheduleRoutePrefetch = () => {
     requestIdleCallback?: (callback: IdleRequestCallback, options?: { timeout: number }) => number
   }
 
-  if (typeof win.requestIdleCallback === 'function') {
-    idlePrefetchHandle = win.requestIdleCallback(() => {
+  const scheduleWhenIdle = () => {
+    // 首屏完成后再预取次要路由，避免与首页数据、图片和关键组件争抢带宽。
+    const timer = window.setTimeout(() => {
+      if (typeof win.requestIdleCallback === 'function') {
+        idlePrefetchHandle = win.requestIdleCallback(() => {
+          runRoutePrefetch()
+        }, { timeout: 3000 })
+        return
+      }
       runRoutePrefetch()
-    }, { timeout: 2200 })
-    return
+    }, 5000)
+    routePrefetchTimers.push(timer)
   }
 
-  routePrefetchTimers.push(window.setTimeout(runRoutePrefetch, 1200))
+  if (document.readyState === 'complete') {
+    scheduleWhenIdle()
+  } else {
+    window.addEventListener('load', scheduleWhenIdle, { once: true })
+  }
 }
 
 const scheduleDeferredUiMount = () => {
@@ -96,12 +107,21 @@ const scheduleDeferredUiMount = () => {
     shouldMountDeferredUi.value = true
   }
 
-  if (typeof win.requestIdleCallback === 'function') {
-    win.requestIdleCallback(mount, { timeout: 1600 })
-    return
+  const scheduleWhenIdle = () => {
+    window.setTimeout(() => {
+      if (typeof win.requestIdleCallback === 'function') {
+        win.requestIdleCallback(mount, { timeout: 2500 })
+        return
+      }
+      mount()
+    }, 1200)
   }
 
-  window.setTimeout(mount, 900)
+  if (document.readyState === 'complete') {
+    scheduleWhenIdle()
+  } else {
+    window.addEventListener('load', scheduleWhenIdle, { once: true })
+  }
 }
 
 watch(

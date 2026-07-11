@@ -1,11 +1,13 @@
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import router from './router'
-// Song：Element Plus 组件由 unplugin-vue-components 自动按需 import；
-// 样式全局一次性加载，避免开发环境组件样式依赖预构建失效导致后台懒加载卡死。
-// v-loading 指令在下方全局注册。
+// Element Plus 模板组件及样式由 resolver 按需导入；服务型组件的样式在此显式声明。
 import { ElLoading } from 'element-plus'
-import 'element-plus/theme-chalk/index.css'
+import 'element-plus/theme-chalk/base.css'
+import 'element-plus/theme-chalk/el-loading.css'
+import 'element-plus/theme-chalk/el-message.css'
+import 'element-plus/theme-chalk/el-message-box.css'
+import 'element-plus/theme-chalk/el-notification.css'
 // Song：说明
 import './styles/ep-theme.scss'
 // Song：说明

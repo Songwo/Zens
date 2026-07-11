@@ -7,6 +7,17 @@ export interface TrustLevelSpec {
     label: string
     description: string
     privileges: string[]
+    requirements?: Record<string, number>
+}
+
+export interface TrustMetricProgress {
+    key: string
+    label: string
+    current: number
+    target: number
+    unit: string
+    percent: number
+    met: boolean
 }
 
 /** TL 指标 */
@@ -30,12 +41,21 @@ export interface TrustInfo {
     metrics: TrustMetrics
     silenced: boolean
     silencedUntil?: string
+    asOf: string
+    windowDays: number
+    dataStatus: 'LIVE' | 'DEGRADED'
+    metricProgress: TrustMetricProgress[]
+    overallProgress: number
 }
 
 export const trustLevelApi = {
     /** 当前登录用户的信任等级详情 */
     info() {
         return api.get<any, Result<TrustInfo>>('/trust-level/info')
+    },
+    /** 用权威行为明细实时重算当前用户等级并返回同一时刻快照 */
+    refresh() {
+        return api.post<any, Result<TrustInfo>>('/trust-level/refresh')
     },
     /** 任意用户的信任等级详情 */
     infoByUserId(userId: string) {

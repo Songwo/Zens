@@ -30,6 +30,48 @@ public interface UserMapper extends BaseMapper<User> {
     @Update("UPDATE sys_user SET total_posts = COALESCE(total_posts, 0) + 1 WHERE id = #{userId}")
     int incrementTotalPosts(@Param("userId") String userId);
 
+    @Update("UPDATE sys_user SET likes_given = COALESCE(likes_given, 0) + 1 WHERE id = #{userId}")
+    int incrementLikesGiven(@Param("userId") String userId);
+
+    @Update("UPDATE sys_user SET likes_given = GREATEST(COALESCE(likes_given, 0) - 1, 0) WHERE id = #{userId}")
+    int decrementLikesGiven(@Param("userId") String userId);
+
+    /** 经验值字段级原子入账，禁止用缓存 User 实体整行回写。 */
+    @Update("""
+            UPDATE sys_user
+               SET experience = GREATEST(COALESCE(experience, 0) + #{delta}, 0),
+                   update_time = NOW()
+             WHERE id = #{userId}
+            """)
+    int addExperienceAtomic(@Param("userId") String userId, @Param("delta") int delta);
+
+    @Update("""
+            UPDATE sys_user
+               SET level = GREATEST(COALESCE(level, 1), #{level}),
+                   update_time = NOW()
+             WHERE id = #{userId}
+            """)
+    int raiseLevelAtLeast(@Param("userId") String userId, @Param("level") int level);
+
+    /** 信任等级比较并交换，防止自动重算覆盖管理员刚授予的 TL4。 */
+    @Update("""
+            UPDATE sys_user
+               SET trust_level = #{newLevel},
+                   update_time = NOW()
+             WHERE id = #{userId}
+               AND COALESCE(trust_level, 0) = #{expectedLevel}
+            """)
+    int updateTrustLevelIfCurrent(@Param("userId") String userId,
+                                  @Param("expectedLevel") int expectedLevel,
+                                  @Param("newLevel") int newLevel);
+
+    @Update("UPDATE sys_user SET last_active_time = #{activeTime} WHERE id = #{userId}")
+    int updateLastActiveTimeAtomic(@Param("userId") String userId,
+                                  @Param("activeTime") java.time.LocalDateTime activeTime);
+
+    @Update("UPDATE sys_user SET active_region = #{region} WHERE id = #{userId}")
+    int updateActiveRegionAtomic(@Param("userId") String userId, @Param("region") String region);
+
     @Update("UPDATE sys_user SET contribution_val = GREATEST(COALESCE(contribution_val, 0) + #{amount}, 0) WHERE id = #{userId}")
     int addContribution(@Param("userId") String userId, @Param("amount") int amount);
 

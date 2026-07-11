@@ -237,7 +237,8 @@ recommendation:
 # 9. 定时任务配置
 trend:
   schedule:
-    view-log-retention-days: 90
+    # 信任画像直接依赖浏览明细；引入日汇总归档表前保留 10 年，避免累计指标被清理任务截断。
+    view-log-retention-days: 3650
 
 # 10. 上传安全控制配置
 campus:

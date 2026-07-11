@@ -135,12 +135,12 @@ public class ViewLogController {
      * 清理旧日志（管理员功能）
      */
     @DeleteMapping("/clean")
-    public Result<?> cleanOldLogs(@RequestParam(defaultValue = "90") int daysToKeep) {
+    public Result<?> cleanOldLogs(@RequestParam(defaultValue = "3650") int daysToKeep) {
         String currentUserId = SecurityUtils.getCurrentUserId();
         if (currentUserId == null || !PermissionUtils.isUserAdmin(currentUserId)) {
             throw new BusinessException(ResultCode.NO_PERMISSION, "仅管理员可以清理浏览日志");
         }
-        int safeDays = Math.min(Math.max(daysToKeep, 7), 3650);
+        int safeDays = Math.min(Math.max(daysToKeep, 3650), 36500);
         long deletedCount = viewLogService.cleanOldLogs(safeDays);
         return Result.success(deletedCount);
     }

@@ -26,7 +26,7 @@ public class TrendTaskScheduler {
 
     /**
      * 每周日凌晨 03:00 执行
-     * 清理超过 90 天的旧浏览日志
+     * 清理超过保留期的旧浏览日志；当前信任画像依赖明细，默认保留 10 年。
      */
     @Scheduled(cron = "0 0 3 ? * SUN")
     public void cleanOldLogsTask() {

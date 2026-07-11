@@ -466,6 +466,7 @@ public class CommentServiceImpl extends ServiceImpl<CommentMapper, Comment> impl
             if (removed > 0) {
                 baseMapper.decrementLikeCount(commentId);
                 userService.decrementLikesReceived(comment.getUserId());
+                userService.decrementLikesGiven(userId);
             }
         } else {
             try {
@@ -479,6 +480,7 @@ public class CommentServiceImpl extends ServiceImpl<CommentMapper, Comment> impl
             }
             baseMapper.incrementLikeCount(commentId);
             userService.incrementLikesReceived(comment.getUserId());
+            userService.incrementLikesGiven(userId);
         }
         postCacheManager.bumpPostDetailCacheVersion(comment.getPostId());
     }

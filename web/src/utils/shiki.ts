@@ -84,22 +84,6 @@ const ALIASES: Record<string, string> = {
   ['gnuplot' as string]: 'bash',
 }
 
-// 启动时预热的语言（必装套件）。Vite 也会按动态 import 切片，
-// 但这些会在首次 highlighter 构建时直接 await。
-const PRELOADED: string[] = [
-  'javascript',
-  'typescript',
-  'html',
-  'css',
-  'json',
-  'bash',
-  'java',
-  'python',
-  'sql',
-  'markdown',
-  'diff',
-]
-
 let _highlighter: HighlighterCore | null = null
 let _initPromise: Promise<HighlighterCore> | null = null
 const _loadedLangs = new Set<string>()
@@ -123,13 +107,10 @@ async function getHighlighter(): Promise<HighlighterCore> {
   _initPromise = (async () => {
     const h = await createHighlighterCore({
       themes: [vitesseLight, vitesseDark],
-      langs: PRELOADED
-        .map(name => LANG_IMPORTS[name])
-        .filter((load): load is () => Promise<any> => Boolean(load))
-        .map(load => load()),
+      // 不预装语言；每篇内容只下载它实际使用的语法包。
+      langs: [],
       engine: createOnigurumaEngine(import('shiki/wasm')),
     })
-    PRELOADED.forEach(l => _loadedLangs.add(l))
     _highlighter = h
     return h
   })()
@@ -139,9 +120,9 @@ async function getHighlighter(): Promise<HighlighterCore> {
 export async function ensureLanguage(rawLang: string): Promise<string | null> {
   const lang = normalizeLang(rawLang)
   if (!lang) return null
-  const h = await getHighlighter()
   if (_loadedLangs.has(lang)) return lang
   if (!isKnownLang(lang)) return null
+  const h = await getHighlighter()
   const existing = _loadingLangs.get(lang)
   if (existing) {
     await existing
@@ -200,10 +181,7 @@ export async function preloadLanguages(rawLangs: Array<string | null | undefined
         .filter((l): l is string => !!l && !_loadedLangs.has(l) && isKnownLang(l))
     )
   )
-  if (langs.length === 0) {
-    if (!_highlighter) await getHighlighter()
-    return
-  }
+  if (langs.length === 0) return
   await Promise.all(langs.map(l => ensureLanguage(l)))
 }
 

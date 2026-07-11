@@ -53,11 +53,20 @@ function createMd(options: { html: boolean; linkify: boolean; typographer: boole
     return defaultImageRenderer(tokens, idx, opts, env, self)
   }
 
-  return instance
-}
+  // 表格本身保持标准语义，外层只负责在窄屏提供独立的横向滚动区域。
+  const defaultTableOpen = instance.renderer.rules.table_open
+    || ((tokens: any[], idx: number, opts: any, _env: any, self: any) => self.renderToken(tokens, idx, opts))
+  const defaultTableClose = instance.renderer.rules.table_close
+    || ((tokens: any[], idx: number, opts: any, _env: any, self: any) => self.renderToken(tokens, idx, opts))
+  instance.renderer.rules.table_open = (tokens: any[], idx: number, opts: any, env: any, self: any) => (
+    '<div class="table-scroll-wrapper" role="region" aria-label="可横向滚动的表格" tabindex="0">' +
+    defaultTableOpen(tokens, idx, opts, env, self)
+  )
+  instance.renderer.rules.table_close = (tokens: any[], idx: number, opts: any, env: any, self: any) => (
+    defaultTableClose(tokens, idx, opts, env, self) + '</div>'
+  )
 
-function escapeAttr(value: string): string {
-  return value.replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+  return instance
 }
 
 /** 包装 Shiki 输出，保留其内部 <pre><code>，外层加自定义壳。 */
@@ -65,11 +74,9 @@ function wrapShikiOutput(shikiHtml: string, escapedLang: string, rawCode: string
   const lineCount = countLines(rawCode)
   const showLineNumbers = lineCount >= 8
   const dataLang = escapedLang || 'text'
-  const rawAttr = escapeAttr(rawCode)
   return (
-    `<div class="code-block-wrapper has-shiki${showLineNumbers ? ' show-line-numbers' : ''}" data-lang="${dataLang}" data-raw="${rawAttr}">` +
-    `<button type="button" class="code-copy-btn" aria-label="复制代码">复制</button>` +
-    `<span class="code-lang-badge">${dataLang}</span>` +
+    `<div class="code-block-wrapper has-shiki${showLineNumbers ? ' show-line-numbers' : ''}" data-lang="${dataLang}">` +
+    renderCodeToolbar(dataLang, lineCount) +
     shikiHtml +
     `</div>`
   )
@@ -78,14 +85,25 @@ function wrapShikiOutput(shikiHtml: string, escapedLang: string, rawCode: string
 /** 无高亮回退：保持外层 class 不变，便于样式兼容旧渲染。 */
 function wrapPlainOutput(escapedCode: string, escapedLang: string, rawCode: string): string {
   const lineCount = countLines(rawCode)
-  const showLineNumbers = lineCount >= 8
   const dataLang = escapedLang || 'text'
-  const rawAttr = escapeAttr(rawCode)
   return (
-    `<div class="code-block-wrapper is-plain${showLineNumbers ? ' show-line-numbers' : ''}" data-lang="${dataLang}" data-raw="${rawAttr}">` +
-    `<button type="button" class="code-copy-btn" aria-label="复制代码">复制</button>` +
-    `<span class="code-lang-badge">${dataLang}</span>` +
+    `<div class="code-block-wrapper is-plain" data-lang="${dataLang}">` +
+    renderCodeToolbar(dataLang, lineCount) +
     `<pre class="cp-code-plain"><code>${escapedCode}</code></pre>` +
+    `</div>`
+  )
+}
+
+function renderCodeToolbar(language: string, lineCount: number): string {
+  const safeLineCount = Math.max(1, lineCount)
+  const label = language === 'text' ? '纯文本' : language
+  return (
+    `<div class="code-block-toolbar" role="group" aria-label="${label} 代码块，共 ${safeLineCount} 行">` +
+    `<div class="code-block-meta">` +
+    `<span class="code-lang-label">${label}</span>` +
+    `<span class="code-line-count">${safeLineCount} 行</span>` +
+    `</div>` +
+    `<button type="button" class="code-copy-btn" aria-label="复制 ${label} 代码，共 ${safeLineCount} 行" aria-live="polite" title="复制代码">复制</button>` +
     `</div>`
   )
 }
@@ -117,11 +135,9 @@ function extractFencedLangs(src: string): string[] {
  */
 export async function renderAsync(src: string): Promise<string> {
   if (!src) return ''
-  const shiki = await loadShikiApi()
-  await shiki.warmupHighlighter()
   const langs = extractFencedLangs(src)
-  if (langs.length > 0) {
-    await shiki.preloadLanguages(langs)
-  }
+  if (langs.length === 0) return md.render(src)
+  const shiki = await loadShikiApi()
+  await shiki.preloadLanguages(langs)
   return md.render(src)
 }

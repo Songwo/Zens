@@ -1,6 +1,7 @@
 package com.campus.trend.campus_pulse.service.impl;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.campus.trend.campus_pulse.common.api.ResultCode;
@@ -48,10 +49,9 @@ public class PostLikeServiceImpl extends ServiceImpl<PostLikeMapper, PostLike> i
      */
     @Override
     public boolean isLike(String postId, String userId) {
-        Long count = lambdaQuery()
+        Long count = baseMapper.selectCount(Wrappers.<PostLike>lambdaQuery()
                 .eq(PostLike::getPostId, postId)
-                .eq(PostLike::getUserId, userId)
-                .count();
+                .eq(PostLike::getUserId, userId));
         return count != null && count > 0;
     }
 
@@ -118,7 +118,7 @@ public class PostLikeServiceImpl extends ServiceImpl<PostLikeMapper, PostLike> i
 
         boolean saved;
         try {
-            saved = save(postLike);
+            saved = baseMapper.insert(postLike) > 0;
         } catch (DuplicateKeyException e) {
             log.debug("点赞记录已存在: userId={}, postId={}", userId, postId);
             return false;
@@ -131,6 +131,7 @@ public class PostLikeServiceImpl extends ServiceImpl<PostLikeMapper, PostLike> i
 
             // Song：增加帖子作者获赞数
             userService.incrementLikesReceived(post.getUserId());
+            userService.incrementLikesGiven(userId);
 
             // Song：被点赞经验 +2（给帖子作者）
             levelService.addExperience(post.getUserId(), 2, "被点赞");
@@ -158,10 +159,9 @@ public class PostLikeServiceImpl extends ServiceImpl<PostLikeMapper, PostLike> i
         }
 
         // Song：2. 删除点赞记录
-        boolean removed = lambdaUpdate()
+        boolean removed = baseMapper.delete(Wrappers.<PostLike>lambdaQuery()
                 .eq(PostLike::getPostId, postId)
-                .eq(PostLike::getUserId, userId)
-                .remove();
+                .eq(PostLike::getUserId, userId)) > 0;
 
         // Song：3. 原子更新帖子的点赞数
         if (removed) {
@@ -172,6 +172,7 @@ public class PostLikeServiceImpl extends ServiceImpl<PostLikeMapper, PostLike> i
 
                 // Song：减少帖子作者获赞数
                 userService.decrementLikesReceived(post.getUserId());
+                userService.decrementLikesGiven(userId);
 
                 // Song：对称扣回被点赞经验，堵住"点赞↔取消"循环刷经验
                 levelService.addExperience(post.getUserId(), -2, "取消点赞");

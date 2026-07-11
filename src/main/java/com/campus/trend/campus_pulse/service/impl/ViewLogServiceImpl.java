@@ -2,6 +2,8 @@ package com.campus.trend.campus_pulse.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.campus.trend.campus_pulse.common.api.ResultCode;
+import com.campus.trend.campus_pulse.common.exception.BusinessException;
 import com.campus.trend.campus_pulse.dto.response.ViewHistoryDto;
 import com.campus.trend.campus_pulse.entity.Post;
 import com.campus.trend.campus_pulse.entity.ViewLog;
@@ -14,6 +16,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -29,6 +32,10 @@ import java.util.stream.Collectors;
 public class ViewLogServiceImpl extends ServiceImpl<ViewLogMapper, ViewLog>
         implements ViewLogService {
 
+    private static final long READ_SESSION_TTL_HOURS = 2;
+    private static final int HEARTBEAT_MAX_ACCEPTED_MS = 60_000;
+    /** 当前信任画像直接从浏览明细聚合；在引入日汇总表前，不得按旧版 90 天策略清除权威数据。 */
+    private static final int TRUST_HISTORY_RETENTION_DAYS = 3650;
 
     private final LevelService levelService;
     private final StringRedisTemplate stringRedisTemplate;
@@ -53,6 +60,15 @@ public class ViewLogServiceImpl extends ServiceImpl<ViewLogMapper, ViewLog>
     @Transactional(rollbackFor = Exception.class)
     public void recordView(String postId, String userId, String ip, String device) {
         LocalDateTime now = LocalDateTime.now();
+        Post existingPost = postMapper.selectById(postId);
+        if (existingPost == null) {
+            throw new BusinessException(ResultCode.POST_NOT_FOUND);
+        }
+        if (!Integer.valueOf(1).equals(existingPost.getStatus())
+                || (StringUtils.hasText(existingPost.getAuditStatus())
+                    && !"APPROVED".equalsIgnoreCase(existingPost.getAuditStatus()))) {
+            throw new BusinessException(ResultCode.NO_PERMISSION, "该帖子当前不可记录阅读行为");
+        }
         ViewLog viewLog = new ViewLog()
                 .setPostId(postId)
                 .setUserId(userId)
@@ -83,6 +99,11 @@ public class ViewLogServiceImpl extends ServiceImpl<ViewLogMapper, ViewLog>
         // Song：每日浏览经验 +1（上限5次/天）
         if (userId != null) {
             try {
+                long nowMs = System.currentTimeMillis();
+                stringRedisTemplate.opsForValue().set("view:active:" + userId, postId,
+                        READ_SESSION_TTL_HOURS, TimeUnit.HOURS);
+                stringRedisTemplate.opsForValue().set("view:heartbeat:last:" + userId + ":" + postId,
+                        String.valueOf(nowMs), READ_SESSION_TTL_HOURS, TimeUnit.HOURS);
                 String viewExpKey = "exp:view:" + userId + ":" + LocalDate.now();
                 String countStr = stringRedisTemplate.opsForValue().get(viewExpKey);
                 int count = countStr != null ? Integer.parseInt(countStr) : 0;
@@ -102,27 +123,53 @@ public class ViewLogServiceImpl extends ServiceImpl<ViewLogMapper, ViewLog>
         if (postId == null || durationMs <= 0) {
             return;
         }
-        // Song：同一帖子 5 秒内的心跳去重，避免前端定时器误差导致重复累加
+        int acceptedDurationMs = Math.min(durationMs, HEARTBEAT_MAX_ACCEPTED_MS);
+        // 已登录用户只接受服务端已建立且仍活跃的阅读会话，并按服务器实际经过时间限幅。
+        // 这样即使客户端伪造 durationMs，也不能比真实时间更快地累积画像指标。
         if (userId != null) {
-            String dedupeKey = "view:heartbeat:" + userId + ":" + postId;
-            Boolean acquired = stringRedisTemplate.opsForValue().setIfAbsent(dedupeKey, "1", 5, TimeUnit.SECONDS);
+            String activePost = stringRedisTemplate.opsForValue().get("view:active:" + userId);
+            if (!postId.equals(activePost)) return;
+
+            String lockKey = "view:heartbeat:lock:" + userId + ":" + postId;
+            Boolean acquired = stringRedisTemplate.opsForValue().setIfAbsent(lockKey, "1", 5, TimeUnit.SECONDS);
             if (Boolean.FALSE.equals(acquired)) {
                 return;
             }
+            try {
+                String lastKey = "view:heartbeat:last:" + userId + ":" + postId;
+                String lastRaw = stringRedisTemplate.opsForValue().get(lastKey);
+                if (lastRaw == null) return;
+                long nowMs = System.currentTimeMillis();
+                long lastMs;
+                try {
+                    lastMs = Long.parseLong(lastRaw);
+                } catch (NumberFormatException ignored) {
+                    return;
+                }
+                long elapsedMs = Math.max(0, nowMs - lastMs);
+                acceptedDurationMs = (int) Math.min(acceptedDurationMs,
+                        Math.min(elapsedMs, HEARTBEAT_MAX_ACCEPTED_MS));
+                stringRedisTemplate.opsForValue().set(lastKey, String.valueOf(nowMs),
+                        READ_SESSION_TTL_HOURS, TimeUnit.HOURS);
+                stringRedisTemplate.expire("view:active:" + userId, READ_SESSION_TTL_HOURS, TimeUnit.HOURS);
+            } finally {
+                stringRedisTemplate.delete(lockKey);
+            }
         }
+        if (acceptedDurationMs <= 0) return;
 
         // Song：写入浏览日志（带停留时长），不重复 +1 view_count，避免刷量
         ViewLog viewLog = new ViewLog()
                 .setPostId(postId)
                 .setUserId(userId)
-                .setDurationMs(durationMs)
+                .setDurationMs(acceptedDurationMs)
                 .setCreateTime(LocalDateTime.now());
         save(viewLog);
 
         // Song：累加用户累计阅读时长（秒），用于 TL 计算
         if (userId != null) {
             try {
-                int sec = durationMs / 1000;
+                int sec = acceptedDurationMs / 1000;
                 if (sec > 0) {
                     userMapper.update(null,
                             new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<com.campus.trend.campus_pulse.entity.User>()
@@ -136,7 +183,7 @@ public class ViewLogServiceImpl extends ServiceImpl<ViewLogMapper, ViewLog>
 
         // Song：累加帖子平均阅读时长（秒），用于热度公式加权
         try {
-            int sec = durationMs / 1000;
+            int sec = acceptedDurationMs / 1000;
             if (sec > 0) {
                 postMapper.update(null,
                         new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<Post>()
@@ -250,7 +297,8 @@ public class ViewLogServiceImpl extends ServiceImpl<ViewLogMapper, ViewLog>
     @Override
     @Transactional(rollbackFor = Exception.class)
     public long cleanOldLogs(int daysToKeep) {
-        LocalDateTime cutoffTime = LocalDateTime.now().minusDays(daysToKeep);
+        int effectiveDaysToKeep = Math.max(daysToKeep, TRUST_HISTORY_RETENTION_DAYS);
+        LocalDateTime cutoffTime = LocalDateTime.now().minusDays(effectiveDaysToKeep);
 
         long count = lambdaQuery()
                 .lt(ViewLog::getCreateTime, cutoffTime)
@@ -260,7 +308,7 @@ public class ViewLogServiceImpl extends ServiceImpl<ViewLogMapper, ViewLog>
             remove(new LambdaQueryWrapper<ViewLog>()
                     .lt(ViewLog::getCreateTime, cutoffTime));
 
-            log.info("清理了 {} 条超过 {} 天的浏览日志", count, daysToKeep);
+            log.info("清理了 {} 条超过 {} 天的浏览日志", count, effectiveDaysToKeep);
         }
 
         return count;

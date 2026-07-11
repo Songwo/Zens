@@ -1,6 +1,9 @@
 package com.campus.trend.campus_pulse.controller;
 
+import com.campus.trend.campus_pulse.annotation.RateLimit;
 import com.campus.trend.campus_pulse.common.api.Result;
+import com.campus.trend.campus_pulse.common.api.ResultCode;
+import com.campus.trend.campus_pulse.common.exception.BusinessException;
 import com.campus.trend.campus_pulse.dto.response.TrustInfoResp;
 import com.campus.trend.campus_pulse.service.TrustLevelService;
 import com.campus.trend.campus_pulse.utils.PermissionUtils;
@@ -44,6 +47,21 @@ public class TrustLevelController {
      */
     @GetMapping("/info/{userId}")
     public Result<TrustInfoResp> getTrustInfoByUserId(@PathVariable String userId) {
+        String currentUserId = SecurityUtils.getCurrentUserId();
+        if (!userId.equals(currentUserId) && !PermissionUtils.isUserAdmin(currentUserId)) {
+            throw new BusinessException(ResultCode.NO_PERMISSION, "无权查看他人的完整行为画像");
+        }
+        return Result.success(trustLevelService.getUserTrustInfo(userId));
+    }
+
+    /**
+     * 当前用户主动刷新：先按权威行为明细重算等级，再返回同一时刻的画像快照。
+     */
+    @PostMapping("/refresh")
+    @RateLimit(key = "trust_level_refresh", limit = 10, windowSeconds = 60)
+    public Result<TrustInfoResp> refreshCurrentUser() {
+        String userId = SecurityUtils.getAuthenticatedUser().getUser().getId();
+        trustLevelService.recalculateAndPromote(userId);
         return Result.success(trustLevelService.getUserTrustInfo(userId));
     }
 
