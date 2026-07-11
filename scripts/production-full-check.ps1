@@ -232,9 +232,16 @@ $actuatorHealthOk = {
             [string]$resp.Content
         }
         $data = $raw | ConvertFrom-Json
+        $healthStatus = if ($data.status -is [string]) {
+            [string]$data.status
+        } elseif ($data.status -and $data.status.status) {
+            [string]$data.status.status
+        } else {
+            ""
+        }
         [pscustomobject]@{
-            ok = ([string]$data.status -eq "UP")
-            detail = "status=$($data.status)"
+            ok = ($healthStatus -eq "UP")
+            detail = "status=$healthStatus"
         }
     } catch {
         [pscustomobject]@{ ok = $false; detail = "invalid actuator json: $($_.Exception.Message)" }
