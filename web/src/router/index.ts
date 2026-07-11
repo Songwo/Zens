@@ -17,13 +17,13 @@ const router = createRouter({
       path: '/',
       name: 'home',
       component: () => import('@/pages/HomePage.vue'),
-      meta: { keepAlive: true, title: '首页', description: '开发者社区最新动态与推荐内容' }
+      meta: { keepAlive: true, title: '首页', description: '发现新鲜讨论、优质内容与值得认识的人' }
     },
     {
       path: '/sections',
       name: 'sections-overview',
       component: () => import('@/pages/SectionsOverview.vue'),
-      meta: { keepAlive: true, title: '板块全景', description: '浏览开发者社区全部板块与话题方向' }
+      meta: { keepAlive: true, title: '板块全景', description: '浏览社区全部板块与兴趣方向' }
     },
     {
       path: '/s/:id',
@@ -161,31 +161,31 @@ const router = createRouter({
       path: '/about',
       name: 'about',
       component: () => import('@/pages/sidebar/AboutPage.vue'),
-      meta: { title: '关于我们', description: '了解 Zens 开发者社区的理念与团队' }
+      meta: { title: '关于我们', description: '了解 Zens 开放社区的理念与团队' }
     },
     {
       path: '/terms',
       name: 'terms',
       component: () => import('@/pages/sidebar/TermsPage.vue'),
-      meta: { title: '用户协议', description: 'Zens 开发者社区用户服务协议' }
+      meta: { title: '用户协议', description: 'Zens 开放社区用户服务协议' }
     },
     {
       path: '/privacy',
       name: 'privacy',
       component: () => import('@/pages/sidebar/PrivacyPage.vue'),
-      meta: { title: '隐私政策', description: 'Zens 开发者社区隐私保护政策' }
+      meta: { title: '隐私政策', description: 'Zens 开放社区隐私保护政策' }
     },
     {
       path: '/contact',
       name: 'contact',
       component: () => import('@/pages/sidebar/ContactPage.vue'),
-      meta: { title: '联系管理', description: '联系 Zens 开发者社区运营团队' }
+      meta: { title: '联系管理', description: '联系 Zens 开放社区运营团队' }
     },
     {
       path: '/auth',
       name: 'auth',
       component: () => import('@/pages/auth/AuthPage.vue'),
-      meta: { guest: true, title: '登录 / 注册', description: '登录或注册 Zens 开发者社区账号' }
+      meta: { guest: true, title: '登录 / 注册', description: '登录或注册 Zens 开放社区账号' }
     },
     {
       path: '/sso/authorize',
@@ -479,9 +479,9 @@ const ensureCanonical = (path: string) => {
 }
 
 router.afterEach((to) => {
-  const title = (to.meta.title as string) || '开发者社区'
-  const description = (to.meta.description as string) || 'Zens 开发者社区，聚合技术讨论、内容协作与社区增长。'
-  document.title = `${title} - Zens`
+  const title = (to.meta.title as string) || '开放社区'
+  const description = (to.meta.description as string) || 'Zens 是一个开放的兴趣与知识社区，欢迎分享经验、作品、观点与真实生活，找到值得交流的人和内容。'
+  document.title = `${title} - Zens 开放社区`
   ensureMetaTag('description', description)
   ensureCanonical(to.fullPath || '/')
   if (typeof window !== 'undefined') {

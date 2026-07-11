@@ -55,7 +55,7 @@ onMounted(() => {
                 <el-icon :size="48"><Lightning /></el-icon>
             </div>
             <div class="hero-text">
-                <h1>欢迎来到 Campus Pulse！</h1>
+                <h1>欢迎来到 Zens！</h1>
                 <p class="hero-sub">
                     你当前的信任等级是
                     <span class="hero-level" :style="{ background: trustLevelColor(currentLevel) }">

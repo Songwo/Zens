@@ -1,7 +1,7 @@
 import type { RouteLocationNormalizedLoaded } from 'vue-router'
 
-const SITE_NAME = 'Zens 开发者社区'
-const DEFAULT_DESCRIPTION = 'Zens 开发者社区，连接技术讨论、内容沉淀、团队协作与社区增长。'
+const SITE_NAME = 'Zens 开放社区'
+const DEFAULT_DESCRIPTION = 'Zens 是一个开放的兴趣与知识社区，欢迎分享经验、作品、观点与真实生活，找到值得交流的人和内容。'
 
 function ensureMeta(selector: string, createAttrs: Record<string, string>) {
   let element = document.head.querySelector<HTMLMetaElement>(selector)

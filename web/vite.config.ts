@@ -33,9 +33,9 @@ export default defineConfig({
       manifestFilename: 'manifest.json',
       includeAssets: ['logo.png', 'logo-horizontal.png', 'robots.txt'],
       manifest: {
-        name: 'Zens 校园社区',
+        name: 'Zens 开放社区',
         short_name: 'Zens',
-        description: 'Zens 校园社区，聚合校园技术交流、学习资源、生活分享与社群互动。',
+        description: 'Zens 是一个开放的兴趣与知识社区，欢迎分享经验、作品、观点与真实生活，找到值得交流的人和内容。',
         lang: 'zh-CN',
         dir: 'ltr',
         theme_color: '#f4b400',

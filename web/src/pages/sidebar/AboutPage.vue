@@ -136,7 +136,7 @@ onMounted(async () => {
           </div>
           <div class="title-text">
             <h1>关于站点 <span>(About Us)</span></h1>
-            <p class="subtitle">Zens 致力于连接每一位开发者与创作者。</p>
+            <p class="subtitle">Zens 连接每一个愿意认真表达、分享与交流的人。</p>
           </div>
         </div>
       </div>
@@ -145,7 +145,7 @@ onMounted(async () => {
       <div class="vision-hero">
         <div class="vision-content">
           <h3>我们的愿景</h3>
-          <p class="vision-text">我们希望打造一个纯净、高效、充满活力的技术分享空间。在这里，你可以讨论最新的框架趋势，也可以记录自己踩坑的日常，或者结交志同道合的技术伙伴。</p>
+          <p class="vision-text">我们希望打造一个友善、真实、有持续价值的开放社区。你可以分享经验与作品，讨论兴趣与生活，也可以提出问题、记录成长，并结识真正聊得来的人。</p>
         </div>
         <div class="vision-bg-pattern"></div>
       </div>
@@ -154,7 +154,7 @@ onMounted(async () => {
       <div class="section-container">
         <div class="section-title">
           <el-icon><Monitor /></el-icon>
-          <h3>强劲驱动的技术栈</h3>
+          <h3>稳定、可信的社区基础设施</h3>
         </div>
         
         <el-row :gutter="20" class="tech-grid">

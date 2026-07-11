@@ -399,7 +399,7 @@ onUnmounted(() => {
 
           <el-form-item prop="inviteCode" label="邀请码 (可选)">
              <div class="otp-input-group">
-                <el-input v-model="form.inviteCode" placeholder="如：campus2026" size="large" />
+                <el-input v-model="form.inviteCode" placeholder="如：zens2026" size="large" />
                 <el-button type="info" plain size="large" :loading="loading" @click="validateInvite">校验</el-button>
              </div>
           </el-form-item>
