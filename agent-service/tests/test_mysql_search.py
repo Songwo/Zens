@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import unittest
+from datetime import datetime
 from unittest.mock import patch
 
 import pymysql
@@ -26,6 +27,9 @@ class FakeCursor:
     def fetchone(self) -> dict[str, int]:
         return self.connection.health_row
 
+    def fetchall(self) -> list[dict]:
+        return self.connection.rows
+
 
 class FakeConnection:
     def __init__(self, *, read_only: int, super_read_only: int) -> None:
@@ -36,6 +40,7 @@ class FakeConnection:
         }
         self.statements: list[tuple[str, object]] = []
         self.closed = False
+        self.rows: list[dict] = []
 
     def __enter__(self) -> "FakeConnection":
         return self
@@ -122,6 +127,28 @@ class MysqlSearchRepositoryTest(unittest.TestCase):
         self.assertNotIn("agent_reader", message)
         self.assertNotIn("replica.internal", message)
         self.assertNotIn("do-not-leak", message)
+
+    def test_operations_candidates_use_read_only_select_with_approved_filter(self) -> None:
+        settings = self.build_settings(require_read_only=True)
+        connection = FakeConnection(read_only=1, super_read_only=1)
+        now = datetime(2026, 7, 11, 9, 0)
+        connection.rows = [{
+            "post_id": "42", "title": "Help", "summary": "", "section_name": "Tech",
+            "tags": "python,help", "comment_count": 0, "like_count": 1, "collect_count": 0,
+            "view_count": 10, "heat_score": 2.0, "is_featured": 0,
+            "created_at": now, "last_activity_at": now,
+        }]
+        repository = MysqlSearchRepository(settings)
+
+        with patch("app.repositories.mysql_search.pymysql.connect", return_value=connection):
+            candidates = repository.list_operations_candidates("engagement", 7, 20, 1)
+
+        self.assertEqual("42", candidates[0].post_id)
+        statements = [statement for statement, _ in connection.statements]
+        self.assertEqual("SET SESSION TRANSACTION READ ONLY", statements[0])
+        self.assertIn("p.audit_status = 'APPROVED'", statements[1])
+        self.assertIn("p.comment_count", statements[1])
+        self.assertFalse(any(token in statements[1].upper() for token in (" INSERT ", " UPDATE ", " DELETE ")))
 
 
 if __name__ == "__main__":

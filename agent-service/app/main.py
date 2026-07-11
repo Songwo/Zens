@@ -2,14 +2,22 @@ from __future__ import annotations
 
 import time
 from contextlib import asynccontextmanager
-from typing import AsyncIterator
+from dataclasses import asdict
+from typing import AsyncIterator, Literal
 
 from fastapi import FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
 from app.config import get_settings
-from app.models import AskRequest, AskResponse, HealthResponse, SearchResponse
+from app.models import (
+    AskRequest,
+    AskResponse,
+    HealthResponse,
+    OperationsCandidateResponse,
+    OperationsCandidatesResponse,
+    SearchResponse,
+)
 from app.repositories.base import SearchRepository
 from app.repositories.mysql_search import MysqlSearchRepository, ReplicaSafetyError
 from app.repositories.postgres_search import PostgresSearchRepository
@@ -120,6 +128,43 @@ def ready(response: Response) -> HealthResponse:
     if health_response.status != "ok":
         response.status_code = 503
     return health_response
+
+
+@app.get("/v1/operations/candidates", response_model=OperationsCandidatesResponse)
+def operations_candidates(
+    kind: Literal["engagement", "weekly"],
+    days: int = 7,
+    limit: int = 20,
+    max_comments: int = 1,
+) -> OperationsCandidatesResponse:
+    if not 1 <= days <= 30:
+        raise HTTPException(status_code=422, detail="days must be between 1 and 30")
+    if not 1 <= limit <= 50:
+        raise HTTPException(status_code=422, detail="limit must be between 1 and 50")
+    if not 0 <= max_comments <= 5:
+        raise HTTPException(status_code=422, detail="max_comments must be between 0 and 5")
+    repository: SearchRepository = app.state.repository
+    try:
+        rows = repository.list_operations_candidates(kind, days, limit, max_comments)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail="candidate query failed") from exc
+    return OperationsCandidatesResponse(
+        kind=kind,
+        window_days=days,
+        candidates=[
+            OperationsCandidateResponse(
+                **asdict(row),
+                score=(row.heat_score if kind == "weekly" else float(max_comments - row.comment_count + 1)),
+                reason=(
+                    "本周高质量/高互动内容候选"
+                    if kind == "weekly"
+                    else f"近 {days} 天发布且仅有 {row.comment_count} 条回复"
+                ),
+            )
+            for row in rows
+        ],
+        backend=repository.backend_name,
+    )
 
 
 @app.post("/v1/community-qa/search", response_model=SearchResponse)

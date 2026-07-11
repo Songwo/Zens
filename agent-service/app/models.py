@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import List, Literal, Optional
 
 from pydantic import BaseModel, Field
@@ -87,3 +88,29 @@ class HealthResponse(BaseModel):
     default_search_limit: int = 6
     min_question_length: int = 2
     default_comments_per_post: int = 2
+
+
+class OperationsCandidateResponse(BaseModel):
+    post_id: str
+    title: str
+    summary: str = ""
+    section_name: Optional[str] = None
+    tags: List[str] = Field(default_factory=list)
+    comment_count: int
+    like_count: int
+    collect_count: int
+    view_count: int
+    heat_score: float
+    is_featured: bool
+    created_at: datetime
+    last_activity_at: datetime
+    url: str
+    score: float
+    reason: str
+
+
+class OperationsCandidatesResponse(BaseModel):
+    kind: Literal["engagement", "weekly"]
+    window_days: int
+    candidates: List[OperationsCandidateResponse]
+    backend: str

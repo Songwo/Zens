@@ -12,7 +12,7 @@ from urllib.parse import urlparse
 import httpx
 
 from zens_ops.config import Settings
-from zens_ops.models import ResearchResult
+from zens_ops.models import OperationsCandidate, ResearchResult
 
 
 class RemoteError(RuntimeError):
@@ -57,6 +57,47 @@ class BaseClient:
 
 
 class AgentClient(BaseClient):
+    async def operations_candidates(
+        self, kind: str, *, days: int = 7, limit: int = 20, max_comments: int = 1,
+    ) -> list[OperationsCandidate] | None:
+        """Use the purpose-built read-only API, or signal that legacy search is required.
+
+        ``None`` means the endpoint is not available. An empty list is authoritative and
+        must not be replaced with broad semantic-search results.
+        """
+        if kind not in {"engagement", "weekly"}:
+            raise ValueError("unsupported operations candidate kind")
+        url = f"{str(self.settings.agent_base_url).rstrip('/')}/v1/operations/candidates"
+        response = await self._request("GET", url, params={
+            "kind": kind, "days": days, "limit": limit, "max_comments": max_comments,
+        })
+        if response.status_code in {404, 405, 501}:
+            return None
+        response.raise_for_status()
+        payload = response.json()
+        if isinstance(payload, dict) and isinstance(payload.get("data"), dict):
+            payload = payload["data"]
+        raw_items = payload.get("candidates", payload.get("items", [])) if isinstance(payload, dict) else []
+        if not isinstance(raw_items, list):
+            raise RemoteError("operations candidates response must contain an item list")
+        result: list[OperationsCandidate] = []
+        seen: set[str] = set()
+        for raw in raw_items:
+            if not isinstance(raw, dict):
+                continue
+            # Support both the proposed contract and the first Agent implementation.
+            normalized = dict(raw)
+            normalized.setdefault("created_at", normalized.get("create_time"))
+            try:
+                candidate = OperationsCandidate.model_validate(normalized)
+            except ValueError:
+                continue
+            if not candidate.post_id or not candidate.title or candidate.post_id in seen:
+                continue
+            seen.add(candidate.post_id)
+            result.append(candidate)
+        return result
+
     async def search(self, question: str, *, limit: int = 10) -> ResearchResult:
         url = f"{str(self.settings.agent_base_url).rstrip('/')}/v1/community-qa/search"
         response = await self._request("POST", url, json={"question": question, "limit": limit, "include_comments": True, "comments_per_post": 2})

@@ -48,20 +48,38 @@ class OpsService:
         return draft.sensitive or any(topic in text for topic in self.settings.sensitive_topic_set)
 
     async def save_draft(self, draft: Draft, kind: str = "POST", plan_id: str | None = None) -> dict:
-        now = datetime.now(self.tz).date().isoformat()
-        idem = self._idem(kind.lower(), f"{now}:{draft.title}:{draft.content[:200]}")
+        kind = kind.upper()
+        if kind not in {"POST", "COMMENT"}:
+            raise ValueError("draft kind must be POST or COMMENT")
         metadata = draft.metadata | {"requiresHumanApproval": True, "sensitive": self._is_sensitive(draft), "draftOnly": self.settings.draft_only}
+        target_post_id = str(metadata.get("targetPostId") or "").strip() or None
+        parent_comment_id = str(metadata.get("parentCommentId") or "").strip() or None
+        if kind == "COMMENT" and not target_post_id:
+            raise ValueError("COMMENT draft requires targetPostId")
+        fingerprint = json.dumps({
+            "type": kind, "title": draft.title.strip(), "content": draft.content,
+            "sectionId": draft.section_id, "tags": draft.tags, "targetPostId": target_post_id,
+            "parentCommentId": parent_comment_id, "planId": plan_id,
+            "periodKey": metadata.get("periodKey"),
+        }, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        idem = self._idem(kind.lower(), fingerprint)
         body = DraftCreate(
             idempotencyKey=idem, type=kind, title=draft.title, content=draft.content,
             sectionId=draft.section_id, tags=",".join(draft.tags), coverImage=draft.cover_image,
-            targetPostId=metadata.get("targetPostId"), parentCommentId=metadata.get("parentCommentId"),
+            targetPostId=target_post_id, parentCommentId=parent_comment_id,
             metadataJson=json.dumps(metadata, ensure_ascii=False),
             planId=plan_id,
         ).model_dump()
         result = await self.main.request("POST", "/api/internal/ops/drafts", body, idempotency_key=idem)
         draft_id = result.get("id") or result.get("draftId")
         if draft_id and not self.settings.dry_run:
-            await self.main.request("POST", f"/api/internal/ops/drafts/{draft_id}/submit", {})
+            await self.main.request(
+                "POST", f"/api/internal/ops/drafts/{draft_id}/submit", {},
+                idempotency_key=f"{idem}:submit",
+            )
+            result = result | {"status": "PENDING_APPROVAL"}
+        elif self.settings.dry_run:
+            result = result | {"status": "PENDING_APPROVAL"}
         return result
 
     async def plan_daily(self) -> dict:
@@ -93,7 +111,10 @@ class OpsService:
 
     async def weekly(self) -> dict:
         self._guard()
-        return await self.save_draft(await self.digest.build())
+        draft = await self.digest.build()
+        if draft is None:
+            return {"skipped": True, "reason": "no_weekly_candidates"}
+        return await self.save_draft(draft)
 
     async def report_metrics(self) -> dict:
         self._guard()

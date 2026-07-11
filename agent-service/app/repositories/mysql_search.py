@@ -3,13 +3,13 @@ from __future__ import annotations
 from collections import defaultdict
 from html import unescape
 import re
-from typing import List, Sequence
+from typing import List, Literal, Sequence
 
 import pymysql
 from pymysql.cursors import DictCursor
 
 from app.config import Settings
-from app.repositories.base import CommentHit, PostHit
+from app.repositories.base import CommentHit, OperationsCandidate, PostHit
 
 _QUESTION_STOP_TERMS = {
     "怎么",
@@ -311,6 +311,54 @@ class MysqlSearchRepository:
         for post_id in post_ids:
             hits.extend(grouped.get(str(post_id), []))
         return hits
+
+    def list_operations_candidates(
+        self, kind: Literal["engagement", "weekly"], days: int, limit: int, max_comments: int
+    ) -> List[OperationsCandidate]:
+        needs_reply = kind == "engagement"
+        sql = """
+        SELECT p.id AS post_id, p.title, COALESCE(p.summary, '') AS summary,
+               s.name AS section_name, COALESCE(p.tags, '') AS tags,
+               COALESCE(p.comment_count, 0) AS comment_count,
+               COALESCE(p.like_count, 0) AS like_count,
+               COALESCE(p.collect_count, 0) AS collect_count,
+               COALESCE(p.view_count, 0) AS view_count,
+               COALESCE(p.heat_score, 0) AS heat_score,
+               COALESCE(p.is_featured, 0) AS is_featured,
+               p.create_time AS created_at,
+               COALESCE(p.last_activity_at, p.create_time) AS last_activity_at
+        FROM sys_post p
+        LEFT JOIN sections s ON s.id = p.section_id
+        WHERE p.status = 1 AND p.audit_status = 'APPROVED'
+          AND p.create_time >= DATE_SUB(NOW(), INTERVAL %s DAY)
+          AND (%s = 0 OR COALESCE(p.comment_count, 0) <= %s)
+        ORDER BY
+          CASE WHEN %s = 1 THEN COALESCE(p.comment_count, 0) END ASC,
+          CASE WHEN %s = 1 THEN p.create_time END ASC,
+          CASE WHEN %s = 0 THEN COALESCE(p.is_featured, 0) END DESC,
+          CASE WHEN %s = 0 THEN COALESCE(p.heat_score, 0) END DESC,
+          CASE WHEN %s = 0 THEN (COALESCE(p.like_count, 0) + COALESCE(p.collect_count, 0) * 2) END DESC,
+          p.id ASC
+        LIMIT %s
+        """
+        flag = 1 if needs_reply else 0
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(sql, [days, flag, max_comments, flag, flag, flag, flag, flag, limit])
+                rows = cur.fetchall() or []
+        return [self._row_to_operations_candidate(row) for row in rows]
+
+    def _row_to_operations_candidate(self, row: dict) -> OperationsCandidate:
+        return OperationsCandidate(
+            post_id=str(row["post_id"]), title=unescape(str(row["title"] or "")),
+            summary=unescape(str(row["summary"] or "")), section_name=row["section_name"],
+            tags=[item.strip() for item in str(row["tags"] or "").split(",") if item.strip()],
+            comment_count=int(row["comment_count"] or 0), like_count=int(row["like_count"] or 0),
+            collect_count=int(row["collect_count"] or 0), view_count=int(row["view_count"] or 0),
+            heat_score=float(row["heat_score"] or 0), is_featured=bool(row["is_featured"]),
+            created_at=row["created_at"], last_activity_at=row["last_activity_at"],
+            url=f"/t/{row['post_id']}",
+        )
 
     def _connect(self) -> pymysql.Connection:
         connection = pymysql.connect(cursorclass=DictCursor, **self._connection_options)
