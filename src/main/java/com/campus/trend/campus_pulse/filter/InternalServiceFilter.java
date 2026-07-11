@@ -109,16 +109,6 @@ public class InternalServiceFilter extends OncePerRequestFilter {
             return;
         }
 
-        String nonceKey = "auth:internal:nonce:" + serviceId + ":" + nonce;
-        Boolean firstSeen = redisTemplate.opsForValue().setIfAbsent(
-                nonceKey, "1", TIMESTAMP_WINDOW_MS * 2, TimeUnit.MILLISECONDS);
-        if (!Boolean.TRUE.equals(firstSeen)) {
-            log.warn("[internal] nonce 复用: {}", nonce);
-            ecosystemMetrics.recordInternalApiCall(serviceId, "duplicate_nonce");
-            reject(response, HttpStatus.CONFLICT, "DUPLICATE_NONCE", "请求重复");
-            return;
-        }
-
         CachedBodyHttpServletRequest cached = new CachedBodyHttpServletRequest(request);
         String body = cached.cachedBodyAsString();
 
@@ -140,10 +130,21 @@ public class InternalServiceFilter extends OncePerRequestFilter {
         }
 
         if (!constantTimeEquals(expectedSig, signature.toLowerCase(Locale.ROOT))) {
-            log.warn("[internal] 签名不匹配: uri={}, expected={}, got={}",
-                    request.getRequestURI(), expectedSig, signature);
+            log.warn("[internal] 签名不匹配: serviceId={}, uri={}", serviceId, request.getRequestURI());
             ecosystemMetrics.recordInternalApiCall(serviceId, "bad_signature");
             reject(response, HttpStatus.UNAUTHORIZED, "BAD_SIGNATURE", "签名校验失败");
+            return;
+        }
+
+        // 只有通过验签的请求才占用 nonce。否则攻击者可以抢先提交伪造签名，
+        // 把合法请求的 nonce 写入 Redis，造成可利用的 nonce-poisoning 拒绝服务。
+        String nonceKey = "auth:internal:nonce:" + serviceId + ":" + nonce;
+        Boolean firstSeen = redisTemplate.opsForValue().setIfAbsent(
+                nonceKey, "1", TIMESTAMP_WINDOW_MS * 2, TimeUnit.MILLISECONDS);
+        if (!Boolean.TRUE.equals(firstSeen)) {
+            log.warn("[internal] nonce 复用: serviceId={}", serviceId);
+            ecosystemMetrics.recordInternalApiCall(serviceId, "duplicate_nonce");
+            reject(response, HttpStatus.CONFLICT, "DUPLICATE_NONCE", "请求重复");
             return;
         }
 

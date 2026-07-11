@@ -1,0 +1,38 @@
+[Unit]
+Description=Zens safety-first operations runner
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=zens-ops
+Group=zens-ops
+WorkingDirectory=/opt/zens-ops-service
+EnvironmentFile=/etc/zens/zens-ops.env
+ExecStart=/opt/zens-ops-service/.venv/bin/zens-ops serve
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+KillSignal=SIGTERM
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectControlGroups=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectKernelLogs=true
+ProtectClock=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+SystemCallArchitectures=native
+UMask=0077
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+ReadWritePaths=/var/log/zens-ops
+
+[Install]
+WantedBy=multi-user.target

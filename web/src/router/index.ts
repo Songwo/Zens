@@ -284,6 +284,12 @@ const router = createRouter({
           meta: { requiresAdmin: true },
         },
         {
+          path: 'ops-automation',
+          name: 'admin-ops-automation',
+          component: () => import('@/pages/admin/OpsAutomationPage.vue'),
+          meta: { requiresAdmin: true, title: '自动运营审批', description: '审批 Zens 自动运营草稿并管理写入熔断与每日限额' },
+        },
+        {
           path: 'my-sections',
           name: 'admin-my-sections',
           component: () => import('@/pages/admin/MyModerationPage.vue'),

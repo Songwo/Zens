@@ -157,12 +157,12 @@ go mod tidy
 go run ./cmd/media-service
 ```
 
-默认入口：
+入口（启动前必须注入 `.env.example` 中列出的四项敏感环境变量）：
 
 - 服务：<http://localhost:8090>
 - 健康检查：<http://localhost:8090/health>
 - 管理面板：<http://localhost:8090/panel/login>
-- 默认账号：`admin` / `admin123456`
+- 面板用户名默认是 `admin`；密码、两类 JWT 密钥和 Service Token 没有默认值，缺失时进程会拒绝启动。
 
 ### 一键脚本
 
@@ -179,6 +179,7 @@ cd go-media-service
 
 ```powershell
 cd go-media-service
+# 先在当前 shell 或不纳入 Git 的 .env 中设置全部必需敏感变量
 docker compose up -d --build
 ```
 
@@ -308,8 +309,8 @@ upload:
   global_upload_concurrency: 64
 
 auth:
-  upload: { enabled: true, jwt_secret: change-me-upload-secret }
-  admin:  { username: admin, password: admin123456, service_tokens: [change-me-java-admin-token] }
+  upload: { enabled: true, jwt_secret: "" } # MEDIA_UPLOAD_JWT_SECRET
+  admin:  { username: admin, password: "", jwt_secret: "", service_tokens: [] }
 
 security:
   per_ip_rps: 20
@@ -338,8 +339,10 @@ security:
 | `MEDIA_PUBLIC_BASE_URL` | `http://localhost:8090` | 拼 `accessUrl` 时使用 |
 | `MEDIA_DATABASE_DSN` | `./data/media.db` | SQLite DSN |
 | `MEDIA_STORAGE_ROOT_DIR` | `./uploads` | 本地存储根 |
-| `MEDIA_UPLOAD_JWT_SECRET` | — | 与 Java 约定的 Upload JWT 密钥 |
-| `MEDIA_ADMIN_PASSWORD` | `admin123456` | 面板登录密码 |
+| `MEDIA_UPLOAD_JWT_SECRET` | 必填，至少 32 字符 | 与 Java 约定的 Upload JWT 密钥 |
+| `MEDIA_ADMIN_PASSWORD` | 必填，至少 16 字符 | 面板登录密码 |
+| `MEDIA_ADMIN_JWT_SECRET` | 必填，至少 32 字符 | 面板会话 JWT 签名密钥 |
+| `MEDIA_ADMIN_SERVICE_TOKENS` | 必填，每项至少 32 字符 | 逗号分隔的 Java 后台 Service Token，可并行轮换 |
 | `MEDIA_PER_IP_RPS` / `MEDIA_PER_USER_RPS` | `20` / `15` | 限流阈值 |
 | `MEDIA_UPLOAD_MAX_CONCURRENCY` | `64` | 全局并发上传上限 |
 
@@ -410,6 +413,10 @@ k6 run scripts/k6-upload-image.js   # 可自行补齐
 - 🔐 WAF / CDN 前置限速
 - 🔐 `/panel` 仅内网/堡垒机
 - 🔐 Secrets 用 Vault / 云厂商 KMS 注入，不入库
+
+服务会对 Upload JWT、管理员密码、管理员 JWT 和每一个 Service Token 做启动期校验。生产值应写入权限为 `0600` 的环境文件（systemd 示例使用 `/etc/zens/go-media-service.env`）或容器 Secret；任何一项为空或长度不足都会 fail-fast，仓库中的 `config.yaml` 不再包含可用凭据。
+
+如果历史版本曾使用过仓库内的固定值，应将它们视为已经泄露：上线本改动前先轮换 Java 与媒体服务共享的 Upload JWT、管理员密码、管理员 JWT 和全部 Service Token，旧值不得继续保留在生产环境。
 
 ---
 

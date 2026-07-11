@@ -1,0 +1,10 @@
+[Unit]
+Description=Periodic Zens operations readiness check
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

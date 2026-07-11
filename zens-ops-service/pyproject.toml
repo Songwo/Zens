@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "zens-ops-service"
+version = "0.1.0"
+description = "Safety-first automation runner for Zens community operations"
+requires-python = ">=3.11"
+dependencies = [
+  "apscheduler>=3.10,<4",
+  "fastapi>=0.115,<1",
+  "httpx>=0.27,<1",
+  "pydantic>=2.8,<3",
+  "pydantic-settings>=2.4,<3",
+  "python-json-logger>=2.0,<4",
+  "uvicorn[standard]>=0.30,<1",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=8,<9", "pytest-asyncio>=0.23,<1", "respx>=0.21,<1"]
+
+[project.scripts]
+zens-ops = "zens_ops.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["zens_ops*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

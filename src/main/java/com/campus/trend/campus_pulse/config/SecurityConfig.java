@@ -96,6 +96,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/static/**", "/api/uploads/**", "/api/ws/**").permitAll()
                         // 内部 s2s 接口由 InternalServiceFilter 单独 HMAC 鉴权,绕过 SecurityFilterChain 的认证
                         .requestMatchers("/api/internal/**").permitAll()
+                        .requestMatchers("/ops-admin/**", "/api/ops-admin/**").hasAnyAuthority("ROLE_ADMIN", "ROLE_SUPER_ADMIN")
                         .requestMatchers(org.springframework.http.HttpMethod.GET, SecurityWhitelist.PUBLIC_GET_URLS).permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.POST, SecurityWhitelist.PUBLIC_POST_URLS).permitAll()
                         .requestMatchers(

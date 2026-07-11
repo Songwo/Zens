@@ -203,6 +203,9 @@ internal:
         secret: ${LOTTERY_SERVICE_SECRET:dev-lottery-service-secret-CHANGE_ME_at_least_16_chars}
       - id: cdk-airdrop
         secret: ${CDK_SERVICE_SECRET:dev-cdk-service-secret-CHANGE_ME_at_least_16_chars}
+      - id: zens-ops
+        enabled: ${ZENS_OPS_ENABLED:false}
+        secret: ${ZENS_OPS_SERVICE_SECRET:}
 
 # 6.Web Url 配置
 Web:
@@ -242,6 +245,14 @@ trend:
 
 # 10. 上传安全控制配置
 campus:
+  ops:
+    service-id: ${OPS_SERVICE_ID:zens-ops}
+    author-username: ${OPS_AUTHOR_USERNAME:zens_ops}
+    daily-publish-limit: ${OPS_DAILY_PUBLISH_LIMIT:1}
+    daily-reply-limit: ${OPS_DAILY_REPLY_LIMIT:10}
+    first-approval-count: ${OPS_FIRST_APPROVAL_COUNT:30}
+    auto-publish: ${OPS_AUTO_PUBLISH:false}
+    circuit-open: ${OPS_CIRCUIT_OPEN:true}
   async:
     core-pool-size: 8      # CPU核数 * 2（从4增至8）
     max-pool-size: 16      # 核心的2倍（从8增至16）

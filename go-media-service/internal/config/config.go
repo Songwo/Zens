@@ -162,6 +162,9 @@ func Load(path string) (*Config, error) {
 	}
 	applyEnvOverrides(&cfg)
 	normalize(&cfg)
+	if err := validateSecrets(&cfg); err != nil {
+		return nil, err
+	}
 	return &cfg, nil
 }
 
@@ -415,8 +418,59 @@ func applyEnvOverrides(cfg *Config) {
 	cfg.Auth.Admin.JWTSecret = utils.EnvString("MEDIA_ADMIN_JWT_SECRET", cfg.Auth.Admin.JWTSecret)
 	cfg.Auth.Admin.Username = utils.EnvString("MEDIA_ADMIN_USERNAME", cfg.Auth.Admin.Username)
 	cfg.Auth.Admin.Password = utils.EnvString("MEDIA_ADMIN_PASSWORD", cfg.Auth.Admin.Password)
+	if raw := strings.TrimSpace(os.Getenv("MEDIA_ADMIN_SERVICE_TOKENS")); raw != "" {
+		cfg.Auth.Admin.ServiceTokens = splitCSVPreserveCase(raw)
+	}
 
 	cfg.Security.PerIPRPS = utils.EnvInt("MEDIA_PER_IP_RPS", cfg.Security.PerIPRPS)
 	cfg.Security.PerUserRPS = utils.EnvInt("MEDIA_PER_USER_RPS", cfg.Security.PerUserRPS)
 	cfg.Security.PublicFileAccess = utils.EnvBool("MEDIA_PUBLIC_FILE_ACCESS", cfg.Security.PublicFileAccess)
+}
+
+func validateSecrets(cfg *Config) error {
+	if cfg.Auth.Upload.Enabled && !isStrongInjectedSecret(cfg.Auth.Upload.JWTSecret, 32) {
+		return fmt.Errorf("MEDIA_UPLOAD_JWT_SECRET must be set and contain at least 32 characters")
+	}
+	if cfg.Panel.Enabled {
+		if strings.TrimSpace(cfg.Auth.Admin.Username) == "" {
+			return fmt.Errorf("MEDIA_ADMIN_USERNAME must be set when the admin panel is enabled")
+		}
+		if !isStrongInjectedSecret(cfg.Auth.Admin.Password, 16) {
+			return fmt.Errorf("MEDIA_ADMIN_PASSWORD must be set and contain at least 16 characters")
+		}
+		if !isStrongInjectedSecret(cfg.Auth.Admin.JWTSecret, 32) {
+			return fmt.Errorf("MEDIA_ADMIN_JWT_SECRET must be set and contain at least 32 characters")
+		}
+	}
+	if len(cfg.Auth.Admin.ServiceTokens) == 0 {
+		return fmt.Errorf("MEDIA_ADMIN_SERVICE_TOKENS must contain at least one token")
+	}
+	for _, token := range cfg.Auth.Admin.ServiceTokens {
+		if !isStrongInjectedSecret(token, 32) {
+			return fmt.Errorf("every MEDIA_ADMIN_SERVICE_TOKENS entry must contain at least 32 characters")
+		}
+	}
+	return nil
+}
+
+func isStrongInjectedSecret(value string, minimumLength int) bool {
+	trimmed := strings.TrimSpace(value)
+	lower := strings.ToLower(trimmed)
+	if len(trimmed) < minimumLength {
+		return false
+	}
+	return !strings.HasPrefix(lower, "replace_with_") &&
+		!strings.HasPrefix(lower, "change-me") &&
+		!strings.Contains(lower, "example")
+}
+
+func splitCSVPreserveCase(value string) []string {
+	parts := strings.Split(value, ",")
+	result := make([]string, 0, len(parts))
+	for _, item := range parts {
+		if trimmed := strings.TrimSpace(item); trimmed != "" {
+			result = append(result, trimmed)
+		}
+	}
+	return result
 }

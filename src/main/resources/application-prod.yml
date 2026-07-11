@@ -146,6 +146,9 @@ internal:
         secret: ${LOTTERY_SERVICE_SECRET}
       - id: cdk-airdrop
         secret: ${CDK_SERVICE_SECRET}
+      - id: zens-ops
+        enabled: ${ZENS_OPS_ENABLED:false}
+        secret: ${ZENS_OPS_SERVICE_SECRET:}
 
 Web:
   AvatarUrl: ${AVATAR_BASE_URL}

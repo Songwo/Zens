@@ -1,0 +1,26 @@
+[Unit]
+Description=Check Zens operations runner readiness
+
+[Service]
+Type=oneshot
+User=zens-ops
+WorkingDirectory=/opt/zens-ops-service
+EnvironmentFile=/etc/zens/zens-ops.env
+ExecStart=/opt/zens-ops-service/.venv/bin/zens-ops health --once
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectControlGroups=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectKernelLogs=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+UMask=0077

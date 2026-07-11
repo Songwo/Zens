@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   go-media-service:
     build:
@@ -14,10 +12,11 @@ services:
       MEDIA_SERVER_PORT: "8090"
       MEDIA_PUBLIC_BASE_URL: "http://localhost:8090"
       MEDIA_DATABASE_DSN: "./data/media.db"
-      MEDIA_ADMIN_USERNAME: "admin"
-      MEDIA_ADMIN_PASSWORD: "admin123456"
-      MEDIA_ADMIN_JWT_SECRET: "change-me-admin-secret"
-      MEDIA_UPLOAD_JWT_SECRET: "change-me-upload-secret"
+      MEDIA_ADMIN_USERNAME: "${MEDIA_ADMIN_USERNAME:-admin}"
+      MEDIA_ADMIN_PASSWORD: "${MEDIA_ADMIN_PASSWORD:?MEDIA_ADMIN_PASSWORD is required}"
+      MEDIA_ADMIN_JWT_SECRET: "${MEDIA_ADMIN_JWT_SECRET:?MEDIA_ADMIN_JWT_SECRET is required}"
+      MEDIA_ADMIN_SERVICE_TOKENS: "${MEDIA_ADMIN_SERVICE_TOKENS:?MEDIA_ADMIN_SERVICE_TOKENS is required}"
+      MEDIA_UPLOAD_JWT_SECRET: "${MEDIA_UPLOAD_JWT_SECRET:?MEDIA_UPLOAD_JWT_SECRET is required}"
     volumes:
       - ./config.yaml:/app/config.yaml:ro
       - ./data:/app/data

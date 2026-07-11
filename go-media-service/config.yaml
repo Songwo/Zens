@@ -45,21 +45,22 @@ upload:
 auth:
   upload:
     enabled: true
-    jwt_secret: 01e4515ae21b09a86f1e6471d2ded654ba0e2e2adb9afc03697f46ceab1c5457
+    # 必须通过 MEDIA_UPLOAD_JWT_SECRET 注入；空值会在启动时 fail-fast。
+    jwt_secret: ""
     issuer: campus-pulse-java
     audience: campus-pulse-media
     header_name: Authorization
     allow_debug_user_header: true
     debug_user_header: X-User-Id
   admin:
-    jwt_secret: 56da45c249191254737ae886b56c8d0bc056a589e6b3163b34fcc93e99478103
+    # 以下敏感值必须由环境变量注入，禁止写入仓库。
+    jwt_secret: ""
     issuer: campus-pulse-media-admin
     username: admin
-    password: Xs2ieHiviTGaLrUFTOj2t7t
+    password: ""
     token_ttl_minutes: 720
     cookie_name: media_panel_token
-    service_tokens:
-      - eaf8adb2a803bba9849e71bd4742d38b6ab9975dc2d29259
+    service_tokens: []
 
 security:
   request_id_header: X-Request-Id

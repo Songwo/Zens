@@ -24,7 +24,7 @@ mysql -u root -p < src/main/resources/sql/campus_pulse_schema.sql
 
 脚本会执行以下动作：
 - 重建 `campus_pulse` 数据库
-- 创建当前版本所需的 25 张核心表
+- 创建当前版本所需的 34 张核心表
 - 创建帖子全文索引、热榜/评论/浏览日志相关索引
 - 生成与当前实体类一致的字段结构
 
@@ -40,6 +40,7 @@ mysql -u root -p < src/main/resources/sql/campus_pulse_schema.sql
 - `sys_view_log` 已补充用户维度和帖子维度组合索引
 - `sys_report.status` 已覆盖异步流程状态：`0/1/2/3/10/11`
 - `sys_tag` 仅保留代码实际使用的字段：`id/name/type/heat/create_time`
+- 自动运营的 `ops_content_plan`、`ops_draft`、`ops_approval`、`ops_job_run`、`ops_metric_snapshot` 已纳入初始化基线
 
 ## 已有数据库升级建议
 已有运行中的数据库不要直接重跑初始化脚本。请先备份，再按 `campus_pulse_schema.sql` 与线上库结构做差异比对，生成一次性升级脚本执行。

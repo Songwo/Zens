@@ -26,6 +26,7 @@ public class InternalServiceProperties {
 
     @Data
     public static class Client {
+        private boolean enabled = true;
         /** 服务标识,子站请求头 X-Service-Id 必须与其一致 */
         private String id;
         /** HMAC-SHA256 共享密钥 */
@@ -37,11 +38,15 @@ public class InternalServiceProperties {
     void validate() {
         Set<String> seen = new HashSet<>();
         for (Client c : clients) {
+            if (c != null && !c.isEnabled()) continue;
             if (c == null || !StringUtils.hasText(c.getId())) {
                 throw new IllegalStateException("internal.service.clients 存在缺少 id 的条目");
             }
             if (!StringUtils.hasText(c.getSecret())) {
                 throw new IllegalStateException("internal.service.clients[" + c.getId() + "] 缺少 secret");
+            }
+            if ("zens-ops".equals(c.getId()) && c.getSecret().length() < 32) {
+                throw new IllegalStateException("internal.service.clients[zens-ops] secret 长度必须至少 32 字符");
             }
             if (!seen.add(c.getId())) {
                 throw new IllegalStateException("internal.service.clients 存在重复 id: " + c.getId());
@@ -53,6 +58,7 @@ public class InternalServiceProperties {
     public Map<String, String> asSecretMap() {
         Map<String, String> map = new LinkedHashMap<>();
         for (Client c : clients) {
+            if (c == null || !c.isEnabled()) continue;
             map.put(c.getId(), c.getSecret());
         }
         return Map.copyOf(map);
