@@ -22,6 +22,7 @@ import org.springframework.util.StreamUtils;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
+import org.springframework.web.util.UriComponentsBuilder;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -149,6 +150,25 @@ public class AgentGatewayServiceImpl implements AgentGatewayService {
     }
 
     @Override
+    public Map<String, Object> weeklyDigest(int days, int limit) {
+        return exchange(insightUrl("/v1/insights/weekly-digest", days, limit, null), HttpMethod.GET, null);
+    }
+
+    @Override
+    public Map<String, Object> unansweredQuestions(int days, int limit, int maxComments) {
+        return exchange(insightUrl("/v1/insights/unanswered", days, limit, maxComments), HttpMethod.GET, null);
+    }
+
+    @Override
+    public Map<String, Object> communityHealth(int days) {
+        String path = UriComponentsBuilder.fromPath("/v1/insights/community-health")
+                .queryParam("days", days)
+                .build()
+                .toUriString();
+        return exchange(path, HttpMethod.GET, null);
+    }
+
+    @Override
     public StreamingResponseBody askStream(CommunityQaAskReq request) {
         if (!isEnabled()) {
             throw new IllegalStateException("Agent 服务未启用，请先检查 campus.agent.enabled 配置");
@@ -195,6 +215,16 @@ public class AgentGatewayServiceImpl implements AgentGatewayService {
             log.warn("Agent 服务调用失败: method={}, url={}, err={}", method, url, ex.getMessage());
             throw new IllegalStateException("Agent 服务暂时不可用，请稍后重试");
         }
+    }
+
+    private String insightUrl(String path, int days, int limit, Integer maxComments) {
+        UriComponentsBuilder builder = UriComponentsBuilder.fromPath(path)
+                .queryParam("days", days)
+                .queryParam("limit", limit);
+        if (maxComments != null) {
+            builder.queryParam("max_comments", maxComments);
+        }
+        return builder.build().toUriString();
     }
 
     private Map<String, Object> buildPayload(CommunityQaAskReq request) {

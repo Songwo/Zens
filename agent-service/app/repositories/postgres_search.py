@@ -6,7 +6,7 @@ from psycopg.rows import dict_row
 from psycopg_pool import ConnectionPool
 
 from app.config import Settings
-from app.repositories.base import CommentHit, OperationsCandidate, PostHit
+from app.repositories.base import CommunityHealth, CommentHit, OperationsCandidate, PostHit
 
 
 class PostgresSearchRepository:
@@ -194,3 +194,41 @@ class PostgresSearchRepository:
             heat_score=float(row["heat_score"] or 0), is_featured=bool(row["is_featured"]),
             created_at=row["created_at"], last_activity_at=row["last_activity_at"], url=f"/t/{row['post_id']}"
         ) for row in rows]
+
+    def get_community_health(self, days: int) -> CommunityHealth:
+        sql = """
+        WITH recent_posts AS (
+          SELECT user_id, comment_count, view_count
+          FROM sys_post
+          WHERE status = 1 AND audit_status = 'APPROVED'
+            AND create_time >= NOW() - (%(days)s * INTERVAL '1 day')
+        ), recent_comments AS (
+          SELECT user_id
+          FROM sys_comment
+          WHERE audit_status = 'APPROVED'
+            AND create_time >= NOW() - (%(days)s * INTERVAL '1 day')
+        ), contributors AS (
+          SELECT user_id FROM recent_posts
+          UNION
+          SELECT user_id FROM recent_comments
+        )
+        SELECT
+          (SELECT COUNT(*) FROM recent_posts) AS published_posts,
+          (SELECT COUNT(*) FROM recent_comments) AS approved_comments,
+          (SELECT COUNT(*) FROM contributors) AS active_contributors,
+          (SELECT COUNT(*) FROM recent_posts WHERE COALESCE(comment_count, 0) = 0) AS unanswered_posts,
+          (SELECT COUNT(*) FROM recent_posts WHERE COALESCE(comment_count, 0) > 0) AS engaged_posts,
+          (SELECT COALESCE(SUM(view_count), 0) FROM recent_posts) AS total_views
+        """
+        with self._pool.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(sql, {"days": days})
+                row = cur.fetchone() or {}
+        return CommunityHealth(
+            published_posts=int(row.get("published_posts") or 0),
+            approved_comments=int(row.get("approved_comments") or 0),
+            active_contributors=int(row.get("active_contributors") or 0),
+            unanswered_posts=int(row.get("unanswered_posts") or 0),
+            engaged_posts=int(row.get("engaged_posts") or 0),
+            total_views=int(row.get("total_views") or 0),
+        )

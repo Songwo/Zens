@@ -7,7 +7,6 @@ import GlobalProgressBar from '@/components/common/GlobalProgressBar.vue'
 import { initSessionResilience } from '@/utils/sessionResilience'
 import { ensureCurrentUserProfile } from '@/utils/sessionProfile'
 import { wsClient } from '@/utils/websocket'
-import { shouldReduceBackgroundWork } from '@/utils/network'
 import { setRouteMeta } from '@/utils/seo'
 import { ElMessage } from 'element-plus'
 import { useRouter } from 'vue-router'
@@ -27,77 +26,6 @@ const shouldMountComposer = ref(false)
 const shouldMountDeferredUi = ref(false)
 const showComposer = computed(() => shouldMountComposer.value)
 let stopSessionResilience: (() => void) | null = null
-let idlePrefetchHandle: number | null = null
-const routePrefetchTimers: number[] = []
-
-const routePrefetchLoaders = [
-  () => import('@/pages/HotPage.vue'),
-  () => import('@/pages/FeaturedPage.vue'),
-]
-
-const clearRoutePrefetch = () => {
-  const win = window as Window & {
-    cancelIdleCallback?: (handle: number) => void
-  }
-
-  if (idlePrefetchHandle !== null && typeof win.cancelIdleCallback === 'function') {
-    win.cancelIdleCallback(idlePrefetchHandle)
-  }
-  idlePrefetchHandle = null
-
-  while (routePrefetchTimers.length) {
-    const timer = routePrefetchTimers.pop()
-    if (typeof timer === 'number') {
-      window.clearTimeout(timer)
-    }
-  }
-}
-
-const runRoutePrefetch = () => {
-  if (document.visibilityState === 'hidden' || shouldReduceBackgroundWork()) {
-    return
-  }
-
-  routePrefetchLoaders.forEach((load, index) => {
-    const timer = window.setTimeout(() => {
-      void load().catch(() => {
-        // ignore non-critical prefetch failures
-      })
-    }, 1200 + index * 600)
-    routePrefetchTimers.push(timer)
-  })
-}
-
-const scheduleRoutePrefetch = () => {
-  if (shouldReduceBackgroundWork()) {
-    return
-  }
-
-  const win = window as Window & {
-    requestIdleCallback?: (callback: IdleRequestCallback, options?: { timeout: number }) => number
-  }
-
-  const scheduleWhenIdle = () => {
-    // 首屏完成后再预取次要路由，避免与首页数据、图片和关键组件争抢带宽。
-    const timer = window.setTimeout(() => {
-      if (typeof win.requestIdleCallback === 'function') {
-        idlePrefetchHandle = win.requestIdleCallback(() => {
-          runRoutePrefetch()
-        }, { timeout: 3000 })
-        return
-      }
-      runRoutePrefetch()
-    }, 5000)
-    routePrefetchTimers.push(timer)
-  }
-
-  if (document.readyState === 'complete') {
-    scheduleWhenIdle()
-  } else {
-    window.addEventListener('load', scheduleWhenIdle, { once: true })
-  }
-}
-
 const scheduleDeferredUiMount = () => {
   const win = window as Window & {
     requestIdleCallback?: (callback: IdleRequestCallback, options?: { timeout: number }) => number
@@ -139,7 +67,6 @@ onMounted(async () => {
   uiStore.applyUiSettings()
   stopSessionResilience = initSessionResilience()
   scheduleDeferredUiMount()
-  scheduleRoutePrefetch()
 
   if ((userStore.accessToken || userStore.refreshToken) && !userStore.userInfo) {
     try {
@@ -186,7 +113,6 @@ watch(() => userStore.userId, (uid, oldUid) => {
 })
 
 onUnmounted(() => {
-  clearRoutePrefetch()
   stopSessionResilience?.()
   stopSessionResilience = null
   unsubForceLogout?.()

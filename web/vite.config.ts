@@ -59,7 +59,9 @@ export default defineConfig({
         // 只预缓存 App Shell 与首页关键块。编辑器、图表、代码高亮语言包等重型异步块改为按需缓存，
         // 避免移动端首次安装/更新 SW 时一次性下载数 MB 的非首屏资源。
         globPatterns: [
-          '**/*.{html,ico,png,svg,woff2}',
+          'index.html',
+          // manifest 图标与 includeAssets 会由插件单独加入；这里不再通配全部图片，
+          // 避免安装 SW 时下载用户尚未看到的媒体资源。
           'assets/index-*.{js,css}',
           'assets/MainLayout-*.{js,css}',
           'assets/HomePage-*.{js,css}',
@@ -88,15 +90,17 @@ export default defineConfig({
             },
           },
           {
-            // 用户上传 / 后端静态图片 / R2 媒体：看过的离线可见，后台静默更新
+            // 上传文件名由服务端/R2 唯一生成，资源 URL 对应不可变内容。
+            // CacheFirst 才能在页面往返时完全避免 StaleWhileRevalidate 的后台重复请求。
             urlPattern: ({ url }) =>
               url.pathname.startsWith('/uploads/')
               || url.pathname.startsWith('/static/')
+              || url.pathname.startsWith('/official/')
               || url.hostname === 'media.allinsong.top',
-            handler: 'StaleWhileRevalidate',
+            handler: 'CacheFirst',
             options: {
               cacheName: 'cp-media',
-              expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 * 30 },
+              expiration: { maxEntries: 300, maxAgeSeconds: 60 * 60 * 24 * 30 },
               cacheableResponse: { statuses: [0, 200] },
             },
           },

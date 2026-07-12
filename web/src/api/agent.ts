@@ -80,6 +80,53 @@ export interface AgentHealthResponse {
   [key: string]: unknown
 }
 
+export interface AgentInsightPost {
+  post_id: string
+  title: string
+  summary: string
+  section_name?: string
+  tags: string[]
+  comment_count: number
+  like_count: number
+  collect_count: number
+  view_count: number
+  score: number
+  reason: string
+  created_at: string
+  url: string
+}
+
+export interface AgentWeeklyDigestResponse {
+  window_days: number
+  generated_at: string
+  highlights: AgentInsightPost[]
+  backend: string
+}
+
+export interface AgentUnansweredResponse {
+  window_days: number
+  max_comments: number
+  questions: AgentInsightPost[]
+  backend: string
+}
+
+export interface AgentCommunityHealthResponse {
+  window_days: number
+  generated_at: string
+  published_posts: number
+  approved_comments: number
+  active_contributors: number
+  unanswered_posts: number
+  engaged_posts: number
+  total_views: number
+  response_rate: number
+  comments_per_post: number
+  health_score: number
+  status: 'healthy' | 'watch' | 'needs_attention'
+  summary: string
+  backend: string
+}
+
 export interface AgentAdminStatus {
   enabled: boolean
   baseUrl: string
@@ -169,6 +216,27 @@ export const agentApi = {
 
   health(config?: AxiosRequestConfig) {
     return api.get<any, Result<AgentHealthResponse>>('/agent/health', config)
+  },
+
+  weeklyDigest(days = 7, limit = 8, config?: AxiosRequestConfig) {
+    return api.get<any, Result<AgentWeeklyDigestResponse>>('/agent/insights/weekly-digest', {
+      ...config,
+      params: { ...(config?.params || {}), days, limit },
+    })
+  },
+
+  unanswered(days = 14, limit = 8, maxComments = 0, config?: AxiosRequestConfig) {
+    return api.get<any, Result<AgentUnansweredResponse>>('/agent/insights/unanswered', {
+      ...config,
+      params: { ...(config?.params || {}), days, limit, maxComments },
+    })
+  },
+
+  communityHealth(days = 7, config?: AxiosRequestConfig) {
+    return api.get<any, Result<AgentCommunityHealthResponse>>('/agent/insights/community-health', {
+      ...config,
+      params: { ...(config?.params || {}), days },
+    })
   },
 
   adminStatus(config?: AxiosRequestConfig) {

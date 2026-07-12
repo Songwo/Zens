@@ -45,6 +45,7 @@ const hotPosts = ref([
       <router-link to="/about">关于我们</router-link> •
       <router-link to="/terms">用户协议</router-link> •
       <router-link to="/privacy">隐私政策</router-link> •
+      <router-link to="/supporter">支持 Zens</router-link> •
       <router-link to="/contact">联系管理</router-link>
       <p class="copyright">© 2026 Zens</p>
     </div>

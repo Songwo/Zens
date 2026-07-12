@@ -3,10 +3,18 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import DOMPurify from 'dompurify'
 import { ElMessage } from 'element-plus'
-import { ArrowUpRight, Bot, FileText, LoaderCircle, SendHorizontal } from 'lucide-vue-next'
+import { Activity, ArrowUpRight, Bot, BookOpen, FileText, LoaderCircle, MessageCircleQuestion, SendHorizontal } from 'lucide-vue-next'
 import MainLayout from '@/layouts/MainLayout.vue'
 import PageBackButton from '@/components/common/PageBackButton.vue'
-import { agentApi, type AgentCitation, type AgentHealthResponse, type AgentRelatedPost, type AgentTrace } from '@/api/agent'
+import {
+  agentApi,
+  type AgentCitation,
+  type AgentCommunityHealthResponse,
+  type AgentHealthResponse,
+  type AgentInsightPost,
+  type AgentRelatedPost,
+  type AgentTrace,
+} from '@/api/agent'
 import { publicDataApi } from '@/api/publicData'
 import {
   buildAgentPromptFromTopic,
@@ -53,6 +61,11 @@ const healthLoading = ref(false)
 const isStreaming = ref(false)
 const currentTurnId = ref('')
 const conversationRef = ref<HTMLElement | null>(null)
+const insightLoading = ref<'weekly' | 'unanswered' | 'health' | ''>('')
+const activeInsight = ref<'weekly' | 'unanswered' | 'health' | ''>('')
+const insightPosts = ref<AgentInsightPost[]>([])
+const communityHealth = ref<AgentCommunityHealthResponse | null>(null)
+const insightError = ref('')
 
 let streamAbortController: AbortController | null = null
 let scrollFrameId = 0
@@ -89,7 +102,7 @@ const heroPrompts = computed(() => {
 
 const backendLabel = computed(() => {
   if (health.value?.backend === 'postgres') return 'PostgreSQL 检索副本'
-  if (health.value?.backend === 'mysql') return 'MySQL 主库检索'
+  if (health.value?.backend === 'mysql') return 'MySQL 只读副本'
   return '等待连接'
 })
 
@@ -106,6 +119,12 @@ const currentSectionLabel = computed(() => {
 })
 
 const canSubmit = computed(() => question.value.trim().length >= 2 && !isStreaming.value)
+
+const healthStatusLabel = computed(() => {
+  if (communityHealth.value?.status === 'healthy') return '状态良好'
+  if (communityHealth.value?.status === 'watch') return '持续观察'
+  return '需要关注'
+})
 
 const buildTurnKey = (questionText: string, sectionId: number | '') =>
   `${questionText.trim()}::${sectionId ? Number(sectionId) : ''}`
@@ -454,6 +473,31 @@ const loadHealth = async () => {
   }
 }
 
+const loadInsight = async (kind: 'weekly' | 'unanswered' | 'health') => {
+  if (insightLoading.value) return
+  activeInsight.value = kind
+  insightLoading.value = kind
+  insightError.value = ''
+  insightPosts.value = []
+  communityHealth.value = null
+  try {
+    if (kind === 'weekly') {
+      const res = await agentApi.weeklyDigest(7, 8, { skipGlobalProgress: true, silentError: true })
+      insightPosts.value = res.data.highlights || []
+    } else if (kind === 'unanswered') {
+      const res = await agentApi.unanswered(14, 8, 0, { skipGlobalProgress: true, silentError: true })
+      insightPosts.value = res.data.questions || []
+    } else {
+      const res = await agentApi.communityHealth(7, { skipGlobalProgress: true, silentError: true })
+      communityHealth.value = res.data
+    }
+  } catch (error: any) {
+    insightError.value = error?.message || '洞察服务暂时不可用'
+  } finally {
+    insightLoading.value = ''
+  }
+}
+
 const openRoute = async (url: string) => {
   if (!url) return
   if (/^https?:\/\//i.test(url)) {
@@ -615,6 +659,82 @@ onUnmounted(() => {
           <span class="agent-meta-pill">{{ currentSectionLabel }}</span>
         </div>
       </header>
+
+      <section class="agent-tools" aria-labelledby="agent-tools-title">
+        <div class="tools-header">
+          <div>
+            <p class="agent-kicker">只读社区洞察</p>
+            <h2 id="agent-tools-title">选择一个 Agent 服务</h2>
+            <p>按需查询只读从库；不自动轮询，也不会修改帖子、评论或用户数据。</p>
+          </div>
+          <span class="agent-meta-pill">点击后才请求</span>
+        </div>
+
+        <div class="tool-grid">
+          <button type="button" class="tool-card" :class="{ active: activeInsight === 'weekly' }" @click="loadInsight('weekly')">
+            <BookOpen class="tool-icon" />
+            <strong>本周精选 Agent</strong>
+            <span>按热度、收藏与真实讨论整理值得回看的内容。</span>
+          </button>
+          <button type="button" class="tool-card" :class="{ active: activeInsight === 'unanswered' }" @click="loadInsight('unanswered')">
+            <MessageCircleQuestion class="tool-icon" />
+            <strong>待回应问题 Agent</strong>
+            <span>找出近两周尚无回复的问题，方便社区成员提供帮助。</span>
+          </button>
+          <button type="button" class="tool-card" :class="{ active: activeInsight === 'health' }" @click="loadInsight('health')">
+            <Activity class="tool-icon" />
+            <strong>社区健康 Agent</strong>
+            <span>查看内容供给、回复覆盖、贡献者和阅读的七日快照。</span>
+          </button>
+        </div>
+
+        <div v-if="activeInsight" class="insight-panel" aria-live="polite">
+          <div v-if="insightLoading" class="insight-loading">
+            <LoaderCircle class="stream-spinner" />
+            <span>正在从只读副本整理数据...</span>
+          </div>
+          <div v-else-if="insightError" class="answer-error">{{ insightError }}</div>
+          <div v-else-if="communityHealth" class="health-overview">
+            <div class="health-score">
+              <strong>{{ communityHealth.health_score }}</strong>
+              <span>{{ healthStatusLabel }}</span>
+            </div>
+            <div class="health-copy">
+              <h3>近 {{ communityHealth.window_days }} 天社区健康快照</h3>
+              <p>{{ communityHealth.summary }}</p>
+              <div class="health-metrics">
+                <span>新帖 {{ communityHealth.published_posts }}</span>
+                <span>评论 {{ communityHealth.approved_comments }}</span>
+                <span>贡献者 {{ communityHealth.active_contributors }}</span>
+                <span>回复覆盖 {{ Math.round(communityHealth.response_rate * 100) }}%</span>
+                <span>未回复 {{ communityHealth.unanswered_posts }}</span>
+                <span>阅读 {{ communityHealth.total_views }}</span>
+              </div>
+            </div>
+          </div>
+          <div v-else-if="insightPosts.length" class="insight-posts">
+            <button
+              v-for="post in insightPosts"
+              :key="`${activeInsight}-${post.post_id}`"
+              type="button"
+              class="insight-post"
+              @click="openRoute(post.url)"
+            >
+              <div>
+                <span class="insight-reason">{{ post.reason }}</span>
+                <strong>{{ post.title }}</strong>
+                <p>{{ post.summary || '打开原帖查看完整内容与讨论。' }}</p>
+                <small>{{ post.section_name || '社区' }} · {{ post.comment_count }} 回复 · {{ post.view_count }} 阅读</small>
+              </div>
+              <ArrowUpRight class="related-jump" />
+            </button>
+          </div>
+          <div v-else class="conversation-empty compact">
+            <h3>当前没有符合条件的内容</h3>
+            <p>这通常意味着近期帖子已经得到回应，或当前时间窗口内没有新内容。</p>
+          </div>
+        </div>
+      </section>
 
       <section class="agent-composer">
         <div class="composer-header">
@@ -919,12 +1039,224 @@ onUnmounted(() => {
 }
 
 .agent-page-header,
+.agent-tools,
 .agent-composer,
 .agent-conversation {
   border: 1px solid var(--agent-border);
   border-radius: 12px;
   background: var(--cp-bg-card, var(--el-bg-color-overlay));
   box-shadow: var(--shadow-soft, 0 1px 3px rgba(15, 23, 42, 0.05));
+}
+
+.agent-tools {
+  padding: 20px 22px;
+}
+
+.tools-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.tools-header h2 {
+  margin: 4px 0 6px;
+  color: var(--el-text-color-primary);
+  font-size: 18px;
+}
+
+.tools-header p:not(.agent-kicker) {
+  margin: 0;
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.tool-grid {
+  margin-top: 16px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.tool-card {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--agent-border);
+  border-radius: 10px;
+  background: var(--agent-surface);
+  color: var(--el-text-color-primary);
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.2s ease, transform 0.2s ease, background-color 0.2s ease;
+}
+
+.tool-card:hover,
+.tool-card.active {
+  border-color: var(--agent-border-strong);
+  background: var(--agent-surface-strong);
+  transform: translateY(-1px);
+}
+
+.tool-icon {
+  width: 22px;
+  height: 22px;
+  color: var(--agent-accent);
+}
+
+.tool-card strong {
+  font-size: 15px;
+}
+
+.tool-card span {
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.insight-panel {
+  margin-top: 14px;
+  padding: 14px;
+  border: 1px solid var(--agent-border);
+  border-radius: 10px;
+  background: var(--cp-bg-card, var(--el-bg-color-overlay));
+}
+
+.insight-loading {
+  min-height: 72px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.insight-posts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.insight-post {
+  padding: 14px;
+  border: 1px solid var(--agent-border);
+  border-radius: 9px;
+  background: var(--agent-surface);
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.insight-post:hover {
+  border-color: var(--agent-border-strong);
+}
+
+.insight-post strong,
+.insight-post p,
+.insight-post small {
+  display: block;
+}
+
+.insight-post strong {
+  margin-top: 7px;
+  color: var(--el-text-color-primary);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.insight-post p {
+  margin: 7px 0;
+  color: var(--el-text-color-regular);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.insight-post small {
+  color: var(--el-text-color-secondary);
+  font-size: 11px;
+}
+
+.insight-reason {
+  color: var(--agent-accent-strong);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.health-overview {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.health-score {
+  width: 92px;
+  min-width: 92px;
+  height: 92px;
+  border-radius: 50%;
+  background: var(--agent-surface-strong);
+  display: grid;
+  place-content: center;
+  text-align: center;
+}
+
+.health-score strong {
+  color: var(--agent-accent-strong);
+  font-size: 30px;
+  line-height: 1;
+}
+
+.health-score span {
+  margin-top: 5px;
+  color: var(--el-text-color-secondary);
+  font-size: 11px;
+}
+
+.health-copy h3,
+.health-copy p {
+  margin: 0;
+}
+
+.health-copy h3 {
+  color: var(--el-text-color-primary);
+  font-size: 16px;
+}
+
+.health-copy p {
+  margin-top: 7px;
+  color: var(--el-text-color-regular);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.health-metrics {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.health-metrics span {
+  min-height: 26px;
+  padding: 0 9px;
+  border-radius: 999px;
+  background: var(--agent-surface);
+  color: var(--el-text-color-secondary);
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.conversation-empty.compact {
+  min-height: 120px;
 }
 
 .agent-page-header {
@@ -1583,6 +1915,7 @@ onUnmounted(() => {
 
 @media (max-width: 900px) {
   .agent-page-header,
+  .agent-tools,
   .agent-composer,
   .agent-conversation {
     border-radius: 12px;
@@ -1600,6 +1933,11 @@ onUnmounted(() => {
   }
 
   .citation-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .tool-grid,
+  .insight-posts {
     grid-template-columns: 1fr;
   }
 
@@ -1627,6 +1965,7 @@ onUnmounted(() => {
 
 @media (max-width: 640px) {
   .agent-page-header,
+  .agent-tools,
   .agent-composer,
   .agent-conversation {
     padding-left: 16px;
@@ -1647,6 +1986,7 @@ onUnmounted(() => {
   }
 
   .composer-header,
+  .tools-header,
   .conversation-header {
     flex-direction: column;
     align-items: stretch;
@@ -1662,6 +2002,10 @@ onUnmounted(() => {
   }
 
   .related-item {
+    align-items: flex-start;
+  }
+
+  .health-overview {
     align-items: flex-start;
   }
 }

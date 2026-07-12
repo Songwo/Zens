@@ -13,15 +13,19 @@ from app.config import get_settings
 from app.models import (
     AskRequest,
     AskResponse,
+    CommunityHealthResponse,
     HealthResponse,
     OperationsCandidateResponse,
     OperationsCandidatesResponse,
     SearchResponse,
+    UnansweredQuestionsResponse,
+    WeeklyDigestResponse,
 )
 from app.repositories.base import SearchRepository
 from app.repositories.mysql_search import MysqlSearchRepository, ReplicaSafetyError
 from app.repositories.postgres_search import PostgresSearchRepository
 from app.services.community_qa import CommunityQaService
+from app.services.community_insights import CommunityInsightsService
 from app.services.llm_client import LlmClient
 
 STARTED_AT = time.time()
@@ -49,6 +53,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         repository=repository,
         llm_client=LlmClient(settings),
     )
+    app.state.insights_service = CommunityInsightsService(repository)
     try:
         yield
     finally:
@@ -165,6 +170,51 @@ def operations_candidates(
         ],
         backend=repository.backend_name,
     )
+
+
+@app.get("/v1/insights/weekly-digest", response_model=WeeklyDigestResponse)
+def weekly_digest(days: int = 7, limit: int = 8) -> WeeklyDigestResponse:
+    _validate_range("days", days, 1, 30)
+    _validate_range("limit", limit, 1, 20)
+    service: CommunityInsightsService = app.state.insights_service
+    try:
+        return service.weekly_digest(days, limit)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail="weekly digest query failed") from exc
+
+
+@app.get("/v1/insights/unanswered", response_model=UnansweredQuestionsResponse)
+def unanswered_questions(
+    days: int = 14,
+    limit: int = 8,
+    max_comments: int = 0,
+) -> UnansweredQuestionsResponse:
+    _validate_range("days", days, 1, 30)
+    _validate_range("limit", limit, 1, 20)
+    _validate_range("max_comments", max_comments, 0, 3)
+    service: CommunityInsightsService = app.state.insights_service
+    try:
+        return service.unanswered_questions(days, limit, max_comments)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail="unanswered questions query failed") from exc
+
+
+@app.get("/v1/insights/community-health", response_model=CommunityHealthResponse)
+def community_health(days: int = 7) -> CommunityHealthResponse:
+    _validate_range("days", days, 1, 30)
+    service: CommunityInsightsService = app.state.insights_service
+    try:
+        return service.community_health(days)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail="community health query failed") from exc
+
+
+def _validate_range(name: str, value: int, minimum: int, maximum: int) -> None:
+    if not minimum <= value <= maximum:
+        raise HTTPException(
+            status_code=422,
+            detail=f"{name} must be between {minimum} and {maximum}",
+        )
 
 
 @app.post("/v1/community-qa/search", response_model=SearchResponse)

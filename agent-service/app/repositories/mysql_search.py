@@ -9,7 +9,7 @@ import pymysql
 from pymysql.cursors import DictCursor
 
 from app.config import Settings
-from app.repositories.base import CommentHit, OperationsCandidate, PostHit
+from app.repositories.base import CommunityHealth, CommentHit, OperationsCandidate, PostHit
 
 _QUESTION_STOP_TERMS = {
     "怎么",
@@ -358,6 +358,49 @@ class MysqlSearchRepository:
             heat_score=float(row["heat_score"] or 0), is_featured=bool(row["is_featured"]),
             created_at=row["created_at"], last_activity_at=row["last_activity_at"],
             url=f"/t/{row['post_id']}",
+        )
+
+    def get_community_health(self, days: int) -> CommunityHealth:
+        sql = """
+        SELECT
+          (SELECT COUNT(*) FROM sys_post p
+           WHERE p.status = 1 AND p.audit_status = 'APPROVED'
+             AND p.create_time >= DATE_SUB(NOW(), INTERVAL %s DAY)) AS published_posts,
+          (SELECT COUNT(*) FROM sys_comment c
+           WHERE c.audit_status = 'APPROVED'
+             AND c.create_time >= DATE_SUB(NOW(), INTERVAL %s DAY)) AS approved_comments,
+          (SELECT COUNT(DISTINCT activity.user_id) FROM (
+             SELECT p.user_id FROM sys_post p
+             WHERE p.status = 1 AND p.audit_status = 'APPROVED'
+               AND p.create_time >= DATE_SUB(NOW(), INTERVAL %s DAY)
+             UNION ALL
+             SELECT c.user_id FROM sys_comment c
+             WHERE c.audit_status = 'APPROVED'
+               AND c.create_time >= DATE_SUB(NOW(), INTERVAL %s DAY)
+          ) activity) AS active_contributors,
+          (SELECT COUNT(*) FROM sys_post p
+           WHERE p.status = 1 AND p.audit_status = 'APPROVED'
+             AND p.create_time >= DATE_SUB(NOW(), INTERVAL %s DAY)
+             AND COALESCE(p.comment_count, 0) = 0) AS unanswered_posts,
+          (SELECT COUNT(*) FROM sys_post p
+           WHERE p.status = 1 AND p.audit_status = 'APPROVED'
+             AND p.create_time >= DATE_SUB(NOW(), INTERVAL %s DAY)
+             AND COALESCE(p.comment_count, 0) > 0) AS engaged_posts,
+          (SELECT COALESCE(SUM(p.view_count), 0) FROM sys_post p
+           WHERE p.status = 1 AND p.audit_status = 'APPROVED'
+             AND p.create_time >= DATE_SUB(NOW(), INTERVAL %s DAY)) AS total_views
+        """
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(sql, [days] * 7)
+                row = cur.fetchone() or {}
+        return CommunityHealth(
+            published_posts=int(row.get("published_posts") or 0),
+            approved_comments=int(row.get("approved_comments") or 0),
+            active_contributors=int(row.get("active_contributors") or 0),
+            unanswered_posts=int(row.get("unanswered_posts") or 0),
+            engaged_posts=int(row.get("engaged_posts") or 0),
+            total_views=int(row.get("total_views") or 0),
         )
 
     def _connect(self) -> pymysql.Connection:

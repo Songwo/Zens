@@ -43,6 +43,16 @@ class OperationsCandidate:
     url: str
 
 
+@dataclass(slots=True)
+class CommunityHealth:
+    published_posts: int
+    approved_comments: int
+    active_contributors: int
+    unanswered_posts: int
+    engaged_posts: int
+    total_views: int
+
+
 class SearchRepository(Protocol):
     backend_name: str
 
@@ -63,3 +73,5 @@ class SearchRepository(Protocol):
         limit: int,
         max_comments: int,
     ) -> List[OperationsCandidate]: ...
+
+    def get_community_health(self, days: int) -> CommunityHealth: ...

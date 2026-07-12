@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
@@ -56,6 +57,34 @@ public class AgentController {
         }
     }
 
+    @GetMapping("/insights/weekly-digest")
+    @RateLimit(key = "agent_weekly_digest", limit = 30, windowSeconds = 60)
+    public Result<?> weeklyDigest(
+            @RequestParam(defaultValue = "7") int days,
+            @RequestParam(defaultValue = "8") int limit) {
+        return Result.success(agentGatewayService.weeklyDigest(
+                requireRange("days", days, 1, 30),
+                requireRange("limit", limit, 1, 20)));
+    }
+
+    @GetMapping("/insights/unanswered")
+    @RateLimit(key = "agent_unanswered_questions", limit = 30, windowSeconds = 60)
+    public Result<?> unansweredQuestions(
+            @RequestParam(defaultValue = "14") int days,
+            @RequestParam(defaultValue = "8") int limit,
+            @RequestParam(defaultValue = "0") int maxComments) {
+        return Result.success(agentGatewayService.unansweredQuestions(
+                requireRange("days", days, 1, 30),
+                requireRange("limit", limit, 1, 20),
+                requireRange("maxComments", maxComments, 0, 3)));
+    }
+
+    @GetMapping("/insights/community-health")
+    @RateLimit(key = "agent_community_health", limit = 30, windowSeconds = 60)
+    public Result<?> communityHealth(@RequestParam(defaultValue = "7") int days) {
+        return Result.success(agentGatewayService.communityHealth(requireRange("days", days, 1, 30)));
+    }
+
     @PostMapping(value = "/community-qa/ask-stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     @RateLimit(key = "agent_community_qa_ask_stream", limit = 12, windowSeconds = 60)
     public ResponseEntity<StreamingResponseBody> askStream(@Valid @RequestBody CommunityQaAskReq request) {
@@ -76,5 +105,12 @@ public class AgentController {
                         outputStream.write(payload.getBytes(StandardCharsets.UTF_8));
                     });
         }
+    }
+
+    private int requireRange(String name, int value, int minimum, int maximum) {
+        if (value < minimum || value > maximum) {
+            throw new IllegalArgumentException(name + " must be between " + minimum + " and " + maximum);
+        }
+        return value;
     }
 }

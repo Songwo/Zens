@@ -114,3 +114,50 @@ class OperationsCandidatesResponse(BaseModel):
     window_days: int
     candidates: List[OperationsCandidateResponse]
     backend: str
+
+
+class InsightPost(BaseModel):
+    post_id: str
+    title: str
+    summary: str = ""
+    section_name: Optional[str] = None
+    tags: List[str] = Field(default_factory=list)
+    comment_count: int = 0
+    like_count: int = 0
+    collect_count: int = 0
+    view_count: int = 0
+    score: float = 0.0
+    reason: str
+    created_at: datetime
+    url: str
+
+
+class WeeklyDigestResponse(BaseModel):
+    window_days: int
+    generated_at: datetime
+    highlights: List[InsightPost]
+    backend: str
+
+
+class UnansweredQuestionsResponse(BaseModel):
+    window_days: int
+    max_comments: int
+    questions: List[InsightPost]
+    backend: str
+
+
+class CommunityHealthResponse(BaseModel):
+    window_days: int
+    generated_at: datetime
+    published_posts: int
+    approved_comments: int
+    active_contributors: int
+    unanswered_posts: int
+    engaged_posts: int
+    total_views: int
+    response_rate: float = Field(ge=0.0, le=1.0)
+    comments_per_post: float = Field(ge=0.0)
+    health_score: int = Field(ge=0, le=100)
+    status: Literal["healthy", "watch", "needs_attention"]
+    summary: str
+    backend: str

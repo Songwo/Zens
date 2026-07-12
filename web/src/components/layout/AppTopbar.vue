@@ -59,6 +59,7 @@ const currentPageLabel = computed(() => {
   if (path === '/featured') return '精华'
   if (path === '/agent') return 'Agent'
   if (path === '/benefits') return '福利'
+  if (path === '/supporter') return '支持 Zens'
   if (path === '/metaverse') return '星港'
   if (path.startsWith('/s/')) return '板块'
   if (path.startsWith('/t/')) return '帖子'
@@ -70,6 +71,7 @@ const mobileSearchShortcuts = [
   { label: '热门排行', path: '/hot' },
   { label: '精华文档', path: '/featured' },
   { label: '福利中心', path: '/benefits' },
+  { label: '支持 Zens', path: '/supporter' },
   { label: '星港', path: '/metaverse' },
 ]
 
@@ -81,6 +83,7 @@ const commandQuickActions = computed(() => {
     { label: '看热榜', desc: '进入社区热门讨论', path: '/hot' },
     { label: '精华汇总', desc: '浏览已沉淀的高价值内容', path: '/featured' },
     { label: '福利中心', desc: '查看可领取的社区福利', path: '/benefits' },
+    { label: '支持 Zens', desc: '了解支持者方案与收费边界', path: '/supporter' },
     { label: '星港', desc: '打开活动、积分与治理入口', path: '/metaverse' },
   ]
 
@@ -568,11 +571,8 @@ onMounted(() => {
     }
   })
 
-  if (userStore.isLoggedIn) {
-    refreshNotificationBadges()
-    subscribeToNotifications()
-    startPolling()
-  }
+  // 登录态的首次加载由上方 immediate watch 统一负责，避免 mounted 再发一轮
+  // 通知/私信未读请求并重复建立 WebSocket 订阅。
 })
 
 onUnmounted(() => {

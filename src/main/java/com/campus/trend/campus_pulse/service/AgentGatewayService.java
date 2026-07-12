@@ -17,5 +17,11 @@ public interface AgentGatewayService {
 
     Map<String, Object> search(CommunityQaAskReq request);
 
+    Map<String, Object> weeklyDigest(int days, int limit);
+
+    Map<String, Object> unansweredQuestions(int days, int limit, int maxComments);
+
+    Map<String, Object> communityHealth(int days);
+
     StreamingResponseBody askStream(CommunityQaAskReq request);
 }

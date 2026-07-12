@@ -150,6 +150,29 @@ class MysqlSearchRepositoryTest(unittest.TestCase):
         self.assertIn("p.comment_count", statements[1])
         self.assertFalse(any(token in statements[1].upper() for token in (" INSERT ", " UPDATE ", " DELETE ")))
 
+    def test_community_health_is_a_read_only_aggregate(self) -> None:
+        settings = self.build_settings(require_read_only=True)
+        connection = FakeConnection(read_only=1, super_read_only=1)
+        connection.health_row = {
+            "published_posts": 8,
+            "approved_comments": 12,
+            "active_contributors": 7,
+            "unanswered_posts": 2,
+            "engaged_posts": 6,
+            "total_views": 320,
+        }
+        repository = MysqlSearchRepository(settings)
+
+        with patch("app.repositories.mysql_search.pymysql.connect", return_value=connection):
+            snapshot = repository.get_community_health(7)
+
+        self.assertEqual(8, snapshot.published_posts)
+        self.assertEqual(7, snapshot.active_contributors)
+        statements = [statement for statement, _ in connection.statements]
+        self.assertEqual("SET SESSION TRANSACTION READ ONLY", statements[0])
+        self.assertIn("SELECT COUNT", statements[1])
+        self.assertFalse(any(token in statements[1].upper() for token in (" INSERT ", " UPDATE ", " DELETE ")))
+
 
 if __name__ == "__main__":
     unittest.main()

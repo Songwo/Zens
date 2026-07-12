@@ -2,7 +2,7 @@
 import { computed, type Component } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/store/user'
-import { ChatDotRound, Connection, Document, EditPen, Setting, Star, SwitchButton, User } from '@element-plus/icons-vue'
+import { ChatDotRound, CoffeeCup, Connection, Document, EditPen, Setting, Star, SwitchButton, User } from '@element-plus/icons-vue'
 import { hasAdminRole, hasBackofficeAccess } from '@/utils/sessionProfile'
 import { triggerSingleLogout } from '@/utils/singleLogout'
 import { resolvePublicAssetUrl } from '@/utils/assetUrl'
@@ -37,6 +37,7 @@ const menuItems = computed<UserMenuItem[]>(() => {
     { key: 'creator', label: '创作管理', icon: EditPen, command: '/me?tab=creator' },
     { key: 'messages', label: '私信会话', icon: ChatDotRound, command: '/messages', divided: true },
     { key: 'metaverse', label: '星港', icon: Connection, command: '/metaverse' },
+    { key: 'supporter', label: '支持 Zens', icon: CoffeeCup, command: '/supporter' },
     { key: 'settings', label: '账户设置', icon: Setting, command: '/settings' },
   ]
   if (canEnterBackoffice.value) {

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Compass, Connection, DataLine, Medal, Menu as IconMenu, Plus, Close, ArrowRight, Present } from '@element-plus/icons-vue'
+import { Compass, Connection, DataLine, Medal, Menu as IconMenu, Plus, Close, ArrowRight, Present, CoffeeCup } from '@element-plus/icons-vue'
 import { publicDataApi } from '@/api/publicData'
 import { tagApi } from '@/api/tag'
 import { useUserStore } from '@/store/user'
@@ -31,6 +31,7 @@ const activeMenu = computed(() => {
   if (route.path.startsWith('/hot')) return '/hot'
   if (route.path.startsWith('/featured')) return '/featured'
   if (route.path.startsWith('/benefits')) return '/benefits'
+  if (route.path.startsWith('/supporter')) return '/supporter'
   if (route.path.startsWith('/metaverse')) return '/metaverse'
   return '/'
 })
@@ -157,6 +158,11 @@ onMounted(async () => {
       <el-menu-item index="/metaverse" @click="go('/metaverse')">
         <el-icon><Connection /></el-icon>
         <span>星港</span>
+      </el-menu-item>
+
+      <el-menu-item index="/supporter" @click="go('/supporter')">
+        <el-icon><CoffeeCup /></el-icon>
+        <span>支持 Zens</span>
       </el-menu-item>
     </el-menu>
 

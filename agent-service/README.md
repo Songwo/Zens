@@ -30,6 +30,7 @@ agent-service/
 │   │   └── postgres_search.py
 │   └── services/
 │       ├── answering.py
+│       ├── community_insights.py
 │       ├── community_qa.py
 │       └── llm_client.py
 ├── scripts/
@@ -62,6 +63,14 @@ agent-service/
 ### 3. `GET /health`
 
 返回服务、当前搜索后端和 MySQL 副本只读状态。该接口始终返回健康快照；供容器编排使用的 `GET /ready` 在数据库不可用时会返回 `503`。
+
+### 4. 只读社区洞察
+
+- `GET /v1/insights/weekly-digest?days=7&limit=8`：按精华、热度、收藏和讨论筛选本周值得回看的帖子。
+- `GET /v1/insights/unanswered?days=14&limit=8&max_comments=0`：筛选尚无回复或回复不足的问题。
+- `GET /v1/insights/community-health?days=7`：返回发帖、评论、贡献者、回复覆盖和阅读量快照。
+
+这些接口只执行 `SELECT`，MySQL 下每次连接仍先执行 `SET SESSION TRANSACTION READ ONLY`。前端 Agent 页面采用按需加载，用户点击对应服务后才发起查询，不进行后台轮询。
 
 ## 快速启动
 
