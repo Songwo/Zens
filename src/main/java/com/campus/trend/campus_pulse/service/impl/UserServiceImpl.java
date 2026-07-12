@@ -24,6 +24,7 @@ import com.campus.trend.campus_pulse.r2.R2Properties;
 import com.campus.trend.campus_pulse.service.NotificationService;
 import com.campus.trend.campus_pulse.service.SectionModeratorService;
 import com.campus.trend.campus_pulse.service.UserService;
+import com.campus.trend.campus_pulse.service.SupporterEntitlementQueryService;
 import com.campus.trend.campus_pulse.utils.SecurityUtils;
 import com.campus.trend.campus_pulse.common.api.ResultCode;
 import com.campus.trend.campus_pulse.common.exception.BusinessException;
@@ -59,6 +60,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     private final SectionMapper sectionMapper;
     private final PostMapper postMapper;
     private final FollowMapper followMapper;
+    private final SupporterEntitlementQueryService supporterEntitlementQueryService;
 
     public UserServiceImpl(PasswordEncoder passwordEncoder,
             com.campus.trend.campus_pulse.service.ContentSecurityService contentSecurityService,
@@ -68,7 +70,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
             ModeratorApplicationMapper moderatorApplicationMapper,
             SectionMapper sectionMapper,
             PostMapper postMapper,
-            FollowMapper followMapper) {
+            FollowMapper followMapper,
+            SupporterEntitlementQueryService supporterEntitlementQueryService) {
         this.passwordEncoder = passwordEncoder;
         this.contentSecurityService = contentSecurityService;
         this.r2Properties = r2Properties;
@@ -78,6 +81,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         this.sectionMapper = sectionMapper;
         this.postMapper = postMapper;
         this.followMapper = followMapper;
+        this.supporterEntitlementQueryService = supporterEntitlementQueryService;
     }
 
     private static final String AUDIT_STATUS_APPROVED = "APPROVED";
@@ -122,6 +126,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
                 new LambdaQueryWrapper<Follow>().eq(Follow::getFollowerId, userId)));
         long followerCount = safeCount(followMapper.selectCount(
                 new LambdaQueryWrapper<Follow>().eq(Follow::getFolloweeId, userId)));
+        var supporter = supporterEntitlementQueryService.findActive(userId);
 
         return new UserProfileResp(
                 user.getId(),
@@ -146,7 +151,10 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
                 user.getCoverConfig(),
                 user.getBadgeText(),
                 user.getBadgeColor(),
-                user.getBadgeStyle()
+                user.getBadgeStyle(),
+                supporter.active(),
+                supporter.tier(),
+                supporter.expiresAt()
         );
     }
 

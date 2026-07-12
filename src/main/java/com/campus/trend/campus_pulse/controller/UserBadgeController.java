@@ -3,6 +3,8 @@ package com.campus.trend.campus_pulse.controller;
 import com.campus.trend.campus_pulse.common.api.Result;
 import com.campus.trend.campus_pulse.entity.UserBadge;
 import com.campus.trend.campus_pulse.service.UserBadgeService;
+import com.campus.trend.campus_pulse.utils.PermissionUtils;
+import com.campus.trend.campus_pulse.utils.SecurityUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
@@ -39,8 +41,9 @@ public class UserBadgeController {
                                 @RequestParam String badgeName,
                                 @RequestParam(required = false) String badgeDesc,
                                 @RequestParam(required = false) String grantReason) {
-        // TODO: 验证管理员权限
-        userBadgeService.grantBadge(userId, badgeType, badgeCategory, badgeName, badgeDesc, grantReason, "admin");
+        if (!PermissionUtils.isAdmin()) return Result.failed("仅管理员可授予徽章");
+        userBadgeService.grantBadge(userId, badgeType, badgeCategory, badgeName, badgeDesc, grantReason,
+                SecurityUtils.getCurrentUserId());
         return Result.success("徽章授予成功");
     }
 
@@ -49,8 +52,8 @@ public class UserBadgeController {
      */
     @PostMapping("/revoke/{badgeId}")
     public Result<?> revokeBadge(@PathVariable Long badgeId) {
-        // TODO: 验证管理员权限
-        userBadgeService.revokeBadge(badgeId, "admin");
+        if (!PermissionUtils.isAdmin()) return Result.failed("仅管理员可撤销徽章");
+        userBadgeService.revokeBadge(badgeId, SecurityUtils.getCurrentUserId());
         return Result.success("徽章已撤销");
     }
 }

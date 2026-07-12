@@ -64,6 +64,9 @@ export interface UserPublicProfile {
     badgeText?: string
     badgeColor?: string
     badgeStyle?: string
+    supporterActive?: boolean
+    supporterTier?: 'SUPPORTER' | 'PLUS'
+    supporterExpiresAt?: string
     postCount: number
     followingCount: number
     followerCount: number

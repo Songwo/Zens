@@ -1,10 +1,12 @@
 package com.campus.trend.campus_pulse.service.impl;
 
 import com.baomidou.mybatisplus.core.MybatisConfiguration;
+import com.baomidou.mybatisplus.core.conditions.Wrapper;
 import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
 import com.campus.trend.campus_pulse.config.properties.PaymentProperties;
 import com.campus.trend.campus_pulse.entity.PaymentOrder;
 import com.campus.trend.campus_pulse.entity.SupporterEntitlement;
+import com.campus.trend.campus_pulse.entity.SupporterPlan;
 import com.campus.trend.campus_pulse.mapper.PaymentCallbackEventMapper;
 import com.campus.trend.campus_pulse.mapper.PaymentOrderMapper;
 import com.campus.trend.campus_pulse.mapper.SupporterEntitlementMapper;
@@ -111,6 +113,42 @@ class SupporterPaymentServiceImplTest {
 
         verify(orderMapper, never()).update(any(), any());
         verify(entitlementMapper, never()).insert(any(SupporterEntitlement.class));
+    }
+
+    @Test
+    void getCurrentStatus_shouldExposeDeliverablePlusCapabilitiesAndBenefits() {
+        LocalDateTime now = LocalDateTime.now();
+        when(entitlementMapper.selectOne(any())).thenReturn(SupporterEntitlement.builder()
+                .userId("user-1").planCode("supporter_plus_30").planNameSnapshot("Zens 共建支持者")
+                .startsAt(now.minusDays(1)).expiresAt(now.plusDays(29)).status("ACTIVE").build());
+        when(planMapper.selectOne(any())).thenReturn(SupporterPlan.builder()
+                .code("supporter_plus_30").benefitsJson("[\"共建反馈专属通道\"]").build());
+
+        var status = service.getCurrentStatus("user-1");
+
+        assertThat(status.active()).isTrue();
+        assertThat(status.remainingDays()).isBetween(28L, 29L);
+        assertThat(status.benefits()).containsExactly("共建反馈专属通道");
+        assertThat(status.capabilities()).contains("SUPPORTER_BADGE", "PROFILE_CO_BUILDER_BADGE",
+                "PRODUCT_FEEDBACK_CHANNEL");
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Wrapper<SupporterEntitlement>> queryCaptor = ArgumentCaptor.forClass(Wrapper.class);
+        verify(entitlementMapper).selectOne(queryCaptor.capture());
+        assertThat(queryCaptor.getValue().getSqlSegment())
+                .contains("starts_at", "<=", "expires_at", ">");
+    }
+
+    @Test
+    void getCurrentStatus_shouldReturnEmptyFactsWhenEntitlementIsMissing() {
+        when(entitlementMapper.selectOne(any())).thenReturn(null);
+
+        var status = service.getCurrentStatus("user-1");
+
+        assertThat(status.active()).isFalse();
+        assertThat(status.remainingDays()).isZero();
+        assertThat(status.benefits()).isEmpty();
+        assertThat(status.capabilities()).isEmpty();
     }
 
     private PaymentOrder order(LocalDateTime createdAt, LocalDateTime expiresAt, int durationDays) {

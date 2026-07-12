@@ -18,6 +18,9 @@ export interface SupporterStatus {
   planName?: string
   startsAt?: string
   expiresAt?: string
+  remainingDays?: number
+  benefits?: string[]
+  capabilities?: string[]
 }
 
 export interface SupporterOrder {

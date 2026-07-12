@@ -5,6 +5,7 @@ import Avatar from '@/components/common/Avatar.vue'
 import UserRoleBadge from '@/components/common/UserRoleBadge.vue'
 import TrustLevelBadge from '@/components/common/TrustLevelBadge.vue'
 import UserBadge from '@/components/common/UserBadge.vue'
+import SupporterBadge from '@/components/common/SupporterBadge.vue'
 import ProfileCover from '@/components/profile/ProfileCover.vue'
 import { parseCoverConfig, type CoverConfig } from '@/utils/coverConfig'
 import { resolvePublicAssetUrl } from '@/utils/assetUrl'
@@ -27,6 +28,9 @@ export interface ProfileHeaderData {
   badgeText?: string
   badgeColor?: string
   badgeStyle?: string
+  supporterActive?: boolean
+  supporterTier?: 'SUPPORTER' | 'PLUS'
+  supporterExpiresAt?: string
   profileCardBgUrl?: string
   coverConfig?: string
   postCount?: number
@@ -80,7 +84,7 @@ const clickableStats = computed(() => isSelf.value)
 </script>
 
 <template>
-  <header class="profile-header">
+  <header class="profile-header" :class="profile.supporterActive ? `supporter-${(profile.supporterTier || 'SUPPORTER').toLowerCase()}` : ''">
     <ProfileCover
       :image-url="coverImageUrl"
       :config="parsedCover"
@@ -97,6 +101,7 @@ const clickableStats = computed(() => isSelf.value)
         <UserRoleBadge :roles="profile.roles || []" />
         <TrustLevelBadge :trust-level="profile.trustLevel ?? 0" />
         <UserBadge :text="profile.badgeText || ''" :color="profile.badgeColor" :effect="profile.badgeStyle" />
+        <SupporterBadge v-if="profile.supporterActive" :tier="profile.supporterTier" :expires-at="profile.supporterExpiresAt" />
         <el-tooltip v-if="profile.level != null" content="资历等级（经验值驱动，仅展示）" placement="top" effect="dark">
           <span class="ph-level-pill">Lv.{{ profile.level }}</span>
         </el-tooltip>
@@ -152,6 +157,8 @@ const clickableStats = computed(() => isSelf.value)
 
 <style scoped>
 .profile-header { background: var(--el-bg-color); }
+.profile-header.supporter-supporter { box-shadow: inset 3px 0 #dec68e; background: linear-gradient(100deg, rgba(222,198,142,.10), transparent 36%), var(--el-bg-color); }
+.profile-header.supporter-plus { box-shadow: inset 3px 0 #b9a1d2; background: linear-gradient(100deg, rgba(185,161,210,.12), transparent 38%), var(--el-bg-color); }
 .ph-body { padding: 0 8px; }
 .ph-avatar { margin-top: -36px; border: 4px solid var(--el-bg-color); border-radius: 50%; }
 .ph-namerow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 8px; }

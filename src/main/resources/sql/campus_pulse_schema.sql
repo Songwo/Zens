@@ -757,7 +757,7 @@ CREATE TABLE `ops_metric_snapshot` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='自动运营周期指标快照表';
 
 -- ============================================================
--- 33-36) 支持者计划、现金订单、支付回调审计与权益账本
+-- 33-37) 支持者计划、现金订单、支付回调审计、权益账本与共建反馈
 -- ============================================================
 CREATE TABLE `supporter_plan` (
   `id` bigint NOT NULL AUTO_INCREMENT, `code` varchar(50) NOT NULL, `name` varchar(80) NOT NULL,
@@ -805,6 +805,17 @@ CREATE TABLE `supporter_entitlement` (
   KEY `idx_supporter_entitlement_user_expire` (`user_id`, `status`, `expires_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支持者权益期限账本';
 
+CREATE TABLE `supporter_feedback` (
+  `id` bigint NOT NULL AUTO_INCREMENT, `user_id` varchar(64) NOT NULL,
+  `subject` varchar(100) NOT NULL, `content` varchar(2000) NOT NULL,
+  `status` varchar(20) NOT NULL DEFAULT 'OPEN', `admin_reply` varchar(2000) DEFAULT NULL,
+  `replied_by` varchar(64) DEFAULT NULL, `replied_at` datetime DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`), KEY `idx_supporter_feedback_user_created` (`user_id`, `created_at`),
+  KEY `idx_supporter_feedback_status_created` (`status`, `created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Zens 共建支持者反馈通道';
+
 -- ============================================================
 -- 基础种子数据
 -- ============================================================
@@ -822,10 +833,10 @@ INSERT INTO `sections` (`id`, `name`, `description`, `icon`, `sort_order`, `stat
 
 INSERT INTO `supporter_plan`
 (`code`, `name`, `description`, `price_cents`, `currency`, `duration_days`, `benefits_json`, `active`, `sort_weight`) VALUES
-('supporter_30', 'Zens 支持者', '支持社区持续维护、内容整理与基础设施成本。不会获得审核优待或推荐排名。', 900, 'CNY', 30,
- '["30 天支持者身份记录","支持者专属月度运营简报","新功能内测邀请（按批次开放）"]', 1, 20),
-('supporter_plus_30', 'Zens 共建支持者', '为社区长期建设提供更多支持，并参与公开的产品反馈与共建讨论。', 1900, 'CNY', 30,
- '["包含 Zens 支持者全部内容","共建反馈议题优先收集","支持者名单展示可由本人随时选择隐藏"]', 1, 10);
+('supporter_30', 'Zens 支持者', '支持社区持续维护与基础设施成本，获得清晰可见的支持者身份与个人资料装饰。', 900, 'CNY', 30,
+ '["30 天支持者身份与到期时间展示","个人资料支持者徽章与专属强调色","本人近 30 天创作数据简报"]', 1, 20),
+('supporter_plus_30', 'Zens 共建支持者', '在支持者权益之上参与长期共建，获得独立的共建身份和结构化反馈通道。', 1900, 'CNY', 30,
+ '["包含 Zens 支持者全部权益","个人资料共建支持者专属徽章","产品共建反馈专属通道","反馈处理状态与官方回复查看"]', 1, 10);
 
 INSERT INTO `sys_changelog`
 (`version`, `title`, `content`, `stage_no`, `stage_label`, `roadmap_status`, `highlights`, `timestamp`, `status`, `sort_order`)

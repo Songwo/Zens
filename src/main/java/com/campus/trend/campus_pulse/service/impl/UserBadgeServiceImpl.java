@@ -101,6 +101,8 @@ public class UserBadgeServiceImpl implements UserBadgeService {
         LambdaQueryWrapper<UserBadge> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(UserBadge::getUserId, userId)
                 .eq(UserBadge::getStatus, 1)
+                .and(w -> w.isNull(UserBadge::getExpiryAt)
+                        .or().gt(UserBadge::getExpiryAt, LocalDateTime.now()))
                 .orderByDesc(UserBadge::getEarnedAt);
         return userBadgeMapper.selectList(wrapper);
     }

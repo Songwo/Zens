@@ -1,6 +1,7 @@
 package com.campus.trend.campus_pulse.dto.response;
 
 import java.util.List;
+import java.time.LocalDateTime;
 
 /**
  * 当前登录用户的完整信息（/user/info）。保持和原 Map 返回相同字段名，
@@ -29,6 +30,9 @@ public record UserProfileResp(
         String coverConfig,
         String badgeText,
         String badgeColor,
-        String badgeStyle
+        String badgeStyle,
+        boolean supporterActive,
+        String supporterTier,
+        LocalDateTime supporterExpiresAt
 ) {
 }

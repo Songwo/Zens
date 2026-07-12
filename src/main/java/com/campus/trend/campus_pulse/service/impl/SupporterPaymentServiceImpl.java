@@ -36,6 +36,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.LocalDateTime;
+import java.time.Duration;
 import java.time.format.DateTimeFormatter;
 import java.util.HexFormat;
 import java.util.List;
@@ -151,16 +152,25 @@ public class SupporterPaymentServiceImpl implements SupporterPaymentService {
 
     @Override
     public SupporterStatusResp getCurrentStatus(String userId) {
+        LocalDateTime now = LocalDateTime.now();
         SupporterEntitlement entitlement = entitlementMapper.selectOne(
                 new LambdaQueryWrapper<SupporterEntitlement>()
                         .eq(SupporterEntitlement::getUserId, userId)
                         .eq(SupporterEntitlement::getStatus, "ACTIVE")
-                        .gt(SupporterEntitlement::getExpiresAt, LocalDateTime.now())
+                        .le(SupporterEntitlement::getStartsAt, now)
+                        .gt(SupporterEntitlement::getExpiresAt, now)
                         .orderByDesc(SupporterEntitlement::getExpiresAt)
                         .last("LIMIT 1"));
-        if (entitlement == null) return new SupporterStatusResp(false, null, null, null, null);
+        if (entitlement == null) {
+            return new SupporterStatusResp(false, null, null, null, null, 0, List.of(), List.of());
+        }
+        SupporterPlan plan = planMapper.selectOne(new LambdaQueryWrapper<SupporterPlan>()
+                .eq(SupporterPlan::getCode, entitlement.getPlanCode()).last("LIMIT 1"));
+        List<String> benefits = plan == null ? List.of() : parseBenefits(plan);
+        List<String> capabilities = capabilitiesFor(entitlement.getPlanCode());
+        long remainingDays = Math.max(1, (Duration.between(now, entitlement.getExpiresAt()).toHours() + 23) / 24);
         return new SupporterStatusResp(true, entitlement.getPlanCode(), entitlement.getPlanNameSnapshot(),
-                entitlement.getStartsAt(), entitlement.getExpiresAt());
+                entitlement.getStartsAt(), entitlement.getExpiresAt(), remainingDays, benefits, capabilities);
     }
 
     @Override
@@ -346,13 +356,30 @@ public class SupporterPaymentServiceImpl implements SupporterPaymentService {
 
     private SupporterPlanResp toPlanResp(SupporterPlan plan) {
         try {
-            List<String> benefits = objectMapper.readValue(plan.getBenefitsJson(), new TypeReference<>() {});
+            List<String> benefits = parseBenefits(plan);
             return new SupporterPlanResp(plan.getCode(), plan.getName(), plan.getDescription(), plan.getPriceCents(),
                     plan.getCurrency(), plan.getDurationDays(), benefits,
                     paymentProperties.isEnabled() && !"disabled".equals(paymentProperties.getProvider()));
         } catch (Exception e) {
             throw new IllegalStateException("支持者方案 benefits_json 配置无效: " + plan.getCode(), e);
         }
+    }
+
+    private List<String> parseBenefits(SupporterPlan plan) {
+        try {
+            if (plan.getBenefitsJson() == null || plan.getBenefitsJson().isBlank()) return List.of();
+            return objectMapper.readValue(plan.getBenefitsJson(), new TypeReference<>() {});
+        } catch (Exception e) {
+            throw new IllegalStateException("支持者方案 benefits_json 配置无效: " + plan.getCode(), e);
+        }
+    }
+
+    /** 能力标识只描述可交付的界面权益，不参与内容推荐、审核或发帖权限。 */
+    private List<String> capabilitiesFor(String planCode) {
+        if ("supporter_plus_30".equals(planCode)) {
+            return List.of("SUPPORTER_BADGE", "PROFILE_SUPPORTER_ACCENT", "PROFILE_CO_BUILDER_BADGE", "PRODUCT_FEEDBACK_CHANNEL");
+        }
+        return List.of("SUPPORTER_BADGE", "PROFILE_SUPPORTER_ACCENT");
     }
 
     private PaymentOrderResp toOrderResp(PaymentOrder order) {

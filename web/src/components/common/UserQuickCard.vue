@@ -6,6 +6,7 @@ import { Position, UserFilled } from '@element-plus/icons-vue'
 import UserRoleBadge from '@/components/common/UserRoleBadge.vue'
 import TrustLevelBadge from '@/components/common/TrustLevelBadge.vue'
 import UserBadge from '@/components/common/UserBadge.vue'
+import SupporterBadge from '@/components/common/SupporterBadge.vue'
 import { followApi } from '@/api/follow'
 import { userApi, type UserPublicProfile } from '@/api/user'
 import { useUserStore } from '@/store/user'
@@ -91,7 +92,9 @@ const quickCardStyle = computed(() => ({
   background: quickCardBgUrl.value
     ? `linear-gradient(135deg, rgba(255,255,255,0.80), rgba(255,255,255,0.80)), url("${quickCardBgUrl.value}") center/cover no-repeat`
     : quickCardPalette.value.background,
-  border: `1px solid ${quickCardPalette.value.borderColor}`,
+  border: profile.value?.supporterActive
+    ? `1px solid ${profile.value.supporterTier === 'PLUS' ? '#b9a1d2' : '#dec68e'}`
+    : `1px solid ${quickCardPalette.value.borderColor}`,
 }))
 
 const canInteract = computed(() => {
@@ -227,6 +230,7 @@ const goToProfile = () => {
               <UserRoleBadge :roles="displayRoles" />
               <TrustLevelBadge :trust-level="profile?.trustLevel ?? 0" />
               <UserBadge :text="displayBadge" :color="displayBadgeColor" :effect="displayBadgeEffect" />
+              <SupporterBadge v-if="profile?.supporterActive" :tier="profile.supporterTier" :expires-at="profile.supporterExpiresAt" />
             </div>
             <div class="username" v-if="displayUsername">@{{ displayUsername }}</div>
             <el-tooltip v-if="profile?.level" content="资历等级（经验值驱动，仅展示）" placement="top" effect="dark">
