@@ -18,6 +18,7 @@ import com.campus.trend.campus_pulse.mapper.PaymentCallbackEventMapper;
 import com.campus.trend.campus_pulse.mapper.PaymentOrderMapper;
 import com.campus.trend.campus_pulse.mapper.SupporterEntitlementMapper;
 import com.campus.trend.campus_pulse.mapper.SupporterPlanMapper;
+import com.campus.trend.campus_pulse.mapper.UserMapper;
 import com.campus.trend.campus_pulse.payment.PaymentCheckout;
 import com.campus.trend.campus_pulse.payment.PaymentNotification;
 import com.campus.trend.campus_pulse.payment.PaymentProvider;
@@ -53,6 +54,7 @@ public class SupporterPaymentServiceImpl implements SupporterPaymentService {
     private final PaymentOrderMapper orderMapper;
     private final PaymentCallbackEventMapper callbackEventMapper;
     private final SupporterEntitlementMapper entitlementMapper;
+    private final UserMapper userMapper;
     private final PaymentProviderRegistry providerRegistry;
     private final PaymentProperties paymentProperties;
     private final ObjectMapper objectMapper;
@@ -86,6 +88,9 @@ public class SupporterPaymentServiceImpl implements SupporterPaymentService {
         if (plan.getPriceCents() == null || plan.getPriceCents() <= 0) {
             throw new BusinessException(ResultCode.FAILED, "支持者方案价格配置无效");
         }
+        if (plan.getDurationDays() == null || plan.getDurationDays() <= 0) {
+            throw new BusinessException(ResultCode.FAILED, "支持者方案权益期限配置无效");
+        }
 
         String providerCode = paymentProperties.getProvider().toLowerCase(Locale.ROOT);
         PaymentProvider provider = providerRegistry.require(providerCode);
@@ -95,6 +100,7 @@ public class SupporterPaymentServiceImpl implements SupporterPaymentService {
                 .userId(userId)
                 .planCode(plan.getCode())
                 .planNameSnapshot(plan.getName())
+                .durationDaysSnapshot(plan.getDurationDays())
                 .amountCents(plan.getPriceCents())
                 .currency(plan.getCurrency())
                 .provider(providerCode)
@@ -115,10 +121,15 @@ public class SupporterPaymentServiceImpl implements SupporterPaymentService {
         try {
             // 外部支付服务商调用不能占用数据库事务；订单先落账，再用同一 orderNo 作为渠道幂等键。
             PaymentCheckout checkout = provider.createCheckout(order);
+            if (checkout.checkoutUrl() == null || checkout.checkoutUrl().isBlank()) {
+                throw new IllegalStateException("支付服务商未返回有效收银台地址");
+            }
             order.setProviderOrderNo(checkout.providerOrderNo());
             order.setCheckoutUrl(checkout.checkoutUrl());
             order.setUpdatedAt(LocalDateTime.now());
-            orderMapper.updateById(order);
+            if (orderMapper.updateById(order) != 1) {
+                throw new IllegalStateException("支付订单收银台信息保存失败");
+            }
         } catch (RuntimeException e) {
             order.setStatus("FAILED");
             order.setFailureReason(safeFailureReason(e.getMessage()));
@@ -203,28 +214,32 @@ public class SupporterPaymentServiceImpl implements SupporterPaymentService {
             rejectEvent(event, "回调金额或币种与订单不一致");
             return;
         }
+        if (!PAID.equals(notification.status())) {
+            rejectEvent(event, "支付通知状态不是 PAID");
+            return;
+        }
         if (PAID.equals(order.getStatus())) {
             finishEvent(event, "DUPLICATE");
             return;
         }
-        if (!PENDING.equals(order.getStatus())) {
+        if (!PENDING.equals(order.getStatus()) && !"EXPIRED".equals(order.getStatus())) {
             rejectEvent(event, "订单状态不允许支付");
             return;
         }
-        if (LocalDateTime.now().isAfter(order.getExpiresAt())) {
-            rejectEvent(event, "订单已过期");
+        LocalDateTime paidAt = notification.paidAt();
+        if (paidAt == null) {
+            rejectEvent(event, "支付通知缺少支付时间");
             return;
         }
-
-        LocalDateTime paidAt = notification.paidAt() == null ? LocalDateTime.now() : notification.paidAt();
         if (paidAt.isAfter(LocalDateTime.now().plusMinutes(10))
-                || paidAt.isBefore(order.getCreatedAt().minusMinutes(10))) {
+                || paidAt.isBefore(order.getCreatedAt().minusMinutes(10))
+                || paidAt.isAfter(order.getExpiresAt())) {
             rejectEvent(event, "支付时间超出订单有效范围");
             return;
         }
         int updated = orderMapper.update(null, new LambdaUpdateWrapper<PaymentOrder>()
                 .eq(PaymentOrder::getId, order.getId())
-                .eq(PaymentOrder::getStatus, PENDING)
+                .in(PaymentOrder::getStatus, PENDING, "EXPIRED")
                 .set(PaymentOrder::getStatus, PAID)
                 .set(PaymentOrder::getPaidAt, paidAt)
                 .set(PaymentOrder::getProviderOrderNo, notification.providerOrderNo())
@@ -232,13 +247,15 @@ public class SupporterPaymentServiceImpl implements SupporterPaymentService {
         if (updated != 1) {
             PaymentOrder latest = orderMapper.selectById(order.getId());
             if (latest == null || !PAID.equals(latest.getStatus())) {
-                rejectEvent(event, "订单并发状态冲突");
-                return;
+                throw new IllegalStateException("支付订单并发状态冲突，请渠道重试通知");
             }
             finishEvent(event, "DUPLICATE");
             return;
         }
 
+        order.setStatus(PAID);
+        order.setPaidAt(paidAt);
+        order.setProviderOrderNo(notification.providerOrderNo());
         grantEntitlement(order, paidAt);
         finishEvent(event, "PROCESSED");
         notificationService.createNotification(order.getUserId(), NotificationType.SYSTEM,
@@ -250,13 +267,20 @@ public class SupporterPaymentServiceImpl implements SupporterPaymentService {
     }
 
     private void grantEntitlement(PaymentOrder order, LocalDateTime paidAt) {
+        if (!PAID.equals(order.getStatus())) {
+            throw new BusinessException(ResultCode.FAILED, "仅已支付订单可以发放支持者权益");
+        }
+        if (userMapper.lockByIdForUpdate(order.getUserId()) == null) {
+            throw new BusinessException(ResultCode.FAILED, "支付订单对应用户不存在");
+        }
         SupporterEntitlement existing = entitlementMapper.selectOne(
                 new LambdaQueryWrapper<SupporterEntitlement>()
                         .eq(SupporterEntitlement::getSourceOrderNo, order.getOrderNo()).last("LIMIT 1"));
         if (existing != null) return;
-        SupporterPlan plan = planMapper.selectOne(new LambdaQueryWrapper<SupporterPlan>()
-                .eq(SupporterPlan::getCode, order.getPlanCode()).last("LIMIT 1"));
-        if (plan == null) throw new BusinessException(ResultCode.FAILED, "订单对应方案不存在");
+        Integer durationDays = order.getDurationDaysSnapshot();
+        if (durationDays == null || durationDays <= 0) {
+            throw new BusinessException(ResultCode.FAILED, "订单权益期限快照无效");
+        }
         SupporterEntitlement latest = entitlementMapper.selectOne(
                 new LambdaQueryWrapper<SupporterEntitlement>()
                         .eq(SupporterEntitlement::getUserId, order.getUserId())
@@ -270,7 +294,7 @@ public class SupporterPaymentServiceImpl implements SupporterPaymentService {
                 .planNameSnapshot(order.getPlanNameSnapshot())
                 .sourceOrderNo(order.getOrderNo())
                 .startsAt(startsAt)
-                .expiresAt(startsAt.plusDays(plan.getDurationDays()))
+                .expiresAt(startsAt.plusDays(durationDays))
                 .status("ACTIVE")
                 .createdAt(LocalDateTime.now())
                 .build());

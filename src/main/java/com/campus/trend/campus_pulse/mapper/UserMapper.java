@@ -88,5 +88,9 @@ public interface UserMapper extends BaseMapper<User> {
     /** 读取当前余额（同事务内在原子更新之后调用即为本笔变动后余额） */
     @Select("SELECT COALESCE(points, 0) FROM sys_user WHERE id = #{userId}")
     Integer selectPointsById(@Param("userId") String userId);
+
+    /** 支付权益顺延的事务级用户锁，串行化同一用户的多笔到账。 */
+    @Select("SELECT id FROM sys_user WHERE id = #{userId} FOR UPDATE")
+    String lockByIdForUpdate(@Param("userId") String userId);
 }
 

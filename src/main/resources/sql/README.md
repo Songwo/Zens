@@ -3,7 +3,7 @@
 ## 单一事实源
 本目录中唯一有效的初始化脚本是 `campus_pulse_schema.sql`。
 
-它已经合并了当前后端代码所依赖的完整表结构、字段、索引和约束。后续数据库结构变更必须先改代码，再同步回写这个文件，禁止继续维护零散 migration SQL。
+它已经合并了当前后端代码所依赖的完整表结构、字段、索引和约束。后续数据库结构变更必须先改代码，再同步回写这个文件。`migrations` 只保留已上线数据库的一次性升级记录，不作为全新初始化的串行脚本集。
 
 ## 适用场景
 - 全新初始化数据库
@@ -46,6 +46,9 @@ mysql -u root -p < src/main/resources/sql/campus_pulse_schema.sql
 已有运行中的数据库不要直接重跑初始化脚本。请先备份，再按 `campus_pulse_schema.sql` 与线上库结构做差异比对，生成一次性升级脚本执行。
 
 历史 `migrations` 目录下的评论软删除、评论收藏、短链接 SQL 已合并进主 schema，不再作为单独事实源维护。
+
+支付升级特别说明：已执行原始 `2026-07-11-supporter-payments.sql` 的旧库，仅执行
+`2026-07-12-payment-order-hardening.sql`；全新库只执行 `campus_pulse_schema.sql`，不要再串行执行这两个文件。
 
 ## 维护要求
 - 每次后端实体字段变更后，必须同步检查 `campus_pulse_schema.sql`

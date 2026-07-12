@@ -770,7 +770,8 @@ CREATE TABLE `supporter_plan` (
 
 CREATE TABLE `payment_order` (
   `id` bigint NOT NULL AUTO_INCREMENT, `order_no` varchar(40) NOT NULL, `user_id` varchar(64) NOT NULL,
-  `plan_code` varchar(50) NOT NULL, `plan_name_snapshot` varchar(80) NOT NULL, `amount_cents` int NOT NULL,
+  `plan_code` varchar(50) NOT NULL, `plan_name_snapshot` varchar(80) NOT NULL,
+  `duration_days_snapshot` int NOT NULL, `amount_cents` int NOT NULL,
   `currency` char(3) NOT NULL, `provider` varchar(30) NOT NULL, `provider_order_no` varchar(100) DEFAULT NULL,
   `status` varchar(20) NOT NULL DEFAULT 'PENDING', `idempotency_key` varchar(100) NOT NULL,
   `checkout_url` varchar(1000) DEFAULT NULL, `failure_reason` varchar(500) DEFAULT NULL, `paid_at` datetime DEFAULT NULL,
@@ -779,7 +780,10 @@ CREATE TABLE `payment_order` (
   PRIMARY KEY (`id`), UNIQUE KEY `uk_payment_order_no` (`order_no`),
   UNIQUE KEY `uk_payment_order_user_idem` (`user_id`, `idempotency_key`),
   KEY `idx_payment_order_user_time` (`user_id`, `created_at`),
-  KEY `idx_payment_order_provider_order` (`provider`, `provider_order_no`),
+  UNIQUE KEY `uk_payment_order_provider_order` (`provider`, `provider_order_no`),
+  CONSTRAINT `chk_payment_provider_order_no_nonblank`
+    CHECK (`provider_order_no` IS NULL OR CHAR_LENGTH(TRIM(`provider_order_no`)) > 0),
+  CONSTRAINT `chk_payment_duration_days_positive` CHECK (`duration_days_snapshot` > 0),
   KEY `idx_payment_order_status_expire` (`status`, `expires_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='现金支付订单';
 

@@ -22,6 +22,7 @@ public class PaymentOrder {
     private String userId;
     private String planCode;
     private String planNameSnapshot;
+    private Integer durationDaysSnapshot;
     private Integer amountCents;
     private String currency;
     private String provider;

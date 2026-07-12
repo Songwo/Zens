@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Check, Lock, Medal, RefreshRight } from '@element-plus/icons-vue'
 import MainLayout from '@/layouts/MainLayout.vue'
@@ -7,12 +8,28 @@ import PageBackButton from '@/components/common/PageBackButton.vue'
 import { supporterApi, type SupporterOrder, type SupporterPlan, type SupporterStatus } from '@/api/supporter'
 
 const loading = ref(true)
+const route = useRoute()
+const router = useRouter()
 const submitting = ref<string | null>(null)
 const plans = ref<SupporterPlan[]>([])
 const status = ref<SupporterStatus>({ active: false })
 const lastOrder = ref<SupporterOrder | null>(null)
+const orderLoading = ref(false)
+const pollFinished = ref(false)
+let pollTimer: ReturnType<typeof setTimeout> | null = null
+let resolvePollDelay: (() => void) | null = null
+let pollingCancelled = false
+const POLL_DELAYS = [0, 1500, 3000, 5000, 8000, 12000]
 
 const paymentAvailable = computed(() => plans.value.some(plan => plan.paymentAvailable))
+const normalizedOrderStatus = computed(() => (lastOrder.value?.status || '').toUpperCase())
+const orderState = computed(() => {
+  if (normalizedOrderStatus.value === 'PAID') return { type: 'success', title: '支付成功', message: '支持者权益已经开通，感谢你帮助 Zens 持续运行。' }
+  if (['FAILED', 'EXPIRED', 'CANCELLED', 'CLOSED'].includes(normalizedOrderStatus.value)) {
+    return { type: 'danger', title: '订单未完成', message: normalizedOrderStatus.value === 'EXPIRED' ? '订单已过期，请重新发起支付。' : '支付失败或订单已关闭，本次不会开通权益。' }
+  }
+  return { type: 'warning', title: pollFinished.value ? '仍在确认支付结果' : '正在确认支付结果', message: pollFinished.value ? '支付回调可能稍有延迟，你可以稍后手动刷新订单状态。' : '已返回 Zens，正在等待支付平台的安全回调，请不要重复付款。' }
+})
 
 const formatMoney = (cents: number) => `¥${(cents / 100).toFixed(cents % 100 ? 2 : 0)}`
 const formatTime = (value?: string) => value ? new Date(value).toLocaleString('zh-CN', { hour12: false }) : '—'
@@ -65,16 +82,70 @@ const support = async (plan: SupporterPlan) => {
   }
 }
 
-const refreshOrder = async () => {
-  if (!lastOrder.value) return
-  const res = await supporterApi.order(lastOrder.value.orderNo)
-  if (res.code === 2000 && res.data) {
-    lastOrder.value = res.data
-    if (res.data.status === 'PAID') await load()
+const fetchOrder = async (orderNo: string) => {
+  orderLoading.value = true
+  try {
+    const res = await supporterApi.order(orderNo)
+    if (res.code === 2000 && res.data) {
+      lastOrder.value = res.data
+      if (res.data.status === 'PAID') await load()
+    }
+  } finally {
+    orderLoading.value = false
   }
 }
 
-onMounted(load)
+const refreshOrder = async () => {
+  if (!lastOrder.value) return
+  await fetchOrder(lastOrder.value.orderNo)
+}
+
+const restoreReturnedOrder = async (orderNo: string) => {
+  for (let index = 0; index < POLL_DELAYS.length; index += 1) {
+    if (pollingCancelled) return
+    const delay = POLL_DELAYS[index] ?? 0
+    if (delay > 0) {
+      await new Promise<void>((resolve) => {
+        resolvePollDelay = resolve
+        pollTimer = setTimeout(() => {
+          pollTimer = null
+          resolvePollDelay = null
+          resolve()
+        }, delay)
+      })
+    }
+    if (pollingCancelled) return
+    await fetchOrder(orderNo)
+    if (lastOrder.value && normalizedOrderStatus.value !== 'PENDING') break
+  }
+  pollFinished.value = normalizedOrderStatus.value === 'PENDING'
+}
+
+onMounted(async () => {
+  await load()
+  const queryOrderNo = Array.isArray(route.query.orderNo) ? route.query.orderNo[0] : route.query.orderNo
+  const orderNo = typeof queryOrderNo === 'string' ? queryOrderNo.trim() : ''
+  if (orderNo) {
+    try {
+      await restoreReturnedOrder(orderNo)
+    } catch (error: any) {
+      pollFinished.value = true
+      ElMessage.error(error?.response?.data?.message || '订单状态查询失败，请稍后重试')
+    } finally {
+      const query = { ...route.query }
+      delete query.orderNo
+      await router.replace({ query }).catch(() => undefined)
+    }
+  }
+})
+
+onBeforeUnmount(() => {
+  pollingCancelled = true
+  if (pollTimer) clearTimeout(pollTimer)
+  pollTimer = null
+  resolvePollDelay?.()
+  resolvePollDelay = null
+})
 </script>
 
 <template>
@@ -127,13 +198,14 @@ onMounted(load)
         </article>
       </section>
 
-      <section v-if="lastOrder" class="order-card">
+      <section v-if="lastOrder" class="order-card" :class="`is-${orderState.type}`">
         <div>
           <p class="eyebrow">latest order</p>
-          <strong>{{ lastOrder.planName }} · {{ lastOrder.status }}</strong>
+          <strong>{{ orderState.title }} · {{ lastOrder.planName }}</strong>
+          <span class="order-message">{{ orderState.message }}</span>
           <span>订单号 {{ lastOrder.orderNo }}，订单过期时间 {{ formatTime(lastOrder.expiresAt) }}</span>
         </div>
-        <el-button :icon="RefreshRight" round @click="refreshOrder">刷新状态</el-button>
+        <el-button :icon="RefreshRight" :loading="orderLoading" round @click="refreshOrder">刷新状态</el-button>
       </section>
 
       <section class="principles">
@@ -162,6 +234,7 @@ onMounted(load)
 .plan-card h2 { margin: 0; font-size: 25px; color: #20242b; }.price { margin-top: 18px; font-size: 42px; font-weight: 900; color: #20242b; }.price small { margin-left: 6px; color: #98a2b3; font-size: 13px; font-weight: 700; }
 .description { min-height: 52px; color: #667085; line-height: 1.7; }.plan-card ul { min-height: 114px; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 10px; }.plan-card li { display: flex; gap: 8px; color: #475467; line-height: 1.55; }.plan-card li .el-icon { flex: 0 0 auto; margin-top: 4px; color: #12a150; }.plan-card .el-button { width: 100%; margin-top: 12px; }
 .order-card { margin-top: 22px; padding: 22px; border: 1px solid #e7e9ed; border-radius: 18px; display: flex; justify-content: space-between; gap: 18px; align-items: center; }.order-card div { display: flex; flex-direction: column; gap: 6px; }.order-card span { color: #667085; font-size: 13px; }
+.order-card.is-success { border-color: #abefc6; background: #f6fef9; }.order-card.is-danger { border-color: #fecdca; background: #fffafa; }.order-card.is-warning { border-color: #fedf89; background: #fffcf5; }.order-card .order-message { color: #344054; font-size: 14px; line-height: 1.6; }
 .principles { margin-top: 28px; padding: 28px; border-radius: 22px; background: #20242b; color: #fff; }.principles h2 { margin-top: 0; }.principle-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 20px; }.principle-grid p { margin: 0; color: #cbd0d8; line-height: 1.75; }.principle-grid strong { color: #fff; }
 @media (max-width: 760px) { .supporter-page { padding: 18px 10px 48px; }.hero { padding: 28px 22px; }.plan-grid,.principle-grid { grid-template-columns: 1fr; }.order-card { align-items: stretch; flex-direction: column; }.plan-card ul,.description { min-height: auto; } }
 </style>

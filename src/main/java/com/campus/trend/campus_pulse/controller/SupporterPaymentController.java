@@ -9,6 +9,7 @@ import com.campus.trend.campus_pulse.service.SupporterPaymentService;
 import com.campus.trend.campus_pulse.utils.SecurityUtils;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -20,6 +21,7 @@ import java.util.Map;
 
 @RestController
 @RequiredArgsConstructor
+@Slf4j
 public class SupporterPaymentController {
     private final SupporterPaymentService service;
 
@@ -47,9 +49,15 @@ public class SupporterPaymentController {
     public ResponseEntity<String> callback(@PathVariable String provider,
                                            @RequestBody String rawBody,
                                            @RequestHeader Map<String, String> headers) {
-        Map<String, String> normalizedHeaders = new LinkedHashMap<>();
-        headers.forEach((key, value) -> normalizedHeaders.put(key.toLowerCase(Locale.ROOT), value));
-        service.handleCallback(provider, rawBody, normalizedHeaders);
-        return ResponseEntity.ok("success");
+        try {
+            Map<String, String> normalizedHeaders = new LinkedHashMap<>();
+            headers.forEach((key, value) -> normalizedHeaders.put(key.toLowerCase(Locale.ROOT), value));
+            service.handleCallback(provider, rawBody, normalizedHeaders);
+            return ResponseEntity.ok().contentType(MediaType.TEXT_PLAIN).body("success");
+        } catch (RuntimeException retryableFailure) {
+            log.warn("[payment] callback processing failed; provider will retry, provider={}", provider,
+                    retryableFailure);
+            return ResponseEntity.ok().contentType(MediaType.TEXT_PLAIN).body("failure");
+        }
     }
 }

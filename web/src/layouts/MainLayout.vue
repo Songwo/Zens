@@ -82,6 +82,10 @@ onMounted(() => {
         </aside>
       </div>
     </div>
+    <footer class="site-footer">
+      <span>© 2026 Zens</span>
+      <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">蒙ICP备2026000841号-2</a>
+    </footer>
     <nav class="mobile-bottom-nav">
       <button
         v-for="item in mobileNavItems"
@@ -193,6 +197,25 @@ onMounted(() => {
   display: none;
 }
 
+.site-footer {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  padding: 4px 16px 24px;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+}
+
+.site-footer a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.site-footer a:hover {
+  color: var(--el-color-primary);
+}
+
 .rail-float-enter-active,
 .rail-float-leave-active {
   transition: opacity 0.28s ease, transform 0.34s cubic-bezier(0.22, 1, 0.36, 1);
@@ -244,6 +267,10 @@ onMounted(() => {
     box-shadow: 0 14px 34px rgba(15, 23, 42, 0.16);
     backdrop-filter: blur(18px) saturate(128%);
     -webkit-tap-highlight-color: transparent;
+  }
+
+  .site-footer {
+    padding-bottom: calc(var(--cp-mobile-nav-height) + env(safe-area-inset-bottom, 0px) + 24px);
   }
 
   .mobile-nav-item {
