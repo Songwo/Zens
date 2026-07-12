@@ -106,6 +106,7 @@ public class SecurityWhitelist {
                         "/agent/community-qa/ask",
                         "/agent/community-qa/ask-stream",
                         "/agent/community-qa/search",
+                        "/agent/insights/**",
                         "/performance/web-vitals",
                         "/payment/callback/**",
                         "/growth/events",
