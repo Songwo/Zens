@@ -81,6 +81,11 @@ export const ssoApi = {
         return api.post<any, Result<SsoClientItem>>('/sso/clients/presets/cdk-airdrop')
     },
 
+    /** 一键创建或修复公益 API 站 OAuth2 应用 */
+    upsertPublicApiClient() {
+        return api.post<any, Result<SsoClientItem>>('/sso/clients/presets/public-api')
+    },
+
     /** 获取应用公开信息（授权页用） */
     getPublicClientInfo(clientId: string) {
         return api.get<any, Result<SsoClientPublicInfo>>(`/sso/clients/public/${clientId}`)
@@ -89,5 +94,14 @@ export const ssoApi = {
     /** 生成 SSO Token（已登录用户调用） */
     authorize(data: { clientId: string; redirectUri: string }) {
         return api.post<any, Result<{ ssoToken: string }>>('/sso/authorize', data)
+    },
+
+    /** 生成标准 OAuth2 一次性授权码（路径名保留 oidc 兼容）。 */
+    authorizeOidc(data: { clientId: string; redirectUri: string; state: string; scope?: string }) {
+        return api.post<any, Result<{ redirectUrl: string }>>('/sso/oidc/authorize', data)
+    },
+
+    denyOidc(data: { clientId: string; redirectUri: string; state: string }) {
+        return api.post<any, Result<{ redirectUrl: string }>>('/sso/oidc/deny', data)
     },
 }

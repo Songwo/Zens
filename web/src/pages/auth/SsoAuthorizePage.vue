@@ -8,6 +8,10 @@ const router = useRouter()
 
 const clientId = computed(() => (route.query.client_id as string) || '')
 const redirectUri = computed(() => (route.query.redirect_uri as string) || '')
+const protocol = computed(() => (route.query.protocol as string) || 'legacy')
+const oidcState = computed(() => (route.query.state as string) || '')
+const oidcScope = computed(() => (route.query.scope as string) || 'profile email')
+const oauthScopes = computed(() => new Set(oidcScope.value.split(/\s+/).filter(Boolean)))
 
 const loading = ref(true)
 const authorizing = ref(false)
@@ -26,7 +30,17 @@ onMounted(async () => {
     const accessToken = localStorage.getItem('access_token') || sessionStorage.getItem('access_token')
     if (!accessToken) {
         // 未登录，跳转到登录页，登录完成后再回来
-        const returnPath = `/sso/authorize?client_id=${encodeURIComponent(clientId.value)}&redirect_uri=${encodeURIComponent(redirectUri.value)}`
+        const returnQuery = new URLSearchParams({
+            client_id: clientId.value,
+            redirect_uri: redirectUri.value,
+        })
+        if (protocol.value === 'oidc') {
+            returnQuery.set('protocol', 'oidc')
+            returnQuery.set('response_type', 'code')
+            returnQuery.set('scope', oidcScope.value)
+            returnQuery.set('state', oidcState.value)
+        }
+        const returnPath = `/sso/authorize?${returnQuery.toString()}`
         router.replace({ path: '/auth', query: { type: 'login', redirect: returnPath } })
         return
     }
@@ -54,6 +68,23 @@ async function handleAuthorize() {
     authorizing.value = true
     error.value = ''
     try {
+        if (protocol.value === 'oidc') {
+            if (!oidcState.value) {
+                throw new Error('OIDC state 参数缺失')
+            }
+            const oidcRes = await ssoApi.authorizeOidc({
+                clientId: clientId.value,
+                redirectUri: redirectUri.value,
+                state: oidcState.value,
+                scope: oidcScope.value,
+            })
+            const redirectUrl = oidcRes.data?.redirectUrl
+            if (!redirectUrl) {
+                throw new Error('OIDC 授权码生成失败')
+            }
+            window.location.href = redirectUrl
+            return
+        }
         const res = await ssoApi.authorize({
             clientId: clientId.value,
             redirectUri: redirectUri.value,
@@ -72,13 +103,25 @@ async function handleAuthorize() {
     }
 }
 
-function handleCancel() {
-    // 取消授权，重定向回去并带上 error
-    if (redirectUri.value) {
-        const separator = redirectUri.value.includes('?') ? '&' : '?'
-        window.location.href = `${redirectUri.value}${separator}error=access_denied`
-    } else {
+async function handleCancel() {
+    if (protocol.value !== 'oidc' || !redirectUri.value || !oidcState.value) {
         router.push('/')
+        return
+    }
+    authorizing.value = true
+    error.value = ''
+    try {
+        const res = await ssoApi.denyOidc({
+            clientId: clientId.value,
+            redirectUri: redirectUri.value,
+            state: oidcState.value,
+        })
+        const safeRedirect = res.data?.redirectUrl
+        if (!safeRedirect) throw new Error('无法验证授权回调地址')
+        window.location.href = safeRedirect
+    } catch (e: any) {
+        error.value = e.message || '拒绝授权失败'
+        authorizing.value = false
     }
 }
 </script>
@@ -127,10 +170,9 @@ function handleCancel() {
                 <div class="sso-permissions">
                     <div class="sso-perm-title">该应用将获取你的以下信息：</div>
                     <ul>
-                        <li>✓ 用户名和昵称</li>
-                        <li>✓ 头像</li>
-                        <li>✓ 邮箱</li>
-                        <li>✓ 角色和等级</li>
+                        <li>✓ 账号唯一标识</li>
+                        <li v-if="protocol !== 'oidc' || oauthScopes.has('profile')">✓ 用户名、昵称和头像</li>
+                        <li v-if="protocol !== 'oidc' || oauthScopes.has('email')">✓ 已绑定邮箱</li>
                     </ul>
                 </div>
 

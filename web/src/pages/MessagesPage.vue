@@ -78,6 +78,7 @@ const userStore = useUserStore()
 
 const conversations = ref<DirectConversation[]>([])
 const conversationsLoading = ref(false)
+const conversationsRefreshing = ref(false)
 const conversationKeyword = ref('')
 const activePeerId = ref('')
 const activePeerName = ref('')
@@ -148,7 +149,7 @@ const startPolling = () => {
   stopPolling()
   pollTimer = setInterval(() => {
     if (!document.hidden) {
-      loadConversations().catch(() => {})
+      loadConversations(true).catch(() => {})
     }
   }, 35000)
 }
@@ -158,7 +159,7 @@ const handleVisibilityChange = () => {
     stopPolling()
     return
   }
-  loadConversations().catch(() => {})
+  loadConversations(true).catch(() => {})
   startPolling()
 }
 
@@ -228,16 +229,27 @@ const receiptLabel = (msg: DirectMessage) => {
   return msg.readReceipt === 'READ' || msg.isRead === 1 ? '已读' : '已送达'
 }
 
-const loadConversations = async () => {
-  conversationsLoading.value = true
+const loadConversations = async (silent = false) => {
+  if (conversationsLoading.value || conversationsRefreshing.value) return
+  if (silent) {
+    conversationsRefreshing.value = true
+  } else {
+    conversationsLoading.value = true
+  }
   try {
     const res = await dmApi.getConversations(1, 50)
     conversations.value = res.data?.records || []
     syncActiveConversationByRoute()
   } catch {
-    ElMessage.error('会话列表加载失败')
+    if (!silent) {
+      ElMessage.error('会话列表加载失败')
+    }
   } finally {
-    conversationsLoading.value = false
+    if (silent) {
+      conversationsRefreshing.value = false
+    } else {
+      conversationsLoading.value = false
+    }
   }
 }
 
@@ -563,7 +575,7 @@ const subscribeToMessagesWs = () => {
         existed.lastTime = newMsg.createdAt
         conversations.value = [existed, ...conversations.value.filter(c => c.peerId !== newMsg.senderId)]
       } else {
-        loadConversations().catch(() => {})
+        loadConversations(true).catch(() => {})
       }
     }
   })

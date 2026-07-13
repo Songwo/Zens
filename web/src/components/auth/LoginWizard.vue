@@ -337,7 +337,7 @@ const handlePasswordLogin = async () => {
     try {
       const res = await authApi.login({
         loginType: 'password',
-        account: pwdForm.account,
+        account: pwdForm.account.trim(),
         password: pwdForm.password,
         rememberMe: pwdForm.rememberMe,
         'cf-turnstile-response': turnstileEnabled ? turnstileToken.value : ''
@@ -610,6 +610,10 @@ onUnmounted(() => {
               placeholder="请输入用户名或邮箱"
               :prefix-icon="User"
               size="large"
+              maxlength="100"
+              autocomplete="username"
+              autocapitalize="none"
+              spellcheck="false"
               @keyup.enter="handlePasswordLogin"
             />
           </el-form-item>
@@ -622,6 +626,8 @@ onUnmounted(() => {
               show-password
               :prefix-icon="Lock"
               size="large"
+              maxlength="128"
+              autocomplete="current-password"
               @keyup.enter="handlePasswordLogin"
             />
           </el-form-item>

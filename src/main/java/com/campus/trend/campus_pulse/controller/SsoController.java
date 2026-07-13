@@ -4,6 +4,7 @@ import com.campus.trend.campus_pulse.common.api.Result;
 import com.campus.trend.campus_pulse.entity.SsoClient;
 import com.campus.trend.campus_pulse.entity.User;
 import com.campus.trend.campus_pulse.service.SsoClientService;
+import com.campus.trend.campus_pulse.service.OidcAuthorizationService;
 import com.campus.trend.campus_pulse.service.UserService;
 import com.campus.trend.campus_pulse.utils.JwtUtil;
 import com.campus.trend.campus_pulse.utils.SecurityUtils;
@@ -14,6 +15,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.util.UriComponentsBuilder;
 
 import java.nio.charset.StandardCharsets;
 import java.security.Key;
@@ -36,6 +41,7 @@ public class SsoController {
     private final UserService userService;
     private final JwtUtil jwtUtil;
     private final com.campus.trend.campus_pulse.monitor.EcosystemMetrics ecosystemMetrics;
+    private final OidcAuthorizationService oidcAuthorizationService;
 
     private static final String POINT_SHOP_CLIENT_ID = "zdc-shop";
     private static final String POINT_SHOP_CLIENT_NAME = "Zens 积分商城";
@@ -74,6 +80,11 @@ public class SsoController {
     private static final String CDK_DESCRIPTION = "Zens 社区 CDK 空投领取站，使用主站账号单点登录并发放兑换码与活动权益。";
     private static final String CDK_LOGO_URL = "/logo.png";
 
+    private static final String PUBLIC_API_CLIENT_ID = "zens-public-api";
+    private static final String PUBLIC_API_CLIENT_NAME = "Zens 公益 API 站";
+    private static final String PUBLIC_API_REDIRECT_URI = "https://pip.kdns.fr/oauth/oidc";
+    private static final String PUBLIC_API_DESCRIPTION = "Zens 公益 API 服务，使用社区账号登录并保持独立站内会话。";
+
     @Value("${jwt.secret}")
     private String jwtSecret;
 
@@ -110,6 +121,13 @@ public class SsoController {
     public Result<?> upsertCdkAirdropClient() {
         return upsertPreset(CDK_CLIENT_ID, CDK_CLIENT_NAME,
                 CDK_REDIRECT_URI, CDK_DESCRIPTION, CDK_LOGO_URL);
+    }
+
+    /** 一键创建或修复公益 API 站 OAuth2 应用。 */
+    @PostMapping("/clients/presets/public-api")
+    public Result<?> upsertPublicApiClient() {
+        return upsertPreset(PUBLIC_API_CLIENT_ID, PUBLIC_API_CLIENT_NAME,
+                PUBLIC_API_REDIRECT_URI, PUBLIC_API_DESCRIPTION, "/logo.png");
     }
 
     /** preset 应用的通用 upsert：复用 ssoClientService.upsertPresetClient，幂等。 */
@@ -299,6 +317,137 @@ public class SsoController {
         log.info("SSO 授权: userId={}, clientId={}, redirectUri={}, result=success", userId, clientId, redirectUri);
 
         return Result.success(Map.of("ssoToken", ssoToken));
+    }
+
+    /**
+     * OAuth2 浏览器入口。保留 /oidc 路径兼容公益站既有回调 slug。
+     */
+    @GetMapping("/oidc/authorize")
+    public ResponseEntity<?> oidcAuthorizeStart(
+            @RequestParam("client_id") String clientId,
+            @RequestParam("redirect_uri") String redirectUri,
+            @RequestParam("response_type") String responseType,
+            @RequestParam(defaultValue = "profile email") String scope,
+            @RequestParam String state) {
+        if (!"code".equals(responseType) || !isSafeState(state) || !isSupportedOAuthScope(scope)) {
+            return ResponseEntity.badRequest().body(Map.of("error", "invalid_request"));
+        }
+        try {
+            ssoClientService.validateClient(clientId, redirectUri);
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", "invalid_client"));
+        }
+        String location = UriComponentsBuilder.fromPath("/sso/authorize")
+                .queryParam("client_id", clientId)
+                .queryParam("redirect_uri", redirectUri)
+                .queryParam("response_type", "code")
+                .queryParam("scope", scope)
+                .queryParam("state", state)
+                .queryParam("protocol", "oidc")
+                .build().encode().toUriString();
+        return ResponseEntity.status(HttpStatus.FOUND).header(HttpHeaders.LOCATION, location).build();
+    }
+
+    /** 已登录用户确认后签发一次性 OAuth2 授权码。 */
+    @PostMapping("/oidc/authorize")
+    public ResponseEntity<Result<?>> oidcAuthorize(@RequestBody Map<String, String> body) {
+        String userId = SecurityUtils.getCurrentUserId();
+        if (userId == null) {
+            return sensitive(Result.failed("请先登录"));
+        }
+        String clientId = body.get("clientId");
+        String redirectUri = body.get("redirectUri");
+        String state = body.get("state");
+        String scope = body.get("scope");
+        if (!StringUtils.hasText(clientId) || !StringUtils.hasText(redirectUri)
+                || !isSafeState(state) || !isSupportedOAuthScope(scope)) {
+            return sensitive(Result.failed("缺少或不支持的 OAuth 参数"));
+        }
+        try {
+            String code = oidcAuthorizationService.issueAuthorizationCode(userId, clientId, redirectUri, scope);
+            String callback = UriComponentsBuilder.fromUriString(redirectUri)
+                    .queryParam("code", code)
+                    .queryParam("state", state)
+                    .build().encode().toUriString();
+            return sensitive(Result.success(Map.of("redirectUrl", callback)));
+        } catch (RuntimeException e) {
+            return sensitive(Result.failed(e.getMessage()));
+        }
+    }
+
+    /** 拒绝授权时同样由服务端校验回调地址，禁止前端 query 参数形成开放重定向。 */
+    @PostMapping("/oidc/deny")
+    public ResponseEntity<Result<?>> denyOAuthAuthorization(@RequestBody Map<String, String> body) {
+        String clientId = body.get("clientId");
+        String redirectUri = body.get("redirectUri");
+        String state = body.get("state");
+        if (!StringUtils.hasText(clientId) || !StringUtils.hasText(redirectUri) || !isSafeState(state)) {
+            return sensitive(Result.failed("缺少必要参数"));
+        }
+        try {
+            ssoClientService.validateClient(clientId, redirectUri);
+            String callback = UriComponentsBuilder.fromUriString(redirectUri)
+                    .queryParam("error", "access_denied")
+                    .queryParam("state", state)
+                    .build().encode().toUriString();
+            return sensitive(Result.success(Map.of("redirectUrl", callback)));
+        } catch (RuntimeException e) {
+            return sensitive(Result.failed("客户端或回调地址无效"));
+        }
+    }
+
+    /** OAuth2 授权码换取短时 Bearer Token，客户端必须使用服务端密钥认证。 */
+    @PostMapping(value = "/oidc/token", consumes = "application/x-www-form-urlencoded")
+    public ResponseEntity<?> oidcToken(
+            @RequestParam("grant_type") String grantType,
+            @RequestParam String code,
+            @RequestParam("client_id") String clientId,
+            @RequestParam("client_secret") String clientSecret,
+            @RequestParam("redirect_uri") String redirectUri) {
+        if (!"authorization_code".equals(grantType)) {
+            return oauthSensitive(HttpStatus.BAD_REQUEST, Map.of("error", "unsupported_grant_type"));
+        }
+        try {
+            return oauthSensitive(HttpStatus.OK,
+                    oidcAuthorizationService.exchangeCode(code, clientId, clientSecret, redirectUri));
+        } catch (RuntimeException e) {
+            return oauthSensitive(HttpStatus.BAD_REQUEST, Map.of("error", "invalid_grant"));
+        }
+    }
+
+    /** OAuth2 userinfo：只接受专为公益站 OAuth 流程签发的访问令牌。 */
+    @GetMapping("/oidc/userinfo")
+    public ResponseEntity<?> oidcUserInfo(@RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization) {
+        if (!StringUtils.hasText(authorization) || !authorization.startsWith("Bearer ")) {
+            return oauthSensitive(HttpStatus.UNAUTHORIZED, Map.of("error", "invalid_token"));
+        }
+        try {
+            return oauthSensitive(HttpStatus.OK, oidcAuthorizationService.userInfo(authorization.substring(7)));
+        } catch (RuntimeException e) {
+            return oauthSensitive(HttpStatus.UNAUTHORIZED, Map.of("error", "invalid_token"));
+        }
+    }
+
+    private boolean isSupportedOAuthScope(String scope) {
+        if (!StringUtils.hasText(scope)) return true;
+        return Arrays.stream(scope.trim().split("\\s+"))
+                .allMatch(item -> "profile".equals(item) || "email".equals(item));
+    }
+
+    private boolean isSafeState(String state) {
+        return StringUtils.hasText(state) && state.length() <= 512
+                && state.chars().noneMatch(Character::isISOControl);
+    }
+
+    private ResponseEntity<Result<?>> sensitive(Result<?> body) {
+        return ResponseEntity.ok().cacheControl(org.springframework.http.CacheControl.noStore()).body(body);
+    }
+
+    private ResponseEntity<?> oauthSensitive(HttpStatus status, Object body) {
+        return ResponseEntity.status(status)
+                .cacheControl(org.springframework.http.CacheControl.noStore())
+                .header(HttpHeaders.PRAGMA, "no-cache")
+                .body(body);
     }
 
     // =================== 辅助方法 ===================

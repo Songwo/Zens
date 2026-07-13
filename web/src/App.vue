@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, defineComponent, h, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useUserStore } from '@/store/user'
 import { useUiStore } from '@/store/ui'
 import { usePostComposerStore } from '@/store/postComposer'
@@ -17,7 +17,30 @@ const composerStore = usePostComposerStore()
 const router = useRouter()
 let unsubForceLogout: (() => void) | null = null
 
-const AsyncPostComposerModal = defineAsyncComponent(() => import('@/components/compose/PostComposerModal.vue'))
+const loadPostComposerModal = () => import('@/components/compose/PostComposerModal.vue')
+// 只预热较轻的弹窗外壳；CodeMirror 等重型编辑器依赖仍在真正发帖时按需加载。
+const preloadPostComposer = () => loadPostComposerModal()
+const ComposerLoadingOverlay = defineComponent({
+  name: 'ComposerLoadingOverlay',
+  setup() {
+    return () => h('div', {
+      class: 'composer-loading-overlay',
+      role: 'status',
+      'aria-live': 'polite',
+      'aria-label': '正在准备发帖编辑器',
+    }, [
+      h('div', { class: 'composer-loading-card' }, [
+        h('span', { class: 'composer-loading-spinner', 'aria-hidden': 'true' }),
+        h('span', '正在准备编辑器…'),
+      ]),
+    ])
+  },
+})
+const AsyncPostComposerModal = defineAsyncComponent({
+  loader: loadPostComposerModal,
+  loadingComponent: ComposerLoadingOverlay,
+  delay: 0,
+})
 const AsyncAppearanceDock = defineAsyncComponent(() => import('@/components/ui/AppearanceDock.vue'))
 const AsyncPulseNotification = defineAsyncComponent(() => import('@/components/common/PulseNotification.vue'))
 const AsyncPwaInstallPrompt = defineAsyncComponent(() => import('@/components/common/PwaInstallPrompt.vue'))
@@ -25,6 +48,7 @@ const AsyncNetworkStatusBanner = defineAsyncComponent(() => import('@/components
 const shouldMountComposer = ref(false)
 const shouldMountDeferredUi = ref(false)
 const showComposer = computed(() => shouldMountComposer.value)
+let composerPreloadScheduled = false
 let stopSessionResilience: (() => void) | null = null
 const scheduleDeferredUiMount = () => {
   const win = window as Window & {
@@ -52,6 +76,27 @@ const scheduleDeferredUiMount = () => {
   }
 }
 
+const scheduleComposerPreload = () => {
+  if (!userStore.accessToken && !userStore.refreshToken) return
+  if (composerPreloadScheduled) return
+  composerPreloadScheduled = true
+
+  const win = window as Window & {
+    requestIdleCallback?: (callback: IdleRequestCallback, options?: { timeout: number }) => number
+  }
+  const preload = () => {
+    void preloadPostComposer().catch((error) => {
+      console.debug('发帖编辑器预加载未完成，将在打开时重试', error)
+    })
+  }
+
+  if (typeof win.requestIdleCallback === 'function') {
+    win.requestIdleCallback(preload, { timeout: 3500 })
+    return
+  }
+  window.setTimeout(preload, 1800)
+}
+
 watch(
   () => composerStore.isOpen,
   (open) => {
@@ -62,11 +107,19 @@ watch(
   { immediate: true }
 )
 
+watch(
+  () => Boolean(userStore.accessToken || userStore.refreshToken),
+  (hasSession) => {
+    if (hasSession) scheduleComposerPreload()
+  }
+)
+
 onMounted(async () => {
   // Song：说明
   uiStore.applyUiSettings()
   stopSessionResilience = initSessionResilience()
   scheduleDeferredUiMount()
+  scheduleComposerPreload()
 
   if ((userStore.accessToken || userStore.refreshToken) && !userStore.userInfo) {
     try {
@@ -163,6 +216,45 @@ onUnmounted(() => {
   transform-origin: 50% 0;
 }
 
+.composer-loading-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2999;
+  display: grid;
+  place-items: center;
+  background: rgba(15, 23, 42, 0.24);
+  backdrop-filter: blur(3px);
+}
+
+.composer-loading-card {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 184px;
+  padding: 15px 18px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 16px;
+  background: var(--el-bg-color, #fff);
+  color: var(--el-text-color-primary, #1f2937);
+  box-shadow: 0 20px 55px rgba(15, 23, 42, 0.18);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.composer-loading-spinner {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  border: 2px solid rgba(34, 197, 94, 0.2);
+  border-top-color: #2f855a;
+  border-radius: 50%;
+  animation: composer-loading-spin 0.72s linear infinite;
+}
+
+@keyframes composer-loading-spin {
+  to { transform: rotate(360deg); }
+}
+
 .route-shell-enter-active {
   transition: opacity 0.28s ease, transform 0.34s cubic-bezier(0.22, 1, 0.36, 1), filter 0.28s ease;
 }
@@ -184,6 +276,10 @@ onUnmounted(() => {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .composer-loading-spinner {
+    animation-duration: 1.8s;
+  }
+
   .route-shell-enter-active,
   .route-shell-leave-active {
     transition-duration: 0.01ms;

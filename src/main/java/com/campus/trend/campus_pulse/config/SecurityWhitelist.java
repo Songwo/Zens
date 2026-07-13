@@ -89,6 +89,8 @@ public class SecurityWhitelist {
                         "/changelog/list",
                         "/short-link/**",
                         "/sso/clients/public/**",
+                        "/sso/oidc/authorize",
+                        "/sso/oidc/userinfo",
                         "/onebox/preview",
                         "/reaction",
                         "/performance/web-vitals/summary",
@@ -109,6 +111,7 @@ public class SecurityWhitelist {
                         "/agent/community-qa/search",
                         "/performance/web-vitals",
                         "/payment/callback/**",
+                        "/sso/oidc/token",
                         "/growth/events",
                         "/comment/create",
                         "/short-link/comment");

@@ -260,6 +260,10 @@ campus:
       notify-url: ${ALIPAY_NOTIFY_URL:}
       return-url: ${ALIPAY_RETURN_URL:}
       seller-id: ${ALIPAY_SELLER_ID:}
+  supporter-voucher:
+    # 32 字节随机密钥的 Base64；生产环境必须写入受限 .env，禁止提交真实值。
+    encryption-key: ${SUPPORTER_VOUCHER_ENCRYPTION_KEY:}
+    redemption-url: ${SUPPORTER_VOUCHER_REDEMPTION_URL:https://pip.kdns.fr}
   ops:
     service-id: ${OPS_SERVICE_ID:zens-ops}
     author-username: ${OPS_AUTHOR_USERNAME:zens_ops}

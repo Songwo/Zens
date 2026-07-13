@@ -112,7 +112,7 @@ public class AuthController {
      */
     @PostMapping("/login")
     public Result<?> login(
-            @RequestBody LoginReq loginRequest,
+            @Valid @RequestBody LoginReq loginRequest,
             @RequestHeader(value = "X-Device-Id", required = false) String deviceId,
             HttpServletRequest request) {
         String clientIp = resolveClientIp(request);

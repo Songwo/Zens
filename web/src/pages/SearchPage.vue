@@ -80,7 +80,6 @@ let suggestAbortController: AbortController | null = null
 let userAbortController: AbortController | null = null
 let tagAbortController: AbortController | null = null
 let agentAbortController: AbortController | null = null
-let agentTimer: ReturnType<typeof setTimeout> | null = null
 let agentRequestId = 0
 let lastAgentSignature = ''
 let syncingRouteState = false
@@ -242,7 +241,7 @@ const agentPanelTitle = computed(() => {
   if (agentError.value) return 'Agent 问答暂时没有跑通'
   if (agentHasAnswer.value) return 'Agent 已回答当前搜索'
   if (agentHasHits.value) return 'Agent 已为当前搜索补充证据'
-  return 'Agent 会自动帮你整理社区线索'
+  return '需要时，让 Agent 帮你整理社区线索'
 })
 const agentPanelDescription = computed(() => {
   if (agentUsingSearchFallback.value) return '专用 Agent 暂未返回引用时，会先复用已经命中的帖子，保证推荐和搜索结果保持一致。'
@@ -250,7 +249,7 @@ const agentPanelDescription = computed(() => {
   if (agentError.value) return agentError.value
   if (agentHasAnswer.value) return agentFallbackLabel.value || '回答基于社区帖子与评论生成，下面保留可跳转的引用和相近帖子。'
   if (agentHasHits.value) return '这些内容来自社区帖子与评论，可以作为普通搜索结果之外的补充入口。'
-  return '输入至少 2 个字符后，搜索会自动触发 Agent 回答，不需要再进入单独页面。'
+  return '先查看普通搜索结果；如果需要归纳和引用，再主动让 Agent 整理。'
 })
 
 const emptyRecoveryDescription = computed(() => {
@@ -668,20 +667,6 @@ const fetchAgentRecommendations = async (force = false) => {
   }
 }
 
-const scheduleAgentRecommendations = (delay = 320) => {
-  if (agentTimer) {
-    clearTimeout(agentTimer)
-    agentTimer = null
-  }
-  if (!canOpenAgent.value) {
-    resetAgentState()
-    return
-  }
-  agentTimer = setTimeout(() => {
-    fetchAgentRecommendations(false)
-  }, delay)
-}
-
 const triggerSearch = (keyword?: string) => {
   const q = (keyword ?? normalizedQuery.value).trim()
   if (!q) {
@@ -750,7 +735,7 @@ const clearFilters = () => {
 
 watch(normalizedQuery, () => {
   scheduleDynamicSuggestions()
-  scheduleAgentRecommendations()
+  resetAgentState()
 })
 
 watch(() => [route.query.q, route.query.sectionId], ([newQuery]) => {
@@ -762,7 +747,7 @@ watch(() => [route.query.q, route.query.sectionId], ([newQuery]) => {
 
   if (q) {
     scheduleFetch(true)
-    scheduleAgentRecommendations()
+    resetAgentState()
   } else {
     resetSearchResultState()
     resetAgentState()
@@ -775,15 +760,15 @@ watch(() => [filters.value.category, filters.value.sortBy, filters.value.timeRan
   }
   if (normalizedQuery.value && searchTab.value === 'post') {
     scheduleFetch(true)
-    scheduleAgentRecommendations()
   }
+  resetAgentState()
 })
 
 watch(searchTab, () => {
   if (normalizedQuery.value) {
     scheduleFetch(true)
   }
-  scheduleAgentRecommendations()
+  resetAgentState()
 })
 
 onMounted(() => {
@@ -799,7 +784,6 @@ onMounted(() => {
   if (q) {
     searchQuery.value = q
     scheduleFetch(true)
-    scheduleAgentRecommendations(0)
   }
 })
 
@@ -817,10 +801,6 @@ onUnmounted(() => {
   if (suggestTimer) {
     clearTimeout(suggestTimer)
     suggestTimer = null
-  }
-  if (agentTimer) {
-    clearTimeout(agentTimer)
-    agentTimer = null
   }
 })
 </script>
@@ -973,9 +953,22 @@ onUnmounted(() => {
         <p v-if="posts.length > 0">
           为您找到相关结果约 <span class="highlight">{{ total }}</span> 个
         </p>
+        <el-button
+          v-if="posts.length > 0 && !agentLoading && !agentResult"
+          type="primary"
+          plain
+          :icon="MagicStick"
+          :disabled="!canOpenAgent"
+          @click="openAgentPanel"
+        >
+          让 Agent 整理这些结果
+        </el-button>
       </div>
 
-      <section v-if="normalizedQuery && searchTab === 'post'" class="agent-panel">
+      <section
+        v-if="normalizedQuery && searchTab === 'post' && (agentLoading || agentError || agentResult)"
+        class="agent-panel"
+      >
         <div class="agent-panel-header">
           <div class="agent-panel-copy">
             <p class="agent-panel-kicker">Agent 回答</p>
@@ -1007,7 +1000,7 @@ onUnmounted(() => {
             :loading="agentLoading"
             @click="openAgentPanel"
           >
-            {{ agentError ? '重试回答' : '重新回答' }}
+            {{ agentError ? '重试回答' : agentResult ? '重新回答' : '让 Agent 整理' }}
           </el-button>
         </div>
 
@@ -1085,7 +1078,7 @@ onUnmounted(() => {
             <span class="agent-panel-highlight">{{ normalizedQuery }}</span>
             <span v-if="selectedCategoryLabel">· {{ selectedCategoryLabel }}</span>
           </div>
-          <span class="agent-panel-feature">自动加载</span>
+          <span class="agent-panel-feature">按需生成</span>
         </div>
       </section>
 
@@ -1395,9 +1388,18 @@ onUnmounted(() => {
 }
 
 .results-info {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
   margin-bottom: 20px;
   color: var(--el-text-color-secondary);
   font-size: 14px;
+}
+
+.results-info p {
+  margin: 0;
 }
 
 .agent-panel {

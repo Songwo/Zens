@@ -50,6 +50,7 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
@@ -67,6 +68,12 @@ public class AuthServiceImpl implements AuthService {
     private static final String LOGIN_SEEN_PREFIX = "auth:login:seen:";
     private static final long LOGIN_CONTEXT_TTL_DAYS = 30;
     private static final long LOGIN_IP_TYPE_TTL_DAYS = 7;
+    /**
+     * 用户不存在时仍执行一次密码校验，减少通过响应时间枚举账号的可能。
+     * 该值是一个不对应任何真实用户的 BCrypt 哈希。
+     */
+    private static final String DUMMY_PASSWORD_HASH =
+            "$2a$10$7EqJtq98hPqEX7fNZaFWoO5uC9pS6V0zC2vZxCGg0iT8Lr7F6jH2K";
 
     private final PasswordEncoder passwordEncoder;
     private final StringRedisTemplate stringRedisTemplate;
@@ -121,6 +128,8 @@ public class AuthServiceImpl implements AuthService {
         String loginType = req.getLoginType();
         if (!StringUtils.hasText(loginType)) {
             loginType = StringUtils.hasText(req.getCode()) ? "otp" : "password";
+        } else {
+            loginType = loginType.strip().toLowerCase(Locale.ROOT);
         }
         User user = "otp".equals(loginType) ? loginByOtp(req) : loginByPassword(req);
         return finalizeLogin(user, req.isRememberMe(), normalizeDeviceId(deviceId), null, clientIp, req.getTwoFactorCode());
@@ -267,7 +276,7 @@ public class AuthServiceImpl implements AuthService {
     }
 
     private User loginByOtp(LoginReq req) {
-        String email = req.getEmail();
+        String email = normalizeEmail(req.getEmail());
         String code = req.getCode();
         if (!StringUtils.hasText(email)) throw new LoginException("登录邮箱不能为空");
         if (!StringUtils.hasText(code)) throw new LoginException("请输入验证码");
@@ -278,19 +287,33 @@ public class AuthServiceImpl implements AuthService {
     }
 
     private User loginByPassword(LoginReq req) {
-        String account = req.getAccount();
+        String account = normalizeLoginAccount(req.getAccount());
         String password = req.getPassword();
         if (!StringUtils.hasText(account)) throw new LoginException("请输入用户名或邮箱");
         if (!StringUtils.hasText(password)) throw new LoginException("请输入密码");
-        User user = account.contains("@")
-                ? userService.lambdaQuery().eq(User::getEmail, account).one()
+        boolean emailLogin = account.contains("@");
+        String lookupAccount = emailLogin ? normalizeEmail(account) : account;
+        User user = emailLogin
+                ? userService.lambdaQuery().eq(User::getEmail, lookupAccount).one()
                 : userService.lambdaQuery().eq(User::getUsername, account).one();
-        if (user == null) throw new LoginException("用户名或密码错误");
+        if (user == null) {
+            passwordEncoder.matches(password, DUMMY_PASSWORD_HASH);
+            throw new LoginException("用户名或密码错误");
+        }
         if (!passwordEncoder.matches(password, user.getPassword())) {
             trackLoginFailure(user.getId());
             throw new LoginException("用户名或密码错误");
         }
         return user;
+    }
+
+    private String normalizeLoginAccount(String account) {
+        return account == null ? null : account.strip();
+    }
+
+    private String normalizeEmail(String email) {
+        String normalized = normalizeLoginAccount(email);
+        return normalized == null ? null : normalized.toLowerCase(Locale.ROOT);
     }
 
     private static final int LOGIN_FAILURE_BURST_THRESHOLD = 5;

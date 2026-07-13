@@ -816,6 +816,34 @@ CREATE TABLE `supporter_feedback` (
   KEY `idx_supporter_feedback_status_created` (`status`, `created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Zens 共建支持者反馈通道';
 
+CREATE TABLE `supporter_voucher_grant` (
+  `id` bigint NOT NULL AUTO_INCREMENT, `user_id` varchar(64) NOT NULL,
+  `source_order_no` varchar(40) NOT NULL, `plan_code` varchar(50) NOT NULL,
+  `quota` int NOT NULL, `status` varchar(20) NOT NULL DEFAULT 'PENDING',
+  `voucher_code_id` bigint DEFAULT NULL, `redemption_url_snapshot` varchar(500) NOT NULL,
+  `granted_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP, `issued_at` datetime DEFAULT NULL,
+  PRIMARY KEY (`id`), UNIQUE KEY `uk_supporter_voucher_grant_order` (`source_order_no`),
+  UNIQUE KEY `uk_supporter_voucher_grant_code` (`voucher_code_id`),
+  KEY `idx_supporter_voucher_grant_user_time` (`user_id`, `granted_at`),
+  KEY `idx_supporter_voucher_grant_pending` (`quota`, `status`, `granted_at`, `id`),
+  CONSTRAINT `chk_supporter_voucher_grant_quota` CHECK (`quota` IN (30, 50)),
+  CONSTRAINT `chk_supporter_voucher_grant_status` CHECK (`status` IN ('PENDING', 'ISSUED'))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='支持者公益站额度发放账本';
+
+CREATE TABLE `supporter_voucher_code` (
+  `id` bigint NOT NULL AUTO_INCREMENT, `quota` int NOT NULL,
+  `code_ciphertext` varchar(1000) NOT NULL,
+  `code_hash` char(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  `status` varchar(20) NOT NULL DEFAULT 'AVAILABLE', `assigned_grant_id` bigint DEFAULT NULL,
+  `imported_by` varchar(64) NOT NULL, `imported_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `assigned_at` datetime DEFAULT NULL, PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_supporter_voucher_code_hash` (`code_hash`),
+  UNIQUE KEY `uk_supporter_voucher_code_grant` (`assigned_grant_id`),
+  KEY `idx_supporter_voucher_code_fifo` (`quota`, `status`, `id`),
+  CONSTRAINT `chk_supporter_voucher_code_quota` CHECK (`quota` IN (30, 50)),
+  CONSTRAINT `chk_supporter_voucher_code_status` CHECK (`status` IN ('AVAILABLE', 'ASSIGNED'))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='支持者公益站预生成兑换码加密库存';
+
 -- ============================================================
 -- 基础种子数据
 -- ============================================================
@@ -834,9 +862,9 @@ INSERT INTO `sections` (`id`, `name`, `description`, `icon`, `sort_order`, `stat
 INSERT INTO `supporter_plan`
 (`code`, `name`, `description`, `price_cents`, `currency`, `duration_days`, `benefits_json`, `active`, `sort_weight`) VALUES
 ('supporter_30', 'Zens 支持者', '支持社区持续维护与基础设施成本，获得清晰可见的支持者身份与个人资料装饰。', 900, 'CNY', 30,
- '["30 天支持者身份与到期时间展示","个人资料支持者徽章与专属强调色","本人近 30 天创作数据简报"]', 1, 20),
+ '["30 天支持者身份与到期时间展示","个人资料支持者徽章与专属强调色","本人近 30 天创作数据简报","每 30 天 30 公益站额度，以兑换码形式发放（缺货自动排队补发）"]', 1, 20),
 ('supporter_plus_30', 'Zens 共建支持者', '在支持者权益之上参与长期共建，获得独立的共建身份和结构化反馈通道。', 1900, 'CNY', 30,
- '["包含 Zens 支持者全部权益","个人资料共建支持者专属徽章","产品共建反馈专属通道","反馈处理状态与官方回复查看"]', 1, 10);
+ '["包含 Zens 支持者全部权益","个人资料共建支持者专属徽章","产品共建反馈专属通道","反馈处理状态与官方回复查看","每 30 天 50 公益站额度，以兑换码形式发放（缺货自动排队补发）"]', 1, 10);
 
 INSERT INTO `sys_changelog`
 (`version`, `title`, `content`, `stage_no`, `stage_label`, `roadmap_status`, `highlights`, `timestamp`, `status`, `sort_order`)

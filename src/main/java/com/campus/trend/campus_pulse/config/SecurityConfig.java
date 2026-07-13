@@ -100,6 +100,9 @@ public class SecurityConfig {
                         .requestMatchers("/ops-admin/**", "/api/ops-admin/**").hasAnyAuthority("ROLE_ADMIN", "ROLE_SUPER_ADMIN")
                         .requestMatchers(org.springframework.http.HttpMethod.GET, SecurityWhitelist.PUBLIC_GET_URLS).permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.POST, SecurityWhitelist.PUBLIC_POST_URLS).permitAll()
+                        // SSO 客户端密钥与可信回调属于系统级配置，公开的应用信息读取已由上方白名单单独放行。
+                        .requestMatchers("/sso/clients/**", "/api/sso/clients/**")
+                        .hasAnyAuthority("ROLE_ADMIN", "ROLE_SUPER_ADMIN")
                         .requestMatchers(
                                 "/moderator/applications",
                                 "/moderator/approve/**",

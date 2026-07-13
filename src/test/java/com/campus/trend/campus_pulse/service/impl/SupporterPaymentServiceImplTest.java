@@ -16,6 +16,7 @@ import com.campus.trend.campus_pulse.payment.PaymentNotification;
 import com.campus.trend.campus_pulse.payment.PaymentProvider;
 import com.campus.trend.campus_pulse.payment.PaymentProviderRegistry;
 import com.campus.trend.campus_pulse.service.NotificationService;
+import com.campus.trend.campus_pulse.service.SupporterVoucherService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -47,6 +48,7 @@ class SupporterPaymentServiceImplTest {
     @Mock private PaymentProvider provider;
     @Mock private Environment environment;
     @Mock private NotificationService notificationService;
+    @Mock private SupporterVoucherService voucherService;
 
     private SupporterPaymentServiceImpl service;
 
@@ -56,11 +58,15 @@ class SupporterPaymentServiceImplTest {
             TableInfoHelper.initTableInfo(new MapperBuilderAssistant(new MybatisConfiguration(), "payment-test"),
                     PaymentOrder.class);
         }
+        if (TableInfoHelper.getTableInfo(SupporterEntitlement.class) == null) {
+            TableInfoHelper.initTableInfo(new MapperBuilderAssistant(new MybatisConfiguration(), "payment-entitlement-test"),
+                    SupporterEntitlement.class);
+        }
         when(provider.code()).thenReturn("alipay");
         PaymentProperties properties = new PaymentProperties(environment);
         service = new SupporterPaymentServiceImpl(planMapper, orderMapper, callbackEventMapper,
                 entitlementMapper, userMapper, new PaymentProviderRegistry(List.of(provider)),
-                properties, new ObjectMapper(), notificationService);
+                properties, new ObjectMapper(), notificationService, voucherService);
     }
 
     @Test
@@ -80,6 +86,7 @@ class SupporterPaymentServiceImplTest {
 
         ArgumentCaptor<SupporterEntitlement> entitlement = ArgumentCaptor.forClass(SupporterEntitlement.class);
         verify(entitlementMapper).insert(entitlement.capture());
+        verify(voucherService).createGrantAndTryIssue(order, notification.paidAt());
         assertThat(entitlement.getValue().getStartsAt()).isEqualTo(notification.paidAt());
         assertThat(entitlement.getValue().getExpiresAt()).isEqualTo(notification.paidAt().plusDays(45));
         assertThat(order.getStatus()).isEqualTo("PAID");

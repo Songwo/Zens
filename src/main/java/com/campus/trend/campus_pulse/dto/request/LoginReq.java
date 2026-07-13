@@ -1,6 +1,8 @@
 package com.campus.trend.campus_pulse.dto.request;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 @Data
@@ -9,23 +11,28 @@ public class LoginReq {
     /**
      * Song：登录账号（用户名或邮箱，密码登录时使用）
      */
+    @Size(max = 100, message = "登录账号不能超过100个字符")
     private String account;
 
     /**
      * Song：密码（密码登录模式）
      */
+    @Size(max = 128, message = "密码长度不合法")
     private String password;
 
     /**
      * Song：登录邮箱（验证码登录模式）
      */
+    @Size(max = 100, message = "邮箱不能超过100个字符")
     private String email;
 
     /**
      * Song：邮箱验证码（验证码登录模式）
      */
+    @Size(max = 12, message = "验证码长度不合法")
     private String code;
 
+    @Pattern(regexp = "(?i)password|otp", message = "不支持的登录方式")
     private String loginType;
 
     /**

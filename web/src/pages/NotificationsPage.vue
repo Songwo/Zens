@@ -18,6 +18,7 @@ const userStore = useUserStore()
 
 const notifications = ref<NotificationType[]>([])
 const notifLoading = ref(false)
+const notifError = ref('')
 const notifUnread = ref(0)
 const notifTypeFilter = ref<'all' | 'reply' | 'mention' | 'like' | 'favorite' | 'follow' | 'security' | 'system'>('all')
 const notifOnlyUnread = ref(false)
@@ -106,7 +107,8 @@ const allFilteredSelected = computed(() => {
 })
 
 const fetchNotifications = async () => {
-  notifLoading.value = true
+  notifLoading.value = notifications.value.length === 0
+  notifError.value = ''
   try {
     const res = await notificationApi.getList(1, 50)
     notifications.value = res.data?.records ?? []
@@ -115,8 +117,9 @@ const fetchNotifications = async () => {
     emitNotificationUnreadSync({ unreadCount: notifUnread.value })
   } catch (error) {
     console.error('获取通知列表失败:', error)
-    notifications.value = []
-    notifSelectedIds.value = []
+    notifError.value = notifications.value.length > 0
+      ? '通知刷新失败，已为你保留上一次加载的内容。'
+      : '通知加载失败，请检查网络后重试。'
   }
   finally { notifLoading.value = false }
 }
@@ -241,7 +244,12 @@ onMounted(() => {
         <el-badge v-if="notifUnread > 0" :value="notifUnread" :max="99" />
       </div>
 
-      <div v-if="notifLoading" class="loading-state">
+      <div v-if="notifError" class="notif-inline-error" role="alert">
+        <span>{{ notifError }}</span>
+        <el-button link type="primary" @click="fetchNotifications">重试</el-button>
+      </div>
+
+      <div v-if="notifLoading && notifications.length === 0" class="loading-state">
         <el-icon class="is-loading"><Loading /></el-icon> 正在加载...
       </div>
       <template v-else-if="notifications.length > 0">
@@ -323,7 +331,7 @@ onMounted(() => {
           description="可以切换类型或取消“只看未读”"
         />
       </template>
-      <EmptyState v-else :icon="ChatDotRound" title="暂无通知" description="当有人给你评论或点赞时，会在这里显示" />
+      <EmptyState v-else-if="!notifError" :icon="ChatDotRound" title="暂无通知" description="当有人给你评论或点赞时，会在这里显示" />
     </div>
   </MainLayout>
 </template>
@@ -351,6 +359,20 @@ onMounted(() => {
   text-align: center;
   padding: 24px;
   color: var(--el-text-color-secondary);
+}
+
+.notif-inline-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 12px 0;
+  padding: 10px 12px;
+  border: 1px solid var(--el-color-danger-light-7);
+  border-radius: 8px;
+  color: var(--el-color-danger);
+  background: var(--el-color-danger-light-9);
+  font-size: 13px;
 }
 
 .notif-header {

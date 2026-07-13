@@ -25,6 +25,7 @@ import com.campus.trend.campus_pulse.payment.PaymentProvider;
 import com.campus.trend.campus_pulse.payment.PaymentProviderRegistry;
 import com.campus.trend.campus_pulse.service.NotificationService;
 import com.campus.trend.campus_pulse.service.SupporterPaymentService;
+import com.campus.trend.campus_pulse.service.SupporterVoucherService;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -60,6 +61,7 @@ public class SupporterPaymentServiceImpl implements SupporterPaymentService {
     private final PaymentProperties paymentProperties;
     private final ObjectMapper objectMapper;
     private final NotificationService notificationService;
+    private final SupporterVoucherService voucherService;
 
     @Override
     public List<SupporterPlanResp> listPlans() {
@@ -267,6 +269,8 @@ public class SupporterPaymentServiceImpl implements SupporterPaymentService {
         order.setPaidAt(paidAt);
         order.setProviderOrderNo(notification.providerOrderNo());
         grantEntitlement(order, paidAt);
+        // 公益站兑换码来自管理员预生成库存；缺货时只保留 PENDING 发放记录，不影响支付权益生效。
+        voucherService.createGrantAndTryIssue(order, paidAt);
         finishEvent(event, "PROCESSED");
         notificationService.createNotification(order.getUserId(), NotificationType.SYSTEM,
                 "Zens 支持者权益已生效",

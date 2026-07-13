@@ -150,4 +150,27 @@ class AuthControllerValidationTest {
         verify(authService).login(org.mockito.ArgumentMatchers.any(),
                 org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq("127.0.0.1"));
     }
+
+    @Test
+    void login_shouldRejectUnsupportedLoginTypeBeforeSecurityChallenge() throws Exception {
+        String payload = """
+                {
+                  "loginType": "username",
+                  "account": "tester",
+                  "password": "123456",
+                  "cf-turnstile-response": "ts-token"
+                }
+                """;
+
+        mockMvc.perform(post("/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(4003))
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("登录方式")));
+
+        verifyNoInteractions(turnstileService);
+        verify(authService, never()).login(org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+    }
 }

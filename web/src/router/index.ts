@@ -290,6 +290,12 @@ const router = createRouter({
           meta: { requiresAdmin: true },
         },
         {
+          path: 'supporter-vouchers',
+          name: 'admin-supporter-vouchers',
+          component: () => import('@/pages/admin/SupporterVouchersPage.vue'),
+          meta: { requiresAdmin: true },
+        },
+        {
           path: 'ops-automation',
           name: 'admin-ops-automation',
           component: () => import('@/pages/admin/OpsAutomationPage.vue'),

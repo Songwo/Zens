@@ -95,7 +95,7 @@ const extraBenefits = computed(() => {
       level: 10,
       title: 'Zens AI 公益站',
       icon: '🤖',
-      url: 'https://zensapi.cc.cd',
+      url: 'https://pip.kdns.fr',
       buttonText: '进入 AI 公益站',
       description: '开放给高等级活跃用户的 AI 工具入口，可用于学习、检索和创作辅助。',
     },

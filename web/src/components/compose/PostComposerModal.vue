@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, onMounted, onUnmounted, computed, nextTick, defineAsyncComponent } from 'vue'
+import { ref, watch, onMounted, onUnmounted, computed, nextTick, defineAsyncComponent, defineComponent, h } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/store/user'
 import { postApi } from '@/api/post'
@@ -49,7 +49,25 @@ const editStatus = ref(1)
 const editAuditStatus = ref('')
 // 投票草稿：null=不附带投票。仅新发帖支持（v1），编辑态隐藏面板。不进本地草稿持久化。
 const pollPanelRef = ref<InstanceType<typeof PollComposerPanel> | null>(null)
-const MarkdownEditor = defineAsyncComponent(() => import('@/components/markdown/MarkdownEditor.vue'))
+const MarkdownEditorLoading = defineComponent({
+  name: 'MarkdownEditorLoading',
+  setup() {
+    return () => h('div', {
+      class: 'markdown-editor-loading',
+      role: 'status',
+      'aria-live': 'polite',
+    }, [
+      h('div', { class: 'markdown-editor-loading-bar is-wide' }),
+      h('div', { class: 'markdown-editor-loading-bar' }),
+      h('span', '正在加载 Markdown 编辑器…'),
+    ])
+  },
+})
+const MarkdownEditor = defineAsyncComponent({
+  loader: () => import('@/components/markdown/MarkdownEditor.vue'),
+  loadingComponent: MarkdownEditorLoading,
+  delay: 0,
+})
 const editorRef = ref<{ insertAtCursor?: (text: string, options?: { ensureBlankLineBefore?: boolean; ensureBlankLineAfter?: boolean }) => void } | null>(null)
 const contentVideoInputRef = ref<HTMLInputElement | null>(null)
 const contentVideoUploading = ref(false)
@@ -1172,6 +1190,36 @@ html.dark .title-input :deep(.el-input__inner) {
   min-width: 0;
 }
 
+.markdown-editor-loading {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 320px;
+  padding: 22px;
+  border: 1px solid var(--cp-border);
+  border-radius: 12px;
+  background: var(--cp-surface-soft, #f8fafc);
+  color: var(--cp-text-secondary, #64748b);
+  font-size: 13px;
+}
+
+.markdown-editor-loading-bar {
+  width: 58%;
+  height: 12px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(148, 163, 184, 0.16), rgba(148, 163, 184, 0.36), rgba(148, 163, 184, 0.16));
+  background-size: 220% 100%;
+  animation: markdown-editor-loading 1.2s ease-in-out infinite;
+}
+
+.markdown-editor-loading-bar.is-wide {
+  width: 82%;
+}
+
+@keyframes markdown-editor-loading {
+  to { background-position: -220% 0; }
+}
+
 /* Song：说明 */
 .composer-footer {
   flex-shrink: 0;
@@ -1332,5 +1380,11 @@ html.dark .composer-footer {
   color: var(--el-text-color-secondary);
   text-decoration: none;
   word-break: break-all;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .markdown-editor-loading-bar {
+    animation: none;
+  }
 }
 </style>

@@ -55,6 +55,7 @@ const allMenuItems: AdminMenuItem[] = [
   { id: 'trust', name: '信任等级', desc: '成长规则与权益', icon: Promotion, path: '/admin/trust', access: 'admin', group: 'people' },
   { id: 'moderator-applications', name: '版主申请', desc: '招募与审批', icon: Medal, path: '/admin/moderator-applications', access: 'admin', group: 'people' },
   { id: 'invite-codes', name: '邀请码', desc: '发放与追踪', icon: Ticket, path: '/admin/invite-codes', access: 'admin', group: 'people' },
+  { id: 'supporter-vouchers', name: '支持者兑换码', desc: '公益额度库存', icon: Ticket, path: '/admin/supporter-vouchers', access: 'admin', group: 'people' },
   { id: 'changelog', name: '发展历程', desc: '公告和路线图', icon: Timer, path: '/admin/changelog', access: 'admin', group: 'people' },
   { id: 'cache', name: '缓存管理', desc: 'Redis 快捷维护', icon: SetUp, path: '/admin/cache', access: 'admin', group: 'system' },
   { id: 'performance', name: '性能观测', desc: '慢请求与慢 SQL', icon: Odometer, path: '/admin/performance', access: 'admin', group: 'system' },
