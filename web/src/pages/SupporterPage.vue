@@ -43,7 +43,8 @@ const formatMoney = (cents: number) => `¥${(cents / 100).toFixed(cents % 100 ? 
 const formatTime = (value?: string) => value ? new Date(value).toLocaleString('zh-CN', { hour12: false }) : '—'
 const quotaBenefit = (plan: SupporterPlan) =>
   plan.benefits.find(benefit => /公益站|兑换码|额度/.test(benefit)) || ''
-const quotaAmount = (plan: SupporterPlan) => quotaBenefit(plan).match(/\d+/)?.[0] || ''
+const quotaAmount = (plan: SupporterPlan) =>
+  quotaBenefit(plan).match(/(\d+)\s*公益站额度/)?.[1] || ''
 const standardBenefits = (plan: SupporterPlan) => {
   const highlighted = quotaBenefit(plan)
   return highlighted ? plan.benefits.filter(benefit => benefit !== highlighted) : plan.benefits
