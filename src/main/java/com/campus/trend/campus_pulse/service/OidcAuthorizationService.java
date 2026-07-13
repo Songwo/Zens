@@ -70,7 +70,11 @@ public class OidcAuthorizationService {
         claims.put("client_id", clientId);
         claims.put("scope", parts[3]);
         String accessToken = jwtUtil.generateAccessToken(user.getId(), claims, false);
-        long expiresIn = Math.max(1L, jwtUtil.getRemainingMillis(accessToken) / 1000L);
+        // OAuth2 的 expires_in 是标准 JSON 数值。项目全局会将 Long 序列化为字符串
+        // 以保护前端大整数精度，但 Go oauth2 客户端会因此拒绝整个 Token 响应。
+        // 这里使用 Integer（有效期为秒，远低于上限）保持协议兼容。
+        int expiresIn = (int) Math.min(Integer.MAX_VALUE,
+                Math.max(1L, jwtUtil.getRemainingMillis(accessToken) / 1000L));
         return Map.of(
                 "access_token", accessToken,
                 "token_type", "Bearer",

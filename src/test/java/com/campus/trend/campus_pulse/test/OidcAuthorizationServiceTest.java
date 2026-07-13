@@ -85,7 +85,8 @@ class OidcAuthorizationServiceTest {
 
         assertEquals("signed-token", token.get("access_token"));
         assertEquals("Bearer", token.get("token_type"));
-        assertEquals(900L, token.get("expires_in"));
+        assertEquals(900, token.get("expires_in"));
+        assertInstanceOf(Integer.class, token.get("expires_in"));
         verify(values, times(1)).getAndDelete("sso:oidc:code:one-time");
     }
 
